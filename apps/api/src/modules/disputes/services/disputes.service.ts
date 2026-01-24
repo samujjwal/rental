@@ -1,0 +1,515 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '@/core/database/prisma.service';
+import { Dispute, DisputeStatus, UserRole } from '@prisma/client';
+
+export interface CreateDisputeDto {
+  bookingId: string;
+  reason: 'DAMAGE' | 'NO_SHOW' | 'CONDITION' | 'PRICING' | 'OTHER';
+  description: string;
+  evidence: string[];
+  requestedResolution: string;
+  requestedAmount?: number;
+}
+
+export interface UpdateDisputeDto {
+  status?: DisputeStatus;
+  resolution?: string;
+  resolvedAmount?: number;
+  adminNotes?: string;
+}
+
+export interface AddEvidenceDto {
+  description: string;
+  files: string[];
+}
+
+@Injectable()
+export class DisputesService {
+  constructor(private prisma: PrismaService) {}
+
+  /**
+   * Create a dispute
+   */
+  async createDispute(userId: string, dto: CreateDisputeDto): Promise<Dispute> {
+    const { bookingId, reason, description, evidence, requestedResolution, requestedAmount } = dto;
+
+    // Verify booking exists
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        listing: true,
+        disputes: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    // Verify authorization (renter or owner)
+    if (booking.renterId !== userId && booking.listing.ownerId !== userId) {
+      throw new ForbiddenException('Not authorized to create dispute for this booking');
+    }
+
+    // Check if there's already an active dispute
+    const activeDispute = booking.disputes.find(
+      (d) => d.status === DisputeStatus.OPEN || d.status === DisputeStatus.UNDER_REVIEW,
+    );
+
+    if (activeDispute) {
+      throw new BadRequestException('An active dispute already exists for this booking');
+    }
+
+    // Create dispute
+    const dispute = await this.prisma.dispute.create({
+      data: {
+        bookingId,
+        reportedBy: userId,
+        reason,
+        description,
+        evidence,
+        requestedResolution,
+        requestedAmount,
+        status: DisputeStatus.OPEN,
+      },
+      include: {
+        booking: {
+          include: {
+            listing: true,
+            renter: {
+              select: {
+                id: true,
+                email: true,
+                profile: true,
+              },
+            },
+          },
+        },
+        reportedByUser: {
+          select: {
+            id: true,
+            email: true,
+            profile: true,
+          },
+        },
+      },
+    });
+
+    // TODO: Send notifications to other party and admin
+
+    return dispute;
+  }
+
+  /**
+   * Get dispute by ID
+   */
+  async getDispute(disputeId: string, userId: string): Promise<any> {
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        booking: {
+          include: {
+            listing: {
+              include: {
+                owner: {
+                  select: {
+                    id: true,
+                    email: true,
+                    profile: true,
+                  },
+                },
+              },
+            },
+            renter: {
+              select: {
+                id: true,
+                email: true,
+                profile: true,
+              },
+            },
+          },
+        },
+        reportedByUser: {
+          select: {
+            id: true,
+            email: true,
+            profile: true,
+          },
+        },
+        resolvedByUser: {
+          select: {
+            id: true,
+            email: true,
+            profile: true,
+          },
+        },
+        responses: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                profile: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+      },
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Verify authorization
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    const isAdmin = user?.role === UserRole.ADMIN;
+    const isParty =
+      dispute.reportedBy === userId ||
+      dispute.booking.renterId === userId ||
+      dispute.booking.listing.ownerId === userId;
+
+    if (!isAdmin && !isParty) {
+      throw new ForbiddenException('Not authorized to view this dispute');
+    }
+
+    return dispute;
+  }
+
+  /**
+   * Get user's disputes
+   */
+  async getUserDisputes(
+    userId: string,
+    options: {
+      status?: DisputeStatus;
+      page?: number;
+      limit?: number;
+    } = {},
+  ): Promise<{ disputes: any[]; total: number }> {
+    const { status, page = 1, limit = 20 } = options;
+
+    const where: any = {
+      OR: [
+        { reportedBy: userId },
+        { booking: { renterId: userId } },
+        { booking: { listing: { ownerId: userId } } },
+      ],
+    };
+
+    if (status) {
+      where.status = status;
+    }
+
+    const [disputes, total] = await Promise.all([
+      this.prisma.dispute.findMany({
+        where,
+        include: {
+          booking: {
+            include: {
+              listing: {
+                select: {
+                  id: true,
+                  title: true,
+                  images: true,
+                  ownerId: true,
+                },
+              },
+              renter: {
+                select: {
+                  id: true,
+                  email: true,
+                  profile: true,
+                },
+              },
+            },
+          },
+          reportedByUser: {
+            select: {
+              id: true,
+              email: true,
+              profile: true,
+            },
+          },
+          _count: {
+            select: {
+              responses: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.dispute.count({ where }),
+    ]);
+
+    return { disputes, total };
+  }
+
+  /**
+   * Add response to dispute
+   */
+  async addResponse(
+    disputeId: string,
+    userId: string,
+    response: { message: string; evidence?: string[] },
+  ): Promise<any> {
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        booking: {
+          include: {
+            listing: true,
+          },
+        },
+      },
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Verify authorization
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    const isAdmin = user?.role === UserRole.ADMIN;
+    const isParty =
+      dispute.reportedBy === userId ||
+      dispute.booking.renterId === userId ||
+      dispute.booking.listing.ownerId === userId;
+
+    if (!isAdmin && !isParty) {
+      throw new ForbiddenException('Not authorized to respond to this dispute');
+    }
+
+    // Create response
+    const disputeResponse = await this.prisma.disputeResponse.create({
+      data: {
+        disputeId,
+        userId,
+        message: response.message,
+        evidence: response.evidence || [],
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            profile: true,
+          },
+        },
+      },
+    });
+
+    // Update dispute status if it was OPEN
+    if (dispute.status === DisputeStatus.OPEN) {
+      await this.prisma.dispute.update({
+        where: { id: disputeId },
+        data: { status: DisputeStatus.UNDER_REVIEW },
+      });
+    }
+
+    // TODO: Send notification to other parties
+
+    return disputeResponse;
+  }
+
+  /**
+   * Update dispute (admin only)
+   */
+  async updateDispute(disputeId: string, userId: string, dto: UpdateDisputeDto): Promise<Dispute> {
+    // Verify admin
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (user?.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only admins can update dispute status');
+    }
+
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    const updateData: any = {};
+
+    if (dto.status) updateData.status = dto.status;
+    if (dto.resolution) updateData.resolution = dto.resolution;
+    if (dto.resolvedAmount !== undefined) updateData.resolvedAmount = dto.resolvedAmount;
+    if (dto.adminNotes) updateData.adminNotes = dto.adminNotes;
+
+    // If resolving dispute
+    if (dto.status && [DisputeStatus.RESOLVED, DisputeStatus.CLOSED].includes(dto.status)) {
+      updateData.resolvedBy = userId;
+      updateData.resolvedAt = new Date();
+    }
+
+    return this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: updateData,
+    });
+  }
+
+  /**
+   * Close dispute
+   */
+  async closeDispute(disputeId: string, userId: string, reason: string): Promise<Dispute> {
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        booking: {
+          include: {
+            listing: true,
+          },
+        },
+      },
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Can be closed by reporter or admin
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    const isAdmin = user?.role === UserRole.ADMIN;
+    const isReporter = dispute.reportedBy === userId;
+
+    if (!isAdmin && !isReporter) {
+      throw new ForbiddenException('Not authorized to close this dispute');
+    }
+
+    return this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: {
+        status: DisputeStatus.CLOSED,
+        resolution: reason,
+        resolvedBy: userId,
+        resolvedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Get all disputes (admin only)
+   */
+  async getAllDisputes(
+    userId: string,
+    options: {
+      status?: DisputeStatus;
+      reason?: string;
+      page?: number;
+      limit?: number;
+    } = {},
+  ): Promise<{ disputes: any[]; total: number }> {
+    // Verify admin
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (user?.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Admin access required');
+    }
+
+    const { status, reason, page = 1, limit = 20 } = options;
+
+    const where: any = {};
+    if (status) where.status = status;
+    if (reason) where.reason = reason;
+
+    const [disputes, total] = await Promise.all([
+      this.prisma.dispute.findMany({
+        where,
+        include: {
+          booking: {
+            include: {
+              listing: {
+                select: {
+                  id: true,
+                  title: true,
+                  ownerId: true,
+                },
+              },
+              renter: {
+                select: {
+                  id: true,
+                  email: true,
+                  profile: true,
+                },
+              },
+            },
+          },
+          reportedByUser: {
+            select: {
+              id: true,
+              email: true,
+              profile: true,
+            },
+          },
+          _count: {
+            select: {
+              responses: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.dispute.count({ where }),
+    ]);
+
+    return { disputes, total };
+  }
+
+  /**
+   * Get dispute statistics (admin only)
+   */
+  async getDisputeStats(userId: string): Promise<any> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (user?.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Admin access required');
+    }
+
+    const [total, open, underReview, resolved, closed] = await Promise.all([
+      this.prisma.dispute.count(),
+      this.prisma.dispute.count({ where: { status: DisputeStatus.OPEN } }),
+      this.prisma.dispute.count({ where: { status: DisputeStatus.UNDER_REVIEW } }),
+      this.prisma.dispute.count({ where: { status: DisputeStatus.RESOLVED } }),
+      this.prisma.dispute.count({ where: { status: DisputeStatus.CLOSED } }),
+    ]);
+
+    return {
+      total,
+      byStatus: {
+        open,
+        underReview,
+        resolved,
+        closed,
+      },
+    };
+  }
+}

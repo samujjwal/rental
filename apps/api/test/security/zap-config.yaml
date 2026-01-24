@@ -1,0 +1,385 @@
+# OWASP ZAP Configuration
+# This file contains context and policy settings for automated security scanning
+
+env:
+  contexts:
+    - name: 'Rental Portal API'
+      urls:
+        - 'http://localhost:3000/api/v1.*'
+      includePaths:
+        - 'http://localhost:3000/api/v1/.*'
+      excludePaths:
+        - 'http://localhost:3000/api/v1/health'
+        - 'http://localhost:3000/api/v1/metrics'
+      authentication:
+        method: 'json'
+        loginUrl: 'http://localhost:3000/api/v1/auth/login'
+        loginRequestData: '{"email":"test@example.com","password":"Test123!@#"}'
+        loggedInIndicator: "\\Q\"accessToken\":\\E"
+        loggedOutIndicator: "\\Q\"message\":\"Unauthorized\"\\E"
+      sessionManagement:
+        method: 'cookie'
+        sessionTokenName: 'JSESSIONID'
+      users:
+        - name: 'test-renter'
+          credentials:
+            email: 'renter@test.com'
+            password: 'Test123!@#'
+        - name: 'test-owner'
+          credentials:
+            email: 'owner@test.com'
+            password: 'Test123!@#'
+        - name: 'test-admin'
+          credentials:
+            email: 'admin@test.com'
+            password: 'Admin123!@#'
+
+  globalExclusions:
+    - 'http://localhost:3000/api/v1/swagger.*'
+    - 'http://localhost:3000/api/v1/docs.*'
+    - ".*\\.css"
+    - ".*\\.js"
+    - ".*\\.png"
+    - ".*\\.jpg"
+    - ".*\\.gif"
+
+  activeScan:
+    policy: 'Default Policy'
+    scanners:
+      # Enable all OWASP Top 10 scanners
+      - id: 40012 # Cross Site Scripting (Reflected)
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 40014 # Cross Site Scripting (Persistent)
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 40016 # Cross Site Scripting (Persistent) - Prime
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 40017 # Cross Site Scripting (Persistent) - Spider
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 40018 # SQL Injection
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 40019 # SQL Injection - MySQL
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 40020 # SQL Injection - Hypersonic SQL
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 40021 # SQL Injection - Oracle
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 40022 # SQL Injection - PostgreSQL
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 90018 # Remote OS Command Injection
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 10202 # Absent Anti-CSRF Tokens
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10023 # Information Disclosure - Debug Error Messages
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'LOW'
+      - id: 10024 # Information Disclosure - Sensitive Information in URL
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10025 # Information Disclosure - Sensitive Information in HTTP Referrer Header
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10026 # HTTP Parameter Pollution
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10027 # Information Disclosure - Suspicious Comments
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10028 # Open Redirect
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10029 # Cookie Poisoning
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10030 # User Controllable Charset
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10031 # User Controllable HTML Element Attribute
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10032 # Viewstate Scanner
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10033 # Directory Browsing
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10034 # Heartbleed OpenSSL Vulnerability
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'LOW'
+      - id: 10035 # Strict-Transport-Security Header Not Set
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'LOW'
+      - id: 10036 # HTTP Server Response Header
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10037 # Server Leaks Information via "X-Powered-By" HTTP Response Header
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10038 # Content Security Policy (CSP) Header Not Set
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10039 # X-Content-Type-Options Header Missing
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'LOW'
+      - id: 10040 # Secure Pages Include Mixed Content
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10041 # HTTP to HTTPS Insecure Transition in Form Post
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10042 # HTTPS to HTTP Insecure Transition in Form Post
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10043 # User Controllable JavaScript Event (XSS)
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 10044 # Big Redirect Detected (Potential Sensitive Information Leak)
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10045 # Source Code Disclosure - /WEB-INF folder
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10046 # Remote File Inclusion
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 10047 # HTTPS Content Available via HTTP
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10048 # Remote Code Execution - Shell Shock
+        enabled: true
+        attackStrength: 'HIGH'
+        threshold: 'MEDIUM'
+      - id: 10049 # Content Type Header Missing
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10050 # Retrieved from Cache
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'MEDIUM'
+      - id: 10051 # X-ChromeLogger-Data (XCOLD) Header Information Leak
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10052 # X-Debug-Token Information Leak
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10053 # Apache Range Header DoS (CVE-2011-3192)
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10054 # Cookie No HttpOnly Flag
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'LOW'
+      - id: 10055 # CSP Scanner
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10056 # X-Frame-Options Header Not Set
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10057 # Username Hash Found
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10058 # GET for POST
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10059 # X-AspNet-Version Response Header
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10060 # X-Powered-By Response Header
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10061 # X-AspNetMvc-Version Response Header
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10062 # PII Disclosure
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10063 # Permissions Policy Header Not Set
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'LOW'
+      - id: 10094 # Base64 Disclosure
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'MEDIUM'
+      - id: 10095 # Backup File Disclosure
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10096 # Timestamp Disclosure
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10097 # Hash Disclosure
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'MEDIUM'
+      - id: 10098 # Cross-Domain Misconfiguration
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10099 # Source Code Disclosure
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10101 # Insufficient Authentication
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10102 # Session Fixation
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10103 # Insecure JSF ViewState
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10104 # User Agent Fuzzer
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10105 # Weak Authentication Method
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10106 # HTTP Only Site
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10107 # Httpoxy - Proxy Header Misuse
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10108 # Reverse Tabnabbing
+        enabled: true
+        attackStrength: 'MEDIUM'
+        threshold: 'MEDIUM'
+      - id: 10109 # Modern Web Application
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+      - id: 10110 # Dangerous JS Functions
+        enabled: true
+        attackStrength: 'LOW'
+        threshold: 'LOW'
+
+  passiveScan:
+    # All passive scanners enabled by default
+    autoTagScanners: true
+
+  spider:
+    maxDepth: 5
+    maxDuration: 10 # minutes
+    threadCount: 5
+    maxChildren: 10
+    acceptCookies: true
+    handleODataParametersVisited: false
+    handleParameters: 'USE_ALL'
+    parseComments: true
+    parseGit: true
+    parseRobotsTxt: true
+    parseSitemapXml: true
+    parseSVNEntries: true
+    postForm: true
+    processForm: true
+    requestWaitTime: 200 # milliseconds
+    sendRefererHeader: true
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+
+  ajaxSpider:
+    browserName: 'firefox-headless'
+    maxCrawlDepth: 10
+    maxCrawlStates: 10
+    maxDuration: 10 # minutes
+    numberOfBrowsers: 1
+    clickDefaultElems: true
+    clickElemsOnce: true
+    randomInputs: true
+
+alertFilters:
+  # Filter out false positives
+  - ruleId: 10096 # Timestamp Disclosure - often false positive
+    url: '.*'
+    enabled: false
+  - ruleId: 10027 # Suspicious Comments - too many false positives
+    url: '.*'
+    enabled: false
+
+reportConfig:
+  template: 'traditional-html'
+  theme: 'original'
+  reportTitle: 'Rental Portal Security Assessment'
+  reportDescription: 'Automated security scan using OWASP ZAP'
+  includedConfidences:
+    - 'USER_CONFIRMED'
+    - 'HIGH'
+    - 'MEDIUM'
+    - 'LOW'
+  includedRisks:
+    - 'HIGH'
+    - 'MEDIUM'
+    - 'LOW'
+    - 'INFORMATIONAL'
+  sections:
+    - 'alertcounts'
+    - 'instancecounts'
+    - 'alertdetails'
+    - 'chart'
+    - 'statistics'

@@ -1,0 +1,53 @@
+{
+  "name": "@rental-portal/web",
+  "version": "1.0.0",
+  "description": "Universal Rental Portal - React Router v7 Web Application",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "react-router dev",
+    "build": "react-router build",
+    "start": "react-router-serve ./build/server/index.js",
+    "typecheck": "tsc",
+    "lint": "eslint app --ext .ts,.tsx",
+    "format": "prettier --write \"app/**/*.{ts,tsx}\""
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.59.20",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router": "^7.1.1",
+    "socket.io-client": "^4.8.3",
+    "zustand": "^5.0.2",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.6.0",
+    "class-variance-authority": "^0.7.1",
+    "lucide-react": "^0.468.0",
+    "@hookform/resolvers": "^4.1.0",
+    "react-hook-form": "^7.54.3",
+    "zod": "^3.24.1",
+    "date-fns": "^4.1.0",
+    "axios": "^1.7.9"
+  },
+  "devDependencies": {
+    "@react-router/dev": "^7.1.1",
+    "@react-router/node": "^7.1.1",
+    "@react-router/serve": "^7.1.1",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.4.51",
+    "tailwindcss": "^3.4.21",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.7",
+    "vite-tsconfig-paths": "^5.1.4",
+    "@typescript-eslint/eslint-plugin": "^8.53.1",
+    "@typescript-eslint/parser": "^8.53.1",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
