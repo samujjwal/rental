@@ -4,8 +4,8 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '@/core/database/prisma.service';
-import { Dispute, DisputeStatus, UserRole } from '@prisma/client';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { Dispute, DisputeStatus, UserRole } from '@rental-portal/database';
 
 export interface CreateDisputeDto {
   bookingId: string;

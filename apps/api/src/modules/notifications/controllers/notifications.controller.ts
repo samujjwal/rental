@@ -13,7 +13,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { NotificationsService, NotificationPreferences } from '../services/notifications.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { NotificationType, NotificationStatus } from '@prisma/client';
+import { NotificationType, NotificationStatus } from '@rental-portal/database';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
@@ -25,7 +25,7 @@ export class NotificationsController {
   @Get()
   @ApiOperation({ summary: 'Get user notifications' })
   async getNotifications(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('status') status?: NotificationStatus,
     @Query('type') type?: NotificationType,
     @Query('page') page?: number,
@@ -41,20 +41,20 @@ export class NotificationsController {
 
   @Get('unread-count')
   @ApiOperation({ summary: 'Get unread notification count' })
-  async getUnreadCount(@CurrentUser('sub') userId: string) {
+  async getUnreadCount(@CurrentUser('id') userId: string) {
     const count = await this.notificationsService.getUnreadCount(userId);
     return { count };
   }
 
   @Post(':id/read')
   @ApiOperation({ summary: 'Mark notification as read' })
-  async markAsRead(@Param('id') notificationId: string, @CurrentUser('sub') userId: string) {
+  async markAsRead(@Param('id') notificationId: string, @CurrentUser('id') userId: string) {
     return this.notificationsService.markAsRead(notificationId, userId);
   }
 
   @Post('read-all')
   @ApiOperation({ summary: 'Mark all notifications as read' })
-  async markAllAsRead(@CurrentUser('sub') userId: string) {
+  async markAllAsRead(@CurrentUser('id') userId: string) {
     const count = await this.notificationsService.markAllAsRead(userId);
     return { marked: count };
   }
@@ -63,7 +63,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Delete notification' })
   async deleteNotification(
     @Param('id') notificationId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     await this.notificationsService.deleteNotification(notificationId, userId);
     return { message: 'Notification deleted successfully' };
@@ -71,14 +71,14 @@ export class NotificationsController {
 
   @Get('preferences')
   @ApiOperation({ summary: 'Get notification preferences' })
-  async getPreferences(@CurrentUser('sub') userId: string) {
+  async getPreferences(@CurrentUser('id') userId: string) {
     return this.notificationsService.getPreferences(userId);
   }
 
   @Patch('preferences')
   @ApiOperation({ summary: 'Update notification preferences' })
   async updatePreferences(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Body() preferences: Partial<NotificationPreferences>,
   ) {
     await this.notificationsService.updatePreferences(userId, preferences);

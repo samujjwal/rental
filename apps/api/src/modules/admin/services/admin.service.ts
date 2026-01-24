@@ -1,12 +1,12 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '@/core/database/prisma.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
 import {
   UserRole,
   ListingStatus,
   BookingStatus,
   DisputeStatus,
   PaymentStatus,
-} from '@prisma/client';
+} from '@rental-portal/database';
 
 @Injectable()
 export class AdminService {

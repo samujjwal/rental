@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { DisputeStatus, UserRole } from '@prisma/client';
+import { DisputeStatus, UserRole } from '@rental-portal/database';
 
 @ApiTags('disputes')
 @ApiBearerAuth()
@@ -16,14 +16,14 @@ export class DisputesController {
 
   @Post()
   @ApiOperation({ summary: 'Create a dispute' })
-  async createDispute(@CurrentUser('sub') userId: string, @Body() dto: CreateDisputeDto) {
+  async createDispute(@CurrentUser('id') userId: string, @Body() dto: CreateDisputeDto) {
     return this.disputesService.createDispute(userId, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get user disputes' })
   async getUserDisputes(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('status') status?: DisputeStatus,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
@@ -40,7 +40,7 @@ export class DisputesController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   async getAllDisputes(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('status') status?: DisputeStatus,
     @Query('reason') reason?: string,
     @Query('page') page?: number,
@@ -58,13 +58,13 @@ export class DisputesController {
   @ApiOperation({ summary: 'Get dispute statistics (admin only)' })
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  async getStats(@CurrentUser('sub') userId: string) {
+  async getStats(@CurrentUser('id') userId: string) {
     return this.disputesService.getDisputeStats(userId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get dispute details' })
-  async getDispute(@Param('id') disputeId: string, @CurrentUser('sub') userId: string) {
+  async getDispute(@Param('id') disputeId: string, @CurrentUser('id') userId: string) {
     return this.disputesService.getDispute(disputeId, userId);
   }
 
@@ -72,7 +72,7 @@ export class DisputesController {
   @ApiOperation({ summary: 'Add response to dispute' })
   async addResponse(
     @Param('id') disputeId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Body() response: { message: string; evidence?: string[] },
   ) {
     return this.disputesService.addResponse(disputeId, userId, response);
@@ -84,7 +84,7 @@ export class DisputesController {
   @Roles(UserRole.ADMIN)
   async updateDispute(
     @Param('id') disputeId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Body() dto: UpdateDisputeDto,
   ) {
     return this.disputesService.updateDispute(disputeId, userId, dto);
@@ -94,7 +94,7 @@ export class DisputesController {
   @ApiOperation({ summary: 'Close dispute' })
   async closeDispute(
     @Param('id') disputeId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Body() body: { reason: string },
   ) {
     return this.disputesService.closeDispute(disputeId, userId, body.reason);

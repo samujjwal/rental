@@ -338,7 +338,7 @@ export class WebhookService {
     // Update user's connected account status
     try {
       await this.prisma.user.updateMany({
-        where: { stripeAccountId: id },
+        where: { stripeConnectId: id },
         data: {
           stripeChargesEnabled: charges_enabled,
           stripePayoutsEnabled: payouts_enabled,

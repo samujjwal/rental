@@ -17,14 +17,14 @@ export class MessagingController {
 
   @Post()
   @ApiOperation({ summary: 'Create or get conversation' })
-  async createConversation(@CurrentUser('sub') userId: string, @Body() dto: CreateConversationDto) {
+  async createConversation(@CurrentUser('id') userId: string, @Body() dto: CreateConversationDto) {
     return this.conversationsService.createOrGetConversation(userId, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get user conversations' })
   async getConversations(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
@@ -38,14 +38,14 @@ export class MessagingController {
 
   @Get('unread-count')
   @ApiOperation({ summary: 'Get total unread message count' })
-  async getUnreadCount(@CurrentUser('sub') userId: string) {
+  async getUnreadCount(@CurrentUser('id') userId: string) {
     const count = await this.conversationsService.getTotalUnreadCount(userId);
     return { count };
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get conversation details' })
-  async getConversation(@Param('id') conversationId: string, @CurrentUser('sub') userId: string) {
+  async getConversation(@Param('id') conversationId: string, @CurrentUser('id') userId: string) {
     return this.conversationsService.getConversation(conversationId, userId);
   }
 
@@ -53,7 +53,7 @@ export class MessagingController {
   @ApiOperation({ summary: 'Delete conversation' })
   async deleteConversation(
     @Param('id') conversationId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     await this.conversationsService.deleteConversation(conversationId, userId);
     return { message: 'Conversation deleted successfully' };
@@ -63,7 +63,7 @@ export class MessagingController {
   @ApiOperation({ summary: 'Get conversation messages' })
   async getMessages(
     @Param('id') conversationId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('before') before?: string,
@@ -79,7 +79,7 @@ export class MessagingController {
   @ApiOperation({ summary: 'Mark all messages in conversation as read' })
   async markConversationAsRead(
     @Param('id') conversationId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     const count = await this.messagesService.markConversationAsRead(conversationId, userId);
     return { marked: count };
@@ -87,7 +87,7 @@ export class MessagingController {
 
   @Delete('messages/:messageId')
   @ApiOperation({ summary: 'Delete message' })
-  async deleteMessage(@Param('messageId') messageId: string, @CurrentUser('sub') userId: string) {
+  async deleteMessage(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
     await this.messagesService.deleteMessage(messageId, userId);
     return { message: 'Message deleted successfully' };
   }

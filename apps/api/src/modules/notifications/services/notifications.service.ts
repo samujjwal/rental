@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '@/core/database/prisma.service';
-import { Notification, NotificationType, NotificationStatus } from '@prisma/client';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { Notification, NotificationType, NotificationStatus } from '@rental-portal/database';
 import * as nodemailer from 'nodemailer';
 import * as twilio from 'twilio';
 

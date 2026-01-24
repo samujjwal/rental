@@ -1,7 +1,7 @@
 export default () => ({
   // Application
   nodeEnv: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT, 10) || 3000,
+  port: parseInt(process.env.PORT || '3000', 10),
   apiPrefix: process.env.API_PREFIX || 'api',
 
   // Database
@@ -48,7 +48,7 @@ export default () => ({
   // Email
   email: {
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT, 10) || 587,
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
     from: process.env.SMTP_FROM,
@@ -70,8 +70,8 @@ export default () => ({
 
   // Rate Limiting
   rateLimit: {
-    ttl: parseInt(process.env.RATE_LIMIT_TTL, 10) || 60,
-    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+    ttl: parseInt(process.env.RATE_LIMIT_TTL || '60', 10),
+    max: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
   },
 
   // Logging

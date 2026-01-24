@@ -7,10 +7,18 @@ import type {
   CreateReviewRequest,
 } from "~/types/booking";
 
-export const bookingApi = {
+export const bookingsApi = {
   async getMyBookings(status?: string): Promise<Booking[]> {
     const params = status ? `?status=${status}` : "";
     return api.get<Booking[]>(`/bookings/my-bookings${params}`);
+  },
+
+  async getBookingsByRenterId(renterId: string): Promise<Booking[]> {
+    return api.get<Booking[]>(`/bookings?renterId=${renterId}`);
+  },
+
+  async getBookingsByOwnerId(ownerId: string): Promise<Booking[]> {
+    return api.get<Booking[]>(`/bookings?ownerId=${ownerId}`);
   },
 
   async getOwnerBookings(status?: string): Promise<Booking[]> {

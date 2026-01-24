@@ -9,6 +9,9 @@ import { ElasticsearchModule } from '@nestjs/elasticsearch';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { CacheModule } from './common/cache/cache.module';
 import { QueueModule } from './common/queue/queue.module';
+import { EmailModule } from './common/email/email.module';
+import { StorageModule } from './common/storage/storage.module';
+import { ModerationModule as CommonModerationModule } from './common/moderation/moderation.module';
 
 // Feature modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -24,6 +27,8 @@ import { FulfillmentModule } from './modules/fulfillment/fulfillment.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { ModerationModule } from './modules/moderation/moderation.module';
+import { InsuranceModule } from './modules/insurance/insurance.module';
 
 import configuration from './config/configuration';
 
@@ -75,6 +80,9 @@ import configuration from './config/configuration';
     PrismaModule,
     CacheModule,
     QueueModule,
+    EmailModule,
+    StorageModule,
+    CommonModerationModule,
 
     // Feature modules
     AuthModule,
@@ -90,6 +98,8 @@ import configuration from './config/configuration';
     DisputesModule,
     NotificationsModule,
     AdminModule,
+    ModerationModule,
+    InsuranceModule,
   ],
 })
 export class AppModule {}

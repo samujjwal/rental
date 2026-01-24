@@ -18,12 +18,12 @@ export class PayoutsService {
     const owner = await this.prisma.user.findUnique({
       where: { id: ownerId },
       select: {
-        stripeAccountId: true,
+        stripeConnectId: true,
         stripeAccountStatus: true,
       },
     });
 
-    if (!owner?.stripeAccountId) {
+    if (!owner?.stripeConnectId) {
       throw new Error('Owner has not connected a payout account');
     }
 
@@ -46,7 +46,7 @@ export class PayoutsService {
 
     // Create Stripe payout
     const stripePayoutId = await this.stripe.createPayout(
-      owner.stripeAccountId,
+      owner.stripeConnectId,
       payoutAmount,
       pendingEarnings.currency,
     );
@@ -135,7 +135,7 @@ export class PayoutsService {
       },
       select: {
         id: true,
-        stripeAccountId: true,
+        stripeConnectId: true,
       },
     });
 

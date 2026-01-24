@@ -20,11 +20,11 @@ export class StripeService {
     // Check if user already has a Stripe account
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { stripeAccountId: true },
+      select: { stripeConnectId: true },
     });
 
-    if (user.stripeAccountId) {
-      return user.stripeAccountId;
+    if (user.stripeConnectId) {
+      return user.stripeConnectId;
     }
 
     // Create Stripe Connect account
@@ -40,7 +40,7 @@ export class StripeService {
     // Save to database
     await this.prisma.user.update({
       where: { id: userId },
-      data: { stripeAccountId: account.id },
+      data: { stripeConnectId: account.id },
     });
 
     return account.id;
@@ -92,7 +92,7 @@ export class StripeService {
       throw new BadRequestException('Booking not found');
     }
 
-    if (!booking.listing.owner.stripeAccountId) {
+    if (!booking.listing.owner.stripeConnectId) {
       throw new BadRequestException('Owner has not set up payments');
     }
 
@@ -105,7 +105,7 @@ export class StripeService {
       customer: customerId,
       application_fee_amount: platformFeeAmount,
       transfer_data: {
-        destination: booking.listing.owner.stripeAccountId,
+        destination: booking.listing.owner.stripeConnectId,
       },
       metadata: {
         bookingId,
@@ -349,7 +349,7 @@ export class StripeService {
 
   private async handleAccountUpdated(account: Stripe.Account): Promise<void> {
     await this.prisma.user.updateMany({
-      where: { stripeAccountId: account.id },
+      where: { stripeConnectId: account.id },
       data: {
         stripeAccountStatus: account.details_submitted ? 'VERIFIED' : 'PENDING',
       },

@@ -15,7 +15,7 @@ import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { UserRole, ListingStatus } from '@prisma/client';
+import { UserRole, ListingStatus } from '@rental-portal/database';
 
 @ApiTags('admin')
 @ApiBearerAuth()
@@ -27,14 +27,14 @@ export class AdminController {
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Get dashboard statistics' })
-  async getDashboard(@CurrentUser('sub') userId: string) {
+  async getDashboard(@CurrentUser('id') userId: string) {
     return this.adminService.getDashboardStats(userId);
   }
 
   @Get('analytics')
   @ApiOperation({ summary: 'Get analytics data' })
   async getAnalytics(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('period') period?: 'day' | 'week' | 'month' | 'year',
   ) {
     return this.adminService.getAnalytics(userId, period);
@@ -43,7 +43,7 @@ export class AdminController {
   @Get('users')
   @ApiOperation({ summary: 'Get all users' })
   async getAllUsers(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('role') role?: UserRole,
     @Query('search') search?: string,
     @Query('page') page?: number,
@@ -60,7 +60,7 @@ export class AdminController {
   @Patch('users/:id/role')
   @ApiOperation({ summary: 'Update user role' })
   async updateUserRole(
-    @CurrentUser('sub') adminId: string,
+    @CurrentUser('id') adminId: string,
     @Param('id') userId: string,
     @Body() body: { role: UserRole },
   ) {
@@ -69,20 +69,20 @@ export class AdminController {
 
   @Post('users/:id/suspend')
   @ApiOperation({ summary: 'Suspend user' })
-  async suspendUser(@CurrentUser('sub') adminId: string, @Param('id') userId: string) {
+  async suspendUser(@CurrentUser('id') adminId: string, @Param('id') userId: string) {
     return this.adminService.toggleUserStatus(adminId, userId, true);
   }
 
   @Post('users/:id/activate')
   @ApiOperation({ summary: 'Activate user' })
-  async activateUser(@CurrentUser('sub') adminId: string, @Param('id') userId: string) {
+  async activateUser(@CurrentUser('id') adminId: string, @Param('id') userId: string) {
     return this.adminService.toggleUserStatus(adminId, userId, false);
   }
 
   @Get('listings')
   @ApiOperation({ summary: 'Get all listings' })
   async getAllListings(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('status') status?: ListingStatus,
     @Query('categoryId') categoryId?: string,
     @Query('search') search?: string,
@@ -101,7 +101,7 @@ export class AdminController {
   @Patch('listings/:id/status')
   @ApiOperation({ summary: 'Update listing status' })
   async updateListingStatus(
-    @CurrentUser('sub') adminId: string,
+    @CurrentUser('id') adminId: string,
     @Param('id') listingId: string,
     @Body() body: { status: ListingStatus; reason?: string },
   ) {
@@ -110,7 +110,7 @@ export class AdminController {
 
   @Delete('listings/:id')
   @ApiOperation({ summary: 'Delete listing' })
-  async deleteListing(@CurrentUser('sub') adminId: string, @Param('id') listingId: string) {
+  async deleteListing(@CurrentUser('id') adminId: string, @Param('id') listingId: string) {
     await this.adminService.deleteListing(adminId, listingId);
     return { message: 'Listing deleted successfully' };
   }
@@ -118,7 +118,7 @@ export class AdminController {
   @Get('revenue')
   @ApiOperation({ summary: 'Get revenue report' })
   async getRevenueReport(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
@@ -128,7 +128,7 @@ export class AdminController {
   @Get('audit-logs')
   @ApiOperation({ summary: 'Get audit logs' })
   async getAuditLogs(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Query('action') action?: string,
     @Query('targetUserId') targetUserId?: string,
     @Query('page') page?: number,

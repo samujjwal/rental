@@ -222,11 +222,11 @@ export class BookingCalculationService {
       reason = 'Per cancellation policy';
     }
 
-    const subtotalRefund = booking.subtotal * refundPercentage;
+    const subtotalRefund = booking.basePrice * refundPercentage;
     const platformFeeRefund = booking.platformFee * refundPercentage;
     const serviceFeeRefund = booking.serviceFee * refundPercentage;
     const depositRefund = booking.depositAmount;
-    const penalty = booking.subtotal - subtotalRefund;
+    const penalty = booking.basePrice - subtotalRefund;
 
     return {
       refundAmount: subtotalRefund + serviceFeeRefund + depositRefund,

@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { PrismaService } from '@/core/database/prisma.service';
-import { BookingStatus } from '@prisma/client';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { BookingStatus } from '@rental-portal/database';
 import { addHours, addDays, isBefore } from 'date-fns';
 
 @Injectable()

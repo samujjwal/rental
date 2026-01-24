@@ -1,6 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '@/core/database/prisma.service';
-import { Conversation, Message, Prisma } from '@prisma/client';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { Conversation, Message, Prisma } from '@rental-portal/database';
 
 export interface CreateConversationDto {
   listingId: string;

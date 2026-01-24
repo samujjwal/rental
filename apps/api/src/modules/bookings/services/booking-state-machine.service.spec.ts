@@ -3,7 +3,7 @@ import { BookingStateMachineService } from './booking-state-machine.service';
 import { PrismaService } from '@/common/database/prisma.service';
 import { EventsService } from '@/common/events/events.service';
 import { AuditService } from '@/common/audit/audit.service';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus } from '@rental-portal/database';
 
 describe('BookingStateMachineService', () => {
   let service: BookingStateMachineService;

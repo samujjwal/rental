@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { BookingStatus, PaymentStatus, ListingStatus } from '@prisma/client';
+import { BookingStatus, PaymentStatus, ListingStatus } from '@rental-portal/database';
 
 // Event payloads
 export interface BookingCreatedEvent {

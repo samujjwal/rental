@@ -3,14 +3,14 @@ version: "3.8"
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: rental-postgres
     environment:
       POSTGRES_USER: rental_user
       POSTGRES_PASSWORD: rental_password
       POSTGRES_DB: rental_portal
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -26,7 +26,7 @@ services:
     image: redis:7-alpine
     container_name: rental-redis
     ports:
-      - "6379:6379"
+      - "6382:6379"
     volumes:
       - redis_data:/data
     networks:

@@ -34,7 +34,7 @@ DATABASE_URL="postgresql://username:password@localhost:5432/rental_portal"
 
 # Redis
 REDIS_HOST=localhost
-REDIS_PORT=6379
+REDIS_PORT=6382
 REDIS_PASSWORD=
 REDIS_TTL=3600
 

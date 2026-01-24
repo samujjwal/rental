@@ -13,7 +13,7 @@ import {
   MessageSentEvent,
   UserRegisteredEvent,
 } from './events.service';
-import { NotificationType } from '@prisma/client';
+import { NotificationType } from '@rental-portal/database';
 
 /**
  * Event listeners that handle cross-module communication

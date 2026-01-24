@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@rental-portal/database';
 import { LoggerService } from '@/common/logger/logger.service';
 
 @Catch()

@@ -8,7 +8,7 @@ import type {
   Category,
 } from "~/types/listing";
 
-export const listingApi = {
+export const listingsApi = {
   async searchListings(
     params: ListingSearchParams
   ): Promise<ListingSearchResponse> {
@@ -25,6 +25,18 @@ export const listingApi = {
 
   async getListingById(id: string): Promise<Listing> {
     return api.get<Listing>(`/listings/${id}`);
+  },
+
+  async getListingsByOwnerId(ownerId: string): Promise<Listing[]> {
+    return api.get<Listing[]>(`/listings?ownerId=${ownerId}`);
+  },
+
+  async getFavoriteListings(userId: string): Promise<Listing[]> {
+    return api.get<Listing[]>(`/listings/favorites?userId=${userId}`);
+  },
+
+  async getRecommendations(userId: string): Promise<Listing[]> {
+    return api.get<Listing[]>(`/listings/recommendations?userId=${userId}`);
   },
 
   async getMyListings(): Promise<Listing[]> {

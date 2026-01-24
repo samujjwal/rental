@@ -18,7 +18,7 @@ export class FulfillmentController {
   @Post('condition-reports')
   @ApiOperation({ summary: 'Create condition report' })
   async createConditionReport(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Body() dto: CreateConditionReportDto,
   ) {
     return this.fulfillmentService.createConditionReport(userId, dto);
@@ -28,14 +28,14 @@ export class FulfillmentController {
   @ApiOperation({ summary: 'Get booking condition reports' })
   async getBookingReports(
     @Param('bookingId') bookingId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     return this.fulfillmentService.getBookingReports(bookingId, userId);
   }
 
   @Get('condition-reports/:id')
   @ApiOperation({ summary: 'Get condition report' })
-  async getReport(@Param('id') reportId: string, @CurrentUser('sub') userId: string) {
+  async getReport(@Param('id') reportId: string, @CurrentUser('id') userId: string) {
     return this.fulfillmentService.getReport(reportId, userId);
   }
 
@@ -43,7 +43,7 @@ export class FulfillmentController {
   @ApiOperation({ summary: 'Update condition report (within 24 hours)' })
   async updateReport(
     @Param('id') reportId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Body() updates: Partial<CreateConditionReportDto>,
   ) {
     return this.fulfillmentService.updateReport(reportId, userId, updates);
@@ -51,7 +51,7 @@ export class FulfillmentController {
 
   @Get('bookings/:bookingId')
   @ApiOperation({ summary: 'Get fulfillment details' })
-  async getFulfillment(@Param('bookingId') bookingId: string, @CurrentUser('sub') userId: string) {
+  async getFulfillment(@Param('bookingId') bookingId: string, @CurrentUser('id') userId: string) {
     return this.fulfillmentService.getFulfillment(bookingId, userId);
   }
 
@@ -59,7 +59,7 @@ export class FulfillmentController {
   @ApiOperation({ summary: 'Update fulfillment status' })
   async updateStatus(
     @Param('id') fulfillmentId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Body() dto: UpdateFulfillmentDto,
   ) {
     return this.fulfillmentService.updateFulfillmentStatus(fulfillmentId, userId, dto);
@@ -69,7 +69,7 @@ export class FulfillmentController {
   @ApiOperation({ summary: 'Record damage claim' })
   async recordDamageClaim(
     @Param('bookingId') bookingId: string,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
     @Body()
     claim: {
       description: string;

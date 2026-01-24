@@ -1,9 +1,9 @@
 import { Processor, Process, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
-import { PrismaService } from '@/core/database/prisma.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
-import { BookingStatus, NotificationType } from '@prisma/client';
+import { BookingStatus, NotificationType } from '@rental-portal/database';
 
 interface BookingExpirationJob {
   bookingId: string;

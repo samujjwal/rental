@@ -52,18 +52,18 @@ export class PaymentsController {
   async getAccountStatus(@CurrentUser('id') userId: string) {
     const user = await this.stripe['prisma'].user.findUnique({
       where: { id: userId },
-      select: { stripeAccountId: true },
+      select: { stripeConnectId: true },
     });
 
-    if (!user?.stripeAccountId) {
+    if (!user?.stripeConnectId) {
       return { connected: false };
     }
 
-    const status = await this.stripe.getAccountStatus(user.stripeAccountId);
+    const status = await this.stripe.getAccountStatus(user.stripeConnectId);
 
     return {
       connected: true,
-      accountId: user.stripeAccountId,
+      accountId: user.stripeConnectId,
       ...status,
     };
   }

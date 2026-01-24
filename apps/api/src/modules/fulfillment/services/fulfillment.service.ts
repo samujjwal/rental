@@ -4,8 +4,8 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '@/core/database/prisma.service';
-import { ConditionReport, FulfillmentStatus, BookingStatus } from '@prisma/client';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { ConditionReport, FulfillmentStatus, BookingStatus } from '@rental-portal/database';
 
 export interface CreateConditionReportDto {
   bookingId: string;

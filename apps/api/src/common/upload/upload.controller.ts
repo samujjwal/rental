@@ -28,7 +28,7 @@ export class UploadController {
   @ApiOperation({ summary: 'Upload single image' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadImage(@UploadedFile() file: Express.Multer.File, @CurrentUser('sub') userId: string) {
+  async uploadImage(@UploadedFile() file: Express.Multer.File, @CurrentUser('id') userId: string) {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
@@ -49,7 +49,7 @@ export class UploadController {
   @UseInterceptors(FilesInterceptor('files', 10))
   async uploadImages(
     @UploadedFiles() files: Express.Multer.File[],
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');
@@ -71,7 +71,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadDocument(
     @UploadedFile() file: Express.Multer.File,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     if (!file) {
       throw new BadRequestException('No file provided');
@@ -110,7 +110,7 @@ export class UploadController {
   @ApiOperation({ summary: 'Get presigned URL for client-side upload' })
   async getPresignedUploadUrl(
     @Body() body: { fileName: string; mimeType: string; folder?: string },
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     const folder = body.folder || `users/${userId}/uploads`;
     return this.uploadService.getPresignedUploadUrl(body.fileName, body.mimeType, folder);
