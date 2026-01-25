@@ -49,7 +49,9 @@ export class MessagesService {
           select: {
             id: true,
             email: true,
-            profile: true,
+            firstName: true,
+            lastName: true,
+            profilePhotoUrl: true,
           },
         },
       },
@@ -114,7 +116,9 @@ export class MessagesService {
             select: {
               id: true,
               email: true,
-              profile: true,
+              firstName: true,
+              lastName: true,
+              profilePhotoUrl: true,
             },
           },
         },
@@ -165,10 +169,24 @@ export class MessagesService {
       throw new ForbiddenException('Cannot mark this message as read');
     }
 
-    return this.prisma.message.update({
-      where: { id: messageId },
-      data: { readAt: new Date() },
+    await this.prisma.messageReadReceipt.upsert({
+      where: {
+        messageId_userId: {
+          messageId,
+          userId,
+        },
+      },
+      create: {
+        messageId,
+        userId,
+        readAt: new Date(),
+      },
+      update: {
+        readAt: new Date(),
+      },
     });
+
+    return message;
   }
 
   /**
@@ -193,15 +211,28 @@ export class MessagesService {
       throw new ForbiddenException('Not a participant in this conversation');
     }
 
-    const result = await this.prisma.message.updateMany({
+    const unreadMessages = await this.prisma.message.findMany({
       where: {
         conversationId,
         senderId: { not: userId },
-        readAt: null,
+        readReceipts: {
+          none: { userId },
+        },
       },
-      data: {
+      select: { id: true },
+    });
+
+    if (unreadMessages.length === 0) {
+      return 0;
+    }
+
+    const result = await this.prisma.messageReadReceipt.createMany({
+      data: unreadMessages.map((m) => ({
+        messageId: m.id,
+        userId,
         readAt: new Date(),
-      },
+      })),
+      skipDuplicates: true,
     });
 
     return result.count;
@@ -245,7 +276,9 @@ export class MessagesService {
           select: {
             id: true,
             email: true,
-            profile: true,
+            firstName: true,
+            lastName: true,
+            profilePhotoUrl: true,
           },
         },
         conversation: {

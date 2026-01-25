@@ -84,11 +84,12 @@ pnpm run dev
 ```
 
 **Services will be available at:**
-- API: http://localhost:3000
-- API Docs: http://localhost:3000/api/docs
-- Web App: http://localhost:5173
-- PostgreSQL: localhost:5434
-- Redis: localhost:6382
+
+- API: http://localhost:3400
+- API Docs: http://localhost:3400/api/docs
+- Web App: http://localhost:3401
+- PostgreSQL: localhost:3432
+- Redis: localhost:3479
 
 ### Option 2: Manual Setup
 
@@ -106,6 +107,7 @@ pnpm run test           # Unit tests
 pnpm run test:e2e       # E2E tests
 pnpm run lint           # Linting
 ```
+
 - API server on http://localhost:3000
 - API docs on http://localhost:3000/api/docs
 
@@ -274,6 +276,7 @@ pnpm run lint
 ## 🎯 Implementation Roadmap
 
 ### ✅ Phase 1: Core Backend (Complete)
+
 - [x] Authentication & Authorization
 - [x] User Management
 - [x] Category System with Templates
@@ -290,6 +293,7 @@ pnpm run lint
 - [x] Admin Dashboard
 
 ### 🟡 Phase 2: Frontend & Testing (In Progress)
+
 - [x] Admin portal UI
 - [x] Organization management
 - [x] Insurance verification
@@ -305,6 +309,7 @@ pnpm run lint
 - [ ] Security audit (pending)
 
 ### 🔜 Phase 3: External Services & Infrastructure (Next)
+
 - [ ] Configure SendGrid email service
 - [ ] Configure Twilio SMS service
 - [ ] Configure Firebase push notifications
@@ -315,6 +320,7 @@ pnpm run lint
 - [ ] Configure CI/CD (GitHub Actions)
 
 ### 📱 Phase 4: Mobile App (Post-Launch)
+
 - [ ] React Native app architecture
 - [ ] Core user flows
 - [ ] Camera integration for condition reports
@@ -324,30 +330,36 @@ pnpm run lint
 ## 📚 Key Documentation
 
 ### Getting Started
+
 - [QUICK_START.md](QUICK_START.md) - Detailed setup guide
 - [DEVELOPER_QUICK_START.md](DEVELOPER_QUICK_START.md) - Developer onboarding
 
 ### Implementation
+
 - [EXECUTION_PLAN_README.md](EXECUTION_PLAN_README.md) - Master execution plan
 - [IMPLEMENTATION_GAP_ANALYSIS.md](IMPLEMENTATION_GAP_ANALYSIS.md) - Current status & gaps
 - [PROGRESS_REPORT.md](PROGRESS_REPORT.md) - Feature implementation history
 
 ### Deployment
+
 - [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md) - Production deployment steps
 - [EXTERNAL_SERVICES_SETUP.md](EXTERNAL_SERVICES_SETUP.md) - External service configuration
 
 ### Architecture
+
 - [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md) - System architecture
 - [RentalPortal_arch_TDD.md](RentalPortal_arch_TDD.md) - Technical design documents
 - [API_README.md](API_README.md) - API documentation
 
 ### Testing
+
 - [TESTING_GUIDE.md](TESTING_GUIDE.md) - Testing strategies
 - [test-all.sh](test-all.sh) - Automated test execution script
 
 ## 🚨 Critical Next Steps
 
 ### Immediate Actions (This Week)
+
 1. **Configure External Services** (Priority: P0)
    - Follow [EXTERNAL_SERVICES_SETUP.md](EXTERNAL_SERVICES_SETUP.md)
    - Set up SendGrid, Twilio, Firebase, OpenAI, AWS
@@ -355,9 +367,11 @@ pnpm run lint
    - Test each integration
 
 2. **Run Complete Test Suite** (Priority: P0)
+
    ```bash
    ./test-all.sh
    ```
+
    - Fix any failing tests
    - Achieve 90%+ test coverage
    - Document test results
@@ -368,6 +382,7 @@ pnpm run lint
    - Enhance dashboard views
 
 ### This Month
+
 4. **Load & Security Testing** (Priority: P1)
    - Execute k6 load tests
    - Run OWASP ZAP security scan

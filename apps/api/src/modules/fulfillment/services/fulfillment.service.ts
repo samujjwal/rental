@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { EmailService } from '@/common/email/email.service';
 import { ConditionReport, FulfillmentStatus, BookingStatus } from '@rental-portal/database';
 
 export interface CreateConditionReportDto {
@@ -28,7 +29,10 @@ export interface UpdateFulfillmentDto {
 
 @Injectable()
 export class FulfillmentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   /**
    * Create condition report
@@ -407,11 +411,33 @@ export class FulfillmentService {
       status: 'PENDING',
     };
 
-    return this.prisma.fulfillment.update({
+    await this.prisma.fulfillment.update({
       where: { id: fulfillment.id },
       data: {
         damageClaim,
       },
     });
+
+    // Notify renter about damage claim
+    if (booking.renter) {
+      await this.emailService.sendEmail(
+        booking.renter.email,
+        'Damage Claim Filed',
+        `<p>A damage claim has been filed for your booking of <strong>${booking.listing.title}</strong>.</p><p>Description: ${claim.description}</p><p>Estimated Cost: ${claim.estimatedCost}</p>`,
+      );
+    }
+
+    return fulfillment;
+
+    // Notify renter about damage claim
+    if (booking.renter) {
+      await this.emailService.sendEmail(
+        booking.renter.email,
+        'Damage Claim Filed',
+        `<p>A damage claim has been filed for your booking of <strong>${booking.listing.title}</strong>.</p><p>Description: ${claim.description}</p><p>Estimated Cost: $${claim.estimatedCost}</p>`,
+      );
+    }
+
+    return fulfillment;
   }
 }

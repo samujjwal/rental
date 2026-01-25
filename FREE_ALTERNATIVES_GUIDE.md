@@ -8,23 +8,24 @@
 
 ## 📊 Cost Comparison Overview
 
-| Service | Original Solution | Monthly Cost | Free Alternative | Monthly Cost | Limitation |
-|---------|------------------|--------------|------------------|--------------|------------|
-| Email | SendGrid | $0-$15 | Resend | $0 | 3,000 emails/month |
-| SMS | Twilio | $0.0075/SMS | Email fallback | $0 | No SMS, email only |
-| Push Notifications | Firebase | $0 | Firebase | $0 | Already free! |
-| Content Moderation | OpenAI GPT-4 | $30-100 | Local filtering | $0 | Basic filtering |
-| File Storage | AWS S3 | $5-20 | Local + Cloudflare R2 | $0 | 10GB free |
-| Image Moderation | AWS Rekognition | $10-50 | Open source | $0 | Self-hosted |
-| Document OCR | AWS Textract | $15-75 | Tesseract.js | $0 | Lower accuracy |
-| Search | AWS OpenSearch | $50-200 | PostgreSQL FTS | $0 | Built-in DB |
-| **TOTAL** | **~$110-460** | **~$0** | **Significant limits** |
+| Service            | Original Solution | Monthly Cost | Free Alternative       | Monthly Cost | Limitation         |
+| ------------------ | ----------------- | ------------ | ---------------------- | ------------ | ------------------ |
+| Email              | SendGrid          | $0-$15       | Resend                 | $0           | 3,000 emails/month |
+| SMS                | Twilio            | $0.0075/SMS  | Email fallback         | $0           | No SMS, email only |
+| Push Notifications | Firebase          | $0           | Firebase               | $0           | Already free!      |
+| Content Moderation | OpenAI GPT-4      | $30-100      | Local filtering        | $0           | Basic filtering    |
+| File Storage       | AWS S3            | $5-20        | Local + Cloudflare R2  | $0           | 10GB free          |
+| Image Moderation   | AWS Rekognition   | $10-50       | Open source            | $0           | Self-hosted        |
+| Document OCR       | AWS Textract      | $15-75       | Tesseract.js           | $0           | Lower accuracy     |
+| Search             | AWS OpenSearch    | $50-200      | PostgreSQL FTS         | $0           | Built-in DB        |
+| **TOTAL**          | **~$110-460**     | **~$0**      | **Significant limits** |
 
 ---
 
 ## 1. 📧 Email Service: Resend (Free Tier)
 
 ### Why Resend?
+
 - **Free Tier:** 3,000 emails/month (SendGrid: 100/day = 3,000/month)
 - **Modern API:** Simpler than SendGrid
 - **React Email:** Built-in template support
@@ -111,6 +112,7 @@ export class ResendEmailService {
 ```
 
 **Test:**
+
 ```bash
 curl -X POST 'https://api.resend.com/emails' \
   -H 'Authorization: Bearer re_xxxxxxxxxxxx' \
@@ -170,11 +172,13 @@ export class GmailEmailService {
 ### Strategy: Skip SMS, Use Free Channels
 
 **Rationale:**
+
 - SMS costs $0.0075-0.02 per message (expensive at scale)
 - Most users check email and app notifications
 - SMS is optional for most rental use cases
 
 **Implementation:**
+
 ```typescript
 // apps/api/src/modules/notifications/services/notification-fallback.service.ts
 @Injectable()
@@ -218,6 +222,7 @@ export class NotificationService {
 ### If SMS is Required: TextBelt (Free Tier)
 
 **TextBelt API:**
+
 - Free tier: 1 SMS/day (for testing)
 - Paid: $0.0075/SMS (same as Twilio)
 
@@ -237,6 +242,7 @@ curl -X POST https://textbelt.com/text \
 **Good News:** Firebase Cloud Messaging is completely free with no limits!
 
 **Setup:**
+
 ```bash
 # 1. Create project at https://console.firebase.google.com (free)
 # 2. Enable Cloud Messaging
@@ -267,7 +273,7 @@ import nlp from 'compromise';
 @Injectable()
 export class FreeContentModerationService {
   private filter = new Filter();
-  
+
   // Add custom words
   constructor() {
     this.filter.addWords('scam', 'fraud', 'fake', 'bitcoin', 'crypto');
@@ -275,7 +281,7 @@ export class FreeContentModerationService {
 
   async moderateListing(listing: any) {
     const flags = [];
-    
+
     // 1. Check for profanity
     if (this.filter.isProfane(listing.title) || this.filter.isProfane(listing.description)) {
       flags.push({
@@ -313,7 +319,7 @@ export class FreeContentModerationService {
     }
 
     return {
-      approved: flags.length === 0 || flags.every(f => f.severity === 'LOW'),
+      approved: flags.length === 0 || flags.every((f) => f.severity === 'LOW'),
       flags,
       confidence: flags.length === 0 ? 1.0 : 0.5,
     };
@@ -327,14 +333,14 @@ export class FreeContentModerationService {
       /(\.com|\.net|\.org){3,}/i, // Multiple domains
       /[A-Z]{10,}/, // Excessive caps
     ];
-    
-    return spamPatterns.some(pattern => pattern.test(text));
+
+    return spamPatterns.some((pattern) => pattern.test(text));
   }
 
   private containsContactInfo(text: string): boolean {
     const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
     const phonePattern = /(\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/;
-    
+
     return emailPattern.test(text) || phonePattern.test(text);
   }
 }
@@ -368,14 +374,14 @@ export class ImageModerationService {
     try {
       // Load image
       const image = await this.loadImage(imageUrl);
-      
+
       // Classify
       const predictions = await this.model.classify(image);
       image.dispose();
 
       // Check results
-      const inappropriate = predictions.find(p => 
-        (p.className === 'Porn' || p.className === 'Hentai') && p.probability > 0.5
+      const inappropriate = predictions.find(
+        (p) => (p.className === 'Porn' || p.className === 'Hentai') && p.probability > 0.5,
       );
 
       return {
@@ -462,6 +468,7 @@ R2_PUBLIC_URL=https://pub-xxxxx.r2.dev
 ```
 
 **Pricing:**
+
 - Storage: 10GB free/month (AWS S3: $0.023/GB)
 - Operations: 1M writes, 10M reads free
 - Bandwidth: FREE (AWS S3: $0.09/GB egress)
@@ -542,6 +549,7 @@ export class StorageService {
 ```
 
 **Serve local files:**
+
 ```typescript
 // apps/api/src/main.ts
 app.useStaticAssets(join(__dirname, '..', 'uploads'), {
@@ -556,6 +564,7 @@ app.useStaticAssets(join(__dirname, '..', 'uploads'), {
 **Already covered above** - Use TensorFlow.js + NSFWJS model (free, self-hosted)
 
 **Alternative:** Cloudinary Free Tier
+
 - 25GB storage
 - 25GB bandwidth/month
 - Image transformations included
@@ -588,8 +597,10 @@ import Tesseract from 'tesseract.js';
 export class OCRService {
   async extractTextFromDocument(imageUrl: string): Promise<string> {
     try {
-      const { data: { text } } = await Tesseract.recognize(imageUrl, 'eng', {
-        logger: info => console.log(info), // Progress logging
+      const {
+        data: { text },
+      } = await Tesseract.recognize(imageUrl, 'eng', {
+        logger: (info) => console.log(info), // Progress logging
       });
 
       return text;
@@ -613,10 +624,7 @@ export class OCRService {
   }
 
   private extractPolicyNumber(text: string): string | null {
-    const patterns = [
-      /policy\s*#?\s*:?\s*([A-Z0-9-]+)/i,
-      /policy\s+number\s*:?\s*([A-Z0-9-]+)/i,
-    ];
+    const patterns = [/policy\s*#?\s*:?\s*([A-Z0-9-]+)/i, /policy\s+number\s*:?\s*([A-Z0-9-]+)/i];
 
     for (const pattern of patterns) {
       const match = text.match(pattern);
@@ -628,7 +636,7 @@ export class OCRService {
 
   private extractProvider(text: string): string | null {
     const providers = ['State Farm', 'Geico', 'Progressive', 'Allstate', 'Liberty Mutual'];
-    
+
     for (const provider of providers) {
       if (text.includes(provider)) return provider;
     }
@@ -637,10 +645,7 @@ export class OCRService {
   }
 
   private extractDate(text: string): Date | null {
-    const datePatterns = [
-      /(\d{1,2}\/\d{1,2}\/\d{4})/,
-      /(\d{4}-\d{2}-\d{2})/,
-    ];
+    const datePatterns = [/(\d{1,2}\/\d{1,2}\/\d{4})/, /(\d{4}-\d{2}-\d{2})/];
 
     for (const pattern of datePatterns) {
       const match = text.match(pattern);
@@ -651,10 +656,7 @@ export class OCRService {
   }
 
   private extractCoverageAmount(text: string): number | null {
-    const patterns = [
-      /\$\s*(\d{1,3}(?:,\d{3})*)/g,
-      /(\d{1,3}(?:,\d{3})*)\s*dollars/gi,
-    ];
+    const patterns = [/\$\s*(\d{1,3}(?:,\d{3})*)/g, /(\d{1,3}(?:,\d{3})*)\s*dollars/gi];
 
     const amounts = [];
     for (const pattern of patterns) {
@@ -713,22 +715,24 @@ export class PostgresSearchService {
 ```
 
 **Add search vector to schema:**
+
 ```prisma
 // packages/database/prisma/schema.prisma
 model Listing {
   // ... existing fields
   searchVector Unsupported("tsvector")?
-  
+
   @@index([searchVector], type: Gin)
 }
 ```
 
 **Create trigger to auto-update search vector:**
+
 ```sql
 -- Run this migration
 CREATE OR REPLACE FUNCTION listings_search_vector_trigger() RETURNS trigger AS $$
 BEGIN
-  NEW.search_vector := 
+  NEW.search_vector :=
     setweight(to_tsvector('english', COALESCE(NEW.title, '')), 'A') ||
     setweight(to_tsvector('english', COALESCE(NEW.description, '')), 'B');
   RETURN NEW;
@@ -750,17 +754,20 @@ CREATE TRIGGER listings_search_vector_update
 ## 🚀 Implementation Priority
 
 ### Phase 1: Immediate (Today)
+
 1. ✅ **Email:** Switch to Resend (3,000/month free)
 2. ✅ **Storage:** Use local files for dev, plan R2 for prod
 3. ✅ **Search:** Use PostgreSQL full-text search
 4. ✅ **Push:** Keep Firebase (already free)
 
 ### Phase 2: This Week
+
 5. ✅ **Content Moderation:** Implement bad-words filter + manual review
 6. ✅ **Image Moderation:** Add NSFWJS model
 7. ✅ **OCR:** Implement Tesseract.js for insurance docs
 
 ### Phase 3: Optional
+
 8. ⏭️ **SMS:** Skip for now, use email fallback
 9. ⏭️ **Advanced Moderation:** Add OpenAI later if needed (paid feature)
 
@@ -769,6 +776,7 @@ CREATE TRIGGER listings_search_vector_update
 ## 💰 Cost Savings Analysis
 
 ### Original Plan (AWS + Premium Services):
+
 - SendGrid: $15/month
 - Twilio SMS: $30-100/month
 - AWS S3: $10/month
@@ -779,6 +787,7 @@ CREATE TRIGGER listings_search_vector_update
 - **Total: ~$255-325/month**
 
 ### Free Alternative Plan:
+
 - Resend Email: $0 (3,000/month)
 - Email fallback (no SMS): $0
 - Cloudflare R2: $0 (10GB/month)
@@ -789,6 +798,7 @@ CREATE TRIGGER listings_search_vector_update
 - **Total: $0/month** 🎉
 
 ### When to Upgrade:
+
 - Email: Upgrade when >3,000 emails/month
 - Storage: Upgrade when >10GB files
 - Moderation: Add OpenAI when >100 listings/day
@@ -842,7 +852,7 @@ curl -X POST 'https://api.resend.com/emails' \
   }'
 
 # Test local file upload
-curl -X POST http://localhost:3000/api/upload \
+curl -X POST http://localhost:3400/api/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@test-image.jpg"
 
@@ -860,15 +870,18 @@ curl -X POST http://localhost:3000/api/moderation/test \
 ## 📚 Additional Free Tools
 
 ### Monitoring (Free Alternatives):
+
 - **UptimeRobot:** Free uptime monitoring (50 monitors)
 - **Better Stack:** Free logs (1GB/month)
 - **Grafana Cloud:** Free tier (10k metrics, 50GB logs)
 
 ### Error Tracking:
+
 - **Sentry:** Free tier (5k errors/month)
 - **LogRocket:** Free tier (1k sessions/month)
 
 ### Analytics:
+
 - **Plausible:** Self-hosted (free)
 - **Umami:** Self-hosted (free)
 - **PostHog:** Free tier (1M events/month)
@@ -902,6 +915,7 @@ npm run test:services  # Verify all free services work
 **Recommendation:** Start with free alternatives, upgrade to paid services only when you hit limits or need advanced features. This approach lets you validate your product and business model before committing to expensive services.
 
 **Next Steps:**
+
 1. Implement Resend email service (30 minutes)
 2. Set up Cloudflare R2 storage (45 minutes)
 3. Add basic content moderation (1 hour)

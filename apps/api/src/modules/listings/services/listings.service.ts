@@ -4,8 +4,8 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
-import { CacheService } from '@/common/cache/cache.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CacheService } from '../../../common/cache/cache.service';
 import {
   Listing,
   ListingStatus,
@@ -15,7 +15,7 @@ import {
   ListingCondition,
   DepositType,
 } from '@rental-portal/database';
-import { CategoryTemplateService } from '@/modules/categories/services/category-template.service';
+import { CategoryTemplateService } from '../../categories/services/category-template.service';
 import { ListingValidationService } from './listing-validation.service';
 
 export interface CreateListingDto {

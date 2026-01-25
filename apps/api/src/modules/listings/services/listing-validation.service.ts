@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
-import { CategoryTemplateService } from '@/modules/categories/services/category-template.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CategoryTemplateService } from '../../categories/services/category-template.service';
 import { Listing } from '@rental-portal/database';
 
 export interface ValidationResult {
@@ -78,7 +78,7 @@ export class ListingValidationService {
       errors.push('Booking mode is required');
     }
 
-    if (listing.bookingMode === 'REQUEST' && !listing.leadTime) {
+    if (listing.bookingMode === 'REQUEST_TO_BOOK' && !listing.leadTime) {
       errors.push('Lead time is required for request booking mode');
     }
 
@@ -105,11 +105,11 @@ export class ListingValidationService {
     }
 
     // Validate pricing mode specific requirements
-    if (listing.pricingMode === 'HOURLY' && !listing.hourlyPrice) {
+    if (listing.pricingMode === 'PER_HOUR' && !listing.hourlyPrice) {
       errors.push('Hourly price is required for hourly pricing mode');
     }
 
-    if (listing.pricingMode === 'DAILY' && !listing.dailyPrice) {
+    if (listing.pricingMode === 'PER_DAY' && !listing.dailyPrice) {
       errors.push('Daily price is required for daily pricing mode');
     }
 

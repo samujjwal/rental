@@ -1,7 +1,7 @@
 export default () => ({
   // Application
   nodeEnv: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT || '3000', 10),
+  port: parseInt(process.env.PORT || '3400', 10),
   apiPrefix: process.env.API_PREFIX || 'api',
 
   // Database
@@ -82,8 +82,8 @@ export default () => ({
   // CORS
   cors: {
     origins: process.env.CORS_ORIGINS?.split(',') || [
-      'http://localhost:3000',
-      'http://localhost:3001',
+      'http://localhost:3401',
+      'http://localhost:3400',
     ],
   },
 

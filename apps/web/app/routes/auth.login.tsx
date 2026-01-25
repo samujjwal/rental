@@ -5,9 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import { useState } from "react";
 import { authApi } from "~/lib/api/auth";
-import { useAuthStore } from "~/lib/store/auth";
+import { createUserSession } from "~/utils/auth.server";
 import { loginSchema, type LoginInput } from "~/lib/validation/auth";
-import { redirect } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
@@ -20,18 +19,18 @@ export async function action({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const remember = formData.get("remember") === "true";
 
     try {
         const response = await authApi.login({ email, password });
 
-        // Store auth data
-        if (typeof window !== "undefined") {
-            localStorage.setItem("accessToken", response.accessToken);
-            localStorage.setItem("refreshToken", response.refreshToken);
-            localStorage.setItem("user", JSON.stringify(response.user));
-        }
-
-        return redirect("/dashboard");
+        return createUserSession({
+            userId: response.user.id,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+            remember,
+            redirectTo: "/dashboard",
+        });
     } catch (error: any) {
         return {
             error: error.response?.data?.message || "Login failed. Please try again.",

@@ -47,24 +47,20 @@ export class ConversationsService {
               select: {
                 id: true,
                 email: true,
-                profile: true,
+                firstName: true,
+                lastName: true,
+                profilePhotoUrl: true,
               },
             },
-          },
-        },
-        listing: {
-          select: {
-            id: true,
-            title: true,
-            images: true,
-            ownerId: true,
           },
         },
         _count: {
           select: {
             messages: {
               where: {
-                readAt: null,
+                readReceipts: {
+                  none: { userId },
+                },
                 senderId: { not: userId },
               },
             },
@@ -92,17 +88,11 @@ export class ConversationsService {
               select: {
                 id: true,
                 email: true,
-                profile: true,
+                firstName: true,
+                lastName: true,
+                profilePhotoUrl: true,
               },
             },
-          },
-        },
-        listing: {
-          select: {
-            id: true,
-            title: true,
-            images: true,
-            ownerId: true,
           },
         },
         _count: {
@@ -141,22 +131,12 @@ export class ConversationsService {
     if (search) {
       where.OR = [
         {
-          listing: {
-            title: {
-              contains: search,
-              mode: 'insensitive',
-            },
-          },
-        },
-        {
           participants: {
             some: {
               user: {
-                profile: {
-                  firstName: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
+                firstName: {
+                  contains: search,
+                  mode: 'insensitive',
                 },
               },
             },
@@ -175,17 +155,11 @@ export class ConversationsService {
                 select: {
                   id: true,
                   email: true,
-                  profile: true,
+                  firstName: true,
+                  lastName: true,
+                  profilePhotoUrl: true,
                 },
               },
-            },
-          },
-          listing: {
-            select: {
-              id: true,
-              title: true,
-              images: true,
-              ownerId: true,
             },
           },
           messages: {
@@ -196,7 +170,9 @@ export class ConversationsService {
             select: {
               messages: {
                 where: {
-                  readAt: null,
+                  readReceipts: {
+                    none: { userId },
+                  },
                   senderId: { not: userId },
                 },
               },
@@ -240,25 +216,20 @@ export class ConversationsService {
               select: {
                 id: true,
                 email: true,
-                profile: true,
+                firstName: true,
+                lastName: true,
+                profilePhotoUrl: true,
               },
             },
-          },
-        },
-        listing: {
-          select: {
-            id: true,
-            title: true,
-            images: true,
-            pricePerDay: true,
-            ownerId: true,
           },
         },
         _count: {
           select: {
             messages: {
               where: {
-                readAt: null,
+                readReceipts: {
+                  none: { userId },
+                },
                 senderId: { not: userId },
               },
             },
@@ -327,7 +298,9 @@ export class ConversationsService {
           select: {
             messages: {
               where: {
-                readAt: null,
+                readReceipts: {
+                  none: { userId },
+                },
                 senderId: { not: userId },
               },
             },

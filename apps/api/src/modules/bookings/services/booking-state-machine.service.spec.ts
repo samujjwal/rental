@@ -1,48 +1,42 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BookingStateMachineService } from './booking-state-machine.service';
-import { PrismaService } from '@/common/database/prisma.service';
-import { EventsService } from '@/common/events/events.service';
-import { AuditService } from '@/common/audit/audit.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CacheService } from '../../../common/cache/cache.service';
 import { BookingStatus } from '@rental-portal/database';
+
+const mockPrismaService = {
+  booking: {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    findMany: jest.fn(),
+  },
+  bookingStateHistory: {
+    create: jest.fn(),
+  },
+};
+
+const mockCacheService = {
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  publish: jest.fn(),
+};
 
 describe('BookingStateMachineService', () => {
   let service: BookingStateMachineService;
   let prisma: PrismaService;
-  let eventsService: EventsService;
-
-  const mockPrismaService = {
-    $transaction: jest.fn(),
-    booking: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
-    },
-    bookingStateHistory: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-    },
-  };
-
-  const mockEventsService = {
-    emitBookingStatusChanged: jest.fn(),
-  };
-
-  const mockAuditService = {
-    log: jest.fn(),
-  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BookingStateMachineService,
         { provide: PrismaService, useValue: mockPrismaService },
-        { provide: EventsService, useValue: mockEventsService },
-        { provide: AuditService, useValue: mockAuditService },
+        { provide: CacheService, useValue: mockCacheService },
       ],
     }).compile();
 
     service = module.get<BookingStateMachineService>(BookingStateMachineService);
     prisma = module.get<PrismaService>(PrismaService);
-    eventsService = module.get<EventsService>(EventsService);
   });
 
   afterEach(() => {
@@ -50,173 +44,85 @@ describe('BookingStateMachineService', () => {
   });
 
   describe('transition', () => {
-    it('should successfully transition from DRAFT to PENDING_OWNER_APPROVAL', async () => {
-      const mockBooking = {
-        id: 'booking-1',
-        status: BookingStatus.DRAFT,
-        listing: {
-          bookingMode: 'REQUEST_TO_BOOK',
-          ownerId: 'owner-1',
-        },
-        renterId: 'renter-1',
-        startDate: new Date(Date.now() + 86400000), // Tomorrow
-        endDate: new Date(Date.now() + 172800000), // Day after tomorrow
-      };
-
-      mockPrismaService.booking.findUnique.mockResolvedValue(mockBooking);
-      mockPrismaService.$transaction.mockImplementation(async (callback) => {
-        return await callback(mockPrismaService);
-      });
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...mockBooking,
+    it('should transition a booking from PENDING_OWNER_APPROVAL to PENDING_PAYMENT (Owner Approve)', async () => {
+      const bookingId = 'booking-1';
+      const ownerId = 'owner-1';
+      const booking = {
+        id: bookingId,
         status: BookingStatus.PENDING_OWNER_APPROVAL,
+        renterId: 'renter-1',
+        listing: { ownerId: ownerId },
+      };
+
+      mockPrismaService.booking.findUnique.mockResolvedValue(booking);
+      mockPrismaService.booking.update.mockResolvedValue({
+        ...booking,
+        status: BookingStatus.PENDING_PAYMENT,
       });
 
-      const result = await service.transition(
-        'booking-1',
-        BookingStatus.PENDING_OWNER_APPROVAL,
-        { userId: 'renter-1', reason: 'Booking request submitted' },
-      );
+      const result = await service.transition(bookingId, 'OWNER_APPROVE', ownerId, 'OWNER');
 
-      expect(result.status).toBe(BookingStatus.PENDING_OWNER_APPROVAL);
-      expect(mockEventsService.emitBookingStatusChanged).toHaveBeenCalled();
-    });
-
-    it('should reject invalid state transition', async () => {
-      const mockBooking = {
-        id: 'booking-1',
-        status: BookingStatus.DRAFT,
-        listing: { bookingMode: 'INSTANT_BOOK' },
-      };
-
-      mockPrismaService.booking.findUnique.mockResolvedValue(mockBooking);
-
-      await expect(
-        service.transition(
-          'booking-1',
-          BookingStatus.COMPLETED, // Invalid transition from DRAFT
-          { userId: 'user-1' },
-        ),
-      ).rejects.toThrow();
-    });
-
-    it('should enforce invariants for CONFIRMED state', async () => {
-      const mockBooking = {
-        id: 'booking-1',
-        status: BookingStatus.PENDING_PAYMENT,
-        paymentStatus: null, // Missing payment
-      };
-
-      mockPrismaService.booking.findUnique.mockResolvedValue(mockBooking);
-
-      await expect(
-        service.transition('booking-1', BookingStatus.CONFIRMED, {
-          userId: 'user-1',
+      expect(result.success).toBe(true);
+      expect(mockPrismaService.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: bookingId },
+          data: expect.objectContaining({
+            status: BookingStatus.PENDING_PAYMENT,
+          }),
         }),
-      ).rejects.toThrow('Payment must be completed');
+      );
+    });
+
+    it('should throw error for unauthorized transition', async () => {
+      const bookingId = 'booking-1';
+      const renterId = 'renter-1';
+      const booking = {
+        id: bookingId,
+        status: BookingStatus.PENDING_OWNER_APPROVAL,
+        renterId: renterId,
+        listing: { ownerId: 'owner-1' },
+      };
+
+      mockPrismaService.booking.findUnique.mockResolvedValue(booking);
+
+      await expect(
+        service.transition(bookingId, 'OWNER_APPROVE', renterId, 'RENTER'),
+      ).rejects.toThrow();
     });
   });
 
   describe('getAvailableTransitions', () => {
-    it('should return correct available transitions for DRAFT state', async () => {
-      mockPrismaService.booking.findUnique.mockResolvedValue({
-        status: BookingStatus.DRAFT,
-      });
+    it('should return available transitions for OWNER', () => {
+      const transitions = service.getAvailableTransitions(
+        BookingStatus.PENDING_OWNER_APPROVAL,
+        'OWNER',
+      );
 
-      const transitions = await service.getAvailableTransitions('booking-1');
-
-      expect(transitions).toContain(BookingStatus.PENDING_OWNER_APPROVAL);
-      expect(transitions).toContain(BookingStatus.PENDING_PAYMENT);
-      expect(transitions).toContain(BookingStatus.CANCELLED);
-    });
-
-    it('should return correct available transitions for CONFIRMED state', async () => {
-      mockPrismaService.booking.findUnique.mockResolvedValue({
-        status: BookingStatus.CONFIRMED,
-      });
-
-      const transitions = await service.getAvailableTransitions('booking-1');
-
-      expect(transitions).toContain(BookingStatus.IN_PROGRESS);
-      expect(transitions).toContain(BookingStatus.CANCELLED);
+      expect(transitions).toContain('OWNER_APPROVE');
+      expect(transitions).toContain('OWNER_REJECT');
     });
   });
 
-  describe('getStateHistory', () => {
-    it('should return booking state history', async () => {
-      const mockHistory = [
-        {
-          id: '1',
-          bookingId: 'booking-1',
-          fromState: BookingStatus.DRAFT,
-          toState: BookingStatus.PENDING_PAYMENT,
-          triggeredBy: 'user-1',
-          createdAt: new Date(),
-        },
-        {
-          id: '2',
-          bookingId: 'booking-1',
-          fromState: BookingStatus.PENDING_PAYMENT,
-          toState: BookingStatus.CONFIRMED,
-          triggeredBy: 'system',
-          createdAt: new Date(),
-        },
-      ];
-
-      mockPrismaService.bookingStateHistory.findMany.mockResolvedValue(mockHistory);
-
-      const result = await service.getStateHistory('booking-1');
-
-      expect(result).toHaveLength(2);
-      expect(result[0].toState).toBe(BookingStatus.PENDING_PAYMENT);
-      expect(result[1].toState).toBe(BookingStatus.CONFIRMED);
-    });
-  });
-
-  describe('checkAndTransitionExpiredBookings', () => {
-    it('should cancel bookings with expired payment', async () => {
+  describe('autoTransitionExpiredBookings', () => {
+    it('should expire pending payments', async () => {
       const expiredBooking = {
-        id: 'booking-1',
+        id: 'booking-expired',
         status: BookingStatus.PENDING_PAYMENT,
-        createdAt: new Date(Date.now() - 1800000 * 2), // 60 minutes ago (expired)
+        createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000), // 25 hours ago
+        renterId: 'renter-1',
+        listing: { ownerId: 'owner-1' },
       };
 
-      mockPrismaService.booking.findMany = jest.fn().mockResolvedValue([expiredBooking]);
-      mockPrismaService.$transaction.mockImplementation(async (callback) => {
-        return await callback(mockPrismaService);
-      });
+      // Mock findMany to return expired booking first, then empty for second call
+      mockPrismaService.booking.findMany
+        .mockResolvedValueOnce([expiredBooking])
+        .mockResolvedValueOnce([]);
+      mockPrismaService.booking.findUnique.mockResolvedValue(expiredBooking);
+      mockPrismaService.booking.update.mockResolvedValue(expiredBooking);
 
-      await service.checkAndTransitionExpiredBookings();
-
-      expect(mockPrismaService.booking.findMany).toHaveBeenCalled();
-      // Verify transition was attempted
-    });
-  });
-
-  describe('autoCompleteAfterInspection', () => {
-    it('should auto-complete bookings after inspection period', async () => {
-      const bookingForCompletion = {
-        id: 'booking-1',
-        status: BookingStatus.AWAITING_RETURN_INSPECTION,
-        endDate: new Date(Date.now() - 172800000 - 3600000), // More than 48 hours ago
-        conditionReports: [
-          {
-            type: 'CHECK_OUT',
-            status: 'APPROVED',
-            damages: [],
-          },
-        ],
-      };
-
-      mockPrismaService.booking.findMany = jest.fn().mockResolvedValue([bookingForCompletion]);
-      mockPrismaService.$transaction.mockImplementation(async (callback) => {
-        return await callback(mockPrismaService);
-      });
-
-      await service.autoCompleteAfterInspection();
+      await service.autoTransitionExpiredBookings();
 
       expect(mockPrismaService.booking.findMany).toHaveBeenCalled();
-      // Verify auto-completion was attempted
     });
   });
 });

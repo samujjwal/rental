@@ -79,7 +79,8 @@ export class BookingsService {
 
     // Determine initial status based on booking mode
     let initialStatus: BookingStatus;
-    if (listing.bookingMode === BookingMode.INSTANT) {
+    // Corrected Enum usage matching Prisma Schema
+    if (listing.bookingMode === BookingMode.INSTANT_BOOK) {
       initialStatus = BookingStatus.PENDING_PAYMENT;
     } else {
       initialStatus = BookingStatus.PENDING_OWNER_APPROVAL;
@@ -104,8 +105,8 @@ export class BookingsService {
         currency: listing.currency,
         stateHistory: {
           create: {
-            state: initialStatus,
-            transitionedBy: renterId,
+            toState: initialStatus,
+            changedBy: renterId,
             metadata: {
               bookingMode: listing.bookingMode,
               pricing: pricing.breakdown,

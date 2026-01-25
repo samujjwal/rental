@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
-import { CacheService } from '@/common/cache/cache.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CacheService } from '../../../common/cache/cache.service';
 
 @Injectable()
 export class InsuranceVerificationService {
@@ -56,14 +56,10 @@ export class InsuranceVerificationService {
     const flags: string[] = [];
     let confidence = 1.0;
 
-    // TODO: Implement automated checks:
-    // 1. OCR to extract policy details
-    // 2. Verify policy number format
-    // 3. Check provider against known insurance companies
-    // 4. Validate dates
-    // 5. Check coverage amounts
+    // Automated checks placeholder
+    // Currently relying on manual verification process.
+    // Future integration: OCR, Policy Format Validation, Carrier Verification.
 
-    // Example checks
     const policy = await this.prisma.auditLog.findFirst({
       where: {
         entityType: 'INSURANCE_POLICY',
@@ -74,6 +70,10 @@ export class InsuranceVerificationService {
     if (!policy) {
       flags.push('Policy not found');
       confidence = 0;
+    } else {
+      // Flag for manual review
+      flags.push('Manual verification required');
+      confidence = 0.5;
     }
 
     // If coverage seems too low
@@ -92,9 +92,7 @@ export class InsuranceVerificationService {
    */
   async verifyProvider(provider: string): Promise<boolean> {
     const knownProviders = await this.getKnownProviders();
-    return knownProviders.some(
-      (known) => known.toLowerCase() === provider.toLowerCase(),
-    );
+    return knownProviders.some((known) => known.toLowerCase() === provider.toLowerCase());
   }
 
   /**

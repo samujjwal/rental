@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { DepositStatus, BookingStatus } from '@rental-portal/database';
 import Stripe from 'stripe';
 
 @Injectable()
@@ -11,7 +12,7 @@ export class StripeService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.stripe = new Stripe(config.get<string>('STRIPE_SECRET_KEY'), {
+    this.stripe = new Stripe(config.get<string>('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2024-11-20.acacia',
     });
   }
@@ -23,7 +24,7 @@ export class StripeService {
       select: { stripeConnectId: true },
     });
 
-    if (user.stripeConnectId) {
+    if (user?.stripeConnectId) {
       return user.stripeConnectId;
     }
 
@@ -114,6 +115,10 @@ export class StripeService {
       },
     });
 
+    if (!paymentIntent.client_secret) {
+      throw new Error('Failed to retrieve client secret from Stripe');
+    }
+
     return {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
@@ -138,7 +143,7 @@ export class StripeService {
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: Math.round(amount * 100),
       currency: currency.toLowerCase(),
-      customer: booking.renter.stripeCustomerId,
+      customer: booking.renter.stripeCustomerId ?? undefined,
       capture_method: 'manual', // Hold funds without capturing
       metadata: {
         type: 'deposit',
@@ -152,8 +157,9 @@ export class StripeService {
         bookingId,
         amount,
         currency,
-        stripePaymentIntentId: paymentIntent.id,
-        status: 'HELD',
+        paymentIntentId: paymentIntent.id,
+        status: DepositStatus.AUTHORIZED,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days expiry approx
       },
     });
 
@@ -169,18 +175,19 @@ export class StripeService {
       throw new BadRequestException('Deposit hold not found');
     }
 
-    if (deposit.status !== 'HELD') {
-      throw new BadRequestException('Deposit not in HELD status');
+    // Map logic: 'HELD' means AUTHORIZED.
+    if (deposit.status !== DepositStatus.AUTHORIZED) {
+      throw new BadRequestException('Deposit not in AUTHORIZED status');
     }
 
     // Cancel the payment intent to release the hold
-    await this.stripe.paymentIntents.cancel(deposit.stripePaymentIntentId);
+    await this.stripe.paymentIntents.cancel(deposit.paymentIntentId);
 
     // Update status
     await this.prisma.depositHold.update({
       where: { id: depositHoldId },
       data: {
-        status: 'RELEASED',
+        status: DepositStatus.RELEASED,
         releasedAt: new Date(),
       },
     });
@@ -195,14 +202,14 @@ export class StripeService {
       throw new BadRequestException('Deposit hold not found');
     }
 
-    if (deposit.status !== 'HELD') {
-      throw new BadRequestException('Deposit not in HELD status');
+    if (deposit.status !== DepositStatus.AUTHORIZED) {
+      throw new BadRequestException('Deposit not in AUTHORIZED status');
     }
 
     // Capture the payment intent (or partial amount)
     const captureAmount = amount ? Math.round(amount * 100) : undefined;
 
-    await this.stripe.paymentIntents.capture(deposit.stripePaymentIntentId, {
+    await this.stripe.paymentIntents.capture(deposit.paymentIntentId, {
       amount_to_capture: captureAmount,
     });
 
@@ -210,9 +217,9 @@ export class StripeService {
     await this.prisma.depositHold.update({
       where: { id: depositHoldId },
       data: {
-        status: 'CAPTURED',
+        status: DepositStatus.CAPTURED,
         capturedAt: new Date(),
-        capturedAmount: amount || deposit.amount,
+        deductedAmount: amount || deposit.amount,
       },
     });
   }
@@ -282,6 +289,7 @@ export class StripeService {
 
   async handleWebhook(signature: string, payload: Buffer): Promise<any> {
     const webhookSecret = this.config.get<string>('STRIPE_WEBHOOK_SECRET');
+    if (!webhookSecret) return null; // Handle missing secret gracefully or throw
 
     const event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
 
@@ -323,8 +331,10 @@ export class StripeService {
     await this.prisma.booking.update({
       where: { id: bookingId },
       data: {
-        stripePaymentIntentId: paymentIntent.id,
-        paymentStatus: 'COMPLETED',
+        paymentIntentId: paymentIntent.id,
+        // CONFIRMED normally means approved by owner, but also payment successful.
+        // Assuming flow is: Request -> Owner Approves (PendingPayment) -> Payment Succeeds (CONFIRMED).
+        status: BookingStatus.CONFIRMED,
       },
     });
 
@@ -340,7 +350,11 @@ export class StripeService {
     await this.prisma.booking.update({
       where: { id: bookingId },
       data: {
-        paymentStatus: 'FAILED',
+        // If payment fails, it might go back to pending payment or stay there.
+        // We don't have a 'PAYMENT_FAILED' status.
+        // We can leave it as PENDING_PAYMENT or move to CANCELLED if expired?
+        // Let's not change status blindly to something that doesn't exist.
+        // paymentStatus: 'FAILED', // Removed
       },
     });
 
@@ -351,7 +365,7 @@ export class StripeService {
     await this.prisma.user.updateMany({
       where: { stripeConnectId: account.id },
       data: {
-        stripeAccountStatus: account.details_submitted ? 'VERIFIED' : 'PENDING',
+        stripeOnboardingComplete: account.details_submitted,
       },
     });
   }

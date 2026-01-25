@@ -3,9 +3,10 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js 18+ or 20+
 - npm 9+ or pnpm
-- Backend API running at http://localhost:3000
+- Backend API running at http://localhost:3400
 
 ### Installation
 
@@ -20,7 +21,7 @@ npm install
 npm run dev
 ```
 
-Visit http://localhost:5173
+Visit http://localhost:3401
 
 ### Build for Production
 
@@ -44,7 +45,7 @@ Create `.env` file in `apps/web`:
 
 ```env
 # API Configuration
-API_URL=http://localhost:3000/api/v1
+API_URL=http://localhost:3400/api/v1
 
 # Production API
 # API_URL=https://api.yourrentaldomain.com/api/v1
@@ -53,6 +54,7 @@ API_URL=http://localhost:3000/api/v1
 ### Vite Configuration
 
 `vite.config.ts` includes:
+
 - React Router plugin
 - TailwindCSS processing
 - Development proxy to backend API
@@ -63,10 +65,12 @@ API_URL=http://localhost:3000/api/v1
 ## 📦 Build Output
 
 Production build creates:
+
 - `build/client` - Client-side bundles
 - `build/server` - SSR server bundles
 
 Files are optimized:
+
 - Code splitting
 - Tree shaking
 - Minification
@@ -94,7 +98,7 @@ COPY --from=builder /app/build ./build
 COPY --from=builder /app/package*.json ./
 RUN npm ci --production
 
-EXPOSE 5173
+EXPOSE 3401
 CMD ["npm", "start"]
 ```
 
@@ -102,7 +106,7 @@ CMD ["npm", "start"]
 
 ```bash
 docker build -t rental-portal-web .
-docker run -p 5173:5173 -e API_URL=http://api:3000/api/v1 rental-portal-web
+docker run -p 3401:3401 -e API_URL=http://api:3400/api/v1 rental-portal-web
 ```
 
 ---
@@ -126,6 +130,7 @@ Configure environment variables in Vercel dashboard.
    - Node.js 20 installed
 
 2. **PM2 Process Manager:**
+
    ```bash
    npm install -g pm2
    pm2 start npm --name "rental-web" -- start
@@ -134,13 +139,14 @@ Configure environment variables in Vercel dashboard.
    ```
 
 3. **Nginx Reverse Proxy:**
+
    ```nginx
    server {
        listen 80;
        server_name yourdomain.com;
-       
+
        location / {
-           proxy_pass http://localhost:5173;
+           proxy_pass http://localhost:3401;
            proxy_http_version 1.1;
            proxy_set_header Upgrade $http_upgrade;
            proxy_set_header Connection 'upgrade';
@@ -303,6 +309,7 @@ npm start
 ### Common Issues
 
 **1. API Connection Failed**
+
 ```
 Solution: Check API_URL environment variable
 Verify backend is running and accessible
@@ -310,6 +317,7 @@ Check CORS configuration
 ```
 
 **2. Build Fails**
+
 ```
 Solution: Clear node_modules and package-lock.json
 Run npm install again
@@ -317,6 +325,7 @@ Check for TypeScript errors
 ```
 
 **3. Images Not Loading**
+
 ```
 Solution: Verify image URLs are absolute
 Check CORS for image domains
@@ -324,6 +333,7 @@ Ensure proper content-type headers
 ```
 
 **4. Slow Performance**
+
 ```
 Solution: Enable production build
 Use CDN for static assets
@@ -336,6 +346,7 @@ Check network waterfall
 ## 📞 Support
 
 For deployment issues:
+
 - Check SESSION_6_SUMMARY.md
 - Review TECH_REFERENCE_GUIDE.md
 - Consult React Router v7 docs

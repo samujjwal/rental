@@ -34,7 +34,7 @@ export function setupSwagger(app: INestApplication): void {
     .addTag('upload', 'File upload endpoints')
     .addTag('webhooks', 'Webhook endpoints')
     .addTag('health', 'Health check endpoints')
-    .addServer('http://localhost:3000', 'Local development server')
+    .addServer('http://localhost:3400', 'Local development server')
     .addServer('https://api-staging.rentalportal.com', 'Staging server')
     .addServer('https://api.rentalportal.com', 'Production server')
     .build();

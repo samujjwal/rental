@@ -1,6 +1,13 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
-import { Availability, RecurrenceRule } from '@rental-portal/database';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { Availability } from '@rental-portal/database';
+
+export interface RecurrenceRule {
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  interval: number;
+  until?: Date;
+  count?: number;
+}
 
 export interface CreateAvailabilityDto {
   listingId: string;
@@ -62,7 +69,12 @@ export class AvailabilityService {
     }
 
     return this.prisma.availability.create({
-      data: dto,
+      data: {
+        listingId: dto.listingId,
+        startDate: dto.startDate,
+        endDate: dto.endDate,
+        available: dto.isAvailable,
+      },
     });
   }
 
@@ -117,7 +129,7 @@ export class AvailabilityService {
     // Check availability rules
     const availabilityRules = await this.getListingAvailability(listingId, startDate, endDate);
 
-    const unavailableRules = availabilityRules.filter((rule) => !rule.isAvailable);
+    const unavailableRules = availabilityRules.filter((rule) => !rule.available);
     if (unavailableRules.length > 0) {
       return {
         isAvailable: false,
@@ -198,22 +210,29 @@ export class AvailabilityService {
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
 
-      // Upsert availability for this date
-      await this.prisma.availability.upsert({
+      // Check if availability exists for this date
+      const existing = await this.prisma.availability.findFirst({
         where: {
-          listingId_startDate: {
-            listingId,
-            startDate: startOfDay,
-          },
-        },
-        update: { isAvailable },
-        create: {
           listingId,
           startDate: startOfDay,
-          endDate: endOfDay,
-          isAvailable,
         },
       });
+
+      if (existing) {
+        await this.prisma.availability.update({
+          where: { id: existing.id },
+          data: { available: isAvailable },
+        });
+      } else {
+        await this.prisma.availability.create({
+          data: {
+            listingId,
+            startDate: startOfDay,
+            endDate: endOfDay,
+            available: isAvailable,
+          },
+        });
+      }
 
       count++;
     }

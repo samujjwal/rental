@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
-import { CacheService } from '@/common/cache/cache.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CacheService } from '../../../common/cache/cache.service';
 import { ImageModerationService } from './image-moderation.service';
 import { TextModerationService } from './text-moderation.service';
 import { ModerationQueueService } from './moderation-queue.service';
@@ -223,8 +223,7 @@ export class ContentModerationService {
     }
 
     return {
-      status:
-        textResult.flags.length > 0 ? ModerationStatus.FLAGGED : ModerationStatus.APPROVED,
+      status: textResult.flags.length > 0 ? ModerationStatus.FLAGGED : ModerationStatus.APPROVED,
       confidence: textResult.confidence,
       flags: textResult.flags,
       requiresHumanReview: textResult.flags.length > 0,
@@ -304,7 +303,7 @@ export class ContentModerationService {
             status: result.status,
             flags: result.flags,
             confidence: result.confidence,
-          },
+          } as any,
         },
       });
     }
@@ -324,20 +323,17 @@ export class ContentModerationService {
     });
 
     const totalViolations = logs.filter((l) => l.action === 'CONTENT_REJECTED').length;
-    const recentViolations = logs
-      .filter(
-        (l) =>
-          l.action === 'CONTENT_REJECTED' &&
-          l.createdAt > new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
-      )
-      .length;
+    const recentViolations = logs.filter(
+      (l) =>
+        l.action === 'CONTENT_REJECTED' &&
+        l.createdAt > new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+    ).length;
 
     return {
       totalViolations,
       recentViolations,
       logs: logs.slice(0, 10),
-      riskLevel:
-        recentViolations > 3 ? 'HIGH' : recentViolations > 1 ? 'MEDIUM' : 'LOW',
+      riskLevel: recentViolations > 3 ? 'HIGH' : recentViolations > 1 ? 'MEDIUM' : 'LOW',
     };
   }
 }

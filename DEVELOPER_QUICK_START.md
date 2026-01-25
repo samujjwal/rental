@@ -7,11 +7,13 @@ Get the Rental Portal platform running locally in under 10 minutes.
 ## Prerequisites
 
 ### Required
+
 - **Node.js**: v20+ ([Download](https://nodejs.org/))
 - **pnpm**: v8+ (`npm install -g pnpm`)
 - **Docker Desktop**: For PostgreSQL, Redis, Elasticsearch ([Download](https://www.docker.com/products/docker-desktop))
 
 ### Optional (for full features)
+
 - **SendGrid Account**: Email delivery
 - **Firebase Project**: Push notifications
 - **Twilio Account**: SMS delivery
@@ -44,7 +46,7 @@ docker-compose ps
 # Expected output:
 # NAME                STATUS
 # rental-postgres     Up
-# rental-redis        Up  
+# rental-redis        Up
 # rental-elasticsearch Up
 ```
 
@@ -81,6 +83,7 @@ cp .env.example .env
 ```
 
 **Minimal `.env` for local development:**
+
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rental_portal
 REDIS_HOST=localhost
@@ -112,15 +115,16 @@ cp .env.example .env
 # Start development server
 pnpm dev
 
-# App starts at http://localhost:5173
+# App starts at http://localhost:3401
 ```
 
 ### 7. Verify Installation
 
 Open browser to:
-- **Frontend**: http://localhost:5173
-- **API**: http://localhost:3000/api/health
-- **API Docs**: http://localhost:3000/api/docs
+
+- **Frontend**: http://localhost:3401
+- **API**: http://localhost:3400/api/health
+- **API Docs**: http://localhost:3400/api/docs
 - **Prisma Studio**: http://localhost:5555
 
 ---
@@ -248,18 +252,20 @@ TWILIO_ACCOUNT_SID=ACxxxxx       # SMS delivery
 ## Common Issues & Solutions
 
 ### Issue: Port already in use
+
 ```bash
 # Find process using port
-lsof -i :3000  # or :5173, :5432, :6379, :9200
+lsof -i :3400  # or :3401, :5432, :6379, :9200
 
 # Kill process
 kill -9 <PID>
 
 # Or use different ports in .env
-PORT=3001
+PORT=3401
 ```
 
 ### Issue: Docker containers not starting
+
 ```bash
 # Check Docker Desktop is running
 docker ps
@@ -273,6 +279,7 @@ docker-compose logs -f
 ```
 
 ### Issue: Database connection error
+
 ```bash
 # Verify PostgreSQL is running
 docker-compose ps
@@ -286,6 +293,7 @@ npx prisma migrate reset
 ```
 
 ### Issue: Prisma Client not generated
+
 ```bash
 cd packages/database
 npx prisma generate
@@ -296,6 +304,7 @@ pnpm install
 ```
 
 ### Issue: Redis connection error
+
 ```bash
 # Verify Redis is running
 docker-compose ps
@@ -310,6 +319,7 @@ REDIS_PORT=6379
 ```
 
 ### Issue: Elasticsearch not accessible
+
 ```bash
 # Check if Elasticsearch is running
 curl http://localhost:9200
@@ -327,6 +337,7 @@ curl http://localhost:9200/_cluster/health
 ## API Testing with cURL
 
 ### Authentication
+
 ```bash
 # Register new user
 curl -X POST http://localhost:3000/api/auth/register \
@@ -351,6 +362,7 @@ export TOKEN=<access_token_from_login>
 ```
 
 ### Create Listing
+
 ```bash
 curl -X POST http://localhost:3000/api/listings \
   -H "Authorization: Bearer $TOKEN" \
@@ -373,12 +385,14 @@ curl -X POST http://localhost:3000/api/listings \
 ```
 
 ### Search Listings
+
 ```bash
 curl -X GET "http://localhost:3000/api/search/listings?query=test&location=San+Francisco&radius=10" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Create Booking
+
 ```bash
 curl -X POST http://localhost:3000/api/bookings \
   -H "Authorization: Bearer $TOKEN" \
@@ -478,22 +492,26 @@ Set breakpoints and press F5 to start debugging.
 ## Next Steps
 
 ### For Backend Development
+
 1. Read [API_README.md](./API_README.md)
 2. Review [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md)
 3. Explore Swagger docs at http://localhost:3000/api/docs
 4. Check out [INTEGRATION_EXAMPLES.md](./INTEGRATION_EXAMPLES.md)
 
 ### For Frontend Development
+
 1. Read [apps/web/README.md](./apps/web/README.md)
 2. Review React Router v7 documentation
 3. Explore [apps/web/app/lib/api/](./apps/web/app/lib/api/) for API hooks
 
 ### For Database Work
+
 1. Review [packages/database/prisma/schema.prisma](./packages/database/prisma/schema.prisma)
 2. Read Prisma documentation
 3. Use Prisma Studio for visual exploration
 
 ### Configure External Services (Optional)
+
 1. [SendGrid Setup](https://docs.sendgrid.com/) - Email delivery
 2. [Firebase Setup](https://firebase.google.com/docs/cloud-messaging) - Push notifications
 3. [Twilio Setup](https://www.twilio.com/docs/sms) - SMS delivery
@@ -505,18 +523,21 @@ Set breakpoints and press F5 to start debugging.
 ## Getting Help
 
 ### Documentation
+
 - **Project Status**: [CURRENT_PROJECT_STATUS.md](./CURRENT_PROJECT_STATUS.md)
 - **API Reference**: [API_README.md](./API_README.md)
 - **Testing Guide**: [TESTING_GUIDE.md](./TESTING_GUIDE.md)
 - **New Features**: [SPRINT_1_COMPLETE.md](./SPRINT_1_COMPLETE.md)
 
 ### External Resources
+
 - [NestJS Documentation](https://docs.nestjs.com/)
 - [React Router v7 Docs](https://reactrouter.com/en/main)
 - [Prisma Documentation](https://www.prisma.io/docs)
 - [Tailwind CSS](https://tailwindcss.com/docs)
 
 ### Community
+
 - Open an issue on GitHub
 - Check existing documentation in `/docs`
 
@@ -525,6 +546,7 @@ Set breakpoints and press F5 to start debugging.
 ## Production Deployment
 
 For production deployment instructions, see:
+
 - [DEPLOYMENT.md](./apps/web/DEPLOYMENT.md) - Frontend deployment
 - [SPRINT_1_COMPLETE.md](./SPRINT_1_COMPLETE.md) - Production checklist
 

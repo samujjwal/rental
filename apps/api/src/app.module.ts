@@ -57,7 +57,7 @@ import configuration from './config/configuration';
       useFactory: () => ({
         redis: {
           host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
+          port: parseInt(process.env.REDIS_PORT || '3479'),
           password: process.env.REDIS_PASSWORD,
         },
       }),
@@ -66,7 +66,7 @@ import configuration from './config/configuration';
     // Elasticsearch
     ElasticsearchModule.registerAsync({
       useFactory: () => ({
-        node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
+        node: process.env.ELASTICSEARCH_NODE || 'http://localhost:3492',
         auth: process.env.ELASTICSEARCH_USERNAME
           ? {
               username: process.env.ELASTICSEARCH_USERNAME,

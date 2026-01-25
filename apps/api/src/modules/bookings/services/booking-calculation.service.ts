@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PricingMode, DepositType } from '@rental-portal/database';
 
 export interface PriceCalculation {
@@ -95,28 +95,28 @@ export class BookingCalculationService {
 
   private calculateBasePrice(listing: any, duration: { value: number; type: string }): number {
     switch (listing.pricingMode) {
-      case PricingMode.HOURLY:
+      case PricingMode.PER_HOUR:
         return (listing.hourlyPrice || listing.basePrice) * duration.value;
 
-      case PricingMode.DAILY:
+      case PricingMode.PER_DAY:
         if (duration.type === 'hours') {
           return listing.dailyPrice || listing.basePrice;
         }
         return (listing.dailyPrice || listing.basePrice) * duration.value;
 
-      case PricingMode.WEEKLY:
+      case PricingMode.PER_WEEK:
         if (duration.type === 'days' && duration.value < 7) {
           return (listing.dailyPrice || listing.basePrice) * duration.value;
         }
         return (listing.weeklyPrice || listing.basePrice) * duration.value;
 
-      case PricingMode.MONTHLY:
+      case PricingMode.PER_MONTH:
         if (duration.type === 'days' && duration.value < 30) {
           return (listing.dailyPrice || listing.basePrice) * duration.value;
         }
         return (listing.monthlyPrice || listing.basePrice) * duration.value;
 
-      case PricingMode.FIXED:
+      case PricingMode.CUSTOM:
       default:
         return listing.basePrice;
     }
@@ -158,7 +158,7 @@ export class BookingCalculationService {
       return 0;
     }
 
-    if (listing.depositType === DepositType.FIXED) {
+    if (listing.depositType === DepositType.FIXED_AMOUNT) {
       return listing.depositAmount || 0;
     }
 

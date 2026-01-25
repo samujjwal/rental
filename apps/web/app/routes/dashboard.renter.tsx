@@ -15,9 +15,8 @@ import {
   TrendingUp,
   DollarSign,
 } from 'lucide-react';
-import { bookingsApi } from '~/lib/api/bookings';
-import { listingsApi } from '~/lib/api/listings';
-import { reviewsApi } from '~/lib/api/reviews';
+import { requireUserId, getUserToken } from '~/utils/auth.server';
+import { apiClient } from '~/lib/api-client';
 import type { Booking } from '~/types/booking';
 import type { Listing } from '~/types/listing';
 import type { Review } from '~/types/review';
@@ -28,26 +27,26 @@ export const meta: MetaFunction = () => {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Get current user from session/token
-  // For now, we'll mock the userId - in production, get from auth context
-  const userId = 'current-user-id'; // TODO: Get from auth
+  const userId = await requireUserId(request);
+  const token = await getUserToken(request);
+  const headers = { Authorization: `Bearer ${token}` };
 
   try {
     const [bookings, favorites, reviews, recommendations] = await Promise.all([
-      bookingsApi.getBookingsByRenterId(userId),
-      listingsApi.getFavoriteListings(userId),
-      reviewsApi.getReviewsByReviewer(userId),
-      listingsApi.getRecommendations(userId),
+      apiClient.get<Booking[]>(`/bookings/renter/${userId}`, { headers }),
+      apiClient.get<Listing[]>(`/listings/favorites?userId=${userId}`, { headers }),
+      apiClient.get<Review[]>(`/reviews/reviewer/${userId}`, { headers }),
+      apiClient.get<Listing[]>(`/listings/recommendations?userId=${userId}`, { headers }),
     ]);
 
     // Calculate statistics
-    const upcomingBookings = bookings.filter(b => 
+    const upcomingBookings = bookings.filter(b =>
       b.state === 'CONFIRMED' && new Date(b.startDate) > new Date()
     ).length;
-    const activeBookings = bookings.filter(b => 
+    const activeBookings = bookings.filter(b =>
       b.state === 'IN_PROGRESS'
     ).length;
-    const completedBookings = bookings.filter(b => 
+    const completedBookings = bookings.filter(b =>
       b.state === 'COMPLETED' || b.state === 'SETTLED'
     ).length;
     const totalSpent = bookings
@@ -68,12 +67,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
 
-    return { 
-      stats, 
+    return {
+      stats,
       recentBookings,
       favorites: favorites.slice(0, 3),
       recommendations: recommendations.slice(0, 4),
-      pendingReviews: bookings.filter(b => 
+      pendingReviews: bookings.filter(b =>
         b.state === 'COMPLETED' && !b.hasReview
       ).slice(0, 3),
     };
@@ -83,15 +82,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
-function StatCard({ 
-  icon: Icon, 
-  label, 
-  value, 
-  color = 'indigo' 
-}: { 
-  icon: any; 
-  label: string; 
-  value: string | number; 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color = 'indigo'
+}: {
+  icon: any;
+  label: string;
+  value: string | number;
   color?: string;
 }) {
   const colorClasses = {
@@ -170,7 +169,7 @@ function BookingCard({ booking }: { booking: Booking }) {
               {booking.state.replace(/_/g, ' ')}
             </span>
           </div>
-          
+
           <div className="space-y-1">
             <div className="flex items-center text-sm text-gray-600">
               <Calendar className="w-4 h-4 mr-2" />

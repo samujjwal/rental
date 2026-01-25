@@ -1,4 +1,5 @@
 # Production Readiness Checklist
+
 ## Complete Pre-Launch Verification
 
 **Platform**: Universal Rental Portal  
@@ -26,11 +27,13 @@
 ### Immediate Actions (Today)
 
 #### 1. Fix Remaining TypeScript Errors
+
 **Status**: 🟡 296 errors remaining  
 **Priority**: P1  
 **Time**: 2-3 hours
 
 **Error Categories:**
+
 ```bash
 # Check error breakdown
 cd apps/api
@@ -38,6 +41,7 @@ pnpm run build 2>&1 | grep "TS[0-9]" | sort | uniq -c | sort -rn | head -20
 ```
 
 **Top Issues to Fix:**
+
 - [ ] **LedgerEntry userId field** (16 errors): Add userId field to schema or remove from code
 - [ ] **UserSelect profile field** (16 errors): Add profile relation or update queries
 - [ ] **Booking listing property** (9 errors): Fix relation or include strategy
@@ -48,6 +52,7 @@ pnpm run build 2>&1 | grep "TS[0-9]" | sort | uniq -c | sort -rn | head -20
   - PAYMENT_RECEIVED (NotificationType)
 
 **Fix Strategy:**
+
 ```typescript
 // Option 1: Add missing field to schema
 model LedgerEntry {
@@ -63,11 +68,13 @@ model LedgerEntry {
 ```
 
 #### 2. Database Migration Completion
+
 **Status**: 🔴 Shadow database error  
 **Priority**: P0  
 **Time**: 30 minutes
 
 **Actions:**
+
 ```bash
 # Check current migration status
 cd packages/database
@@ -85,17 +92,20 @@ pnpm prisma db seed
 ```
 
 **Migration Files to Verify:**
+
 - [ ] `20260123_add_insurance_and_preferences` - Latest migration
 - [ ] `20260124_add_audit_log_metadata` - New migration for metadata field
 - [ ] All migrations apply cleanly
 - [ ] Seed data runs successfully
 
 #### 3. Environment Configuration
+
 **Status**: ✅ Template exists (.env.example)  
 **Priority**: P0  
 **Time**: 10 minutes
 
 **Required API Keys:**
+
 ```bash
 # 1. Resend Email Service (2 minutes)
 # Visit: https://resend.com/signup
@@ -124,15 +134,16 @@ JWT_SECRET=$(openssl rand -base64 32)
 JWT_REFRESH_SECRET=$(openssl rand -base64 32)
 
 # 5. Database URLs
-DATABASE_URL="postgresql://postgres:postgres@localhost:5434/rental_portal?schema=public"
-REDIS_URL="redis://localhost:6379"
+DATABASE_URL="postgresql://postgres:postgres@localhost:3432/rental_portal?schema=public"
+REDIS_URL="redis://localhost:3479"
 
 # 6. Application URLs
-API_URL=http://localhost:3000
-WEB_URL=http://localhost:5173
+API_URL=http://localhost:3400
+WEB_URL=http://localhost:3401
 ```
 
 **Automation Script:**
+
 ```bash
 ./setup-env.sh  # Copies .env.example and prompts for values
 ```
@@ -142,16 +153,19 @@ WEB_URL=http://localhost:5173
 ## 🔌 External Services Setup
 
 ### 1. Resend Email Service
+
 **Purpose**: Transactional emails (verification, notifications, receipts)  
 **Cost**: FREE (3,000 emails/month), then $20/month  
 **Setup Time**: 2 minutes
 
 **Steps:**
+
 1. Sign up at https://resend.com
 2. Verify domain (optional, or use resend.dev for testing)
 3. Create API key in Settings > API Keys
 4. Add to `.env`: `RESEND_API_KEY=re_xxxxx`
 5. Test:
+
 ```bash
 curl -X POST https://api.resend.com/emails \
   -H "Authorization: Bearer YOUR_API_KEY" \
@@ -165,6 +179,7 @@ curl -X POST https://api.resend.com/emails \
 ```
 
 **Verification:**
+
 - [ ] API key configured in `.env`
 - [ ] Test email sent successfully
 - [ ] User registration email works
@@ -172,11 +187,13 @@ curl -X POST https://api.resend.com/emails \
 - [ ] Payment receipt email works
 
 ### 2. Stripe Payment Gateway
+
 **Purpose**: Payment processing, payouts, escrow  
 **Cost**: 2.9% + $0.30 per transaction  
 **Setup Time**: 5 minutes + verification (1-2 days for production)
 
 **Steps:**
+
 1. Sign up at https://dashboard.stripe.com/register
 2. Switch to **Test mode** (top-right toggle)
 3. Copy test keys from Developers > API keys
@@ -185,6 +202,7 @@ curl -X POST https://api.resend.com/emails \
    - Events: `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`
    - Copy webhook secret
 5. Add to `.env`:
+
 ```env
 STRIPE_SECRET_KEY=sk_test_xxxxx
 STRIPE_PUBLISHABLE_KEY=pk_test_xxxxx
@@ -192,6 +210,7 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 ```
 
 **Test Cards:**
+
 ```
 Success: 4242 4242 4242 4242
 Decline: 4000 0000 0000 0002
@@ -199,6 +218,7 @@ Decline: 4000 0000 0000 0002
 ```
 
 **Verification:**
+
 - [ ] Test keys configured
 - [ ] Webhook endpoint receiving events
 - [ ] Successful payment with test card
@@ -207,16 +227,19 @@ Decline: 4000 0000 0000 0002
 - [ ] Stripe Connect ready for owner payouts
 
 ### 3. Cloudflare R2 Storage
+
 **Purpose**: File uploads (listing photos, condition reports, documents)  
 **Cost**: FREE (10GB storage, 1M reads/month), then $0.015/GB  
 **Setup Time**: 3 minutes
 
 **Steps:**
+
 1. Sign up at https://dash.cloudflare.com/
 2. Navigate to R2 Object Storage
 3. Create bucket: `rental-portal-uploads`
 4. Create API token with R2 permissions
 5. Add to `.env`:
+
 ```env
 R2_ACCOUNT_ID=your_account_id
 R2_ACCESS_KEY_ID=your_access_key
@@ -225,6 +248,7 @@ R2_BUCKET_NAME=rental-portal-uploads
 ```
 
 **Verification:**
+
 - [ ] Bucket created
 - [ ] API credentials configured
 - [ ] Test file upload via API
@@ -233,31 +257,37 @@ R2_BUCKET_NAME=rental-portal-uploads
 - [ ] Public URL generation works
 
 ### 4. PostgreSQL Database
+
 **Status**: ✅ Local setup complete  
 **Production**: Requires managed service
 
 **Options:**
+
 - **AWS RDS PostgreSQL**: $0.04/hour (~$30/month for db.t4g.micro)
 - **DigitalOcean Managed DB**: $15/month (1GB RAM)
 - **Supabase**: FREE tier available
 - **Railway**: $5/month
 
 **Configuration:**
+
 ```env
 DATABASE_URL="postgresql://user:password@host:5432/rental_portal?schema=public"
 ```
 
 ### 5. Redis Cache
+
 **Status**: ✅ Local setup complete  
 **Production**: Requires managed service
 
 **Options:**
+
 - **AWS ElastiCache**: $0.023/hour (~$17/month for cache.t4g.micro)
 - **DigitalOcean Managed Redis**: $15/month (1GB RAM)
 - **Upstash**: FREE tier (10k commands/day)
 - **Railway**: $5/month
 
 **Configuration:**
+
 ```env
 REDIS_URL="redis://user:password@host:6379"
 ```
@@ -267,6 +297,7 @@ REDIS_URL="redis://user:password@host:6379"
 ## 🗄️ Database Migrations
 
 ### Migration Status Check
+
 ```bash
 cd packages/database
 
@@ -278,6 +309,7 @@ pnpm prisma migrate status
 ```
 
 ### Apply Pending Migrations
+
 ```bash
 # Development (with data reset)
 pnpm prisma migrate dev
@@ -287,6 +319,7 @@ pnpm prisma migrate deploy
 ```
 
 ### Seed Initial Data
+
 ```bash
 # Run seed script
 pnpm prisma db seed
@@ -298,6 +331,7 @@ pnpm prisma db seed
 ```
 
 ### Backup Strategy
+
 ```bash
 # Create backup before migration
 pg_dump rental_portal > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -307,6 +341,7 @@ psql rental_portal < backup_20260124_120000.sql
 ```
 
 **Checklist:**
+
 - [ ] All migrations applied successfully
 - [ ] Seed data loaded
 - [ ] Backup created before production migration
@@ -317,8 +352,10 @@ psql rental_portal < backup_20260124_120000.sql
 ## 🔒 Security Hardening
 
 ### 1. Authentication & Authorization
+
 **Status**: ✅ Implementation complete  
 **Verification**:
+
 - [ ] JWT tokens expire correctly (15 min access, 7 days refresh)
 - [ ] Refresh token rotation works
 - [ ] Password reset flow secure
@@ -328,8 +365,10 @@ psql rental_portal < backup_20260124_120000.sql
 - [ ] @CurrentUser decorator validates correctly
 
 ### 2. Input Validation
+
 **Status**: ✅ Implementation complete  
 **Verification**:
+
 - [ ] All DTO classes have validation decorators
 - [ ] SQL injection prevented (Prisma parameterized queries)
 - [ ] XSS prevented (React escapes by default)
@@ -338,8 +377,10 @@ psql rental_portal < backup_20260124_120000.sql
 - [ ] Date validation (no past bookings)
 
 ### 3. Rate Limiting
+
 **Status**: ✅ Implementation complete  
 **Configuration**:
+
 ```typescript
 // apps/api/src/common/rate-limit/rate-limit.module.ts
 @ThrottlerModule.forRoot({
@@ -353,28 +394,32 @@ psql rental_portal < backup_20260124_120000.sql
 ```
 
 **Verify Endpoints:**
+
 ```bash
 # Test rate limit
 for i in {1..150}; do
-  curl http://localhost:3000/api/health
+  curl http://localhost:3400/api/health
 done
 
 # Should return 429 after 100 requests
 ```
 
 **Checklist:**
+
 - [ ] Global rate limit active (100 req/min)
 - [ ] Auth endpoints stricter (5 login attempts / 15 min)
 - [ ] Payment endpoints protected
 - [ ] Redis storage for rate limit state
 
 ### 4. CORS Configuration
+
 **Status**: ✅ Implementation complete  
 **Verification**:
+
 ```typescript
 // apps/api/src/main.ts
 app.enableCors({
-  origin: process.env.WEB_URL || 'http://localhost:5173',
+  origin: process.env.WEB_URL || 'http://localhost:3401',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -382,19 +427,23 @@ app.enableCors({
 ```
 
 **Checklist:**
+
 - [ ] CORS restricted to web app domain only
 - [ ] Credentials (cookies) allowed
-- [ ] No wildcard (*) in production
+- [ ] No wildcard (\*) in production
 - [ ] Preflight requests handled
 
 ### 5. Security Headers
+
 **Status**: ✅ Implementation complete (Helmet middleware)  
 **Verification**:
+
 ```bash
-curl -I http://localhost:3000 | grep -E "X-|Strict-Transport|Content-Security"
+curl -I http://localhost:3400 | grep -E "X-|Strict-Transport|Content-Security"
 ```
 
 **Expected Headers:**
+
 ```
 X-Frame-Options: DENY
 X-Content-Type-Options: nosniff
@@ -404,21 +453,25 @@ Content-Security-Policy: default-src 'self'
 ```
 
 **Checklist:**
+
 - [ ] Helmet middleware active
 - [ ] CSP policy configured
 - [ ] HTTPS enforced in production
 - [ ] Security headers present in responses
 
 ### 6. Secrets Management
+
 **Status**: ⚠️ Needs production solution  
 **Current**: `.env` file (dev only)  
 **Production Options**:
+
 - AWS Secrets Manager
 - HashiCorp Vault
 - Doppler
 - GitHub Secrets (for CI/CD)
 
 **Checklist:**
+
 - [ ] No secrets in code
 - [ ] `.env` in `.gitignore`
 - [ ] Production secrets in secret manager
@@ -430,16 +483,19 @@ Content-Security-Policy: default-src 'self'
 ## ⚡ Performance Optimization
 
 ### 1. Database Query Optimization
+
 **Status**: ✅ Indexes exist  
 **Verification**:
+
 ```sql
 -- Check indexes
-SELECT tablename, indexname FROM pg_indexes 
-WHERE schemaname = 'public' 
+SELECT tablename, indexname FROM pg_indexes
+WHERE schemaname = 'public'
 ORDER BY tablename, indexname;
 ```
 
 **Critical Indexes:**
+
 - `Listing`: cityIdx, categoryIdx, statusIdx
 - `Booking`: renterIdx, ownerIdx, statusIdx, datesIdx
 - `User`: emailIdx (unique)
@@ -447,6 +503,7 @@ ORDER BY tablename, indexname;
 - `Message`: conversationIdx, senderIdx
 
 **Checklist:**
+
 - [ ] All foreign keys indexed
 - [ ] Search fields indexed
 - [ ] Query EXPLAIN plans reviewed
@@ -454,14 +511,17 @@ ORDER BY tablename, indexname;
 - [ ] Pagination implemented
 
 ### 2. Caching Strategy
+
 **Status**: ✅ Redis caching implemented  
 **Cached Data**:
+
 - Listing details (10 min TTL)
 - Category list (1 hour TTL)
 - User profile (5 min TTL)
 - Search results (5 min TTL)
 
 **Verification:**
+
 ```bash
 # Check Redis keys
 redis-cli
@@ -471,6 +531,7 @@ redis-cli
 ```
 
 **Checklist:**
+
 - [ ] Hot paths cached
 - [ ] Cache invalidation on updates
 - [ ] TTL appropriate for data type
@@ -478,19 +539,23 @@ redis-cli
 - [ ] Graceful fallback if Redis down
 
 ### 3. API Response Time
+
 **Target**: p95 < 500ms  
 **Monitoring**:
+
 ```typescript
 // Prometheus metrics already configured
-// View at http://localhost:3000/metrics
+// View at http://localhost:3400/metrics
 ```
 
 **Slow Endpoints to Optimize:**
+
 - Search API: Add ElasticSearch (already planned)
 - Dashboard stats: Pre-compute with cron job
 - Listing feed: Implement cursor pagination
 
 **Checklist:**
+
 - [ ] p50 < 100ms
 - [ ] p95 < 500ms
 - [ ] p99 < 1000ms
@@ -498,13 +563,16 @@ redis-cli
 - [ ] Slow query log enabled
 
 ### 4. Frontend Performance
+
 **Status**: ✅ Vite build optimized  
 **Features**:
+
 - Code splitting (React Router lazy loading)
 - Image lazy loading
 - Bundle size analysis
 
 **Verification:**
+
 ```bash
 cd apps/web
 pnpm run build
@@ -517,6 +585,7 @@ du -sh dist/
 ```
 
 **Checklist:**
+
 - [ ] Lighthouse score > 90
 - [ ] First Contentful Paint < 1.5s
 - [ ] Time to Interactive < 3.5s
@@ -529,10 +598,12 @@ du -sh dist/
 ## 📊 Monitoring & Observability
 
 ### 1. Application Monitoring
+
 **Tool**: Sentry (error tracking)  
 **Setup Time**: 5 minutes
 
 **Configuration:**
+
 ```typescript
 // apps/api/src/main.ts
 import * as Sentry from '@sentry/node';
@@ -552,6 +623,7 @@ SENTRY_DSN=https://xxx@sentry.io/xxx
 ```
 
 **Checklist:**
+
 - [ ] Sentry configured in API
 - [ ] Sentry configured in Web
 - [ ] Source maps uploaded
@@ -559,20 +631,24 @@ SENTRY_DSN=https://xxx@sentry.io/xxx
 - [ ] Slack/email notifications active
 
 ### 2. Infrastructure Monitoring
+
 **Tool**: Prometheus + Grafana  
 **Status**: ✅ Configuration exists
 
 **Start Monitoring Stack:**
+
 ```bash
 docker-compose -f docker-compose.monitoring.yml up -d
 ```
 
 **Dashboards:**
-- Grafana: http://localhost:3001 (admin/admin)
+
+- Grafana: http://localhost:3402 (admin/admin)
 - Prometheus: http://localhost:9090
-- API Metrics: http://localhost:3000/metrics
+- API Metrics: http://localhost:3400/metrics
 
 **Key Metrics:**
+
 - API request rate
 - Response time (p50, p95, p99)
 - Error rate
@@ -582,6 +658,7 @@ docker-compose -f docker-compose.monitoring.yml up -d
 - CPU usage
 
 **Checklist:**
+
 - [ ] Prometheus scraping metrics
 - [ ] Grafana dashboards created
 - [ ] Alert rules configured
@@ -591,21 +668,25 @@ docker-compose -f docker-compose.monitoring.yml up -d
 - [ ] Database connection pool alert
 
 ### 3. Log Aggregation
+
 **Tool**: Winston (app logs)  
 **Status**: ✅ Implemented
 
 **Log Levels:**
+
 - `error`: Errors requiring attention
 - `warn`: Warnings, degraded performance
 - `info`: Important business events
 - `debug`: Detailed debugging (dev only)
 
 **Log Destinations:**
+
 - Console (structured JSON)
 - File: `logs/error.log`, `logs/combined.log`
 - (Optional) CloudWatch, Datadog, Loggly
 
 **Checklist:**
+
 - [ ] Structured logging enabled
 - [ ] Log rotation configured
 - [ ] Error logs monitored
@@ -613,19 +694,23 @@ docker-compose -f docker-compose.monitoring.yml up -d
 - [ ] User action audit trail
 
 ### 4. Uptime Monitoring
+
 **Tool**: UptimeRobot (free) or Pingdom  
 **Setup Time**: 3 minutes
 
 **Monitors:**
+
 - API health: `https://your-domain.com/api/health` (1 min interval)
 - Web app: `https://your-domain.com` (1 min interval)
 - Database: Check via health endpoint
 
 **Alerts:**
+
 - Down for 2 minutes → SMS/Email
 - Response time > 5s → Email
 
 **Checklist:**
+
 - [ ] Health check endpoint returning 200
 - [ ] Uptime monitor configured
 - [ ] Alert contacts added
@@ -636,6 +721,7 @@ docker-compose -f docker-compose.monitoring.yml up -d
 ## ✅ Testing Verification
 
 ### Unit Tests
+
 ```bash
 cd apps/api
 pnpm run test
@@ -645,6 +731,7 @@ pnpm run test
 ```
 
 **Critical Tests:**
+
 - [ ] Booking state machine transitions
 - [ ] Payment ledger double-entry
 - [ ] Price calculation
@@ -652,12 +739,14 @@ pnpm run test
 - [ ] Authorization checks
 
 ### Integration Tests
+
 ```bash
 cd apps/api
 pnpm run test:e2e
 ```
 
 **Flows to Test:**
+
 - [ ] User registration → email verification → login
 - [ ] Create listing → publish → search appears
 - [ ] Book listing → approve → pay → confirm → complete
@@ -665,6 +754,7 @@ pnpm run test:e2e
 - [ ] Dispute creation → resolution
 
 ### Load Tests
+
 ```bash
 cd apps/api/test/load
 k6 run search-queries.load.js
@@ -672,6 +762,7 @@ k6 run bookings-flow.load.js
 ```
 
 **Success Criteria:**
+
 - [ ] 100 concurrent users
 - [ ] p95 response time < 500ms
 - [ ] Error rate < 1%
@@ -679,6 +770,7 @@ k6 run bookings-flow.load.js
 - [ ] Database connections stable
 
 ### Security Tests
+
 ```bash
 cd apps/api/test/security
 ./quick-security-test.sh
@@ -686,6 +778,7 @@ cd apps/api/test/security
 ```
 
 **Checklist:**
+
 - [ ] No SQL injection vulnerabilities
 - [ ] No XSS vulnerabilities
 - [ ] CSRF protection working
@@ -698,6 +791,7 @@ cd apps/api/test/security
 ## 📚 Documentation
 
 ### Code Documentation
+
 - [ ] **API Documentation**: Swagger UI at `/api/docs`
 - [ ] **README.md**: Project overview, setup instructions
 - [ ] **ARCHITECTURE_OVERVIEW.md**: System architecture
@@ -705,6 +799,7 @@ cd apps/api/test/security
 - [ ] **SERVICE_CONFIGURATION_GUIDE.md**: External service setup
 
 ### Operational Documentation
+
 - [ ] **Deployment Guide**: Step-by-step deployment
 - [ ] **Monitoring Guide**: Dashboard setup, alerts
 - [ ] **Incident Response**: On-call procedures
@@ -712,6 +807,7 @@ cd apps/api/test/security
 - [ ] **Rollback Procedure**: How to rollback deployment
 
 ### User Documentation
+
 - [ ] **User Guide**: How to use the platform
 - [ ] **Owner Guide**: How to list items, manage bookings
 - [ ] **Renter Guide**: How to book, payment, returns
@@ -726,6 +822,7 @@ cd apps/api/test/security
 ### Pre-Deployment
 
 **Code Quality:**
+
 - [ ] TypeScript build passes (allow 296 type errors for now)
 - [ ] Linting passes: `pnpm run lint`
 - [ ] Unit tests pass: `pnpm run test`
@@ -734,6 +831,7 @@ cd apps/api/test/security
 - [ ] No TODO comments in critical paths
 
 **Configuration:**
+
 - [ ] All environment variables set
 - [ ] API keys configured (Resend, Stripe, R2)
 - [ ] Database connection string correct
@@ -743,6 +841,7 @@ cd apps/api/test/security
 - [ ] Rate limiting configured
 
 **Database:**
+
 - [ ] Backup created
 - [ ] Migrations applied
 - [ ] Seed data loaded
@@ -750,6 +849,7 @@ cd apps/api/test/security
 - [ ] Connection pooling configured
 
 **External Services:**
+
 - [ ] Resend email sending works
 - [ ] Stripe payments processing
 - [ ] R2 file uploads working
@@ -757,6 +857,7 @@ cd apps/api/test/security
 - [ ] Redis accessible
 
 **Security:**
+
 - [ ] HTTPS enabled
 - [ ] Security headers active
 - [ ] Secrets not in code
@@ -767,6 +868,7 @@ cd apps/api/test/security
 - [ ] Authorization enforced
 
 **Monitoring:**
+
 - [ ] Sentry configured
 - [ ] Prometheus scraping
 - [ ] Grafana dashboards created
@@ -777,6 +879,7 @@ cd apps/api/test/security
 ### Deployment Steps
 
 **1. Build Application:**
+
 ```bash
 # Build API
 cd apps/api
@@ -788,6 +891,7 @@ pnpm run build
 ```
 
 **2. Deploy Database:**
+
 ```bash
 # Run migrations
 cd packages/database
@@ -798,10 +902,11 @@ pnpm prisma migrate status
 ```
 
 **3. Deploy API:**
+
 ```bash
 # Option A: Docker
 docker build -t rental-api ./apps/api
-docker run -p 3000:3000 --env-file .env rental-api
+docker run -p 3400:3400 --env-file .env rental-api
 
 # Option B: Direct Node
 cd apps/api
@@ -809,6 +914,7 @@ NODE_ENV=production node dist/main.js
 ```
 
 **4. Deploy Web:**
+
 ```bash
 # Serve static files via Nginx, Cloudflare Pages, Vercel, etc.
 # Example with Nginx:
@@ -817,6 +923,7 @@ nginx -s reload
 ```
 
 **5. Verify Deployment:**
+
 ```bash
 # Health check
 curl https://your-domain.com/api/health
@@ -834,6 +941,7 @@ curl https://your-domain.com
 ### Post-Deployment
 
 **Smoke Tests:**
+
 - [ ] Homepage loads
 - [ ] User registration works
 - [ ] User login works
@@ -845,6 +953,7 @@ curl https://your-domain.com
 - [ ] File upload works
 
 **Monitoring:**
+
 - [ ] Check Sentry for errors
 - [ ] Check Grafana dashboards
 - [ ] Verify logs are flowing
@@ -853,6 +962,7 @@ curl https://your-domain.com
 - [ ] Monitor Redis hit rate
 
 **Performance:**
+
 - [ ] Run Lighthouse audit
 - [ ] Check API response times
 - [ ] Verify caching working
@@ -861,6 +971,7 @@ curl https://your-domain.com
 ### Rollback Plan
 
 **If deployment fails:**
+
 ```bash
 # 1. Revert API deployment
 docker stop rental-api
@@ -879,6 +990,7 @@ curl https://your-domain.com/api/health
 ```
 
 **Checklist:**
+
 - [ ] Previous version backup exists
 - [ ] Database backup before migration
 - [ ] Rollback procedure documented
@@ -891,18 +1003,21 @@ curl https://your-domain.com/api/health
 ### Launch Targets (Week 1)
 
 **Performance:**
+
 - ✅ API p95 response time < 500ms
 - ✅ Web app Lighthouse score > 90
 - ✅ Uptime > 99.5%
 - ✅ Error rate < 0.1%
 
 **Business:**
+
 - 🎯 10 active listings
 - 🎯 5 successful bookings
 - 🎯 0 payment failures
 - 🎯 0 critical bugs reported
 
 **User Experience:**
+
 - 🎯 Registration completion > 80%
 - 🎯 Listing creation completion > 70%
 - 🎯 Booking completion > 60%
@@ -911,6 +1026,7 @@ curl https://your-domain.com/api/health
 ### Production Readiness Score
 
 **Current Status:**
+
 ```
 Infrastructure:     [████████████████░░░░] 80%
 Security:           [███████████████████░] 95%
@@ -923,12 +1039,14 @@ OVERALL:            [██████████████████░�
 ```
 
 **Blocking Issues:**
+
 - 🔴 296 TypeScript errors (non-critical, can launch)
 - 🔴 Database migrations need clean apply
 - 🟡 E2E tests not executed yet
 - 🟡 Load tests not executed yet
 
 **Ready to Launch When:**
+
 - [x] External service API keys obtained (Resend, Stripe)
 - [x] Database migrations applied cleanly
 - [ ] Critical smoke tests pass
@@ -940,6 +1058,7 @@ OVERALL:            [██████████████████░�
 **Estimated Time to Production: 3-7 Days**
 
 **Critical Path:**
+
 1. Fix database migration issues (2-4 hours)
 2. Obtain and configure API keys (10 minutes)
 3. Deploy to staging (1 day)

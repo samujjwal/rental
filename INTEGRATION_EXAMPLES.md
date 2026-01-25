@@ -41,7 +41,7 @@ async createListing(
 ) {
   // [1] FRAUD DETECTION: Check user risk
   const fraudCheck = await this.fraudDetectionService.checkUserRisk(userId);
-  
+
   if (fraudCheck.riskLevel === 'CRITICAL') {
     throw new ForbiddenException('Account flagged for suspicious activity');
   }
@@ -78,7 +78,7 @@ async createListing(
   const category = await this.categoriesService.findOne(
     createListingDto.categoryId,
   );
-  
+
   const insuranceRequirement =
     await this.insuranceService.checkInsuranceRequirement({
       category: category.name,
@@ -560,30 +560,35 @@ async createOrganizationListing(
 ## Key Integration Points Summary
 
 ### 1. Fraud Detection Integration
+
 - **Listing Creation**: User risk check before allowing listing
 - **Booking Creation**: Booking risk check with velocity/pattern analysis
 - **Message Sending**: Real-time suspicious activity detection
 - **Payment Processing**: Transaction risk scoring
 
 ### 2. Content Moderation Integration
+
 - **Listing Creation**: Text + image moderation before publish
 - **Profile Updates**: Bio and photo moderation
 - **Messaging**: Real-time PII detection and blocking
 - **Reviews**: Content validation before publication
 
 ### 3. Tax Calculation Integration
+
 - **Booking Creation**: Calculate taxes per jurisdiction
 - **Payment Processing**: Tax line items in invoices
 - **Payout Processing**: Net amounts after tax withholding
 - **Reporting**: Generate 1099 forms for owners
 
 ### 4. Insurance Integration
+
 - **Listing Creation**: Check if insurance required
 - **Listing Activation**: Block activation without valid insurance
 - **Booking Creation**: Verify insurance before accepting booking
 - **Booking Confirmation**: Include insurance details in confirmation
 
 ### 5. Notification Integration
+
 - **All Domain Events**: Automatic notifications via event listeners
 - **Fraud Alerts**: High-risk activity notifications
 - **Moderation Results**: Approval/rejection notifications
@@ -591,6 +596,7 @@ async createOrganizationListing(
 - **Tax Deadlines**: 1099 generation reminders
 
 ### 6. Organizations Integration
+
 - **Multi-User Listings**: Team members can manage listings
 - **Role-Based Access**: Owners/admins/managers/members permissions
 - **Audit Trail**: Track which team member performed actions
@@ -659,9 +665,9 @@ describe('Listing Creation with Fraud Check', () => {
       flags: [{ type: 'MULTIPLE_VIOLATIONS', severity: 'CRITICAL' }],
     });
 
-    await expect(
-      listingsController.createListing(userId, dto),
-    ).rejects.toThrow('Account flagged for suspicious activity');
+    await expect(listingsController.createListing(userId, dto)).rejects.toThrow(
+      'Account flagged for suspicious activity',
+    );
   });
 });
 
@@ -685,7 +691,7 @@ describe('Listing Creation with Moderation', () => {
 
 ```bash
 # Test full booking flow
-curl -X POST http://localhost:3000/api/bookings \
+curl -X POST http://localhost:3400/api/bookings \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

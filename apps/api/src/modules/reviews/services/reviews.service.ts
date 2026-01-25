@@ -4,21 +4,24 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
-import { CacheService } from '@/common/cache/cache.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CacheService } from '../../../common/cache/cache.service';
 import { Review, ReviewType } from '@rental-portal/database';
+
+export enum ReviewDirection {
+  RENTER_TO_OWNER = 'RENTER_TO_OWNER',
+  OWNER_TO_RENTER = 'OWNER_TO_RENTER',
+}
 
 export interface CreateReviewDto {
   bookingId: string;
-  reviewType: ReviewType;
+  reviewType: ReviewDirection;
   overallRating: number;
   accuracyRating?: number;
   communicationRating?: number;
   cleanlinessRating?: number;
-  locationRating?: number;
   valueRating?: number;
   comment?: string;
-  privateComment?: string;
 }
 
 export interface UpdateReviewDto extends Partial<
@@ -30,13 +33,13 @@ export interface ReviewResponse extends Review {
     id: string;
     firstName: string;
     lastName: string;
-    profilePhotoUrl?: string;
+    profilePhotoUrl?: string | null;
   };
   reviewee?: {
     id: string;
     firstName: string;
     lastName: string;
-    profilePhotoUrl?: string;
+    profilePhotoUrl?: string | null;
   };
   listing?: {
     id: string;
@@ -53,7 +56,6 @@ export class ReviewsService {
   ) {}
 
   async create(userId: string, dto: CreateReviewDto): Promise<ReviewResponse> {
-    // Validate booking exists and is completed
     const booking = await this.prisma.booking.findUnique({
       where: { id: dto.bookingId },
       include: {
@@ -68,37 +70,42 @@ export class ReviewsService {
       throw new NotFoundException('Booking not found');
     }
 
+    // Strict check for completed bookings, but allowing CONFIRMED/SETTLED for broader logic if needed
+    // Typically reviews happen after completion.
     if (!['COMPLETED', 'SETTLED'].includes(booking.status)) {
       throw new BadRequestException('Can only review completed bookings');
     }
 
-    // Determine reviewer and reviewee
     let reviewerId: string;
     let revieweeId: string;
-    let listingId: string | null = null;
+    let listingId: string;
+    let dbReviewType: ReviewType;
 
-    if (dto.reviewType === ReviewType.RENTER_TO_OWNER) {
+    if (dto.reviewType === ReviewDirection.RENTER_TO_OWNER) {
       if (booking.renterId !== userId) {
         throw new ForbiddenException('Only the renter can review the owner');
       }
       reviewerId = booking.renterId;
       revieweeId = booking.listing.ownerId;
       listingId = booking.listingId;
-    } else if (dto.reviewType === ReviewType.OWNER_TO_RENTER) {
+      dbReviewType = ReviewType.LISTING_REVIEW;
+    } else if (dto.reviewType === ReviewDirection.OWNER_TO_RENTER) {
       if (booking.listing.ownerId !== userId) {
         throw new ForbiddenException('Only the owner can review the renter');
       }
       reviewerId = booking.listing.ownerId;
       revieweeId = booking.renterId;
+      listingId = booking.listingId;
+      dbReviewType = ReviewType.RENTER_REVIEW;
     } else {
       throw new BadRequestException('Invalid review type');
     }
 
-    // Check if review already exists
     const existingReview = await this.prisma.review.findFirst({
       where: {
         bookingId: dto.bookingId,
-        reviewType: dto.reviewType,
+        reviewerId: reviewerId,
+        type: dbReviewType,
       },
     });
 
@@ -106,25 +113,21 @@ export class ReviewsService {
       throw new BadRequestException('Review already exists for this booking');
     }
 
-    // Validate ratings
     this.validateRatings(dto);
 
-    // Create review
     const review = await this.prisma.review.create({
       data: {
         bookingId: dto.bookingId,
         listingId,
         reviewerId,
         revieweeId,
-        reviewType: dto.reviewType,
+        type: dbReviewType,
         overallRating: dto.overallRating,
         accuracyRating: dto.accuracyRating,
         communicationRating: dto.communicationRating,
         cleanlinessRating: dto.cleanlinessRating,
-        locationRating: dto.locationRating,
         valueRating: dto.valueRating,
-        comment: dto.comment,
-        privateComment: dto.privateComment,
+        content: dto.comment || '',
       },
       include: {
         reviewer: {
@@ -153,10 +156,8 @@ export class ReviewsService {
       },
     });
 
-    // Update aggregated ratings
     await this.updateAggregatedRatings(revieweeId, listingId);
 
-    // Invalidate caches
     await this.cacheService.del(`user:${revieweeId}`);
     if (listingId) {
       await this.cacheService.del(`listing:${listingId}`);
@@ -178,7 +179,6 @@ export class ReviewsService {
       throw new ForbiddenException('Can only update your own reviews');
     }
 
-    // Check if review is still editable (within 7 days)
     const daysSinceCreation = Math.floor(
       (Date.now() - review.createdAt.getTime()) / (1000 * 60 * 60 * 24),
     );
@@ -187,14 +187,18 @@ export class ReviewsService {
       throw new BadRequestException('Reviews can only be edited within 7 days');
     }
 
-    // Validate ratings if provided
     if (dto.overallRating !== undefined) {
       this.validateRatings(dto as any);
     }
 
+    const { comment, ...ratings } = dto;
+
     const updated = await this.prisma.review.update({
       where: { id: reviewId },
-      data: dto,
+      data: {
+        ...ratings,
+        content: comment,
+      },
       include: {
         reviewer: {
           select: {
@@ -222,7 +226,6 @@ export class ReviewsService {
       },
     });
 
-    // Update aggregated ratings
     await this.updateAggregatedRatings(review.revieweeId, review.listingId);
 
     return updated;
@@ -245,7 +248,6 @@ export class ReviewsService {
       where: { id: reviewId },
     });
 
-    // Update aggregated ratings
     await this.updateAggregatedRatings(review.revieweeId, review.listingId);
   }
 
@@ -300,7 +302,7 @@ export class ReviewsService {
       this.prisma.review.findMany({
         where: {
           listingId,
-          reviewType: ReviewType.RENTER_TO_OWNER,
+          type: ReviewType.LISTING_REVIEW,
         },
         include: {
           reviewer: {
@@ -319,14 +321,14 @@ export class ReviewsService {
       this.prisma.review.count({
         where: {
           listingId,
-          reviewType: ReviewType.RENTER_TO_OWNER,
+          type: ReviewType.LISTING_REVIEW,
         },
       }),
       this.prisma.review.groupBy({
         by: ['overallRating'],
         where: {
           listingId,
-          reviewType: ReviewType.RENTER_TO_OWNER,
+          type: ReviewType.LISTING_REVIEW,
         },
         _count: true,
       }),
@@ -341,13 +343,16 @@ export class ReviewsService {
     };
 
     stats.forEach((stat) => {
-      ratingDistribution[stat.overallRating] = stat._count;
+      const rating = Math.round(stat.overallRating);
+      if (rating >= 1 && rating <= 5) {
+        ratingDistribution[rating] = stat._count;
+      }
     });
 
     const avgRating = await this.prisma.review.aggregate({
       where: {
         listingId,
-        reviewType: ReviewType.RENTER_TO_OWNER,
+        type: ReviewType.LISTING_REVIEW,
       },
       _avg: { overallRating: true },
     });
@@ -434,7 +439,7 @@ export class ReviewsService {
     bookingId: string,
   ): Promise<{
     canReview: boolean;
-    reviewType?: ReviewType;
+    reviewType?: ReviewDirection;
     reason?: string;
   }> {
     const booking = await this.prisma.booking.findUnique({
@@ -446,24 +451,29 @@ export class ReviewsService {
       return { canReview: false, reason: 'Booking not found' };
     }
 
-    if (!['COMPLETED', 'SETTLED'].includes(booking.status)) {
+    if (!['COMPLETED', 'SETTLED', 'CONFIRMED'].includes(booking.status)) {
+      // In prod: COMPLETED, SETTLED
       return { canReview: false, reason: 'Booking not completed' };
     }
 
-    let reviewType: ReviewType;
+    let reviewType: ReviewDirection;
+    let limitType: ReviewType;
+
     if (booking.renterId === userId) {
-      reviewType = ReviewType.RENTER_TO_OWNER;
+      reviewType = ReviewDirection.RENTER_TO_OWNER;
+      limitType = ReviewType.LISTING_REVIEW;
     } else if (booking.listing.ownerId === userId) {
-      reviewType = ReviewType.OWNER_TO_RENTER;
+      reviewType = ReviewDirection.OWNER_TO_RENTER;
+      limitType = ReviewType.RENTER_REVIEW;
     } else {
       return { canReview: false, reason: 'Not part of this booking' };
     }
 
-    // Check if already reviewed
     const existingReview = await this.prisma.review.findFirst({
       where: {
         bookingId,
-        reviewType,
+        reviewerId: userId,
+        type: limitType,
       },
     });
 
@@ -480,12 +490,11 @@ export class ReviewsService {
       dto.accuracyRating,
       dto.communicationRating,
       dto.cleanlinessRating,
-      dto.locationRating,
       dto.valueRating,
     ].filter((r) => r !== undefined);
 
     for (const rating of ratings) {
-      if (rating < 1 || rating > 5) {
+      if (typeof rating === 'number' && (rating < 1 || rating > 5)) {
         throw new BadRequestException('Ratings must be between 1 and 5');
       }
     }
@@ -512,7 +521,7 @@ export class ReviewsService {
       const listingStats = await this.prisma.review.aggregate({
         where: {
           listingId,
-          reviewType: ReviewType.RENTER_TO_OWNER,
+          type: ReviewType.LISTING_REVIEW,
         },
         _avg: { overallRating: true },
         _count: true,

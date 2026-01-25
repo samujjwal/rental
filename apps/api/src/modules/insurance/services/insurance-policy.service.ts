@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceStatus, InsurancePolicy } from './insurance.service';
 
 @Injectable()
@@ -12,7 +12,7 @@ export class InsurancePolicyService {
   async createPolicy(data: Partial<InsurancePolicy>): Promise<InsurancePolicy> {
     // In production: Store in insurance_policies table
     // const policy = await this.prisma.insurancePolicy.create({ data });
-    
+
     // For now, create audit log entry
     const auditLog = await this.prisma.auditLog.create({
       data: {

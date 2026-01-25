@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs/promises';
@@ -29,13 +34,14 @@ export class StorageService {
   private readonly publicUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.useLocalStorage = this.configService.get<string>('NODE_ENV') === 'development' || 
-                          !this.configService.get<string>('R2_ACCOUNT_ID');
-    
+    this.useLocalStorage =
+      this.configService.get<string>('NODE_ENV') === 'development' ||
+      !this.configService.get<string>('R2_ACCOUNT_ID');
+
     if (this.useLocalStorage) {
       // Local storage for development
       this.localStoragePath = this.configService.get<string>('LOCAL_STORAGE_PATH') || './uploads';
-      this.publicUrl = this.configService.get<string>('API_URL') || 'http://localhost:3000';
+      this.publicUrl = this.configService.get<string>('API_URL') || 'http://localhost:3400';
       this.bucketName = '';
       this.logger.log('Using local file storage for development');
     } else {
@@ -44,7 +50,7 @@ export class StorageService {
       const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID') || '';
       const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY') || '';
       this.bucketName = this.configService.get<string>('R2_BUCKET_NAME') || 'rental-portal-uploads';
-      
+
       if (accountId && accessKeyId && secretAccessKey) {
         this.s3Client = new S3Client({
           region: 'auto',
@@ -54,15 +60,16 @@ export class StorageService {
             secretAccessKey,
           },
         });
-        
-        this.publicUrl = this.configService.get<string>('R2_PUBLIC_URL') || 
-                         `https://pub-${accountId}.r2.dev/${this.bucketName}`;
+
+        this.publicUrl =
+          this.configService.get<string>('R2_PUBLIC_URL') ||
+          `https://pub-${accountId}.r2.dev/${this.bucketName}`;
         this.logger.log('Using Cloudflare R2 storage for production');
       } else {
         this.logger.warn('R2 credentials not configured, falling back to local storage');
         this.useLocalStorage = true;
         this.localStoragePath = './uploads';
-        this.publicUrl = 'http://localhost:3000';
+        this.publicUrl = 'http://localhost:3400';
         this.bucketName = '';
       }
     }
@@ -70,7 +77,7 @@ export class StorageService {
 
   async upload(options: UploadOptions): Promise<UploadResult> {
     const { file, fileName, mimeType, folder = 'general' } = options;
-    
+
     // Generate unique key
     const extension = path.extname(fileName);
     const uniqueName = `${uuidv4()}${extension}`;
@@ -87,17 +94,17 @@ export class StorageService {
     try {
       const fullPath = path.join(this.localStoragePath, key);
       const directory = path.dirname(fullPath);
-      
+
       // Create directory if it doesn't exist
       await fs.mkdir(directory, { recursive: true });
-      
+
       // Write file
       await fs.writeFile(fullPath, file);
-      
+
       const url = `${this.publicUrl}/uploads/${key}`;
-      
+
       this.logger.log(`File uploaded to local storage: ${key}`);
-      
+
       return {
         url,
         key,
@@ -123,11 +130,11 @@ export class StorageService {
       });
 
       await this.s3Client.send(command);
-      
+
       const url = `${this.publicUrl}/${key}`;
-      
+
       this.logger.log(`File uploaded to R2: ${key}`);
-      
+
       return {
         url,
         key,
@@ -204,7 +211,11 @@ export class StorageService {
     }
   }
 
-  async uploadListingImage(file: Buffer, fileName: string, mimeType: string): Promise<UploadResult> {
+  async uploadListingImage(
+    file: Buffer,
+    fileName: string,
+    mimeType: string,
+  ): Promise<UploadResult> {
     return this.upload({
       file,
       fileName,
@@ -213,7 +224,11 @@ export class StorageService {
     });
   }
 
-  async uploadProfilePicture(file: Buffer, fileName: string, mimeType: string): Promise<UploadResult> {
+  async uploadProfilePicture(
+    file: Buffer,
+    fileName: string,
+    mimeType: string,
+  ): Promise<UploadResult> {
     return this.upload({
       file,
       fileName,
@@ -222,7 +237,11 @@ export class StorageService {
     });
   }
 
-  async uploadInsuranceDocument(file: Buffer, fileName: string, mimeType: string): Promise<UploadResult> {
+  async uploadInsuranceDocument(
+    file: Buffer,
+    fileName: string,
+    mimeType: string,
+  ): Promise<UploadResult> {
     return this.upload({
       file,
       fileName,
@@ -231,7 +250,11 @@ export class StorageService {
     });
   }
 
-  async uploadConditionReport(file: Buffer, fileName: string, mimeType: string): Promise<UploadResult> {
+  async uploadConditionReport(
+    file: Buffer,
+    fileName: string,
+    mimeType: string,
+  ): Promise<UploadResult> {
     return this.upload({
       file,
       fileName,

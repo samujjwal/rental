@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { EmailService } from '@/common/email/email.service';
 import { Dispute, DisputeStatus, UserRole } from '@rental-portal/database';
 
 export interface CreateDisputeDto {
@@ -30,7 +31,10 @@ export interface AddEvidenceDto {
 
 @Injectable()
 export class DisputesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   /**
    * Create a dispute
@@ -100,7 +104,23 @@ export class DisputesService {
       },
     });
 
-    // TODO: Send notifications to other party and admin
+    // Send notifications
+    const targetUserId = userId === booking.renterId ? booking.listing.ownerId : booking.renterId;
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { email: true, firstName: true },
+    });
+
+    if (targetUser) {
+      await this.emailService.sendEmail(
+        targetUser.email,
+        `New Dispute Created: ${reason}`,
+        `<p>A dispute has been opened for booking #${booking.id}. Reason: ${reason}. Please log in to view details.</p>`,
+      );
+    }
+
+    // Notify Admin (hardcoded or configured email)
+    // await this.emailService.sendEmail('admin@rentals.com', 'New Dispute Created', ...);
 
     return dispute;
   }

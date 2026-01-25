@@ -1,24 +1,30 @@
 import { json, type LoaderFunctionArgs } from 'react-router';
-import { requireAdmin } from '~/utils/auth.server';
+import { useLoaderData, Link } from 'react-router';
+import { requireAdmin, getUserToken } from '~/utils/auth.server';
 import { apiClient } from '~/lib/api-client';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireAdmin(request);
+  const token = await getUserToken(request);
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+  };
 
   // Fetch dashboard statistics
   const [stats, recentBookings, recentDisputes, systemHealth] = await Promise.all([
-    apiClient.get('/admin/stats'),
-    apiClient.get('/admin/bookings/recent?limit=10'),
-    apiClient.get('/admin/disputes?status=OPEN&limit=5'),
-    apiClient.get('/health'),
+    apiClient.get<any>('/admin/stats', { headers }),
+    apiClient.get<any>('/admin/bookings/recent?limit=10', { headers }),
+    apiClient.get<any>('/admin/disputes?status=OPEN&limit=5', { headers }),
+    apiClient.get<any>('/health'),
   ]);
 
   return json({
     user,
-    stats: stats.data,
-    recentBookings: recentBookings.data,
-    recentDisputes: recentDisputes.data,
-    systemHealth: systemHealth.data,
+    stats,
+    recentBookings,
+    recentDisputes,
+    systemHealth,
   });
 }
 

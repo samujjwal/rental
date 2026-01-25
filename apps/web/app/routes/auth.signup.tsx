@@ -5,8 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { authApi } from "~/lib/api/auth";
+import { createUserSession } from "~/utils/auth.server";
 import { signupSchema, type SignupInput } from "~/lib/validation/auth";
-import { redirect } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
@@ -34,14 +34,13 @@ export async function action({ request }: ActionFunctionArgs) {
             role,
         });
 
-        // Store auth data
-        if (typeof window !== "undefined") {
-            localStorage.setItem("accessToken", response.accessToken);
-            localStorage.setItem("refreshToken", response.refreshToken);
-            localStorage.setItem("user", JSON.stringify(response.user));
-        }
-
-        return redirect("/dashboard");
+        return createUserSession({
+            userId: response.user.id,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+            remember: false,
+            redirectTo: "/dashboard",
+        });
     } catch (error: any) {
         return {
             error:

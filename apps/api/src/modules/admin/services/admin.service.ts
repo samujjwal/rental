@@ -463,11 +463,34 @@ export class AdminService {
   ): Promise<any> {
     await this.verifyAdmin(userId);
 
-    // TODO: Implement audit logging system
-    // For now, return placeholder
+    const { action, targetUserId, page = 1, limit = 20 } = options;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (action) where.action = action;
+    if (targetUserId) where.userId = targetUserId;
+
+    const [logs, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+        },
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+
     return {
-      logs: [],
-      total: 0,
+      logs,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 }

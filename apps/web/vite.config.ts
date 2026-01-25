@@ -1,8 +1,8 @@
-import { reactRouter } from '@react-router/dev/vite';
-import autoprefixer from 'autoprefixer';
-import tailwindcss from 'tailwindcss';
-import { defineConfig } from 'vite';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { reactRouter } from "@react-router/dev/vite";
+import autoprefixer from "autoprefixer";
+import tailwindcss from "tailwindcss";
+import { defineConfig } from "vite";
+import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   plugins: [reactRouter(), tsconfigPaths()],
@@ -12,10 +12,10 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 3401,
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
+      "/api": {
+        target: "http://localhost:3400",
         changeOrigin: true,
       },
     },

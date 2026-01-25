@@ -42,7 +42,7 @@ npm install
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`
+The app will be available at `http://localhost:3401`
 
 ### Build for Production
 
@@ -61,7 +61,7 @@ npm start
 Create a `.env` file in the `apps/web` directory:
 
 ```env
-API_URL=http://localhost:3000/api/v1
+API_URL=http://localhost:3400/api/v1
 ```
 
 ## Features Implemented

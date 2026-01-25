@@ -27,14 +27,14 @@ Create `.env` file in `apps/api/`:
 ```env
 # Server
 NODE_ENV=development
-PORT=3000
+PORT=3400
 
 # Database
 DATABASE_URL="postgresql://username:password@localhost:5432/rental_portal"
 
 # Redis
 REDIS_HOST=localhost
-REDIS_PORT=6382
+REDIS_PORT=3479
 REDIS_PASSWORD=
 REDIS_TTL=3600
 
@@ -60,11 +60,11 @@ EMAIL_FROM=noreply@rentalportal.com
 SENDGRID_API_KEY=your_sendgrid_api_key
 
 # Frontend
-FRONTEND_URL=http://localhost:5173
-CORS_ORIGINS=http://localhost:5173,http://localhost:3001
+FRONTEND_URL=http://localhost:3401
+CORS_ORIGINS=http://localhost:3401,http://localhost:3400
 
 # Elasticsearch
-ELASTICSEARCH_NODE=http://localhost:9200
+ELASTICSEARCH_NODE=http://localhost:3492
 ELASTICSEARCH_USERNAME=elastic
 ELASTICSEARCH_PASSWORD=
 
@@ -106,11 +106,11 @@ cd apps/api
 npm run start:dev
 ```
 
-The API will be available at `http://localhost:3000`
+The API will be available at `http://localhost:3400`
 
 #### Swagger Documentation:
 
-Visit `http://localhost:3000/api/docs` for interactive API documentation
+Visit `http://localhost:3400/api/docs` for interactive API documentation
 
 ## 📦 Available Scripts
 
@@ -190,7 +190,7 @@ npx prisma generate
 
 ### Error: Stripe webhook validation failed
 
-- Use Stripe CLI for local testing: `stripe listen --forward-to localhost:3000/payments/webhook`
+- Use Stripe CLI for local testing: `stripe listen --forward-to localhost:3400/payments/webhook`
 - Copy webhook secret to STRIPE_WEBHOOK_SECRET
 
 ## 📚 API Endpoints

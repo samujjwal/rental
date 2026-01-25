@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: rental_password
       POSTGRES_DB: rental_portal
     ports:
-      - "5434:5432"
+      - "3432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -26,7 +26,7 @@ services:
     image: redis:7-alpine
     container_name: rental-redis
     ports:
-      - "6382:6379"
+      - "3479:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -47,8 +47,8 @@ services:
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "3492:9200"
+      - "3493:9300"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
@@ -68,12 +68,12 @@ services:
     container_name: rental-api
     environment:
       NODE_ENV: production
-      PORT: 3000
+      PORT: 3400
       DATABASE_URL: postgresql://rental_user:rental_password@postgres:5432/rental_portal?schema=public
       REDIS_URL: redis://redis:6379
       ELASTICSEARCH_NODE: http://elasticsearch:9200
     ports:
-      - "3000:3000"
+      - "3400:3400"
     depends_on:
       postgres:
         condition: service_healthy

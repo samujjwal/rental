@@ -16,10 +16,8 @@ import {
   Plus,
   ArrowUpRight,
 } from 'lucide-react';
-import { listingsApi } from '~/lib/api/listings';
-import { bookingsApi } from '~/lib/api/bookings';
-import { reviewsApi } from '~/lib/api/reviews';
-import { paymentsApi } from '~/lib/api/payments';
+import { requireUserId, getUserToken } from '~/utils/auth.server';
+import { apiClient } from '~/lib/api-client';
 import type { Listing } from '~/types/listing';
 import type { Booking } from '~/types/booking';
 import type { Review } from '~/types/review';
@@ -30,28 +28,28 @@ export const meta: MetaFunction = () => {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Get current user from session/token
-  // For now, we'll mock the userId - in production, get from auth context
-  const userId = 'current-user-id'; // TODO: Get from auth
+  const userId = await requireUserId(request);
+  const token = await getUserToken(request);
+  const headers = { Authorization: `Bearer ${token}` };
 
   try {
     const [listings, bookings, reviews, earnings] = await Promise.all([
-      listingsApi.getListingsByOwnerId(userId),
-      bookingsApi.getBookingsByOwnerId(userId),
-      reviewsApi.getReviewsForUser(userId),
-      paymentsApi.getOwnerEarnings(userId),
+      apiClient.get<Listing[]>(`/listings?ownerId=${userId}`, { headers }),
+      apiClient.get<Booking[]>(`/bookings/owner/${userId}`, { headers }),
+      apiClient.get<Review[]>(`/reviews/user/${userId}`, { headers }),
+      apiClient.get<any>(`/payments/earnings/${userId}`, { headers }),
     ]);
 
     // Calculate statistics
     const activeListings = listings.filter(l => l.status === 'ACTIVE').length;
     const totalListings = listings.length;
-    const pendingBookings = bookings.filter(b => 
+    const pendingBookings = bookings.filter(b =>
       b.state === 'PENDING_OWNER_APPROVAL' || b.state === 'PENDING_PAYMENT'
     ).length;
-    const activeBookings = bookings.filter(b => 
+    const activeBookings = bookings.filter(b =>
       b.state === 'CONFIRMED' || b.state === 'IN_PROGRESS'
     ).length;
-    const completedBookings = bookings.filter(b => 
+    const completedBookings = bookings.filter(b =>
       b.state === 'COMPLETED' || b.state === 'SETTLED'
     ).length;
     const averageRating = reviews.length > 0
@@ -75,8 +73,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
 
-    return { 
-      stats, 
+    return {
+      stats,
       listings: listings.slice(0, 6), // Show top 6 listings
       recentBookings,
       recentReviews: reviews.slice(0, 3),
@@ -87,16 +85,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
-function StatCard({ 
-  icon: Icon, 
-  label, 
-  value, 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
   trend,
-  color = 'indigo' 
-}: { 
-  icon: any; 
-  label: string; 
-  value: string | number; 
+  color = 'indigo'
+}: {
+  icon: any;
+  label: string;
+  value: string | number;
   trend?: string;
   color?: string;
 }) {
@@ -198,9 +196,8 @@ function ListingCard({ listing }: { listing: Listing }) {
             <Package className="w-12 h-12 text-gray-400" />
           </div>
         )}
-        <span className={`absolute top-2 right-2 px-2 py-1 text-white text-xs font-semibold rounded ${
-          listing.status === 'ACTIVE' ? 'bg-green-500' : 'bg-gray-500'
-        }`}>
+        <span className={`absolute top-2 right-2 px-2 py-1 text-white text-xs font-semibold rounded ${listing.status === 'ACTIVE' ? 'bg-green-500' : 'bg-gray-500'
+          }`}>
           {listing.status}
         </span>
       </div>

@@ -1,5 +1,5 @@
 export default () => ({
-  port: parseInt(process.env.PORT || '3000', 10),
+  port: parseInt(process.env.PORT || '3400', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
 
   // Database
@@ -10,7 +10,7 @@ export default () => ({
   // Redis
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    port: parseInt(process.env.REDIS_PORT || '3479', 10),
     password: process.env.REDIS_PASSWORD,
     ttl: parseInt(process.env.REDIS_TTL || '3600', 10),
   },
@@ -45,12 +45,12 @@ export default () => ({
   },
 
   // Frontend URLs
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3401',
   corsOrigins: (process.env.CORS_ORIGINS || '*').split(','),
 
   // Elasticsearch
   elasticsearch: {
-    node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
+    node: process.env.ELASTICSEARCH_NODE || 'http://localhost:3492',
     username: process.env.ELASTICSEARCH_USERNAME,
     password: process.env.ELASTICSEARCH_PASSWORD,
   },

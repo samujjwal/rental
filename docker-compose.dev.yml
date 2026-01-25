@@ -8,14 +8,14 @@ services:
       POSTGRES_PASSWORD: rental_password
       POSTGRES_DB: rental_portal
     ports:
-      - "5434:5432"
+      - "3432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6382:6379"
+      - "3479:6379"
     volumes:
       - redis_data:/data
 
@@ -26,8 +26,8 @@ services:
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "3492:9200"
+      - "3493:9300"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
 

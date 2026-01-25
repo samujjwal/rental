@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
-import { PrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
 
 export interface SearchQuery {
   query?: string;
@@ -227,12 +227,13 @@ export class SearchService {
             },
           },
         },
-      });
+      } as any);
 
       const results: SearchResult[] = response.hits.hits.map((hit: any) => ({
         ...hit._source,
         score: hit._score,
-        distance: hit.sort?.[0] !== hit._score ? hit.sort[0] : undefined,
+        distance:
+          hit.sort && hit.sort.length > 0 && hit.sort[0] !== hit._score ? hit.sort[0] : undefined,
       }));
 
       return {
@@ -269,8 +270,8 @@ export class SearchService {
           },
           size: limit,
           _source: ['title'],
-        },
-      });
+        } as any,
+      } as any);
 
       return response.hits.hits.map((hit: any) => hit._source.title);
     } catch (error) {
@@ -306,7 +307,7 @@ export class SearchService {
             size: 5,
             _source: ['id', 'title', 'slug', 'photos', 'basePrice', 'currency'],
           },
-        }),
+        } as any),
         this.elasticsearch.search({
           index: this.indexName,
           body: {
@@ -320,7 +321,7 @@ export class SearchService {
             },
             size: 0,
           },
-        }),
+        } as any),
         this.elasticsearch.search({
           index: this.indexName,
           body: {
@@ -340,7 +341,7 @@ export class SearchService {
             },
             size: 0,
           },
-        }),
+        } as any),
       ]);
 
       return {
@@ -392,7 +393,7 @@ export class SearchService {
           },
           size: limit,
         },
-      });
+      } as any);
 
       return response.hits.hits.map((hit: any) => ({
         ...hit._source,

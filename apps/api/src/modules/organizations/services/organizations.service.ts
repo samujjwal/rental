@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { EmailService } from '@/common/email/email.service';
 import { Organization, OrganizationRole, OrganizationStatus } from '@rental-portal/database';
 
 export interface CreateOrganizationDto {
@@ -43,7 +44,10 @@ export interface InviteMemberDto {
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   /**
    * Create organization (professional rental business account)
@@ -229,7 +233,19 @@ export class OrganizationsService {
       },
     });
 
-    // TODO: Send invitation notification
+    // Send invitation email
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    });
+
+    if (organization) {
+      await this.emailService.sendEmail(
+        dto.email,
+        'Invitation to join Organization',
+        `<p>You have been added to the organization <strong>${organization.name}</strong> as <strong>${dto.role}</strong>.</p>`,
+      );
+    }
 
     return member;
   }

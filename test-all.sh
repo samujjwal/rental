@@ -135,7 +135,7 @@ if [ -f "apps/api/test/load/search-queries.load.js" ]; then
     # Wait for API to be ready
     print_status "Waiting for API to be ready..."
     for i in {1..30}; do
-        if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+        if curl -s http://localhost:3400/health > /dev/null 2>&1; then
             print_success "API is ready"
             break
         fi

@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
-import { CacheService } from '@/common/cache/cache.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CacheService } from '../../../common/cache/cache.service';
 import { BookingStatus } from '@rental-portal/database';
 
 export type BookingTransition =
@@ -240,9 +240,9 @@ export class BookingStateMachineService {
         status: authorizedTransition.to,
         stateHistory: {
           create: {
-            state: authorizedTransition.to,
-            transitionedBy: actorId,
-            metadata,
+            toState: authorizedTransition.to,
+            changedBy: actorId,
+            metadata: metadata as any,
           },
         },
       },
@@ -381,22 +381,14 @@ export class BookingStateMachineService {
   async getStateHistory(bookingId: string) {
     return this.prisma.bookingStateHistory.findMany({
       where: { bookingId },
-      include: {
-        transitionedByUser: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
-      orderBy: { transitionedAt: 'asc' },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
   isTerminalState(state: BookingStatus): boolean {
-    return [BookingStatus.SETTLED, BookingStatus.REFUNDED, BookingStatus.CANCELLED].includes(state);
+    return (
+      [BookingStatus.SETTLED, BookingStatus.REFUNDED, BookingStatus.CANCELLED] as BookingStatus[]
+    ).includes(state);
   }
 
   async autoTransitionExpiredBookings(): Promise<number> {

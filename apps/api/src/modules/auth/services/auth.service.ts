@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { User, UserRole, UserStatus } from '@rental-portal/database';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { EmailService } from '@/common/email/email.service';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { MfaService } from './mfa.service';
@@ -41,6 +42,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly mfaService: MfaService,
     private readonly cacheService: CacheService,
+    private readonly emailService: EmailService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -246,8 +248,7 @@ export class AuthService {
       },
     });
 
-    // TODO: Send email with reset link
-    // await this.emailService.sendPasswordReset(user.email, resetToken);
+    await this.emailService.sendPasswordResetEmail(user.email, resetToken);
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {

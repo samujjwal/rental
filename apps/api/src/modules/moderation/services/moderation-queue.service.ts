@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ModerationFlag } from './content-moderation.service';
 
 interface QueueItem {
@@ -26,7 +26,7 @@ export class ModerationQueueService {
           flags: item.flags,
           priority: item.priority,
           status: 'PENDING',
-        },
+        } as any,
       },
     });
   }
@@ -56,17 +56,13 @@ export class ModerationQueueService {
 
     // Filter in memory for metadata fields (could be optimized with JSONB queries)
     let filtered = items;
-    
+
     if (filters?.status) {
-      filtered = filtered.filter(
-        (item) => (item.metadata as any)?.status === filters.status,
-      );
+      filtered = filtered.filter((item) => (item.metadata as any)?.status === filters.status);
     }
 
     if (filters?.priority) {
-      filtered = filtered.filter(
-        (item) => (item.metadata as any)?.priority === filters.priority,
-      );
+      filtered = filtered.filter((item) => (item.metadata as any)?.priority === filters.priority);
     }
 
     return filtered.map((item) => ({

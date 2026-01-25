@@ -5,7 +5,7 @@ export const validationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test', 'staging')
     .default('development'),
-  PORT: Joi.number().default(3000),
+  PORT: Joi.number().default(3400),
   API_PREFIX: Joi.string().default('api'),
 
   // Database
@@ -62,7 +62,7 @@ export const validationSchema = Joi.object({
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug', 'verbose').default('info'),
 
   // CORS
-  CORS_ORIGINS: Joi.string().default('http://localhost:3000,http://localhost:3001'),
+  CORS_ORIGINS: Joi.string().default('http://localhost:3401,http://localhost:3400'),
 
   // File Upload
   MAX_FILE_SIZE: Joi.number().default(10485760), // 10MB in bytes

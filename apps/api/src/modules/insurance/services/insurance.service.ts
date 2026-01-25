@@ -1,5 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceVerificationService } from './insurance-verification.service';
 import { InsurancePolicyService } from './insurance-policy.service';
 
@@ -60,12 +60,11 @@ export class InsuranceService {
 
     // Determine insurance requirements based on category and value
     const categoryRequirements = this.getCategoryRequirements(listing.category.name);
-    const valueRequirements = this.getValueRequirements(listing.pricePerDay);
+    const listingPrice = listing.dailyPrice || listing.basePrice;
+    const valueRequirements = this.getValueRequirements(listingPrice);
 
     const required =
-      categoryRequirements.required ||
-      valueRequirements.required ||
-      listing.pricePerDay > 500;
+      categoryRequirements.required || valueRequirements.required || listingPrice > 500;
 
     return {
       required,
@@ -73,7 +72,7 @@ export class InsuranceService {
       minimumCoverage: Math.max(
         categoryRequirements.minimumCoverage || 0,
         valueRequirements.minimumCoverage || 0,
-        listing.pricePerDay * 2, // At least 2x the daily rate
+        listingPrice * 2, // At least 2x the daily rate
       ),
       reason: required
         ? categoryRequirements.reason ||
@@ -156,17 +155,14 @@ export class InsuranceService {
       await this.prisma.listing.update({
         where: { id: policy.listingId },
         data: {
-          metadata: {
-            insuranceVerified: approved,
-            insurancePolicyId: policyId,
-          },
+          insuranceVerified: approved,
+          insurancePolicyId: approved ? policyId : null,
+          insuranceVerifiedAt: approved ? new Date() : null,
         },
       });
     }
 
-    this.logger.log(
-      `Insurance policy ${approved ? 'verified' : 'rejected'}: ${policyId}`,
-    );
+    this.logger.log(`Insurance policy ${approved ? 'verified' : 'rejected'}: ${policyId}`);
   }
 
   /**
@@ -174,13 +170,12 @@ export class InsuranceService {
    */
   async hasValidInsurance(listingId: string): Promise<boolean> {
     const policy = await this.policyService.getActivePolicy(listingId);
-    
+
     if (!policy) return false;
 
     // Check if policy is verified and not expired
     return (
-      policy.status === InsuranceStatus.VERIFIED &&
-      new Date(policy.expirationDate) > new Date()
+      policy.status === InsuranceStatus.VERIFIED && new Date(policy.expirationDate) > new Date()
     );
   }
 
@@ -214,10 +209,8 @@ export class InsuranceService {
       generatedAt: new Date(),
     };
 
-    // TODO: Generate PDF and upload to storage
-    const certificateUrl = `https://storage.rentalportal.com/certificates/${policyId}.pdf`;
-
-    return { url: certificateUrl };
+    // Use uploaded document as certificate for MVP
+    return { url: policy.documentUrl };
   }
 
   /**
@@ -284,20 +277,5 @@ export class InsuranceService {
     }
 
     return { required: false };
-  }
-
-  /**
-   * Integration with Stripe Identity for document verification
-   */
-  async verifyWithStripeIdentity(policyId: string, documentUrl: string): Promise<void> {
-    // In production: Use Stripe Identity API to verify insurance documents
-    // const stripe = require('stripe')(this.config.get('STRIPE_SECRET_KEY'));
-    
-    // const verification = await stripe.identity.verificationSessions.create({
-    //   type: 'document',
-    //   metadata: { policyId }
-    // });
-
-    // this.logger.log(`Stripe Identity verification created: ${verification.id}`);
   }
 }
