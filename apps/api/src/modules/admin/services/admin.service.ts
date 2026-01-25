@@ -2,6 +2,7 @@ import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import {
   UserRole,
+  UserStatus,
   ListingStatus,
   BookingStatus,
   DisputeStatus,
@@ -69,9 +70,10 @@ export class AdminService {
         select: {
           id: true,
           email: true,
+          firstName: true,
+          lastName: true,
           role: true,
           createdAt: true,
-          profile: true,
         },
       }),
     ]);
@@ -164,11 +166,11 @@ export class AdminService {
       }),
       this.prisma.listing.findMany({
         take: 10,
-        orderBy: { views: 'desc' },
+        orderBy: { viewCount: 'desc' },
         select: {
           id: true,
           title: true,
-          views: true,
+          viewCount: true,
           averageRating: true,
           _count: {
             select: { bookings: true },
@@ -237,12 +239,11 @@ export class AdminService {
       this.prisma.user.findMany({
         where,
         include: {
-          profile: true,
           _count: {
             select: {
               listings: true,
               bookingsAsRenter: true,
-              reviews: true,
+              reviewsGiven: true,
             },
           },
         },
@@ -278,7 +279,7 @@ export class AdminService {
     // For now, we'll use a note in the profile
     const user = await this.prisma.user.findUnique({
       where: { id: targetUserId },
-      include: { profile: true },
+      include: { userPreferences: true },
     });
 
     if (!user) {
@@ -298,10 +299,11 @@ export class AdminService {
       });
     }
 
-    return this.prisma.userProfile.update({
-      where: { userId: targetUserId },
+    // Update user status
+    return this.prisma.user.update({
+      where: { id: targetUserId },
       data: {
-        notes: suspend ? 'Account suspended by admin' : '',
+        status: suspend ? UserStatus.SUSPENDED : UserStatus.ACTIVE,
       },
     });
   }
@@ -341,7 +343,8 @@ export class AdminService {
             select: {
               id: true,
               email: true,
-              profile: true,
+              firstName: true,
+              lastName: true,
             },
           },
           category: true,
@@ -373,13 +376,19 @@ export class AdminService {
   ): Promise<any> {
     await this.verifyAdmin(adminId);
 
+    const updateData: any = {
+      status,
+      moderatedBy: adminId,
+      moderatedAt: new Date(),
+    };
+
+    if (reason && status === ListingStatus.REJECTED) {
+      updateData.rejectionReason = reason;
+    }
+
     return this.prisma.listing.update({
       where: { id: listingId },
-      data: {
-        status,
-        // Store reason in notes if provided
-        notes: reason ? { adminNote: reason } : undefined,
-      },
+      data: updateData,
     });
   }
 
@@ -414,7 +423,10 @@ export class AdminService {
       },
       include: {
         booking: {
-          include: {
+          select: {
+            id: true,
+            platformFee: true,
+            listingId: true,
             listing: {
               select: {
                 id: true,
@@ -428,7 +440,7 @@ export class AdminService {
     });
 
     const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
-    const platformFees = payments.reduce((sum, p) => sum + (p.platformFee || 0), 0);
+    const platformFees = payments.reduce((sum, p) => sum + (p.booking.platformFee || 0), 0);
 
     // Group by category
     const revenueByCategory: Record<string, number> = {};

@@ -13,7 +13,7 @@ export class StripeService {
     private readonly prisma: PrismaService,
   ) {
     this.stripe = new Stripe(config.get<string>('STRIPE_SECRET_KEY') || '', {
-      apiVersion: '2024-11-20.acacia',
+      apiVersion: '2025-12-15.clover',
     });
   }
 

@@ -25,6 +25,7 @@ model User {
   firstName              String
   lastName               String
   phoneNumber            String?
+  phone                  String? // Alias for phoneNumber for compatibility
   phoneVerified          Boolean   @default(false)
   dateOfBirth            DateTime?
   profilePhotoUrl        String?
@@ -49,6 +50,8 @@ model User {
   stripeCustomerId         String? @unique
   stripeConnectId          String? @unique
   stripeOnboardingComplete Boolean @default(false)
+  stripeChargesEnabled     Boolean @default(false)
+  stripePayoutsEnabled     Boolean @default(false)
 
   // Settings
   role              UserRole   @default(CUSTOMER)
@@ -95,6 +98,7 @@ model User {
   insurancePolicies        InsurancePolicy[]
   deviceTokens             DeviceToken[]
   userPreferences          UserPreferences?
+  conditionReportsReported ConditionReport[]         @relation("ReportedByUser")
 
   @@index([email])
   @@index([stripeCustomerId])
@@ -152,12 +156,14 @@ model Session {
 // ==================== Organizations ====================
 
 model Organization {
-  id          String  @id @default(uuid())
-  name        String
-  slug        String  @unique
-  description String? @db.Text
-  logoUrl     String?
-  websiteUrl  String?
+  id           String  @id @default(uuid())
+  name         String
+  slug         String  @unique
+  description  String? @db.Text
+  logoUrl      String?
+  websiteUrl   String?
+  businessType String? // Type of business (e.g., LLC, Corporation, Sole Proprietorship)
+  taxId        String? // Tax identification number
 
   // Contact
   email       String
@@ -480,6 +486,9 @@ model Booking {
   endDate   DateTime
   duration  Int // in hours
 
+  // Guest information
+  guestCount Int @default(1)
+
   // Pricing breakdown
   basePrice      Float
   serviceFee     Float
@@ -487,10 +496,14 @@ model Booking {
   depositAmount  Float @default(0)
   discountAmount Float @default(0)
   totalPrice     Float
+  totalAmount    Float // Same as totalPrice, included for compatibility
   ownerEarnings  Float
   platformFee    Float
 
   currency String @default("USD")
+
+  // Additional contact info
+  renterMessage String? @db.Text
 
   // Status
   status             BookingStatus @default(DRAFT)
@@ -527,6 +540,7 @@ model Booking {
   stateHistory     BookingStateHistory[]
   ledgerEntries    LedgerEntry[]
   depositHold      DepositHold?          @relation(fields: [depositHoldId], references: [id])
+  payments         Payment[]
   conditionReports ConditionReport[]
   reviews          Review[]
   disputes         Dispute[]
@@ -545,6 +559,7 @@ enum BookingStatus {
   PENDING_OWNER_APPROVAL
   PENDING_PAYMENT
   CONFIRMED
+  ACTIVE
   IN_PROGRESS
   AWAITING_RETURN_INSPECTION
   COMPLETED
@@ -656,6 +671,36 @@ enum DepositStatus {
   RELEASED
   EXPIRED
   FAILED
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  bookingId             String
+  amount                Float
+  currency              String        @default("USD")
+  stripePaymentIntentId String?       @unique
+  stripeChargeId        String?       @unique
+  status                PaymentStatus @default(PENDING)
+  failureReason         String?       @db.Text
+  processedAt           DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId])
+  @@index([status])
+  @@index([stripePaymentIntentId])
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
 }
 
 model Refund {
@@ -918,6 +963,7 @@ model ConditionReport {
   id         String     @id @default(uuid())
   bookingId  String
   reportType ReportType
+  type       ReportType // Alias for reportType for compatibility
 
   // Inspector
   reportedBy String
@@ -928,7 +974,9 @@ model ConditionReport {
 
   // Overall condition
   overallCondition String?
+  condition        String? // Alias for overallCondition
   notes            String? @db.Text
+  damages          Json? // Array of damage objects
 
   // Damage/issues
   issuesFound  Boolean @default(false)
@@ -950,8 +998,9 @@ model ConditionReport {
   completedAt DateTime?
 
   // Relations
-  booking Booking  @relation(fields: [bookingId], references: [id])
-  dispute Dispute?
+  booking        Booking  @relation(fields: [bookingId], references: [id])
+  reportedByUser User     @relation("ReportedByUser", fields: [reportedBy], references: [id])
+  dispute        Dispute?
 
   @@index([bookingId])
   @@index([reportType])
@@ -1057,6 +1106,7 @@ enum DisputeType {
 
 enum DisputeStatus {
   OPEN
+  UNDER_REVIEW
   INVESTIGATING
   AWAITING_RESPONSE
   IN_MEDIATION
@@ -1183,6 +1233,7 @@ model Notification {
   // Status
   read   Boolean   @default(false)
   readAt DateTime?
+  status String? // Status field for compatibility (UNREAD, READ, ARCHIVED)
 
   // Delivery
   sentViaEmail Boolean @default(false)
@@ -1214,6 +1265,12 @@ enum NotificationType {
   LISTING_REJECTED
   VERIFICATION_COMPLETE
   SYSTEM_ANNOUNCEMENT
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
 }
 
 // ==================== Audit Logs ====================

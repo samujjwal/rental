@@ -94,7 +94,7 @@ import configuration from './config/configuration';
     SearchModule,
     MessagingModule,
     ReviewsModule,
-    FulfillmentModule,
+    // FulfillmentModule, // TODO: Requires Fulfillment model in schema - currently disabled
     DisputesModule,
     NotificationsModule,
     AdminModule,

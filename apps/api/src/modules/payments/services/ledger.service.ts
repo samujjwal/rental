@@ -177,16 +177,7 @@ export class LedgerService {
             bookingId,
             accountType: AccountType.CASH,
             transactionType: TransactionType.REFUND,
-            side: LedgerSide.DEBIT, // Refund money back to renter? Or Renter gets Debit?
-            // If Renter 'Cash' Account: Debit = Spend, Credit = Receive?
-            // Usually Assets: Dr = Increase. So Debit Cash = Receive.
-            // Earlier: Payment: Debit Renter Cash (Spend? No, usually Debit Expense, Credit Cash).
-            // Let's stick to the previous code's direction if possible, but previous code was:
-            // Payment: Debit Renter (0), Credit (total). Wait.
-            // Previous code: debit: 0, credit: amounts.total. -> This implies Credit = Outflow for Renter?
-            // Previous code: UserId: Renter, Type: Cash, Debit: 0, Credit: Total.
-            // Use that logic. Credit = Spend.
-            // So Refund: Debit = Receive.
+            // Refund: Debit = Receive money back
             side: LedgerSide.DEBIT,
             amount: amount,
             currency,

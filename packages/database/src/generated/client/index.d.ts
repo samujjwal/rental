@@ -79,6 +79,11 @@ export type LedgerEntry = $Result.DefaultSelection<Prisma.$LedgerEntryPayload>
  */
 export type DepositHold = $Result.DefaultSelection<Prisma.$DepositHoldPayload>
 /**
+ * Model Payment
+ * 
+ */
+export type Payment = $Result.DefaultSelection<Prisma.$PaymentPayload>
+/**
  * Model Refund
  * 
  */
@@ -301,6 +306,7 @@ export const BookingStatus: {
   PENDING_OWNER_APPROVAL: 'PENDING_OWNER_APPROVAL',
   PENDING_PAYMENT: 'PENDING_PAYMENT',
   CONFIRMED: 'CONFIRMED',
+  ACTIVE: 'ACTIVE',
   IN_PROGRESS: 'IN_PROGRESS',
   AWAITING_RETURN_INSPECTION: 'AWAITING_RETURN_INSPECTION',
   COMPLETED: 'COMPLETED',
@@ -340,6 +346,18 @@ export const DepositStatus: {
 };
 
 export type DepositStatus = (typeof DepositStatus)[keyof typeof DepositStatus]
+
+
+export const PaymentStatus: {
+  PENDING: 'PENDING',
+  PROCESSING: 'PROCESSING',
+  SUCCEEDED: 'SUCCEEDED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+  REFUNDED: 'REFUNDED'
+};
+
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
 
 
 export const RefundStatus: {
@@ -455,6 +473,7 @@ export type DisputeType = (typeof DisputeType)[keyof typeof DisputeType]
 
 export const DisputeStatus: {
   OPEN: 'OPEN',
+  UNDER_REVIEW: 'UNDER_REVIEW',
   INVESTIGATING: 'INVESTIGATING',
   AWAITING_RESPONSE: 'AWAITING_RESPONSE',
   IN_MEDIATION: 'IN_MEDIATION',
@@ -515,6 +534,15 @@ export const NotificationType: {
 };
 
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType]
+
+
+export const NotificationStatus: {
+  UNREAD: 'UNREAD',
+  READ: 'READ',
+  ARCHIVED: 'ARCHIVED'
+};
+
+export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus]
 
 
 export const InsuranceStatus: {
@@ -594,6 +622,10 @@ export type DepositStatus = $Enums.DepositStatus
 
 export const DepositStatus: typeof $Enums.DepositStatus
 
+export type PaymentStatus = $Enums.PaymentStatus
+
+export const PaymentStatus: typeof $Enums.PaymentStatus
+
 export type RefundStatus = $Enums.RefundStatus
 
 export const RefundStatus: typeof $Enums.RefundStatus
@@ -657,6 +689,10 @@ export const ResolutionOutcome: typeof $Enums.ResolutionOutcome
 export type NotificationType = $Enums.NotificationType
 
 export const NotificationType: typeof $Enums.NotificationType
+
+export type NotificationStatus = $Enums.NotificationStatus
+
+export const NotificationStatus: typeof $Enums.NotificationStatus
 
 export type InsuranceStatus = $Enums.InsuranceStatus
 
@@ -908,6 +944,16 @@ export class PrismaClient<
     * ```
     */
   get depositHold(): Prisma.DepositHoldDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.payment`: Exposes CRUD operations for the **Payment** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Payments
+    * const payments = await prisma.payment.findMany()
+    * ```
+    */
+  get payment(): Prisma.PaymentDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.refund`: Exposes CRUD operations for the **Refund** model.
@@ -1545,6 +1591,7 @@ export namespace Prisma {
     BookingStateHistory: 'BookingStateHistory',
     LedgerEntry: 'LedgerEntry',
     DepositHold: 'DepositHold',
+    Payment: 'Payment',
     Refund: 'Refund',
     Payout: 'Payout',
     Review: 'Review',
@@ -1579,7 +1626,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "session" | "organization" | "organizationMember" | "category" | "listing" | "cancellationPolicy" | "availability" | "favoriteListing" | "booking" | "bookingStateHistory" | "ledgerEntry" | "depositHold" | "refund" | "payout" | "review" | "conversation" | "conversationParticipant" | "message" | "messageReadReceipt" | "conditionReport" | "reportPhoto" | "dispute" | "disputeResponse" | "disputeEvidence" | "disputeTimelineEvent" | "disputeResolution" | "notification" | "auditLog" | "insurancePolicy" | "deviceToken" | "userPreferences"
+      modelProps: "user" | "session" | "organization" | "organizationMember" | "category" | "listing" | "cancellationPolicy" | "availability" | "favoriteListing" | "booking" | "bookingStateHistory" | "ledgerEntry" | "depositHold" | "payment" | "refund" | "payout" | "review" | "conversation" | "conversationParticipant" | "message" | "messageReadReceipt" | "conditionReport" | "reportPhoto" | "dispute" | "disputeResponse" | "disputeEvidence" | "disputeTimelineEvent" | "disputeResolution" | "notification" | "auditLog" | "insurancePolicy" | "deviceToken" | "userPreferences"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -2542,6 +2589,80 @@ export namespace Prisma {
           count: {
             args: Prisma.DepositHoldCountArgs<ExtArgs>
             result: $Utils.Optional<DepositHoldCountAggregateOutputType> | number
+          }
+        }
+      }
+      Payment: {
+        payload: Prisma.$PaymentPayload<ExtArgs>
+        fields: Prisma.PaymentFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PaymentFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PaymentFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          findFirst: {
+            args: Prisma.PaymentFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PaymentFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          findMany: {
+            args: Prisma.PaymentFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>[]
+          }
+          create: {
+            args: Prisma.PaymentCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          createMany: {
+            args: Prisma.PaymentCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.PaymentCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>[]
+          }
+          delete: {
+            args: Prisma.PaymentDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          update: {
+            args: Prisma.PaymentUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          deleteMany: {
+            args: Prisma.PaymentDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PaymentUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.PaymentUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>[]
+          }
+          upsert: {
+            args: Prisma.PaymentUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          aggregate: {
+            args: Prisma.PaymentAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePayment>
+          }
+          groupBy: {
+            args: Prisma.PaymentGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PaymentGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PaymentCountArgs<ExtArgs>
+            result: $Utils.Optional<PaymentCountAggregateOutputType> | number
           }
         }
       }
@@ -4072,6 +4193,7 @@ export namespace Prisma {
     bookingStateHistory?: BookingStateHistoryOmit
     ledgerEntry?: LedgerEntryOmit
     depositHold?: DepositHoldOmit
+    payment?: PaymentOmit
     refund?: RefundOmit
     payout?: PayoutOmit
     review?: ReviewOmit
@@ -4188,6 +4310,7 @@ export namespace Prisma {
     notifications: number
     insurancePolicies: number
     deviceTokens: number
+    conditionReportsReported: number
   }
 
   export type UserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -4208,6 +4331,7 @@ export namespace Prisma {
     notifications?: boolean | UserCountOutputTypeCountNotificationsArgs
     insurancePolicies?: boolean | UserCountOutputTypeCountInsurancePoliciesArgs
     deviceTokens?: boolean | UserCountOutputTypeCountDeviceTokensArgs
+    conditionReportsReported?: boolean | UserCountOutputTypeCountConditionReportsReportedArgs
   }
 
   // Custom InputTypes
@@ -4338,6 +4462,13 @@ export namespace Prisma {
    */
   export type UserCountOutputTypeCountDeviceTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: DeviceTokenWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountConditionReportsReportedArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ConditionReportWhereInput
   }
 
 
@@ -4517,6 +4648,7 @@ export namespace Prisma {
   export type BookingCountOutputType = {
     stateHistory: number
     ledgerEntries: number
+    payments: number
     conditionReports: number
     reviews: number
     disputes: number
@@ -4526,6 +4658,7 @@ export namespace Prisma {
   export type BookingCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     stateHistory?: boolean | BookingCountOutputTypeCountStateHistoryArgs
     ledgerEntries?: boolean | BookingCountOutputTypeCountLedgerEntriesArgs
+    payments?: boolean | BookingCountOutputTypeCountPaymentsArgs
     conditionReports?: boolean | BookingCountOutputTypeCountConditionReportsArgs
     reviews?: boolean | BookingCountOutputTypeCountReviewsArgs
     disputes?: boolean | BookingCountOutputTypeCountDisputesArgs
@@ -4555,6 +4688,13 @@ export namespace Prisma {
    */
   export type BookingCountOutputTypeCountLedgerEntriesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: LedgerEntryWhereInput
+  }
+
+  /**
+   * BookingCountOutputType without action
+   */
+  export type BookingCountOutputTypeCountPaymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PaymentWhereInput
   }
 
   /**
@@ -4807,6 +4947,7 @@ export namespace Prisma {
     firstName: string | null
     lastName: string | null
     phoneNumber: string | null
+    phone: string | null
     phoneVerified: boolean | null
     dateOfBirth: Date | null
     profilePhotoUrl: string | null
@@ -4825,6 +4966,8 @@ export namespace Prisma {
     stripeCustomerId: string | null
     stripeConnectId: string | null
     stripeOnboardingComplete: boolean | null
+    stripeChargesEnabled: boolean | null
+    stripePayoutsEnabled: boolean | null
     role: $Enums.UserRole | null
     status: $Enums.UserStatus | null
     preferredLanguage: string | null
@@ -4854,6 +4997,7 @@ export namespace Prisma {
     firstName: string | null
     lastName: string | null
     phoneNumber: string | null
+    phone: string | null
     phoneVerified: boolean | null
     dateOfBirth: Date | null
     profilePhotoUrl: string | null
@@ -4872,6 +5016,8 @@ export namespace Prisma {
     stripeCustomerId: string | null
     stripeConnectId: string | null
     stripeOnboardingComplete: boolean | null
+    stripeChargesEnabled: boolean | null
+    stripePayoutsEnabled: boolean | null
     role: $Enums.UserRole | null
     status: $Enums.UserStatus | null
     preferredLanguage: string | null
@@ -4901,6 +5047,7 @@ export namespace Prisma {
     firstName: number
     lastName: number
     phoneNumber: number
+    phone: number
     phoneVerified: number
     dateOfBirth: number
     profilePhotoUrl: number
@@ -4919,6 +5066,8 @@ export namespace Prisma {
     stripeCustomerId: number
     stripeConnectId: number
     stripeOnboardingComplete: number
+    stripeChargesEnabled: number
+    stripePayoutsEnabled: number
     role: number
     status: number
     preferredLanguage: number
@@ -4964,6 +5113,7 @@ export namespace Prisma {
     firstName?: true
     lastName?: true
     phoneNumber?: true
+    phone?: true
     phoneVerified?: true
     dateOfBirth?: true
     profilePhotoUrl?: true
@@ -4982,6 +5132,8 @@ export namespace Prisma {
     stripeCustomerId?: true
     stripeConnectId?: true
     stripeOnboardingComplete?: true
+    stripeChargesEnabled?: true
+    stripePayoutsEnabled?: true
     role?: true
     status?: true
     preferredLanguage?: true
@@ -5011,6 +5163,7 @@ export namespace Prisma {
     firstName?: true
     lastName?: true
     phoneNumber?: true
+    phone?: true
     phoneVerified?: true
     dateOfBirth?: true
     profilePhotoUrl?: true
@@ -5029,6 +5182,8 @@ export namespace Prisma {
     stripeCustomerId?: true
     stripeConnectId?: true
     stripeOnboardingComplete?: true
+    stripeChargesEnabled?: true
+    stripePayoutsEnabled?: true
     role?: true
     status?: true
     preferredLanguage?: true
@@ -5058,6 +5213,7 @@ export namespace Prisma {
     firstName?: true
     lastName?: true
     phoneNumber?: true
+    phone?: true
     phoneVerified?: true
     dateOfBirth?: true
     profilePhotoUrl?: true
@@ -5076,6 +5232,8 @@ export namespace Prisma {
     stripeCustomerId?: true
     stripeConnectId?: true
     stripeOnboardingComplete?: true
+    stripeChargesEnabled?: true
+    stripePayoutsEnabled?: true
     role?: true
     status?: true
     preferredLanguage?: true
@@ -5192,6 +5350,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber: string | null
+    phone: string | null
     phoneVerified: boolean
     dateOfBirth: Date | null
     profilePhotoUrl: string | null
@@ -5210,6 +5369,8 @@ export namespace Prisma {
     stripeCustomerId: string | null
     stripeConnectId: string | null
     stripeOnboardingComplete: boolean
+    stripeChargesEnabled: boolean
+    stripePayoutsEnabled: boolean
     role: $Enums.UserRole
     status: $Enums.UserStatus
     preferredLanguage: string
@@ -5258,6 +5419,7 @@ export namespace Prisma {
     firstName?: boolean
     lastName?: boolean
     phoneNumber?: boolean
+    phone?: boolean
     phoneVerified?: boolean
     dateOfBirth?: boolean
     profilePhotoUrl?: boolean
@@ -5276,6 +5438,8 @@ export namespace Prisma {
     stripeCustomerId?: boolean
     stripeConnectId?: boolean
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: boolean
     status?: boolean
     preferredLanguage?: boolean
@@ -5312,6 +5476,7 @@ export namespace Prisma {
     insurancePolicies?: boolean | User$insurancePoliciesArgs<ExtArgs>
     deviceTokens?: boolean | User$deviceTokensArgs<ExtArgs>
     userPreferences?: boolean | User$userPreferencesArgs<ExtArgs>
+    conditionReportsReported?: boolean | User$conditionReportsReportedArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["user"]>
 
@@ -5324,6 +5489,7 @@ export namespace Prisma {
     firstName?: boolean
     lastName?: boolean
     phoneNumber?: boolean
+    phone?: boolean
     phoneVerified?: boolean
     dateOfBirth?: boolean
     profilePhotoUrl?: boolean
@@ -5342,6 +5508,8 @@ export namespace Prisma {
     stripeCustomerId?: boolean
     stripeConnectId?: boolean
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: boolean
     status?: boolean
     preferredLanguage?: boolean
@@ -5371,6 +5539,7 @@ export namespace Prisma {
     firstName?: boolean
     lastName?: boolean
     phoneNumber?: boolean
+    phone?: boolean
     phoneVerified?: boolean
     dateOfBirth?: boolean
     profilePhotoUrl?: boolean
@@ -5389,6 +5558,8 @@ export namespace Prisma {
     stripeCustomerId?: boolean
     stripeConnectId?: boolean
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: boolean
     status?: boolean
     preferredLanguage?: boolean
@@ -5418,6 +5589,7 @@ export namespace Prisma {
     firstName?: boolean
     lastName?: boolean
     phoneNumber?: boolean
+    phone?: boolean
     phoneVerified?: boolean
     dateOfBirth?: boolean
     profilePhotoUrl?: boolean
@@ -5436,6 +5608,8 @@ export namespace Prisma {
     stripeCustomerId?: boolean
     stripeConnectId?: boolean
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: boolean
     status?: boolean
     preferredLanguage?: boolean
@@ -5456,7 +5630,7 @@ export namespace Prisma {
     deletedAt?: boolean
   }
 
-  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "email" | "emailVerified" | "emailVerificationToken" | "passwordHash" | "firstName" | "lastName" | "phoneNumber" | "phoneVerified" | "dateOfBirth" | "profilePhotoUrl" | "bio" | "addressLine1" | "addressLine2" | "city" | "state" | "postalCode" | "country" | "idVerificationStatus" | "idVerificationUrl" | "governmentIdUrl" | "governmentIdType" | "governmentIdNumber" | "stripeCustomerId" | "stripeConnectId" | "stripeOnboardingComplete" | "role" | "status" | "preferredLanguage" | "preferredCurrency" | "timezone" | "mfaEnabled" | "mfaSecret" | "passwordResetToken" | "passwordResetExpires" | "lastLoginAt" | "lastLoginIp" | "averageRating" | "totalReviews" | "responseRate" | "responseTime" | "createdAt" | "updatedAt" | "deletedAt", ExtArgs["result"]["user"]>
+  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "email" | "emailVerified" | "emailVerificationToken" | "passwordHash" | "firstName" | "lastName" | "phoneNumber" | "phone" | "phoneVerified" | "dateOfBirth" | "profilePhotoUrl" | "bio" | "addressLine1" | "addressLine2" | "city" | "state" | "postalCode" | "country" | "idVerificationStatus" | "idVerificationUrl" | "governmentIdUrl" | "governmentIdType" | "governmentIdNumber" | "stripeCustomerId" | "stripeConnectId" | "stripeOnboardingComplete" | "stripeChargesEnabled" | "stripePayoutsEnabled" | "role" | "status" | "preferredLanguage" | "preferredCurrency" | "timezone" | "mfaEnabled" | "mfaSecret" | "passwordResetToken" | "passwordResetExpires" | "lastLoginAt" | "lastLoginIp" | "averageRating" | "totalReviews" | "responseRate" | "responseTime" | "createdAt" | "updatedAt" | "deletedAt", ExtArgs["result"]["user"]>
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     sessions?: boolean | User$sessionsArgs<ExtArgs>
     listings?: boolean | User$listingsArgs<ExtArgs>
@@ -5476,6 +5650,7 @@ export namespace Prisma {
     insurancePolicies?: boolean | User$insurancePoliciesArgs<ExtArgs>
     deviceTokens?: boolean | User$deviceTokensArgs<ExtArgs>
     userPreferences?: boolean | User$userPreferencesArgs<ExtArgs>
+    conditionReportsReported?: boolean | User$conditionReportsReportedArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type UserIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -5502,6 +5677,7 @@ export namespace Prisma {
       insurancePolicies: Prisma.$InsurancePolicyPayload<ExtArgs>[]
       deviceTokens: Prisma.$DeviceTokenPayload<ExtArgs>[]
       userPreferences: Prisma.$UserPreferencesPayload<ExtArgs> | null
+      conditionReportsReported: Prisma.$ConditionReportPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -5512,6 +5688,7 @@ export namespace Prisma {
       firstName: string
       lastName: string
       phoneNumber: string | null
+      phone: string | null
       phoneVerified: boolean
       dateOfBirth: Date | null
       profilePhotoUrl: string | null
@@ -5530,6 +5707,8 @@ export namespace Prisma {
       stripeCustomerId: string | null
       stripeConnectId: string | null
       stripeOnboardingComplete: boolean
+      stripeChargesEnabled: boolean
+      stripePayoutsEnabled: boolean
       role: $Enums.UserRole
       status: $Enums.UserStatus
       preferredLanguage: string
@@ -5960,6 +6139,7 @@ export namespace Prisma {
     insurancePolicies<T extends User$insurancePoliciesArgs<ExtArgs> = {}>(args?: Subset<T, User$insurancePoliciesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$InsurancePolicyPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     deviceTokens<T extends User$deviceTokensArgs<ExtArgs> = {}>(args?: Subset<T, User$deviceTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DeviceTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     userPreferences<T extends User$userPreferencesArgs<ExtArgs> = {}>(args?: Subset<T, User$userPreferencesArgs<ExtArgs>>): Prisma__UserPreferencesClient<$Result.GetResult<Prisma.$UserPreferencesPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    conditionReportsReported<T extends User$conditionReportsReportedArgs<ExtArgs> = {}>(args?: Subset<T, User$conditionReportsReportedArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ConditionReportPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -5997,6 +6177,7 @@ export namespace Prisma {
     readonly firstName: FieldRef<"User", 'String'>
     readonly lastName: FieldRef<"User", 'String'>
     readonly phoneNumber: FieldRef<"User", 'String'>
+    readonly phone: FieldRef<"User", 'String'>
     readonly phoneVerified: FieldRef<"User", 'Boolean'>
     readonly dateOfBirth: FieldRef<"User", 'DateTime'>
     readonly profilePhotoUrl: FieldRef<"User", 'String'>
@@ -6015,6 +6196,8 @@ export namespace Prisma {
     readonly stripeCustomerId: FieldRef<"User", 'String'>
     readonly stripeConnectId: FieldRef<"User", 'String'>
     readonly stripeOnboardingComplete: FieldRef<"User", 'Boolean'>
+    readonly stripeChargesEnabled: FieldRef<"User", 'Boolean'>
+    readonly stripePayoutsEnabled: FieldRef<"User", 'Boolean'>
     readonly role: FieldRef<"User", 'UserRole'>
     readonly status: FieldRef<"User", 'UserStatus'>
     readonly preferredLanguage: FieldRef<"User", 'String'>
@@ -6845,6 +7028,30 @@ export namespace Prisma {
      */
     include?: UserPreferencesInclude<ExtArgs> | null
     where?: UserPreferencesWhereInput
+  }
+
+  /**
+   * User.conditionReportsReported
+   */
+  export type User$conditionReportsReportedArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ConditionReport
+     */
+    select?: ConditionReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ConditionReport
+     */
+    omit?: ConditionReportOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ConditionReportInclude<ExtArgs> | null
+    where?: ConditionReportWhereInput
+    orderBy?: ConditionReportOrderByWithRelationInput | ConditionReportOrderByWithRelationInput[]
+    cursor?: ConditionReportWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ConditionReportScalarFieldEnum | ConditionReportScalarFieldEnum[]
   }
 
   /**
@@ -7980,6 +8187,8 @@ export namespace Prisma {
     description: string | null
     logoUrl: string | null
     websiteUrl: string | null
+    businessType: string | null
+    taxId: string | null
     email: string | null
     phoneNumber: string | null
     addressLine1: string | null
@@ -8001,6 +8210,8 @@ export namespace Prisma {
     description: string | null
     logoUrl: string | null
     websiteUrl: string | null
+    businessType: string | null
+    taxId: string | null
     email: string | null
     phoneNumber: string | null
     addressLine1: string | null
@@ -8022,6 +8233,8 @@ export namespace Prisma {
     description: number
     logoUrl: number
     websiteUrl: number
+    businessType: number
+    taxId: number
     email: number
     phoneNumber: number
     addressLine1: number
@@ -8045,6 +8258,8 @@ export namespace Prisma {
     description?: true
     logoUrl?: true
     websiteUrl?: true
+    businessType?: true
+    taxId?: true
     email?: true
     phoneNumber?: true
     addressLine1?: true
@@ -8066,6 +8281,8 @@ export namespace Prisma {
     description?: true
     logoUrl?: true
     websiteUrl?: true
+    businessType?: true
+    taxId?: true
     email?: true
     phoneNumber?: true
     addressLine1?: true
@@ -8087,6 +8304,8 @@ export namespace Prisma {
     description?: true
     logoUrl?: true
     websiteUrl?: true
+    businessType?: true
+    taxId?: true
     email?: true
     phoneNumber?: true
     addressLine1?: true
@@ -8181,6 +8400,8 @@ export namespace Prisma {
     description: string | null
     logoUrl: string | null
     websiteUrl: string | null
+    businessType: string | null
+    taxId: string | null
     email: string
     phoneNumber: string | null
     addressLine1: string | null
@@ -8219,6 +8440,8 @@ export namespace Prisma {
     description?: boolean
     logoUrl?: boolean
     websiteUrl?: boolean
+    businessType?: boolean
+    taxId?: boolean
     email?: boolean
     phoneNumber?: boolean
     addressLine1?: boolean
@@ -8243,6 +8466,8 @@ export namespace Prisma {
     description?: boolean
     logoUrl?: boolean
     websiteUrl?: boolean
+    businessType?: boolean
+    taxId?: boolean
     email?: boolean
     phoneNumber?: boolean
     addressLine1?: boolean
@@ -8264,6 +8489,8 @@ export namespace Prisma {
     description?: boolean
     logoUrl?: boolean
     websiteUrl?: boolean
+    businessType?: boolean
+    taxId?: boolean
     email?: boolean
     phoneNumber?: boolean
     addressLine1?: boolean
@@ -8285,6 +8512,8 @@ export namespace Prisma {
     description?: boolean
     logoUrl?: boolean
     websiteUrl?: boolean
+    businessType?: boolean
+    taxId?: boolean
     email?: boolean
     phoneNumber?: boolean
     addressLine1?: boolean
@@ -8299,7 +8528,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type OrganizationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "slug" | "description" | "logoUrl" | "websiteUrl" | "email" | "phoneNumber" | "addressLine1" | "addressLine2" | "city" | "state" | "postalCode" | "country" | "stripeConnectId" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["organization"]>
+  export type OrganizationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "slug" | "description" | "logoUrl" | "websiteUrl" | "businessType" | "taxId" | "email" | "phoneNumber" | "addressLine1" | "addressLine2" | "city" | "state" | "postalCode" | "country" | "stripeConnectId" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["organization"]>
   export type OrganizationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     members?: boolean | Organization$membersArgs<ExtArgs>
     listings?: boolean | Organization$listingsArgs<ExtArgs>
@@ -8321,6 +8550,8 @@ export namespace Prisma {
       description: string | null
       logoUrl: string | null
       websiteUrl: string | null
+      businessType: string | null
+      taxId: string | null
       email: string
       phoneNumber: string | null
       addressLine1: string | null
@@ -8764,6 +8995,8 @@ export namespace Prisma {
     readonly description: FieldRef<"Organization", 'String'>
     readonly logoUrl: FieldRef<"Organization", 'String'>
     readonly websiteUrl: FieldRef<"Organization", 'String'>
+    readonly businessType: FieldRef<"Organization", 'String'>
+    readonly taxId: FieldRef<"Organization", 'String'>
     readonly email: FieldRef<"Organization", 'String'>
     readonly phoneNumber: FieldRef<"Organization", 'String'>
     readonly addressLine1: FieldRef<"Organization", 'String'>
@@ -16932,24 +17165,28 @@ export namespace Prisma {
 
   export type BookingAvgAggregateOutputType = {
     duration: number | null
+    guestCount: number | null
     basePrice: number | null
     serviceFee: number | null
     tax: number | null
     depositAmount: number | null
     discountAmount: number | null
     totalPrice: number | null
+    totalAmount: number | null
     ownerEarnings: number | null
     platformFee: number | null
   }
 
   export type BookingSumAggregateOutputType = {
     duration: number | null
+    guestCount: number | null
     basePrice: number | null
     serviceFee: number | null
     tax: number | null
     depositAmount: number | null
     discountAmount: number | null
     totalPrice: number | null
+    totalAmount: number | null
     ownerEarnings: number | null
     platformFee: number | null
   }
@@ -16962,15 +17199,18 @@ export namespace Prisma {
     startDate: Date | null
     endDate: Date | null
     duration: number | null
+    guestCount: number | null
     basePrice: number | null
     serviceFee: number | null
     tax: number | null
     depositAmount: number | null
     discountAmount: number | null
     totalPrice: number | null
+    totalAmount: number | null
     ownerEarnings: number | null
     platformFee: number | null
     currency: string | null
+    renterMessage: string | null
     status: $Enums.BookingStatus | null
     cancellationReason: string | null
     cancelledBy: string | null
@@ -16998,15 +17238,18 @@ export namespace Prisma {
     startDate: Date | null
     endDate: Date | null
     duration: number | null
+    guestCount: number | null
     basePrice: number | null
     serviceFee: number | null
     tax: number | null
     depositAmount: number | null
     discountAmount: number | null
     totalPrice: number | null
+    totalAmount: number | null
     ownerEarnings: number | null
     platformFee: number | null
     currency: string | null
+    renterMessage: string | null
     status: $Enums.BookingStatus | null
     cancellationReason: string | null
     cancelledBy: string | null
@@ -17034,15 +17277,18 @@ export namespace Prisma {
     startDate: number
     endDate: number
     duration: number
+    guestCount: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount: number
     discountAmount: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency: number
+    renterMessage: number
     status: number
     cancellationReason: number
     cancelledBy: number
@@ -17067,24 +17313,28 @@ export namespace Prisma {
 
   export type BookingAvgAggregateInputType = {
     duration?: true
+    guestCount?: true
     basePrice?: true
     serviceFee?: true
     tax?: true
     depositAmount?: true
     discountAmount?: true
     totalPrice?: true
+    totalAmount?: true
     ownerEarnings?: true
     platformFee?: true
   }
 
   export type BookingSumAggregateInputType = {
     duration?: true
+    guestCount?: true
     basePrice?: true
     serviceFee?: true
     tax?: true
     depositAmount?: true
     discountAmount?: true
     totalPrice?: true
+    totalAmount?: true
     ownerEarnings?: true
     platformFee?: true
   }
@@ -17097,15 +17347,18 @@ export namespace Prisma {
     startDate?: true
     endDate?: true
     duration?: true
+    guestCount?: true
     basePrice?: true
     serviceFee?: true
     tax?: true
     depositAmount?: true
     discountAmount?: true
     totalPrice?: true
+    totalAmount?: true
     ownerEarnings?: true
     platformFee?: true
     currency?: true
+    renterMessage?: true
     status?: true
     cancellationReason?: true
     cancelledBy?: true
@@ -17133,15 +17386,18 @@ export namespace Prisma {
     startDate?: true
     endDate?: true
     duration?: true
+    guestCount?: true
     basePrice?: true
     serviceFee?: true
     tax?: true
     depositAmount?: true
     discountAmount?: true
     totalPrice?: true
+    totalAmount?: true
     ownerEarnings?: true
     platformFee?: true
     currency?: true
+    renterMessage?: true
     status?: true
     cancellationReason?: true
     cancelledBy?: true
@@ -17169,15 +17425,18 @@ export namespace Prisma {
     startDate?: true
     endDate?: true
     duration?: true
+    guestCount?: true
     basePrice?: true
     serviceFee?: true
     tax?: true
     depositAmount?: true
     discountAmount?: true
     totalPrice?: true
+    totalAmount?: true
     ownerEarnings?: true
     platformFee?: true
     currency?: true
+    renterMessage?: true
     status?: true
     cancellationReason?: true
     cancelledBy?: true
@@ -17293,15 +17552,18 @@ export namespace Prisma {
     startDate: Date
     endDate: Date
     duration: number
+    guestCount: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount: number
     discountAmount: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency: string
+    renterMessage: string | null
     status: $Enums.BookingStatus
     cancellationReason: string | null
     cancelledBy: string | null
@@ -17349,15 +17611,18 @@ export namespace Prisma {
     startDate?: boolean
     endDate?: boolean
     duration?: boolean
+    guestCount?: boolean
     basePrice?: boolean
     serviceFee?: boolean
     tax?: boolean
     depositAmount?: boolean
     discountAmount?: boolean
     totalPrice?: boolean
+    totalAmount?: boolean
     ownerEarnings?: boolean
     platformFee?: boolean
     currency?: boolean
+    renterMessage?: boolean
     status?: boolean
     cancellationReason?: boolean
     cancelledBy?: boolean
@@ -17382,6 +17647,7 @@ export namespace Prisma {
     stateHistory?: boolean | Booking$stateHistoryArgs<ExtArgs>
     ledgerEntries?: boolean | Booking$ledgerEntriesArgs<ExtArgs>
     depositHold?: boolean | Booking$depositHoldArgs<ExtArgs>
+    payments?: boolean | Booking$paymentsArgs<ExtArgs>
     conditionReports?: boolean | Booking$conditionReportsArgs<ExtArgs>
     reviews?: boolean | Booking$reviewsArgs<ExtArgs>
     disputes?: boolean | Booking$disputesArgs<ExtArgs>
@@ -17397,15 +17663,18 @@ export namespace Prisma {
     startDate?: boolean
     endDate?: boolean
     duration?: boolean
+    guestCount?: boolean
     basePrice?: boolean
     serviceFee?: boolean
     tax?: boolean
     depositAmount?: boolean
     discountAmount?: boolean
     totalPrice?: boolean
+    totalAmount?: boolean
     ownerEarnings?: boolean
     platformFee?: boolean
     currency?: boolean
+    renterMessage?: boolean
     status?: boolean
     cancellationReason?: boolean
     cancelledBy?: boolean
@@ -17438,15 +17707,18 @@ export namespace Prisma {
     startDate?: boolean
     endDate?: boolean
     duration?: boolean
+    guestCount?: boolean
     basePrice?: boolean
     serviceFee?: boolean
     tax?: boolean
     depositAmount?: boolean
     discountAmount?: boolean
     totalPrice?: boolean
+    totalAmount?: boolean
     ownerEarnings?: boolean
     platformFee?: boolean
     currency?: boolean
+    renterMessage?: boolean
     status?: boolean
     cancellationReason?: boolean
     cancelledBy?: boolean
@@ -17479,15 +17751,18 @@ export namespace Prisma {
     startDate?: boolean
     endDate?: boolean
     duration?: boolean
+    guestCount?: boolean
     basePrice?: boolean
     serviceFee?: boolean
     tax?: boolean
     depositAmount?: boolean
     discountAmount?: boolean
     totalPrice?: boolean
+    totalAmount?: boolean
     ownerEarnings?: boolean
     platformFee?: boolean
     currency?: boolean
+    renterMessage?: boolean
     status?: boolean
     cancellationReason?: boolean
     cancelledBy?: boolean
@@ -17508,7 +17783,7 @@ export namespace Prisma {
     completedAt?: boolean
   }
 
-  export type BookingOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "listingId" | "renterId" | "ownerId" | "startDate" | "endDate" | "duration" | "basePrice" | "serviceFee" | "tax" | "depositAmount" | "discountAmount" | "totalPrice" | "ownerEarnings" | "platformFee" | "currency" | "status" | "cancellationReason" | "cancelledBy" | "cancelledAt" | "paymentIntentId" | "depositHoldId" | "depositReleased" | "depositReleasedAt" | "checkInTime" | "checkOutTime" | "actualReturnTime" | "categoryData" | "renterNotes" | "ownerNotes" | "createdAt" | "updatedAt" | "confirmedAt" | "completedAt", ExtArgs["result"]["booking"]>
+  export type BookingOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "listingId" | "renterId" | "ownerId" | "startDate" | "endDate" | "duration" | "guestCount" | "basePrice" | "serviceFee" | "tax" | "depositAmount" | "discountAmount" | "totalPrice" | "totalAmount" | "ownerEarnings" | "platformFee" | "currency" | "renterMessage" | "status" | "cancellationReason" | "cancelledBy" | "cancelledAt" | "paymentIntentId" | "depositHoldId" | "depositReleased" | "depositReleasedAt" | "checkInTime" | "checkOutTime" | "actualReturnTime" | "categoryData" | "renterNotes" | "ownerNotes" | "createdAt" | "updatedAt" | "confirmedAt" | "completedAt", ExtArgs["result"]["booking"]>
   export type BookingInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     listing?: boolean | ListingDefaultArgs<ExtArgs>
     renter?: boolean | UserDefaultArgs<ExtArgs>
@@ -17516,6 +17791,7 @@ export namespace Prisma {
     stateHistory?: boolean | Booking$stateHistoryArgs<ExtArgs>
     ledgerEntries?: boolean | Booking$ledgerEntriesArgs<ExtArgs>
     depositHold?: boolean | Booking$depositHoldArgs<ExtArgs>
+    payments?: boolean | Booking$paymentsArgs<ExtArgs>
     conditionReports?: boolean | Booking$conditionReportsArgs<ExtArgs>
     reviews?: boolean | Booking$reviewsArgs<ExtArgs>
     disputes?: boolean | Booking$disputesArgs<ExtArgs>
@@ -17544,6 +17820,7 @@ export namespace Prisma {
       stateHistory: Prisma.$BookingStateHistoryPayload<ExtArgs>[]
       ledgerEntries: Prisma.$LedgerEntryPayload<ExtArgs>[]
       depositHold: Prisma.$DepositHoldPayload<ExtArgs> | null
+      payments: Prisma.$PaymentPayload<ExtArgs>[]
       conditionReports: Prisma.$ConditionReportPayload<ExtArgs>[]
       reviews: Prisma.$ReviewPayload<ExtArgs>[]
       disputes: Prisma.$DisputePayload<ExtArgs>[]
@@ -17557,15 +17834,18 @@ export namespace Prisma {
       startDate: Date
       endDate: Date
       duration: number
+      guestCount: number
       basePrice: number
       serviceFee: number
       tax: number
       depositAmount: number
       discountAmount: number
       totalPrice: number
+      totalAmount: number
       ownerEarnings: number
       platformFee: number
       currency: string
+      renterMessage: string | null
       status: $Enums.BookingStatus
       cancellationReason: string | null
       cancelledBy: string | null
@@ -17984,6 +18264,7 @@ export namespace Prisma {
     stateHistory<T extends Booking$stateHistoryArgs<ExtArgs> = {}>(args?: Subset<T, Booking$stateHistoryArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BookingStateHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     ledgerEntries<T extends Booking$ledgerEntriesArgs<ExtArgs> = {}>(args?: Subset<T, Booking$ledgerEntriesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$LedgerEntryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     depositHold<T extends Booking$depositHoldArgs<ExtArgs> = {}>(args?: Subset<T, Booking$depositHoldArgs<ExtArgs>>): Prisma__DepositHoldClient<$Result.GetResult<Prisma.$DepositHoldPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    payments<T extends Booking$paymentsArgs<ExtArgs> = {}>(args?: Subset<T, Booking$paymentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     conditionReports<T extends Booking$conditionReportsArgs<ExtArgs> = {}>(args?: Subset<T, Booking$conditionReportsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ConditionReportPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     reviews<T extends Booking$reviewsArgs<ExtArgs> = {}>(args?: Subset<T, Booking$reviewsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ReviewPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     disputes<T extends Booking$disputesArgs<ExtArgs> = {}>(args?: Subset<T, Booking$disputesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DisputePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -18024,15 +18305,18 @@ export namespace Prisma {
     readonly startDate: FieldRef<"Booking", 'DateTime'>
     readonly endDate: FieldRef<"Booking", 'DateTime'>
     readonly duration: FieldRef<"Booking", 'Int'>
+    readonly guestCount: FieldRef<"Booking", 'Int'>
     readonly basePrice: FieldRef<"Booking", 'Float'>
     readonly serviceFee: FieldRef<"Booking", 'Float'>
     readonly tax: FieldRef<"Booking", 'Float'>
     readonly depositAmount: FieldRef<"Booking", 'Float'>
     readonly discountAmount: FieldRef<"Booking", 'Float'>
     readonly totalPrice: FieldRef<"Booking", 'Float'>
+    readonly totalAmount: FieldRef<"Booking", 'Float'>
     readonly ownerEarnings: FieldRef<"Booking", 'Float'>
     readonly platformFee: FieldRef<"Booking", 'Float'>
     readonly currency: FieldRef<"Booking", 'String'>
+    readonly renterMessage: FieldRef<"Booking", 'String'>
     readonly status: FieldRef<"Booking", 'BookingStatus'>
     readonly cancellationReason: FieldRef<"Booking", 'String'>
     readonly cancelledBy: FieldRef<"Booking", 'String'>
@@ -18511,6 +18795,30 @@ export namespace Prisma {
      */
     include?: DepositHoldInclude<ExtArgs> | null
     where?: DepositHoldWhereInput
+  }
+
+  /**
+   * Booking.payments
+   */
+  export type Booking$paymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    where?: PaymentWhereInput
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    cursor?: PaymentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
   }
 
   /**
@@ -22122,6 +22430,1176 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: DepositHoldInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model Payment
+   */
+
+  export type AggregatePayment = {
+    _count: PaymentCountAggregateOutputType | null
+    _avg: PaymentAvgAggregateOutputType | null
+    _sum: PaymentSumAggregateOutputType | null
+    _min: PaymentMinAggregateOutputType | null
+    _max: PaymentMaxAggregateOutputType | null
+  }
+
+  export type PaymentAvgAggregateOutputType = {
+    amount: number | null
+  }
+
+  export type PaymentSumAggregateOutputType = {
+    amount: number | null
+  }
+
+  export type PaymentMinAggregateOutputType = {
+    id: string | null
+    bookingId: string | null
+    amount: number | null
+    currency: string | null
+    stripePaymentIntentId: string | null
+    stripeChargeId: string | null
+    status: $Enums.PaymentStatus | null
+    failureReason: string | null
+    processedAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PaymentMaxAggregateOutputType = {
+    id: string | null
+    bookingId: string | null
+    amount: number | null
+    currency: string | null
+    stripePaymentIntentId: string | null
+    stripeChargeId: string | null
+    status: $Enums.PaymentStatus | null
+    failureReason: string | null
+    processedAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PaymentCountAggregateOutputType = {
+    id: number
+    bookingId: number
+    amount: number
+    currency: number
+    stripePaymentIntentId: number
+    stripeChargeId: number
+    status: number
+    failureReason: number
+    processedAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type PaymentAvgAggregateInputType = {
+    amount?: true
+  }
+
+  export type PaymentSumAggregateInputType = {
+    amount?: true
+  }
+
+  export type PaymentMinAggregateInputType = {
+    id?: true
+    bookingId?: true
+    amount?: true
+    currency?: true
+    stripePaymentIntentId?: true
+    stripeChargeId?: true
+    status?: true
+    failureReason?: true
+    processedAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PaymentMaxAggregateInputType = {
+    id?: true
+    bookingId?: true
+    amount?: true
+    currency?: true
+    stripePaymentIntentId?: true
+    stripeChargeId?: true
+    status?: true
+    failureReason?: true
+    processedAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PaymentCountAggregateInputType = {
+    id?: true
+    bookingId?: true
+    amount?: true
+    currency?: true
+    stripePaymentIntentId?: true
+    stripeChargeId?: true
+    status?: true
+    failureReason?: true
+    processedAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type PaymentAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Payment to aggregate.
+     */
+    where?: PaymentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Payments to fetch.
+     */
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PaymentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Payments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Payments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned Payments
+    **/
+    _count?: true | PaymentCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: PaymentAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: PaymentSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PaymentMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PaymentMaxAggregateInputType
+  }
+
+  export type GetPaymentAggregateType<T extends PaymentAggregateArgs> = {
+        [P in keyof T & keyof AggregatePayment]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePayment[P]>
+      : GetScalarType<T[P], AggregatePayment[P]>
+  }
+
+
+
+
+  export type PaymentGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PaymentWhereInput
+    orderBy?: PaymentOrderByWithAggregationInput | PaymentOrderByWithAggregationInput[]
+    by: PaymentScalarFieldEnum[] | PaymentScalarFieldEnum
+    having?: PaymentScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PaymentCountAggregateInputType | true
+    _avg?: PaymentAvgAggregateInputType
+    _sum?: PaymentSumAggregateInputType
+    _min?: PaymentMinAggregateInputType
+    _max?: PaymentMaxAggregateInputType
+  }
+
+  export type PaymentGroupByOutputType = {
+    id: string
+    bookingId: string
+    amount: number
+    currency: string
+    stripePaymentIntentId: string | null
+    stripeChargeId: string | null
+    status: $Enums.PaymentStatus
+    failureReason: string | null
+    processedAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: PaymentCountAggregateOutputType | null
+    _avg: PaymentAvgAggregateOutputType | null
+    _sum: PaymentSumAggregateOutputType | null
+    _min: PaymentMinAggregateOutputType | null
+    _max: PaymentMaxAggregateOutputType | null
+  }
+
+  type GetPaymentGroupByPayload<T extends PaymentGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PaymentGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PaymentGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PaymentGroupByOutputType[P]>
+            : GetScalarType<T[P], PaymentGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PaymentSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bookingId?: boolean
+    amount?: boolean
+    currency?: boolean
+    stripePaymentIntentId?: boolean
+    stripeChargeId?: boolean
+    status?: boolean
+    failureReason?: boolean
+    processedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    booking?: boolean | BookingDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["payment"]>
+
+  export type PaymentSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bookingId?: boolean
+    amount?: boolean
+    currency?: boolean
+    stripePaymentIntentId?: boolean
+    stripeChargeId?: boolean
+    status?: boolean
+    failureReason?: boolean
+    processedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    booking?: boolean | BookingDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["payment"]>
+
+  export type PaymentSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bookingId?: boolean
+    amount?: boolean
+    currency?: boolean
+    stripePaymentIntentId?: boolean
+    stripeChargeId?: boolean
+    status?: boolean
+    failureReason?: boolean
+    processedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    booking?: boolean | BookingDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["payment"]>
+
+  export type PaymentSelectScalar = {
+    id?: boolean
+    bookingId?: boolean
+    amount?: boolean
+    currency?: boolean
+    stripePaymentIntentId?: boolean
+    stripeChargeId?: boolean
+    status?: boolean
+    failureReason?: boolean
+    processedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type PaymentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bookingId" | "amount" | "currency" | "stripePaymentIntentId" | "stripeChargeId" | "status" | "failureReason" | "processedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["payment"]>
+  export type PaymentInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    booking?: boolean | BookingDefaultArgs<ExtArgs>
+  }
+  export type PaymentIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    booking?: boolean | BookingDefaultArgs<ExtArgs>
+  }
+  export type PaymentIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    booking?: boolean | BookingDefaultArgs<ExtArgs>
+  }
+
+  export type $PaymentPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "Payment"
+    objects: {
+      booking: Prisma.$BookingPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      bookingId: string
+      amount: number
+      currency: string
+      stripePaymentIntentId: string | null
+      stripeChargeId: string | null
+      status: $Enums.PaymentStatus
+      failureReason: string | null
+      processedAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["payment"]>
+    composites: {}
+  }
+
+  type PaymentGetPayload<S extends boolean | null | undefined | PaymentDefaultArgs> = $Result.GetResult<Prisma.$PaymentPayload, S>
+
+  type PaymentCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PaymentFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PaymentCountAggregateInputType | true
+    }
+
+  export interface PaymentDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Payment'], meta: { name: 'Payment' } }
+    /**
+     * Find zero or one Payment that matches the filter.
+     * @param {PaymentFindUniqueArgs} args - Arguments to find a Payment
+     * @example
+     * // Get one Payment
+     * const payment = await prisma.payment.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PaymentFindUniqueArgs>(args: SelectSubset<T, PaymentFindUniqueArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Payment that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PaymentFindUniqueOrThrowArgs} args - Arguments to find a Payment
+     * @example
+     * // Get one Payment
+     * const payment = await prisma.payment.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PaymentFindUniqueOrThrowArgs>(args: SelectSubset<T, PaymentFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Payment that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentFindFirstArgs} args - Arguments to find a Payment
+     * @example
+     * // Get one Payment
+     * const payment = await prisma.payment.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PaymentFindFirstArgs>(args?: SelectSubset<T, PaymentFindFirstArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Payment that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentFindFirstOrThrowArgs} args - Arguments to find a Payment
+     * @example
+     * // Get one Payment
+     * const payment = await prisma.payment.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PaymentFindFirstOrThrowArgs>(args?: SelectSubset<T, PaymentFindFirstOrThrowArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Payments that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Payments
+     * const payments = await prisma.payment.findMany()
+     * 
+     * // Get first 10 Payments
+     * const payments = await prisma.payment.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const paymentWithIdOnly = await prisma.payment.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PaymentFindManyArgs>(args?: SelectSubset<T, PaymentFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Payment.
+     * @param {PaymentCreateArgs} args - Arguments to create a Payment.
+     * @example
+     * // Create one Payment
+     * const Payment = await prisma.payment.create({
+     *   data: {
+     *     // ... data to create a Payment
+     *   }
+     * })
+     * 
+     */
+    create<T extends PaymentCreateArgs>(args: SelectSubset<T, PaymentCreateArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Payments.
+     * @param {PaymentCreateManyArgs} args - Arguments to create many Payments.
+     * @example
+     * // Create many Payments
+     * const payment = await prisma.payment.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PaymentCreateManyArgs>(args?: SelectSubset<T, PaymentCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many Payments and returns the data saved in the database.
+     * @param {PaymentCreateManyAndReturnArgs} args - Arguments to create many Payments.
+     * @example
+     * // Create many Payments
+     * const payment = await prisma.payment.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many Payments and only return the `id`
+     * const paymentWithIdOnly = await prisma.payment.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends PaymentCreateManyAndReturnArgs>(args?: SelectSubset<T, PaymentCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a Payment.
+     * @param {PaymentDeleteArgs} args - Arguments to delete one Payment.
+     * @example
+     * // Delete one Payment
+     * const Payment = await prisma.payment.delete({
+     *   where: {
+     *     // ... filter to delete one Payment
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PaymentDeleteArgs>(args: SelectSubset<T, PaymentDeleteArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Payment.
+     * @param {PaymentUpdateArgs} args - Arguments to update one Payment.
+     * @example
+     * // Update one Payment
+     * const payment = await prisma.payment.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PaymentUpdateArgs>(args: SelectSubset<T, PaymentUpdateArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Payments.
+     * @param {PaymentDeleteManyArgs} args - Arguments to filter Payments to delete.
+     * @example
+     * // Delete a few Payments
+     * const { count } = await prisma.payment.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PaymentDeleteManyArgs>(args?: SelectSubset<T, PaymentDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Payments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Payments
+     * const payment = await prisma.payment.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PaymentUpdateManyArgs>(args: SelectSubset<T, PaymentUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Payments and returns the data updated in the database.
+     * @param {PaymentUpdateManyAndReturnArgs} args - Arguments to update many Payments.
+     * @example
+     * // Update many Payments
+     * const payment = await prisma.payment.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more Payments and only return the `id`
+     * const paymentWithIdOnly = await prisma.payment.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends PaymentUpdateManyAndReturnArgs>(args: SelectSubset<T, PaymentUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one Payment.
+     * @param {PaymentUpsertArgs} args - Arguments to update or create a Payment.
+     * @example
+     * // Update or create a Payment
+     * const payment = await prisma.payment.upsert({
+     *   create: {
+     *     // ... data to create a Payment
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Payment we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PaymentUpsertArgs>(args: SelectSubset<T, PaymentUpsertArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Payments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentCountArgs} args - Arguments to filter Payments to count.
+     * @example
+     * // Count the number of Payments
+     * const count = await prisma.payment.count({
+     *   where: {
+     *     // ... the filter for the Payments we want to count
+     *   }
+     * })
+    **/
+    count<T extends PaymentCountArgs>(
+      args?: Subset<T, PaymentCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PaymentCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Payment.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PaymentAggregateArgs>(args: Subset<T, PaymentAggregateArgs>): Prisma.PrismaPromise<GetPaymentAggregateType<T>>
+
+    /**
+     * Group by Payment.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PaymentGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PaymentGroupByArgs['orderBy'] }
+        : { orderBy?: PaymentGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PaymentGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPaymentGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the Payment model
+   */
+  readonly fields: PaymentFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for Payment.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PaymentClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    booking<T extends BookingDefaultArgs<ExtArgs> = {}>(args?: Subset<T, BookingDefaultArgs<ExtArgs>>): Prisma__BookingClient<$Result.GetResult<Prisma.$BookingPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the Payment model
+   */
+  interface PaymentFieldRefs {
+    readonly id: FieldRef<"Payment", 'String'>
+    readonly bookingId: FieldRef<"Payment", 'String'>
+    readonly amount: FieldRef<"Payment", 'Float'>
+    readonly currency: FieldRef<"Payment", 'String'>
+    readonly stripePaymentIntentId: FieldRef<"Payment", 'String'>
+    readonly stripeChargeId: FieldRef<"Payment", 'String'>
+    readonly status: FieldRef<"Payment", 'PaymentStatus'>
+    readonly failureReason: FieldRef<"Payment", 'String'>
+    readonly processedAt: FieldRef<"Payment", 'DateTime'>
+    readonly createdAt: FieldRef<"Payment", 'DateTime'>
+    readonly updatedAt: FieldRef<"Payment", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * Payment findUnique
+   */
+  export type PaymentFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payment to fetch.
+     */
+    where: PaymentWhereUniqueInput
+  }
+
+  /**
+   * Payment findUniqueOrThrow
+   */
+  export type PaymentFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payment to fetch.
+     */
+    where: PaymentWhereUniqueInput
+  }
+
+  /**
+   * Payment findFirst
+   */
+  export type PaymentFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payment to fetch.
+     */
+    where?: PaymentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Payments to fetch.
+     */
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Payments.
+     */
+    cursor?: PaymentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Payments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Payments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Payments.
+     */
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
+  }
+
+  /**
+   * Payment findFirstOrThrow
+   */
+  export type PaymentFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payment to fetch.
+     */
+    where?: PaymentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Payments to fetch.
+     */
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Payments.
+     */
+    cursor?: PaymentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Payments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Payments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Payments.
+     */
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
+  }
+
+  /**
+   * Payment findMany
+   */
+  export type PaymentFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payments to fetch.
+     */
+    where?: PaymentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Payments to fetch.
+     */
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing Payments.
+     */
+    cursor?: PaymentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Payments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Payments.
+     */
+    skip?: number
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
+  }
+
+  /**
+   * Payment create
+   */
+  export type PaymentCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * The data needed to create a Payment.
+     */
+    data: XOR<PaymentCreateInput, PaymentUncheckedCreateInput>
+  }
+
+  /**
+   * Payment createMany
+   */
+  export type PaymentCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many Payments.
+     */
+    data: PaymentCreateManyInput | PaymentCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * Payment createManyAndReturn
+   */
+  export type PaymentCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * The data used to create many Payments.
+     */
+    data: PaymentCreateManyInput | PaymentCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * Payment update
+   */
+  export type PaymentUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * The data needed to update a Payment.
+     */
+    data: XOR<PaymentUpdateInput, PaymentUncheckedUpdateInput>
+    /**
+     * Choose, which Payment to update.
+     */
+    where: PaymentWhereUniqueInput
+  }
+
+  /**
+   * Payment updateMany
+   */
+  export type PaymentUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update Payments.
+     */
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyInput>
+    /**
+     * Filter which Payments to update
+     */
+    where?: PaymentWhereInput
+    /**
+     * Limit how many Payments to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * Payment updateManyAndReturn
+   */
+  export type PaymentUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * The data used to update Payments.
+     */
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyInput>
+    /**
+     * Filter which Payments to update
+     */
+    where?: PaymentWhereInput
+    /**
+     * Limit how many Payments to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * Payment upsert
+   */
+  export type PaymentUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * The filter to search for the Payment to update in case it exists.
+     */
+    where: PaymentWhereUniqueInput
+    /**
+     * In case the Payment found by the `where` argument doesn't exist, create a new Payment with this data.
+     */
+    create: XOR<PaymentCreateInput, PaymentUncheckedCreateInput>
+    /**
+     * In case the Payment was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PaymentUpdateInput, PaymentUncheckedUpdateInput>
+  }
+
+  /**
+   * Payment delete
+   */
+  export type PaymentDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter which Payment to delete.
+     */
+    where: PaymentWhereUniqueInput
+  }
+
+  /**
+   * Payment deleteMany
+   */
+  export type PaymentDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Payments to delete
+     */
+    where?: PaymentWhereInput
+    /**
+     * Limit how many Payments to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * Payment without action
+   */
+  export type PaymentDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
   }
 
 
@@ -30167,9 +31645,11 @@ export namespace Prisma {
     id: string | null
     bookingId: string | null
     reportType: $Enums.ReportType | null
+    type: $Enums.ReportType | null
     reportedBy: string | null
     reportedAt: Date | null
     overallCondition: string | null
+    condition: string | null
     notes: string | null
     issuesFound: boolean | null
     damageAmount: number | null
@@ -30185,9 +31665,11 @@ export namespace Prisma {
     id: string | null
     bookingId: string | null
     reportType: $Enums.ReportType | null
+    type: $Enums.ReportType | null
     reportedBy: string | null
     reportedAt: Date | null
     overallCondition: string | null
+    condition: string | null
     notes: string | null
     issuesFound: boolean | null
     damageAmount: number | null
@@ -30203,11 +31685,14 @@ export namespace Prisma {
     id: number
     bookingId: number
     reportType: number
+    type: number
     reportedBy: number
     reportedAt: number
     checklistData: number
     overallCondition: number
+    condition: number
     notes: number
+    damages: number
     issuesFound: number
     damageAmount: number
     acknowledgedBy: number
@@ -30232,9 +31717,11 @@ export namespace Prisma {
     id?: true
     bookingId?: true
     reportType?: true
+    type?: true
     reportedBy?: true
     reportedAt?: true
     overallCondition?: true
+    condition?: true
     notes?: true
     issuesFound?: true
     damageAmount?: true
@@ -30250,9 +31737,11 @@ export namespace Prisma {
     id?: true
     bookingId?: true
     reportType?: true
+    type?: true
     reportedBy?: true
     reportedAt?: true
     overallCondition?: true
+    condition?: true
     notes?: true
     issuesFound?: true
     damageAmount?: true
@@ -30268,11 +31757,14 @@ export namespace Prisma {
     id?: true
     bookingId?: true
     reportType?: true
+    type?: true
     reportedBy?: true
     reportedAt?: true
     checklistData?: true
     overallCondition?: true
+    condition?: true
     notes?: true
+    damages?: true
     issuesFound?: true
     damageAmount?: true
     acknowledgedBy?: true
@@ -30374,11 +31866,14 @@ export namespace Prisma {
     id: string
     bookingId: string
     reportType: $Enums.ReportType
+    type: $Enums.ReportType
     reportedBy: string
     reportedAt: Date
     checklistData: JsonValue
     overallCondition: string | null
+    condition: string | null
     notes: string | null
+    damages: JsonValue | null
     issuesFound: boolean
     damageAmount: number | null
     acknowledgedBy: string | null
@@ -30412,11 +31907,14 @@ export namespace Prisma {
     id?: boolean
     bookingId?: boolean
     reportType?: boolean
+    type?: boolean
     reportedBy?: boolean
     reportedAt?: boolean
     checklistData?: boolean
     overallCondition?: boolean
+    condition?: boolean
     notes?: boolean
+    damages?: boolean
     issuesFound?: boolean
     damageAmount?: boolean
     acknowledgedBy?: boolean
@@ -30427,6 +31925,7 @@ export namespace Prisma {
     completedAt?: boolean
     photos?: boolean | ConditionReport$photosArgs<ExtArgs>
     booking?: boolean | BookingDefaultArgs<ExtArgs>
+    reportedByUser?: boolean | UserDefaultArgs<ExtArgs>
     dispute?: boolean | ConditionReport$disputeArgs<ExtArgs>
     _count?: boolean | ConditionReportCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["conditionReport"]>
@@ -30435,11 +31934,14 @@ export namespace Prisma {
     id?: boolean
     bookingId?: boolean
     reportType?: boolean
+    type?: boolean
     reportedBy?: boolean
     reportedAt?: boolean
     checklistData?: boolean
     overallCondition?: boolean
+    condition?: boolean
     notes?: boolean
+    damages?: boolean
     issuesFound?: boolean
     damageAmount?: boolean
     acknowledgedBy?: boolean
@@ -30449,17 +31951,21 @@ export namespace Prisma {
     createdAt?: boolean
     completedAt?: boolean
     booking?: boolean | BookingDefaultArgs<ExtArgs>
+    reportedByUser?: boolean | UserDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["conditionReport"]>
 
   export type ConditionReportSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     bookingId?: boolean
     reportType?: boolean
+    type?: boolean
     reportedBy?: boolean
     reportedAt?: boolean
     checklistData?: boolean
     overallCondition?: boolean
+    condition?: boolean
     notes?: boolean
+    damages?: boolean
     issuesFound?: boolean
     damageAmount?: boolean
     acknowledgedBy?: boolean
@@ -30469,17 +31975,21 @@ export namespace Prisma {
     createdAt?: boolean
     completedAt?: boolean
     booking?: boolean | BookingDefaultArgs<ExtArgs>
+    reportedByUser?: boolean | UserDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["conditionReport"]>
 
   export type ConditionReportSelectScalar = {
     id?: boolean
     bookingId?: boolean
     reportType?: boolean
+    type?: boolean
     reportedBy?: boolean
     reportedAt?: boolean
     checklistData?: boolean
     overallCondition?: boolean
+    condition?: boolean
     notes?: boolean
+    damages?: boolean
     issuesFound?: boolean
     damageAmount?: boolean
     acknowledgedBy?: boolean
@@ -30490,18 +32000,21 @@ export namespace Prisma {
     completedAt?: boolean
   }
 
-  export type ConditionReportOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bookingId" | "reportType" | "reportedBy" | "reportedAt" | "checklistData" | "overallCondition" | "notes" | "issuesFound" | "damageAmount" | "acknowledgedBy" | "acknowledgedAt" | "disputeRaised" | "status" | "createdAt" | "completedAt", ExtArgs["result"]["conditionReport"]>
+  export type ConditionReportOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bookingId" | "reportType" | "type" | "reportedBy" | "reportedAt" | "checklistData" | "overallCondition" | "condition" | "notes" | "damages" | "issuesFound" | "damageAmount" | "acknowledgedBy" | "acknowledgedAt" | "disputeRaised" | "status" | "createdAt" | "completedAt", ExtArgs["result"]["conditionReport"]>
   export type ConditionReportInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     photos?: boolean | ConditionReport$photosArgs<ExtArgs>
     booking?: boolean | BookingDefaultArgs<ExtArgs>
+    reportedByUser?: boolean | UserDefaultArgs<ExtArgs>
     dispute?: boolean | ConditionReport$disputeArgs<ExtArgs>
     _count?: boolean | ConditionReportCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type ConditionReportIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     booking?: boolean | BookingDefaultArgs<ExtArgs>
+    reportedByUser?: boolean | UserDefaultArgs<ExtArgs>
   }
   export type ConditionReportIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     booking?: boolean | BookingDefaultArgs<ExtArgs>
+    reportedByUser?: boolean | UserDefaultArgs<ExtArgs>
   }
 
   export type $ConditionReportPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -30509,17 +32022,21 @@ export namespace Prisma {
     objects: {
       photos: Prisma.$ReportPhotoPayload<ExtArgs>[]
       booking: Prisma.$BookingPayload<ExtArgs>
+      reportedByUser: Prisma.$UserPayload<ExtArgs>
       dispute: Prisma.$DisputePayload<ExtArgs> | null
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
       bookingId: string
       reportType: $Enums.ReportType
+      type: $Enums.ReportType
       reportedBy: string
       reportedAt: Date
       checklistData: Prisma.JsonValue
       overallCondition: string | null
+      condition: string | null
       notes: string | null
+      damages: Prisma.JsonValue | null
       issuesFound: boolean
       damageAmount: number | null
       acknowledgedBy: string | null
@@ -30924,6 +32441,7 @@ export namespace Prisma {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     photos<T extends ConditionReport$photosArgs<ExtArgs> = {}>(args?: Subset<T, ConditionReport$photosArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ReportPhotoPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     booking<T extends BookingDefaultArgs<ExtArgs> = {}>(args?: Subset<T, BookingDefaultArgs<ExtArgs>>): Prisma__BookingClient<$Result.GetResult<Prisma.$BookingPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    reportedByUser<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     dispute<T extends ConditionReport$disputeArgs<ExtArgs> = {}>(args?: Subset<T, ConditionReport$disputeArgs<ExtArgs>>): Prisma__DisputeClient<$Result.GetResult<Prisma.$DisputePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -30957,11 +32475,14 @@ export namespace Prisma {
     readonly id: FieldRef<"ConditionReport", 'String'>
     readonly bookingId: FieldRef<"ConditionReport", 'String'>
     readonly reportType: FieldRef<"ConditionReport", 'ReportType'>
+    readonly type: FieldRef<"ConditionReport", 'ReportType'>
     readonly reportedBy: FieldRef<"ConditionReport", 'String'>
     readonly reportedAt: FieldRef<"ConditionReport", 'DateTime'>
     readonly checklistData: FieldRef<"ConditionReport", 'Json'>
     readonly overallCondition: FieldRef<"ConditionReport", 'String'>
+    readonly condition: FieldRef<"ConditionReport", 'String'>
     readonly notes: FieldRef<"ConditionReport", 'String'>
+    readonly damages: FieldRef<"ConditionReport", 'Json'>
     readonly issuesFound: FieldRef<"ConditionReport", 'Boolean'>
     readonly damageAmount: FieldRef<"ConditionReport", 'Float'>
     readonly acknowledgedBy: FieldRef<"ConditionReport", 'String'>
@@ -38390,6 +39911,7 @@ export namespace Prisma {
     actionLabel: string | null
     read: boolean | null
     readAt: Date | null
+    status: string | null
     sentViaEmail: boolean | null
     sentViaPush: boolean | null
     createdAt: Date | null
@@ -38407,6 +39929,7 @@ export namespace Prisma {
     actionLabel: string | null
     read: boolean | null
     readAt: Date | null
+    status: string | null
     sentViaEmail: boolean | null
     sentViaPush: boolean | null
     createdAt: Date | null
@@ -38425,6 +39948,7 @@ export namespace Prisma {
     actionLabel: number
     read: number
     readAt: number
+    status: number
     sentViaEmail: number
     sentViaPush: number
     createdAt: number
@@ -38444,6 +39968,7 @@ export namespace Prisma {
     actionLabel?: true
     read?: true
     readAt?: true
+    status?: true
     sentViaEmail?: true
     sentViaPush?: true
     createdAt?: true
@@ -38461,6 +39986,7 @@ export namespace Prisma {
     actionLabel?: true
     read?: true
     readAt?: true
+    status?: true
     sentViaEmail?: true
     sentViaPush?: true
     createdAt?: true
@@ -38479,6 +40005,7 @@ export namespace Prisma {
     actionLabel?: true
     read?: true
     readAt?: true
+    status?: true
     sentViaEmail?: true
     sentViaPush?: true
     createdAt?: true
@@ -38570,6 +40097,7 @@ export namespace Prisma {
     actionLabel: string | null
     read: boolean
     readAt: Date | null
+    status: string | null
     sentViaEmail: boolean
     sentViaPush: boolean
     createdAt: Date
@@ -38605,6 +40133,7 @@ export namespace Prisma {
     actionLabel?: boolean
     read?: boolean
     readAt?: boolean
+    status?: boolean
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: boolean
@@ -38624,6 +40153,7 @@ export namespace Prisma {
     actionLabel?: boolean
     read?: boolean
     readAt?: boolean
+    status?: boolean
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: boolean
@@ -38643,6 +40173,7 @@ export namespace Prisma {
     actionLabel?: boolean
     read?: boolean
     readAt?: boolean
+    status?: boolean
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: boolean
@@ -38662,12 +40193,13 @@ export namespace Prisma {
     actionLabel?: boolean
     read?: boolean
     readAt?: boolean
+    status?: boolean
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: boolean
   }
 
-  export type NotificationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "type" | "title" | "message" | "data" | "relatedId" | "relatedType" | "actionUrl" | "actionLabel" | "read" | "readAt" | "sentViaEmail" | "sentViaPush" | "createdAt", ExtArgs["result"]["notification"]>
+  export type NotificationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "type" | "title" | "message" | "data" | "relatedId" | "relatedType" | "actionUrl" | "actionLabel" | "read" | "readAt" | "status" | "sentViaEmail" | "sentViaPush" | "createdAt", ExtArgs["result"]["notification"]>
   export type NotificationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
   }
@@ -38696,6 +40228,7 @@ export namespace Prisma {
       actionLabel: string | null
       read: boolean
       readAt: Date | null
+      status: string | null
       sentViaEmail: boolean
       sentViaPush: boolean
       createdAt: Date
@@ -39135,6 +40668,7 @@ export namespace Prisma {
     readonly actionLabel: FieldRef<"Notification", 'String'>
     readonly read: FieldRef<"Notification", 'Boolean'>
     readonly readAt: FieldRef<"Notification", 'DateTime'>
+    readonly status: FieldRef<"Notification", 'String'>
     readonly sentViaEmail: FieldRef<"Notification", 'Boolean'>
     readonly sentViaPush: FieldRef<"Notification", 'Boolean'>
     readonly createdAt: FieldRef<"Notification", 'DateTime'>
@@ -44140,6 +45674,7 @@ export namespace Prisma {
     firstName: 'firstName',
     lastName: 'lastName',
     phoneNumber: 'phoneNumber',
+    phone: 'phone',
     phoneVerified: 'phoneVerified',
     dateOfBirth: 'dateOfBirth',
     profilePhotoUrl: 'profilePhotoUrl',
@@ -44158,6 +45693,8 @@ export namespace Prisma {
     stripeCustomerId: 'stripeCustomerId',
     stripeConnectId: 'stripeConnectId',
     stripeOnboardingComplete: 'stripeOnboardingComplete',
+    stripeChargesEnabled: 'stripeChargesEnabled',
+    stripePayoutsEnabled: 'stripePayoutsEnabled',
     role: 'role',
     status: 'status',
     preferredLanguage: 'preferredLanguage',
@@ -44202,6 +45739,8 @@ export namespace Prisma {
     description: 'description',
     logoUrl: 'logoUrl',
     websiteUrl: 'websiteUrl',
+    businessType: 'businessType',
+    taxId: 'taxId',
     email: 'email',
     phoneNumber: 'phoneNumber',
     addressLine1: 'addressLine1',
@@ -44367,15 +45906,18 @@ export namespace Prisma {
     startDate: 'startDate',
     endDate: 'endDate',
     duration: 'duration',
+    guestCount: 'guestCount',
     basePrice: 'basePrice',
     serviceFee: 'serviceFee',
     tax: 'tax',
     depositAmount: 'depositAmount',
     discountAmount: 'discountAmount',
     totalPrice: 'totalPrice',
+    totalAmount: 'totalAmount',
     ownerEarnings: 'ownerEarnings',
     platformFee: 'platformFee',
     currency: 'currency',
+    renterMessage: 'renterMessage',
     status: 'status',
     cancellationReason: 'cancellationReason',
     cancelledBy: 'cancelledBy',
@@ -44449,6 +45991,23 @@ export namespace Prisma {
   };
 
   export type DepositHoldScalarFieldEnum = (typeof DepositHoldScalarFieldEnum)[keyof typeof DepositHoldScalarFieldEnum]
+
+
+  export const PaymentScalarFieldEnum: {
+    id: 'id',
+    bookingId: 'bookingId',
+    amount: 'amount',
+    currency: 'currency',
+    stripePaymentIntentId: 'stripePaymentIntentId',
+    stripeChargeId: 'stripeChargeId',
+    status: 'status',
+    failureReason: 'failureReason',
+    processedAt: 'processedAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
 
 
   export const RefundScalarFieldEnum: {
@@ -44569,11 +46128,14 @@ export namespace Prisma {
     id: 'id',
     bookingId: 'bookingId',
     reportType: 'reportType',
+    type: 'type',
     reportedBy: 'reportedBy',
     reportedAt: 'reportedAt',
     checklistData: 'checklistData',
     overallCondition: 'overallCondition',
+    condition: 'condition',
     notes: 'notes',
+    damages: 'damages',
     issuesFound: 'issuesFound',
     damageAmount: 'damageAmount',
     acknowledgedBy: 'acknowledgedBy',
@@ -44693,6 +46255,7 @@ export namespace Prisma {
     actionLabel: 'actionLabel',
     read: 'read',
     readAt: 'readAt',
+    status: 'status',
     sentViaEmail: 'sentViaEmail',
     sentViaPush: 'sentViaPush',
     createdAt: 'createdAt'
@@ -44813,6 +46376,7 @@ export namespace Prisma {
     firstName: 'firstName',
     lastName: 'lastName',
     phoneNumber: 'phoneNumber',
+    phone: 'phone',
     profilePhotoUrl: 'profilePhotoUrl',
     bio: 'bio',
     addressLine1: 'addressLine1',
@@ -44856,6 +46420,8 @@ export namespace Prisma {
     description: 'description',
     logoUrl: 'logoUrl',
     websiteUrl: 'websiteUrl',
+    businessType: 'businessType',
+    taxId: 'taxId',
     email: 'email',
     phoneNumber: 'phoneNumber',
     addressLine1: 'addressLine1',
@@ -44958,6 +46524,7 @@ export namespace Prisma {
     renterId: 'renterId',
     ownerId: 'ownerId',
     currency: 'currency',
+    renterMessage: 'renterMessage',
     cancellationReason: 'cancellationReason',
     cancelledBy: 'cancelledBy',
     paymentIntentId: 'paymentIntentId',
@@ -45001,6 +46568,18 @@ export namespace Prisma {
   };
 
   export type DepositHoldOrderByRelevanceFieldEnum = (typeof DepositHoldOrderByRelevanceFieldEnum)[keyof typeof DepositHoldOrderByRelevanceFieldEnum]
+
+
+  export const PaymentOrderByRelevanceFieldEnum: {
+    id: 'id',
+    bookingId: 'bookingId',
+    currency: 'currency',
+    stripePaymentIntentId: 'stripePaymentIntentId',
+    stripeChargeId: 'stripeChargeId',
+    failureReason: 'failureReason'
+  };
+
+  export type PaymentOrderByRelevanceFieldEnum = (typeof PaymentOrderByRelevanceFieldEnum)[keyof typeof PaymentOrderByRelevanceFieldEnum]
 
 
   export const RefundOrderByRelevanceFieldEnum: {
@@ -45085,6 +46664,7 @@ export namespace Prisma {
     bookingId: 'bookingId',
     reportedBy: 'reportedBy',
     overallCondition: 'overallCondition',
+    condition: 'condition',
     notes: 'notes',
     acknowledgedBy: 'acknowledgedBy'
   };
@@ -45167,7 +46747,8 @@ export namespace Prisma {
     relatedId: 'relatedId',
     relatedType: 'relatedType',
     actionUrl: 'actionUrl',
-    actionLabel: 'actionLabel'
+    actionLabel: 'actionLabel',
+    status: 'status'
   };
 
   export type NotificationOrderByRelevanceFieldEnum = (typeof NotificationOrderByRelevanceFieldEnum)[keyof typeof NotificationOrderByRelevanceFieldEnum]
@@ -45527,6 +47108,20 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'PaymentStatus'
+   */
+  export type EnumPaymentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentStatus'>
+    
+
+
+  /**
+   * Reference to a field of type 'PaymentStatus[]'
+   */
+  export type ListEnumPaymentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentStatus[]'>
+    
+
+
+  /**
    * Reference to a field of type 'RefundStatus'
    */
   export type EnumRefundStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RefundStatus'>
@@ -45779,6 +47374,7 @@ export namespace Prisma {
     firstName?: StringFilter<"User"> | string
     lastName?: StringFilter<"User"> | string
     phoneNumber?: StringNullableFilter<"User"> | string | null
+    phone?: StringNullableFilter<"User"> | string | null
     phoneVerified?: BoolFilter<"User"> | boolean
     dateOfBirth?: DateTimeNullableFilter<"User"> | Date | string | null
     profilePhotoUrl?: StringNullableFilter<"User"> | string | null
@@ -45797,6 +47393,8 @@ export namespace Prisma {
     stripeCustomerId?: StringNullableFilter<"User"> | string | null
     stripeConnectId?: StringNullableFilter<"User"> | string | null
     stripeOnboardingComplete?: BoolFilter<"User"> | boolean
+    stripeChargesEnabled?: BoolFilter<"User"> | boolean
+    stripePayoutsEnabled?: BoolFilter<"User"> | boolean
     role?: EnumUserRoleFilter<"User"> | $Enums.UserRole
     status?: EnumUserStatusFilter<"User"> | $Enums.UserStatus
     preferredLanguage?: StringFilter<"User"> | string
@@ -45833,6 +47431,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyListRelationFilter
     deviceTokens?: DeviceTokenListRelationFilter
     userPreferences?: XOR<UserPreferencesNullableScalarRelationFilter, UserPreferencesWhereInput> | null
+    conditionReportsReported?: ConditionReportListRelationFilter
   }
 
   export type UserOrderByWithRelationInput = {
@@ -45844,6 +47443,7 @@ export namespace Prisma {
     firstName?: SortOrder
     lastName?: SortOrder
     phoneNumber?: SortOrderInput | SortOrder
+    phone?: SortOrderInput | SortOrder
     phoneVerified?: SortOrder
     dateOfBirth?: SortOrderInput | SortOrder
     profilePhotoUrl?: SortOrderInput | SortOrder
@@ -45862,6 +47462,8 @@ export namespace Prisma {
     stripeCustomerId?: SortOrderInput | SortOrder
     stripeConnectId?: SortOrderInput | SortOrder
     stripeOnboardingComplete?: SortOrder
+    stripeChargesEnabled?: SortOrder
+    stripePayoutsEnabled?: SortOrder
     role?: SortOrder
     status?: SortOrder
     preferredLanguage?: SortOrder
@@ -45898,6 +47500,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyOrderByRelationAggregateInput
     deviceTokens?: DeviceTokenOrderByRelationAggregateInput
     userPreferences?: UserPreferencesOrderByWithRelationInput
+    conditionReportsReported?: ConditionReportOrderByRelationAggregateInput
     _relevance?: UserOrderByRelevanceInput
   }
 
@@ -45915,6 +47518,7 @@ export namespace Prisma {
     firstName?: StringFilter<"User"> | string
     lastName?: StringFilter<"User"> | string
     phoneNumber?: StringNullableFilter<"User"> | string | null
+    phone?: StringNullableFilter<"User"> | string | null
     phoneVerified?: BoolFilter<"User"> | boolean
     dateOfBirth?: DateTimeNullableFilter<"User"> | Date | string | null
     profilePhotoUrl?: StringNullableFilter<"User"> | string | null
@@ -45931,6 +47535,8 @@ export namespace Prisma {
     governmentIdType?: EnumGovernmentIdTypeNullableFilter<"User"> | $Enums.GovernmentIdType | null
     governmentIdNumber?: StringNullableFilter<"User"> | string | null
     stripeOnboardingComplete?: BoolFilter<"User"> | boolean
+    stripeChargesEnabled?: BoolFilter<"User"> | boolean
+    stripePayoutsEnabled?: BoolFilter<"User"> | boolean
     role?: EnumUserRoleFilter<"User"> | $Enums.UserRole
     status?: EnumUserStatusFilter<"User"> | $Enums.UserStatus
     preferredLanguage?: StringFilter<"User"> | string
@@ -45967,6 +47573,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyListRelationFilter
     deviceTokens?: DeviceTokenListRelationFilter
     userPreferences?: XOR<UserPreferencesNullableScalarRelationFilter, UserPreferencesWhereInput> | null
+    conditionReportsReported?: ConditionReportListRelationFilter
   }, "id" | "email" | "stripeCustomerId" | "stripeConnectId">
 
   export type UserOrderByWithAggregationInput = {
@@ -45978,6 +47585,7 @@ export namespace Prisma {
     firstName?: SortOrder
     lastName?: SortOrder
     phoneNumber?: SortOrderInput | SortOrder
+    phone?: SortOrderInput | SortOrder
     phoneVerified?: SortOrder
     dateOfBirth?: SortOrderInput | SortOrder
     profilePhotoUrl?: SortOrderInput | SortOrder
@@ -45996,6 +47604,8 @@ export namespace Prisma {
     stripeCustomerId?: SortOrderInput | SortOrder
     stripeConnectId?: SortOrderInput | SortOrder
     stripeOnboardingComplete?: SortOrder
+    stripeChargesEnabled?: SortOrder
+    stripePayoutsEnabled?: SortOrder
     role?: SortOrder
     status?: SortOrder
     preferredLanguage?: SortOrder
@@ -46033,6 +47643,7 @@ export namespace Prisma {
     firstName?: StringWithAggregatesFilter<"User"> | string
     lastName?: StringWithAggregatesFilter<"User"> | string
     phoneNumber?: StringNullableWithAggregatesFilter<"User"> | string | null
+    phone?: StringNullableWithAggregatesFilter<"User"> | string | null
     phoneVerified?: BoolWithAggregatesFilter<"User"> | boolean
     dateOfBirth?: DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
     profilePhotoUrl?: StringNullableWithAggregatesFilter<"User"> | string | null
@@ -46051,6 +47662,8 @@ export namespace Prisma {
     stripeCustomerId?: StringNullableWithAggregatesFilter<"User"> | string | null
     stripeConnectId?: StringNullableWithAggregatesFilter<"User"> | string | null
     stripeOnboardingComplete?: BoolWithAggregatesFilter<"User"> | boolean
+    stripeChargesEnabled?: BoolWithAggregatesFilter<"User"> | boolean
+    stripePayoutsEnabled?: BoolWithAggregatesFilter<"User"> | boolean
     role?: EnumUserRoleWithAggregatesFilter<"User"> | $Enums.UserRole
     status?: EnumUserStatusWithAggregatesFilter<"User"> | $Enums.UserStatus
     preferredLanguage?: StringWithAggregatesFilter<"User"> | string
@@ -46152,6 +47765,8 @@ export namespace Prisma {
     description?: StringNullableFilter<"Organization"> | string | null
     logoUrl?: StringNullableFilter<"Organization"> | string | null
     websiteUrl?: StringNullableFilter<"Organization"> | string | null
+    businessType?: StringNullableFilter<"Organization"> | string | null
+    taxId?: StringNullableFilter<"Organization"> | string | null
     email?: StringFilter<"Organization"> | string
     phoneNumber?: StringNullableFilter<"Organization"> | string | null
     addressLine1?: StringNullableFilter<"Organization"> | string | null
@@ -46175,6 +47790,8 @@ export namespace Prisma {
     description?: SortOrderInput | SortOrder
     logoUrl?: SortOrderInput | SortOrder
     websiteUrl?: SortOrderInput | SortOrder
+    businessType?: SortOrderInput | SortOrder
+    taxId?: SortOrderInput | SortOrder
     email?: SortOrder
     phoneNumber?: SortOrderInput | SortOrder
     addressLine1?: SortOrderInput | SortOrder
@@ -46203,6 +47820,8 @@ export namespace Prisma {
     description?: StringNullableFilter<"Organization"> | string | null
     logoUrl?: StringNullableFilter<"Organization"> | string | null
     websiteUrl?: StringNullableFilter<"Organization"> | string | null
+    businessType?: StringNullableFilter<"Organization"> | string | null
+    taxId?: StringNullableFilter<"Organization"> | string | null
     email?: StringFilter<"Organization"> | string
     phoneNumber?: StringNullableFilter<"Organization"> | string | null
     addressLine1?: StringNullableFilter<"Organization"> | string | null
@@ -46225,6 +47844,8 @@ export namespace Prisma {
     description?: SortOrderInput | SortOrder
     logoUrl?: SortOrderInput | SortOrder
     websiteUrl?: SortOrderInput | SortOrder
+    businessType?: SortOrderInput | SortOrder
+    taxId?: SortOrderInput | SortOrder
     email?: SortOrder
     phoneNumber?: SortOrderInput | SortOrder
     addressLine1?: SortOrderInput | SortOrder
@@ -46252,6 +47873,8 @@ export namespace Prisma {
     description?: StringNullableWithAggregatesFilter<"Organization"> | string | null
     logoUrl?: StringNullableWithAggregatesFilter<"Organization"> | string | null
     websiteUrl?: StringNullableWithAggregatesFilter<"Organization"> | string | null
+    businessType?: StringNullableWithAggregatesFilter<"Organization"> | string | null
+    taxId?: StringNullableWithAggregatesFilter<"Organization"> | string | null
     email?: StringWithAggregatesFilter<"Organization"> | string
     phoneNumber?: StringNullableWithAggregatesFilter<"Organization"> | string | null
     addressLine1?: StringNullableWithAggregatesFilter<"Organization"> | string | null
@@ -47021,15 +48644,18 @@ export namespace Prisma {
     startDate?: DateTimeFilter<"Booking"> | Date | string
     endDate?: DateTimeFilter<"Booking"> | Date | string
     duration?: IntFilter<"Booking"> | number
+    guestCount?: IntFilter<"Booking"> | number
     basePrice?: FloatFilter<"Booking"> | number
     serviceFee?: FloatFilter<"Booking"> | number
     tax?: FloatFilter<"Booking"> | number
     depositAmount?: FloatFilter<"Booking"> | number
     discountAmount?: FloatFilter<"Booking"> | number
     totalPrice?: FloatFilter<"Booking"> | number
+    totalAmount?: FloatFilter<"Booking"> | number
     ownerEarnings?: FloatFilter<"Booking"> | number
     platformFee?: FloatFilter<"Booking"> | number
     currency?: StringFilter<"Booking"> | string
+    renterMessage?: StringNullableFilter<"Booking"> | string | null
     status?: EnumBookingStatusFilter<"Booking"> | $Enums.BookingStatus
     cancellationReason?: StringNullableFilter<"Booking"> | string | null
     cancelledBy?: StringNullableFilter<"Booking"> | string | null
@@ -47054,6 +48680,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryListRelationFilter
     ledgerEntries?: LedgerEntryListRelationFilter
     depositHold?: XOR<DepositHoldNullableScalarRelationFilter, DepositHoldWhereInput> | null
+    payments?: PaymentListRelationFilter
     conditionReports?: ConditionReportListRelationFilter
     reviews?: ReviewListRelationFilter
     disputes?: DisputeListRelationFilter
@@ -47068,15 +48695,18 @@ export namespace Prisma {
     startDate?: SortOrder
     endDate?: SortOrder
     duration?: SortOrder
+    guestCount?: SortOrder
     basePrice?: SortOrder
     serviceFee?: SortOrder
     tax?: SortOrder
     depositAmount?: SortOrder
     discountAmount?: SortOrder
     totalPrice?: SortOrder
+    totalAmount?: SortOrder
     ownerEarnings?: SortOrder
     platformFee?: SortOrder
     currency?: SortOrder
+    renterMessage?: SortOrderInput | SortOrder
     status?: SortOrder
     cancellationReason?: SortOrderInput | SortOrder
     cancelledBy?: SortOrderInput | SortOrder
@@ -47101,6 +48731,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryOrderByRelationAggregateInput
     ledgerEntries?: LedgerEntryOrderByRelationAggregateInput
     depositHold?: DepositHoldOrderByWithRelationInput
+    payments?: PaymentOrderByRelationAggregateInput
     conditionReports?: ConditionReportOrderByRelationAggregateInput
     reviews?: ReviewOrderByRelationAggregateInput
     disputes?: DisputeOrderByRelationAggregateInput
@@ -47119,15 +48750,18 @@ export namespace Prisma {
     startDate?: DateTimeFilter<"Booking"> | Date | string
     endDate?: DateTimeFilter<"Booking"> | Date | string
     duration?: IntFilter<"Booking"> | number
+    guestCount?: IntFilter<"Booking"> | number
     basePrice?: FloatFilter<"Booking"> | number
     serviceFee?: FloatFilter<"Booking"> | number
     tax?: FloatFilter<"Booking"> | number
     depositAmount?: FloatFilter<"Booking"> | number
     discountAmount?: FloatFilter<"Booking"> | number
     totalPrice?: FloatFilter<"Booking"> | number
+    totalAmount?: FloatFilter<"Booking"> | number
     ownerEarnings?: FloatFilter<"Booking"> | number
     platformFee?: FloatFilter<"Booking"> | number
     currency?: StringFilter<"Booking"> | string
+    renterMessage?: StringNullableFilter<"Booking"> | string | null
     status?: EnumBookingStatusFilter<"Booking"> | $Enums.BookingStatus
     cancellationReason?: StringNullableFilter<"Booking"> | string | null
     cancelledBy?: StringNullableFilter<"Booking"> | string | null
@@ -47152,6 +48786,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryListRelationFilter
     ledgerEntries?: LedgerEntryListRelationFilter
     depositHold?: XOR<DepositHoldNullableScalarRelationFilter, DepositHoldWhereInput> | null
+    payments?: PaymentListRelationFilter
     conditionReports?: ConditionReportListRelationFilter
     reviews?: ReviewListRelationFilter
     disputes?: DisputeListRelationFilter
@@ -47166,15 +48801,18 @@ export namespace Prisma {
     startDate?: SortOrder
     endDate?: SortOrder
     duration?: SortOrder
+    guestCount?: SortOrder
     basePrice?: SortOrder
     serviceFee?: SortOrder
     tax?: SortOrder
     depositAmount?: SortOrder
     discountAmount?: SortOrder
     totalPrice?: SortOrder
+    totalAmount?: SortOrder
     ownerEarnings?: SortOrder
     platformFee?: SortOrder
     currency?: SortOrder
+    renterMessage?: SortOrderInput | SortOrder
     status?: SortOrder
     cancellationReason?: SortOrderInput | SortOrder
     cancelledBy?: SortOrderInput | SortOrder
@@ -47211,15 +48849,18 @@ export namespace Prisma {
     startDate?: DateTimeWithAggregatesFilter<"Booking"> | Date | string
     endDate?: DateTimeWithAggregatesFilter<"Booking"> | Date | string
     duration?: IntWithAggregatesFilter<"Booking"> | number
+    guestCount?: IntWithAggregatesFilter<"Booking"> | number
     basePrice?: FloatWithAggregatesFilter<"Booking"> | number
     serviceFee?: FloatWithAggregatesFilter<"Booking"> | number
     tax?: FloatWithAggregatesFilter<"Booking"> | number
     depositAmount?: FloatWithAggregatesFilter<"Booking"> | number
     discountAmount?: FloatWithAggregatesFilter<"Booking"> | number
     totalPrice?: FloatWithAggregatesFilter<"Booking"> | number
+    totalAmount?: FloatWithAggregatesFilter<"Booking"> | number
     ownerEarnings?: FloatWithAggregatesFilter<"Booking"> | number
     platformFee?: FloatWithAggregatesFilter<"Booking"> | number
     currency?: StringWithAggregatesFilter<"Booking"> | string
+    renterMessage?: StringNullableWithAggregatesFilter<"Booking"> | string | null
     status?: EnumBookingStatusWithAggregatesFilter<"Booking"> | $Enums.BookingStatus
     cancellationReason?: StringNullableWithAggregatesFilter<"Booking"> | string | null
     cancelledBy?: StringNullableWithAggregatesFilter<"Booking"> | string | null
@@ -47505,6 +49146,94 @@ export namespace Prisma {
     deductionReason?: StringNullableWithAggregatesFilter<"DepositHold"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"DepositHold"> | Date | string
     expiresAt?: DateTimeWithAggregatesFilter<"DepositHold"> | Date | string
+  }
+
+  export type PaymentWhereInput = {
+    AND?: PaymentWhereInput | PaymentWhereInput[]
+    OR?: PaymentWhereInput[]
+    NOT?: PaymentWhereInput | PaymentWhereInput[]
+    id?: StringFilter<"Payment"> | string
+    bookingId?: StringFilter<"Payment"> | string
+    amount?: FloatFilter<"Payment"> | number
+    currency?: StringFilter<"Payment"> | string
+    stripePaymentIntentId?: StringNullableFilter<"Payment"> | string | null
+    stripeChargeId?: StringNullableFilter<"Payment"> | string | null
+    status?: EnumPaymentStatusFilter<"Payment"> | $Enums.PaymentStatus
+    failureReason?: StringNullableFilter<"Payment"> | string | null
+    processedAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    createdAt?: DateTimeFilter<"Payment"> | Date | string
+    updatedAt?: DateTimeFilter<"Payment"> | Date | string
+    booking?: XOR<BookingScalarRelationFilter, BookingWhereInput>
+  }
+
+  export type PaymentOrderByWithRelationInput = {
+    id?: SortOrder
+    bookingId?: SortOrder
+    amount?: SortOrder
+    currency?: SortOrder
+    stripePaymentIntentId?: SortOrderInput | SortOrder
+    stripeChargeId?: SortOrderInput | SortOrder
+    status?: SortOrder
+    failureReason?: SortOrderInput | SortOrder
+    processedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    booking?: BookingOrderByWithRelationInput
+    _relevance?: PaymentOrderByRelevanceInput
+  }
+
+  export type PaymentWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    stripePaymentIntentId?: string
+    stripeChargeId?: string
+    AND?: PaymentWhereInput | PaymentWhereInput[]
+    OR?: PaymentWhereInput[]
+    NOT?: PaymentWhereInput | PaymentWhereInput[]
+    bookingId?: StringFilter<"Payment"> | string
+    amount?: FloatFilter<"Payment"> | number
+    currency?: StringFilter<"Payment"> | string
+    status?: EnumPaymentStatusFilter<"Payment"> | $Enums.PaymentStatus
+    failureReason?: StringNullableFilter<"Payment"> | string | null
+    processedAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    createdAt?: DateTimeFilter<"Payment"> | Date | string
+    updatedAt?: DateTimeFilter<"Payment"> | Date | string
+    booking?: XOR<BookingScalarRelationFilter, BookingWhereInput>
+  }, "id" | "stripePaymentIntentId" | "stripeChargeId">
+
+  export type PaymentOrderByWithAggregationInput = {
+    id?: SortOrder
+    bookingId?: SortOrder
+    amount?: SortOrder
+    currency?: SortOrder
+    stripePaymentIntentId?: SortOrderInput | SortOrder
+    stripeChargeId?: SortOrderInput | SortOrder
+    status?: SortOrder
+    failureReason?: SortOrderInput | SortOrder
+    processedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: PaymentCountOrderByAggregateInput
+    _avg?: PaymentAvgOrderByAggregateInput
+    _max?: PaymentMaxOrderByAggregateInput
+    _min?: PaymentMinOrderByAggregateInput
+    _sum?: PaymentSumOrderByAggregateInput
+  }
+
+  export type PaymentScalarWhereWithAggregatesInput = {
+    AND?: PaymentScalarWhereWithAggregatesInput | PaymentScalarWhereWithAggregatesInput[]
+    OR?: PaymentScalarWhereWithAggregatesInput[]
+    NOT?: PaymentScalarWhereWithAggregatesInput | PaymentScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"Payment"> | string
+    bookingId?: StringWithAggregatesFilter<"Payment"> | string
+    amount?: FloatWithAggregatesFilter<"Payment"> | number
+    currency?: StringWithAggregatesFilter<"Payment"> | string
+    stripePaymentIntentId?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    stripeChargeId?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    status?: EnumPaymentStatusWithAggregatesFilter<"Payment"> | $Enums.PaymentStatus
+    failureReason?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    processedAt?: DateTimeNullableWithAggregatesFilter<"Payment"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"Payment"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"Payment"> | Date | string
   }
 
   export type RefundWhereInput = {
@@ -48118,11 +49847,14 @@ export namespace Prisma {
     id?: StringFilter<"ConditionReport"> | string
     bookingId?: StringFilter<"ConditionReport"> | string
     reportType?: EnumReportTypeFilter<"ConditionReport"> | $Enums.ReportType
+    type?: EnumReportTypeFilter<"ConditionReport"> | $Enums.ReportType
     reportedBy?: StringFilter<"ConditionReport"> | string
     reportedAt?: DateTimeFilter<"ConditionReport"> | Date | string
     checklistData?: JsonFilter<"ConditionReport">
     overallCondition?: StringNullableFilter<"ConditionReport"> | string | null
+    condition?: StringNullableFilter<"ConditionReport"> | string | null
     notes?: StringNullableFilter<"ConditionReport"> | string | null
+    damages?: JsonNullableFilter<"ConditionReport">
     issuesFound?: BoolFilter<"ConditionReport"> | boolean
     damageAmount?: FloatNullableFilter<"ConditionReport"> | number | null
     acknowledgedBy?: StringNullableFilter<"ConditionReport"> | string | null
@@ -48133,6 +49865,7 @@ export namespace Prisma {
     completedAt?: DateTimeNullableFilter<"ConditionReport"> | Date | string | null
     photos?: ReportPhotoListRelationFilter
     booking?: XOR<BookingScalarRelationFilter, BookingWhereInput>
+    reportedByUser?: XOR<UserScalarRelationFilter, UserWhereInput>
     dispute?: XOR<DisputeNullableScalarRelationFilter, DisputeWhereInput> | null
   }
 
@@ -48140,11 +49873,14 @@ export namespace Prisma {
     id?: SortOrder
     bookingId?: SortOrder
     reportType?: SortOrder
+    type?: SortOrder
     reportedBy?: SortOrder
     reportedAt?: SortOrder
     checklistData?: SortOrder
     overallCondition?: SortOrderInput | SortOrder
+    condition?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
+    damages?: SortOrderInput | SortOrder
     issuesFound?: SortOrder
     damageAmount?: SortOrderInput | SortOrder
     acknowledgedBy?: SortOrderInput | SortOrder
@@ -48155,6 +49891,7 @@ export namespace Prisma {
     completedAt?: SortOrderInput | SortOrder
     photos?: ReportPhotoOrderByRelationAggregateInput
     booking?: BookingOrderByWithRelationInput
+    reportedByUser?: UserOrderByWithRelationInput
     dispute?: DisputeOrderByWithRelationInput
     _relevance?: ConditionReportOrderByRelevanceInput
   }
@@ -48166,11 +49903,14 @@ export namespace Prisma {
     NOT?: ConditionReportWhereInput | ConditionReportWhereInput[]
     bookingId?: StringFilter<"ConditionReport"> | string
     reportType?: EnumReportTypeFilter<"ConditionReport"> | $Enums.ReportType
+    type?: EnumReportTypeFilter<"ConditionReport"> | $Enums.ReportType
     reportedBy?: StringFilter<"ConditionReport"> | string
     reportedAt?: DateTimeFilter<"ConditionReport"> | Date | string
     checklistData?: JsonFilter<"ConditionReport">
     overallCondition?: StringNullableFilter<"ConditionReport"> | string | null
+    condition?: StringNullableFilter<"ConditionReport"> | string | null
     notes?: StringNullableFilter<"ConditionReport"> | string | null
+    damages?: JsonNullableFilter<"ConditionReport">
     issuesFound?: BoolFilter<"ConditionReport"> | boolean
     damageAmount?: FloatNullableFilter<"ConditionReport"> | number | null
     acknowledgedBy?: StringNullableFilter<"ConditionReport"> | string | null
@@ -48181,6 +49921,7 @@ export namespace Prisma {
     completedAt?: DateTimeNullableFilter<"ConditionReport"> | Date | string | null
     photos?: ReportPhotoListRelationFilter
     booking?: XOR<BookingScalarRelationFilter, BookingWhereInput>
+    reportedByUser?: XOR<UserScalarRelationFilter, UserWhereInput>
     dispute?: XOR<DisputeNullableScalarRelationFilter, DisputeWhereInput> | null
   }, "id">
 
@@ -48188,11 +49929,14 @@ export namespace Prisma {
     id?: SortOrder
     bookingId?: SortOrder
     reportType?: SortOrder
+    type?: SortOrder
     reportedBy?: SortOrder
     reportedAt?: SortOrder
     checklistData?: SortOrder
     overallCondition?: SortOrderInput | SortOrder
+    condition?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
+    damages?: SortOrderInput | SortOrder
     issuesFound?: SortOrder
     damageAmount?: SortOrderInput | SortOrder
     acknowledgedBy?: SortOrderInput | SortOrder
@@ -48215,11 +49959,14 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"ConditionReport"> | string
     bookingId?: StringWithAggregatesFilter<"ConditionReport"> | string
     reportType?: EnumReportTypeWithAggregatesFilter<"ConditionReport"> | $Enums.ReportType
+    type?: EnumReportTypeWithAggregatesFilter<"ConditionReport"> | $Enums.ReportType
     reportedBy?: StringWithAggregatesFilter<"ConditionReport"> | string
     reportedAt?: DateTimeWithAggregatesFilter<"ConditionReport"> | Date | string
     checklistData?: JsonWithAggregatesFilter<"ConditionReport">
     overallCondition?: StringNullableWithAggregatesFilter<"ConditionReport"> | string | null
+    condition?: StringNullableWithAggregatesFilter<"ConditionReport"> | string | null
     notes?: StringNullableWithAggregatesFilter<"ConditionReport"> | string | null
+    damages?: JsonNullableWithAggregatesFilter<"ConditionReport">
     issuesFound?: BoolWithAggregatesFilter<"ConditionReport"> | boolean
     damageAmount?: FloatNullableWithAggregatesFilter<"ConditionReport"> | number | null
     acknowledgedBy?: StringNullableWithAggregatesFilter<"ConditionReport"> | string | null
@@ -48747,6 +50494,7 @@ export namespace Prisma {
     actionLabel?: StringNullableFilter<"Notification"> | string | null
     read?: BoolFilter<"Notification"> | boolean
     readAt?: DateTimeNullableFilter<"Notification"> | Date | string | null
+    status?: StringNullableFilter<"Notification"> | string | null
     sentViaEmail?: BoolFilter<"Notification"> | boolean
     sentViaPush?: BoolFilter<"Notification"> | boolean
     createdAt?: DateTimeFilter<"Notification"> | Date | string
@@ -48766,6 +50514,7 @@ export namespace Prisma {
     actionLabel?: SortOrderInput | SortOrder
     read?: SortOrder
     readAt?: SortOrderInput | SortOrder
+    status?: SortOrderInput | SortOrder
     sentViaEmail?: SortOrder
     sentViaPush?: SortOrder
     createdAt?: SortOrder
@@ -48789,6 +50538,7 @@ export namespace Prisma {
     actionLabel?: StringNullableFilter<"Notification"> | string | null
     read?: BoolFilter<"Notification"> | boolean
     readAt?: DateTimeNullableFilter<"Notification"> | Date | string | null
+    status?: StringNullableFilter<"Notification"> | string | null
     sentViaEmail?: BoolFilter<"Notification"> | boolean
     sentViaPush?: BoolFilter<"Notification"> | boolean
     createdAt?: DateTimeFilter<"Notification"> | Date | string
@@ -48808,6 +50558,7 @@ export namespace Prisma {
     actionLabel?: SortOrderInput | SortOrder
     read?: SortOrder
     readAt?: SortOrderInput | SortOrder
+    status?: SortOrderInput | SortOrder
     sentViaEmail?: SortOrder
     sentViaPush?: SortOrder
     createdAt?: SortOrder
@@ -48832,6 +50583,7 @@ export namespace Prisma {
     actionLabel?: StringNullableWithAggregatesFilter<"Notification"> | string | null
     read?: BoolWithAggregatesFilter<"Notification"> | boolean
     readAt?: DateTimeNullableWithAggregatesFilter<"Notification"> | Date | string | null
+    status?: StringNullableWithAggregatesFilter<"Notification"> | string | null
     sentViaEmail?: BoolWithAggregatesFilter<"Notification"> | boolean
     sentViaPush?: BoolWithAggregatesFilter<"Notification"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"Notification"> | Date | string
@@ -49180,6 +50932,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -49198,6 +50951,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -49234,6 +50989,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateInput = {
@@ -49245,6 +51001,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -49263,6 +51020,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -49299,6 +51058,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUpdateInput = {
@@ -49310,6 +51070,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49328,6 +51089,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -49364,6 +51127,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateInput = {
@@ -49375,6 +51139,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49393,6 +51158,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -49429,6 +51196,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserCreateManyInput = {
@@ -49440,6 +51208,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -49458,6 +51227,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -49487,6 +51258,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49505,6 +51277,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -49534,6 +51308,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49552,6 +51327,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -49655,6 +51432,8 @@ export namespace Prisma {
     description?: string | null
     logoUrl?: string | null
     websiteUrl?: string | null
+    businessType?: string | null
+    taxId?: string | null
     email: string
     phoneNumber?: string | null
     addressLine1?: string | null
@@ -49678,6 +51457,8 @@ export namespace Prisma {
     description?: string | null
     logoUrl?: string | null
     websiteUrl?: string | null
+    businessType?: string | null
+    taxId?: string | null
     email: string
     phoneNumber?: string | null
     addressLine1?: string | null
@@ -49701,6 +51482,8 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     websiteUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: NullableStringFieldUpdateOperationsInput | string | null
+    taxId?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
     addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49724,6 +51507,8 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     websiteUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: NullableStringFieldUpdateOperationsInput | string | null
+    taxId?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
     addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49747,6 +51532,8 @@ export namespace Prisma {
     description?: string | null
     logoUrl?: string | null
     websiteUrl?: string | null
+    businessType?: string | null
+    taxId?: string | null
     email: string
     phoneNumber?: string | null
     addressLine1?: string | null
@@ -49768,6 +51555,8 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     websiteUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: NullableStringFieldUpdateOperationsInput | string | null
+    taxId?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
     addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49789,6 +51578,8 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     websiteUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: NullableStringFieldUpdateOperationsInput | string | null
+    taxId?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
     addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
@@ -50681,15 +52472,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -50713,6 +52507,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
@@ -50727,15 +52522,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -50756,6 +52554,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
@@ -50767,15 +52566,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -50799,6 +52601,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
@@ -50813,15 +52616,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -50842,6 +52648,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
@@ -50856,15 +52663,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -50890,15 +52700,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -50926,15 +52739,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51256,6 +53072,103 @@ export namespace Prisma {
     deductionReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentCreateInput = {
+    id?: string
+    amount: number
+    currency?: string
+    stripePaymentIntentId?: string | null
+    stripeChargeId?: string | null
+    status?: $Enums.PaymentStatus
+    failureReason?: string | null
+    processedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    booking: BookingCreateNestedOneWithoutPaymentsInput
+  }
+
+  export type PaymentUncheckedCreateInput = {
+    id?: string
+    bookingId: string
+    amount: number
+    currency?: string
+    stripePaymentIntentId?: string | null
+    stripeChargeId?: string | null
+    status?: $Enums.PaymentStatus
+    failureReason?: string | null
+    processedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    amount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    stripePaymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeChargeId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    failureReason?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    booking?: BookingUpdateOneRequiredWithoutPaymentsNestedInput
+  }
+
+  export type PaymentUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bookingId?: StringFieldUpdateOperationsInput | string
+    amount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    stripePaymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeChargeId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    failureReason?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentCreateManyInput = {
+    id?: string
+    bookingId: string
+    amount: number
+    currency?: string
+    stripePaymentIntentId?: string | null
+    stripeChargeId?: string | null
+    status?: $Enums.PaymentStatus
+    failureReason?: string | null
+    processedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    amount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    stripePaymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeChargeId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    failureReason?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bookingId?: StringFieldUpdateOperationsInput | string
+    amount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    stripePaymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeChargeId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    failureReason?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type RefundCreateInput = {
@@ -51914,11 +53827,13 @@ export namespace Prisma {
   export type ConditionReportCreateInput = {
     id?: string
     reportType: $Enums.ReportType
-    reportedBy: string
+    type: $Enums.ReportType
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -51929,6 +53844,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     photos?: ReportPhotoCreateNestedManyWithoutReportInput
     booking: BookingCreateNestedOneWithoutConditionReportsInput
+    reportedByUser: UserCreateNestedOneWithoutConditionReportsReportedInput
     dispute?: DisputeCreateNestedOneWithoutConditionReportInput
   }
 
@@ -51936,11 +53852,14 @@ export namespace Prisma {
     id?: string
     bookingId: string
     reportType: $Enums.ReportType
+    type: $Enums.ReportType
     reportedBy: string
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -51956,11 +53875,13 @@ export namespace Prisma {
   export type ConditionReportUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
-    reportedBy?: StringFieldUpdateOperationsInput | string
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51971,6 +53892,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     photos?: ReportPhotoUpdateManyWithoutReportNestedInput
     booking?: BookingUpdateOneRequiredWithoutConditionReportsNestedInput
+    reportedByUser?: UserUpdateOneRequiredWithoutConditionReportsReportedNestedInput
     dispute?: DisputeUpdateOneWithoutConditionReportNestedInput
   }
 
@@ -51978,11 +53900,14 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     bookingId?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedBy?: StringFieldUpdateOperationsInput | string
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51999,11 +53924,14 @@ export namespace Prisma {
     id?: string
     bookingId: string
     reportType: $Enums.ReportType
+    type: $Enums.ReportType
     reportedBy: string
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -52017,11 +53945,13 @@ export namespace Prisma {
   export type ConditionReportUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
-    reportedBy?: StringFieldUpdateOperationsInput | string
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -52036,11 +53966,14 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     bookingId?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedBy?: StringFieldUpdateOperationsInput | string
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -52594,6 +54527,7 @@ export namespace Prisma {
     actionLabel?: string | null
     read?: boolean
     readAt?: Date | string | null
+    status?: string | null
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: Date | string
@@ -52613,6 +54547,7 @@ export namespace Prisma {
     actionLabel?: string | null
     read?: boolean
     readAt?: Date | string | null
+    status?: string | null
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: Date | string
@@ -52630,6 +54565,7 @@ export namespace Prisma {
     actionLabel?: NullableStringFieldUpdateOperationsInput | string | null
     read?: BoolFieldUpdateOperationsInput | boolean
     readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: NullableStringFieldUpdateOperationsInput | string | null
     sentViaEmail?: BoolFieldUpdateOperationsInput | boolean
     sentViaPush?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52649,6 +54585,7 @@ export namespace Prisma {
     actionLabel?: NullableStringFieldUpdateOperationsInput | string | null
     read?: BoolFieldUpdateOperationsInput | boolean
     readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: NullableStringFieldUpdateOperationsInput | string | null
     sentViaEmail?: BoolFieldUpdateOperationsInput | boolean
     sentViaPush?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52667,6 +54604,7 @@ export namespace Prisma {
     actionLabel?: string | null
     read?: boolean
     readAt?: Date | string | null
+    status?: string | null
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: Date | string
@@ -52684,6 +54622,7 @@ export namespace Prisma {
     actionLabel?: NullableStringFieldUpdateOperationsInput | string | null
     read?: BoolFieldUpdateOperationsInput | boolean
     readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: NullableStringFieldUpdateOperationsInput | string | null
     sentViaEmail?: BoolFieldUpdateOperationsInput | boolean
     sentViaPush?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52702,6 +54641,7 @@ export namespace Prisma {
     actionLabel?: NullableStringFieldUpdateOperationsInput | string | null
     read?: BoolFieldUpdateOperationsInput | boolean
     readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: NullableStringFieldUpdateOperationsInput | string | null
     sentViaEmail?: BoolFieldUpdateOperationsInput | boolean
     sentViaPush?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53271,6 +55211,12 @@ export namespace Prisma {
     isNot?: UserPreferencesWhereInput | null
   }
 
+  export type ConditionReportListRelationFilter = {
+    every?: ConditionReportWhereInput
+    some?: ConditionReportWhereInput
+    none?: ConditionReportWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -53332,6 +55278,10 @@ export namespace Prisma {
     _count?: SortOrder
   }
 
+  export type ConditionReportOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type UserOrderByRelevanceInput = {
     fields: UserOrderByRelevanceFieldEnum | UserOrderByRelevanceFieldEnum[]
     sort: SortOrder
@@ -53347,6 +55297,7 @@ export namespace Prisma {
     firstName?: SortOrder
     lastName?: SortOrder
     phoneNumber?: SortOrder
+    phone?: SortOrder
     phoneVerified?: SortOrder
     dateOfBirth?: SortOrder
     profilePhotoUrl?: SortOrder
@@ -53365,6 +55316,8 @@ export namespace Prisma {
     stripeCustomerId?: SortOrder
     stripeConnectId?: SortOrder
     stripeOnboardingComplete?: SortOrder
+    stripeChargesEnabled?: SortOrder
+    stripePayoutsEnabled?: SortOrder
     role?: SortOrder
     status?: SortOrder
     preferredLanguage?: SortOrder
@@ -53401,6 +55354,7 @@ export namespace Prisma {
     firstName?: SortOrder
     lastName?: SortOrder
     phoneNumber?: SortOrder
+    phone?: SortOrder
     phoneVerified?: SortOrder
     dateOfBirth?: SortOrder
     profilePhotoUrl?: SortOrder
@@ -53419,6 +55373,8 @@ export namespace Prisma {
     stripeCustomerId?: SortOrder
     stripeConnectId?: SortOrder
     stripeOnboardingComplete?: SortOrder
+    stripeChargesEnabled?: SortOrder
+    stripePayoutsEnabled?: SortOrder
     role?: SortOrder
     status?: SortOrder
     preferredLanguage?: SortOrder
@@ -53448,6 +55404,7 @@ export namespace Prisma {
     firstName?: SortOrder
     lastName?: SortOrder
     phoneNumber?: SortOrder
+    phone?: SortOrder
     phoneVerified?: SortOrder
     dateOfBirth?: SortOrder
     profilePhotoUrl?: SortOrder
@@ -53466,6 +55423,8 @@ export namespace Prisma {
     stripeCustomerId?: SortOrder
     stripeConnectId?: SortOrder
     stripeOnboardingComplete?: SortOrder
+    stripeChargesEnabled?: SortOrder
+    stripePayoutsEnabled?: SortOrder
     role?: SortOrder
     status?: SortOrder
     preferredLanguage?: SortOrder
@@ -53703,6 +55662,8 @@ export namespace Prisma {
     description?: SortOrder
     logoUrl?: SortOrder
     websiteUrl?: SortOrder
+    businessType?: SortOrder
+    taxId?: SortOrder
     email?: SortOrder
     phoneNumber?: SortOrder
     addressLine1?: SortOrder
@@ -53724,6 +55685,8 @@ export namespace Prisma {
     description?: SortOrder
     logoUrl?: SortOrder
     websiteUrl?: SortOrder
+    businessType?: SortOrder
+    taxId?: SortOrder
     email?: SortOrder
     phoneNumber?: SortOrder
     addressLine1?: SortOrder
@@ -53745,6 +55708,8 @@ export namespace Prisma {
     description?: SortOrder
     logoUrl?: SortOrder
     websiteUrl?: SortOrder
+    businessType?: SortOrder
+    taxId?: SortOrder
     email?: SortOrder
     phoneNumber?: SortOrder
     addressLine1?: SortOrder
@@ -54502,10 +56467,10 @@ export namespace Prisma {
     isNot?: DepositHoldWhereInput | null
   }
 
-  export type ConditionReportListRelationFilter = {
-    every?: ConditionReportWhereInput
-    some?: ConditionReportWhereInput
-    none?: ConditionReportWhereInput
+  export type PaymentListRelationFilter = {
+    every?: PaymentWhereInput
+    some?: PaymentWhereInput
+    none?: PaymentWhereInput
   }
 
   export type ConversationListRelationFilter = {
@@ -54522,7 +56487,7 @@ export namespace Prisma {
     _count?: SortOrder
   }
 
-  export type ConditionReportOrderByRelationAggregateInput = {
+  export type PaymentOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -54544,15 +56509,18 @@ export namespace Prisma {
     startDate?: SortOrder
     endDate?: SortOrder
     duration?: SortOrder
+    guestCount?: SortOrder
     basePrice?: SortOrder
     serviceFee?: SortOrder
     tax?: SortOrder
     depositAmount?: SortOrder
     discountAmount?: SortOrder
     totalPrice?: SortOrder
+    totalAmount?: SortOrder
     ownerEarnings?: SortOrder
     platformFee?: SortOrder
     currency?: SortOrder
+    renterMessage?: SortOrder
     status?: SortOrder
     cancellationReason?: SortOrder
     cancelledBy?: SortOrder
@@ -54575,12 +56543,14 @@ export namespace Prisma {
 
   export type BookingAvgOrderByAggregateInput = {
     duration?: SortOrder
+    guestCount?: SortOrder
     basePrice?: SortOrder
     serviceFee?: SortOrder
     tax?: SortOrder
     depositAmount?: SortOrder
     discountAmount?: SortOrder
     totalPrice?: SortOrder
+    totalAmount?: SortOrder
     ownerEarnings?: SortOrder
     platformFee?: SortOrder
   }
@@ -54593,15 +56563,18 @@ export namespace Prisma {
     startDate?: SortOrder
     endDate?: SortOrder
     duration?: SortOrder
+    guestCount?: SortOrder
     basePrice?: SortOrder
     serviceFee?: SortOrder
     tax?: SortOrder
     depositAmount?: SortOrder
     discountAmount?: SortOrder
     totalPrice?: SortOrder
+    totalAmount?: SortOrder
     ownerEarnings?: SortOrder
     platformFee?: SortOrder
     currency?: SortOrder
+    renterMessage?: SortOrder
     status?: SortOrder
     cancellationReason?: SortOrder
     cancelledBy?: SortOrder
@@ -54629,15 +56602,18 @@ export namespace Prisma {
     startDate?: SortOrder
     endDate?: SortOrder
     duration?: SortOrder
+    guestCount?: SortOrder
     basePrice?: SortOrder
     serviceFee?: SortOrder
     tax?: SortOrder
     depositAmount?: SortOrder
     discountAmount?: SortOrder
     totalPrice?: SortOrder
+    totalAmount?: SortOrder
     ownerEarnings?: SortOrder
     platformFee?: SortOrder
     currency?: SortOrder
+    renterMessage?: SortOrder
     status?: SortOrder
     cancellationReason?: SortOrder
     cancelledBy?: SortOrder
@@ -54659,12 +56635,14 @@ export namespace Prisma {
 
   export type BookingSumOrderByAggregateInput = {
     duration?: SortOrder
+    guestCount?: SortOrder
     basePrice?: SortOrder
     serviceFee?: SortOrder
     tax?: SortOrder
     depositAmount?: SortOrder
     discountAmount?: SortOrder
     totalPrice?: SortOrder
+    totalAmount?: SortOrder
     ownerEarnings?: SortOrder
     platformFee?: SortOrder
   }
@@ -54911,6 +56889,79 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumDepositStatusFilter<$PrismaModel>
     _max?: NestedEnumDepositStatusFilter<$PrismaModel>
+  }
+
+  export type EnumPaymentStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentStatus | EnumPaymentStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentStatusFilter<$PrismaModel> | $Enums.PaymentStatus
+  }
+
+  export type PaymentOrderByRelevanceInput = {
+    fields: PaymentOrderByRelevanceFieldEnum | PaymentOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type PaymentCountOrderByAggregateInput = {
+    id?: SortOrder
+    bookingId?: SortOrder
+    amount?: SortOrder
+    currency?: SortOrder
+    stripePaymentIntentId?: SortOrder
+    stripeChargeId?: SortOrder
+    status?: SortOrder
+    failureReason?: SortOrder
+    processedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PaymentAvgOrderByAggregateInput = {
+    amount?: SortOrder
+  }
+
+  export type PaymentMaxOrderByAggregateInput = {
+    id?: SortOrder
+    bookingId?: SortOrder
+    amount?: SortOrder
+    currency?: SortOrder
+    stripePaymentIntentId?: SortOrder
+    stripeChargeId?: SortOrder
+    status?: SortOrder
+    failureReason?: SortOrder
+    processedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PaymentMinOrderByAggregateInput = {
+    id?: SortOrder
+    bookingId?: SortOrder
+    amount?: SortOrder
+    currency?: SortOrder
+    stripePaymentIntentId?: SortOrder
+    stripeChargeId?: SortOrder
+    status?: SortOrder
+    failureReason?: SortOrder
+    processedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PaymentSumOrderByAggregateInput = {
+    amount?: SortOrder
+  }
+
+  export type EnumPaymentStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentStatus | EnumPaymentStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentStatusWithAggregatesFilter<$PrismaModel> | $Enums.PaymentStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumPaymentStatusFilter<$PrismaModel>
+    _max?: NestedEnumPaymentStatusFilter<$PrismaModel>
   }
 
   export type EnumRefundStatusFilter<$PrismaModel = never> = {
@@ -55445,6 +57496,29 @@ export namespace Prisma {
     notIn?: $Enums.ReportType[] | ListEnumReportTypeFieldRefInput<$PrismaModel>
     not?: NestedEnumReportTypeFilter<$PrismaModel> | $Enums.ReportType
   }
+  export type JsonNullableFilter<$PrismaModel = never> =
+    | PatchUndefined<
+        Either<Required<JsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>,
+        Required<JsonNullableFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>
+
+  export type JsonNullableFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string[]
+    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+  }
 
   export type EnumReportStatusFilter<$PrismaModel = never> = {
     equals?: $Enums.ReportStatus | EnumReportStatusFieldRefInput<$PrismaModel>
@@ -55478,11 +57552,14 @@ export namespace Prisma {
     id?: SortOrder
     bookingId?: SortOrder
     reportType?: SortOrder
+    type?: SortOrder
     reportedBy?: SortOrder
     reportedAt?: SortOrder
     checklistData?: SortOrder
     overallCondition?: SortOrder
+    condition?: SortOrder
     notes?: SortOrder
+    damages?: SortOrder
     issuesFound?: SortOrder
     damageAmount?: SortOrder
     acknowledgedBy?: SortOrder
@@ -55501,9 +57578,11 @@ export namespace Prisma {
     id?: SortOrder
     bookingId?: SortOrder
     reportType?: SortOrder
+    type?: SortOrder
     reportedBy?: SortOrder
     reportedAt?: SortOrder
     overallCondition?: SortOrder
+    condition?: SortOrder
     notes?: SortOrder
     issuesFound?: SortOrder
     damageAmount?: SortOrder
@@ -55519,9 +57598,11 @@ export namespace Prisma {
     id?: SortOrder
     bookingId?: SortOrder
     reportType?: SortOrder
+    type?: SortOrder
     reportedBy?: SortOrder
     reportedAt?: SortOrder
     overallCondition?: SortOrder
+    condition?: SortOrder
     notes?: SortOrder
     issuesFound?: SortOrder
     damageAmount?: SortOrder
@@ -55545,6 +57626,32 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumReportTypeFilter<$PrismaModel>
     _max?: NestedEnumReportTypeFilter<$PrismaModel>
+  }
+  export type JsonNullableWithAggregatesFilter<$PrismaModel = never> =
+    | PatchUndefined<
+        Either<Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, 'path'>>,
+        Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, 'path'>>
+
+  export type JsonNullableWithAggregatesFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string[]
+    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedJsonNullableFilter<$PrismaModel>
+    _max?: NestedJsonNullableFilter<$PrismaModel>
   }
 
   export type EnumReportStatusWithAggregatesFilter<$PrismaModel = never> = {
@@ -55963,29 +58070,6 @@ export namespace Prisma {
     notIn?: $Enums.NotificationType[] | ListEnumNotificationTypeFieldRefInput<$PrismaModel>
     not?: NestedEnumNotificationTypeFilter<$PrismaModel> | $Enums.NotificationType
   }
-  export type JsonNullableFilter<$PrismaModel = never> =
-    | PatchUndefined<
-        Either<Required<JsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>,
-        Required<JsonNullableFilterBase<$PrismaModel>>
-      >
-    | OptionalFlat<Omit<Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>
-
-  export type JsonNullableFilterBase<$PrismaModel = never> = {
-    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
-    path?: string[]
-    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
-    string_contains?: string | StringFieldRefInput<$PrismaModel>
-    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
-    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
-    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
-  }
 
   export type NotificationOrderByRelevanceInput = {
     fields: NotificationOrderByRelevanceFieldEnum | NotificationOrderByRelevanceFieldEnum[]
@@ -56006,6 +58090,7 @@ export namespace Prisma {
     actionLabel?: SortOrder
     read?: SortOrder
     readAt?: SortOrder
+    status?: SortOrder
     sentViaEmail?: SortOrder
     sentViaPush?: SortOrder
     createdAt?: SortOrder
@@ -56023,6 +58108,7 @@ export namespace Prisma {
     actionLabel?: SortOrder
     read?: SortOrder
     readAt?: SortOrder
+    status?: SortOrder
     sentViaEmail?: SortOrder
     sentViaPush?: SortOrder
     createdAt?: SortOrder
@@ -56040,6 +58126,7 @@ export namespace Prisma {
     actionLabel?: SortOrder
     read?: SortOrder
     readAt?: SortOrder
+    status?: SortOrder
     sentViaEmail?: SortOrder
     sentViaPush?: SortOrder
     createdAt?: SortOrder
@@ -56053,32 +58140,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumNotificationTypeFilter<$PrismaModel>
     _max?: NestedEnumNotificationTypeFilter<$PrismaModel>
-  }
-  export type JsonNullableWithAggregatesFilter<$PrismaModel = never> =
-    | PatchUndefined<
-        Either<Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, 'path'>>,
-        Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>
-      >
-    | OptionalFlat<Omit<Required<JsonNullableWithAggregatesFilterBase<$PrismaModel>>, 'path'>>
-
-  export type JsonNullableWithAggregatesFilterBase<$PrismaModel = never> = {
-    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
-    path?: string[]
-    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
-    string_contains?: string | StringFieldRefInput<$PrismaModel>
-    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
-    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
-    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedJsonNullableFilter<$PrismaModel>
-    _max?: NestedJsonNullableFilter<$PrismaModel>
   }
 
   export type UserNullableScalarRelationFilter = {
@@ -56414,6 +58475,13 @@ export namespace Prisma {
     connect?: UserPreferencesWhereUniqueInput
   }
 
+  export type ConditionReportCreateNestedManyWithoutReportedByUserInput = {
+    create?: XOR<ConditionReportCreateWithoutReportedByUserInput, ConditionReportUncheckedCreateWithoutReportedByUserInput> | ConditionReportCreateWithoutReportedByUserInput[] | ConditionReportUncheckedCreateWithoutReportedByUserInput[]
+    connectOrCreate?: ConditionReportCreateOrConnectWithoutReportedByUserInput | ConditionReportCreateOrConnectWithoutReportedByUserInput[]
+    createMany?: ConditionReportCreateManyReportedByUserInputEnvelope
+    connect?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+  }
+
   export type SessionUncheckedCreateNestedManyWithoutUserInput = {
     create?: XOR<SessionCreateWithoutUserInput, SessionUncheckedCreateWithoutUserInput> | SessionCreateWithoutUserInput[] | SessionUncheckedCreateWithoutUserInput[]
     connectOrCreate?: SessionCreateOrConnectWithoutUserInput | SessionCreateOrConnectWithoutUserInput[]
@@ -56537,6 +58605,13 @@ export namespace Prisma {
     create?: XOR<UserPreferencesCreateWithoutUserInput, UserPreferencesUncheckedCreateWithoutUserInput>
     connectOrCreate?: UserPreferencesCreateOrConnectWithoutUserInput
     connect?: UserPreferencesWhereUniqueInput
+  }
+
+  export type ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput = {
+    create?: XOR<ConditionReportCreateWithoutReportedByUserInput, ConditionReportUncheckedCreateWithoutReportedByUserInput> | ConditionReportCreateWithoutReportedByUserInput[] | ConditionReportUncheckedCreateWithoutReportedByUserInput[]
+    connectOrCreate?: ConditionReportCreateOrConnectWithoutReportedByUserInput | ConditionReportCreateOrConnectWithoutReportedByUserInput[]
+    createMany?: ConditionReportCreateManyReportedByUserInputEnvelope
+    connect?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -56839,6 +58914,20 @@ export namespace Prisma {
     update?: XOR<XOR<UserPreferencesUpdateToOneWithWhereWithoutUserInput, UserPreferencesUpdateWithoutUserInput>, UserPreferencesUncheckedUpdateWithoutUserInput>
   }
 
+  export type ConditionReportUpdateManyWithoutReportedByUserNestedInput = {
+    create?: XOR<ConditionReportCreateWithoutReportedByUserInput, ConditionReportUncheckedCreateWithoutReportedByUserInput> | ConditionReportCreateWithoutReportedByUserInput[] | ConditionReportUncheckedCreateWithoutReportedByUserInput[]
+    connectOrCreate?: ConditionReportCreateOrConnectWithoutReportedByUserInput | ConditionReportCreateOrConnectWithoutReportedByUserInput[]
+    upsert?: ConditionReportUpsertWithWhereUniqueWithoutReportedByUserInput | ConditionReportUpsertWithWhereUniqueWithoutReportedByUserInput[]
+    createMany?: ConditionReportCreateManyReportedByUserInputEnvelope
+    set?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+    disconnect?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+    delete?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+    connect?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+    update?: ConditionReportUpdateWithWhereUniqueWithoutReportedByUserInput | ConditionReportUpdateWithWhereUniqueWithoutReportedByUserInput[]
+    updateMany?: ConditionReportUpdateManyWithWhereWithoutReportedByUserInput | ConditionReportUpdateManyWithWhereWithoutReportedByUserInput[]
+    deleteMany?: ConditionReportScalarWhereInput | ConditionReportScalarWhereInput[]
+  }
+
   export type SessionUncheckedUpdateManyWithoutUserNestedInput = {
     create?: XOR<SessionCreateWithoutUserInput, SessionUncheckedCreateWithoutUserInput> | SessionCreateWithoutUserInput[] | SessionUncheckedCreateWithoutUserInput[]
     connectOrCreate?: SessionCreateOrConnectWithoutUserInput | SessionCreateOrConnectWithoutUserInput[]
@@ -57085,6 +59174,20 @@ export namespace Prisma {
     delete?: UserPreferencesWhereInput | boolean
     connect?: UserPreferencesWhereUniqueInput
     update?: XOR<XOR<UserPreferencesUpdateToOneWithWhereWithoutUserInput, UserPreferencesUpdateWithoutUserInput>, UserPreferencesUncheckedUpdateWithoutUserInput>
+  }
+
+  export type ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput = {
+    create?: XOR<ConditionReportCreateWithoutReportedByUserInput, ConditionReportUncheckedCreateWithoutReportedByUserInput> | ConditionReportCreateWithoutReportedByUserInput[] | ConditionReportUncheckedCreateWithoutReportedByUserInput[]
+    connectOrCreate?: ConditionReportCreateOrConnectWithoutReportedByUserInput | ConditionReportCreateOrConnectWithoutReportedByUserInput[]
+    upsert?: ConditionReportUpsertWithWhereUniqueWithoutReportedByUserInput | ConditionReportUpsertWithWhereUniqueWithoutReportedByUserInput[]
+    createMany?: ConditionReportCreateManyReportedByUserInputEnvelope
+    set?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+    disconnect?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+    delete?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+    connect?: ConditionReportWhereUniqueInput | ConditionReportWhereUniqueInput[]
+    update?: ConditionReportUpdateWithWhereUniqueWithoutReportedByUserInput | ConditionReportUpdateWithWhereUniqueWithoutReportedByUserInput[]
+    updateMany?: ConditionReportUpdateManyWithWhereWithoutReportedByUserInput | ConditionReportUpdateManyWithWhereWithoutReportedByUserInput[]
+    deleteMany?: ConditionReportScalarWhereInput | ConditionReportScalarWhereInput[]
   }
 
   export type UserCreateNestedOneWithoutSessionsInput = {
@@ -57695,6 +59798,13 @@ export namespace Prisma {
     connect?: DepositHoldWhereUniqueInput
   }
 
+  export type PaymentCreateNestedManyWithoutBookingInput = {
+    create?: XOR<PaymentCreateWithoutBookingInput, PaymentUncheckedCreateWithoutBookingInput> | PaymentCreateWithoutBookingInput[] | PaymentUncheckedCreateWithoutBookingInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutBookingInput | PaymentCreateOrConnectWithoutBookingInput[]
+    createMany?: PaymentCreateManyBookingInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+  }
+
   export type ConditionReportCreateNestedManyWithoutBookingInput = {
     create?: XOR<ConditionReportCreateWithoutBookingInput, ConditionReportUncheckedCreateWithoutBookingInput> | ConditionReportCreateWithoutBookingInput[] | ConditionReportUncheckedCreateWithoutBookingInput[]
     connectOrCreate?: ConditionReportCreateOrConnectWithoutBookingInput | ConditionReportCreateOrConnectWithoutBookingInput[]
@@ -57735,6 +59845,13 @@ export namespace Prisma {
     connectOrCreate?: LedgerEntryCreateOrConnectWithoutBookingInput | LedgerEntryCreateOrConnectWithoutBookingInput[]
     createMany?: LedgerEntryCreateManyBookingInputEnvelope
     connect?: LedgerEntryWhereUniqueInput | LedgerEntryWhereUniqueInput[]
+  }
+
+  export type PaymentUncheckedCreateNestedManyWithoutBookingInput = {
+    create?: XOR<PaymentCreateWithoutBookingInput, PaymentUncheckedCreateWithoutBookingInput> | PaymentCreateWithoutBookingInput[] | PaymentUncheckedCreateWithoutBookingInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutBookingInput | PaymentCreateOrConnectWithoutBookingInput[]
+    createMany?: PaymentCreateManyBookingInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
   }
 
   export type ConditionReportUncheckedCreateNestedManyWithoutBookingInput = {
@@ -57831,6 +59948,20 @@ export namespace Prisma {
     update?: XOR<XOR<DepositHoldUpdateToOneWithWhereWithoutBookingsInput, DepositHoldUpdateWithoutBookingsInput>, DepositHoldUncheckedUpdateWithoutBookingsInput>
   }
 
+  export type PaymentUpdateManyWithoutBookingNestedInput = {
+    create?: XOR<PaymentCreateWithoutBookingInput, PaymentUncheckedCreateWithoutBookingInput> | PaymentCreateWithoutBookingInput[] | PaymentUncheckedCreateWithoutBookingInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutBookingInput | PaymentCreateOrConnectWithoutBookingInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutBookingInput | PaymentUpsertWithWhereUniqueWithoutBookingInput[]
+    createMany?: PaymentCreateManyBookingInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutBookingInput | PaymentUpdateWithWhereUniqueWithoutBookingInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutBookingInput | PaymentUpdateManyWithWhereWithoutBookingInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+  }
+
   export type ConditionReportUpdateManyWithoutBookingNestedInput = {
     create?: XOR<ConditionReportCreateWithoutBookingInput, ConditionReportUncheckedCreateWithoutBookingInput> | ConditionReportCreateWithoutBookingInput[] | ConditionReportUncheckedCreateWithoutBookingInput[]
     connectOrCreate?: ConditionReportCreateOrConnectWithoutBookingInput | ConditionReportCreateOrConnectWithoutBookingInput[]
@@ -57913,6 +60044,20 @@ export namespace Prisma {
     update?: LedgerEntryUpdateWithWhereUniqueWithoutBookingInput | LedgerEntryUpdateWithWhereUniqueWithoutBookingInput[]
     updateMany?: LedgerEntryUpdateManyWithWhereWithoutBookingInput | LedgerEntryUpdateManyWithWhereWithoutBookingInput[]
     deleteMany?: LedgerEntryScalarWhereInput | LedgerEntryScalarWhereInput[]
+  }
+
+  export type PaymentUncheckedUpdateManyWithoutBookingNestedInput = {
+    create?: XOR<PaymentCreateWithoutBookingInput, PaymentUncheckedCreateWithoutBookingInput> | PaymentCreateWithoutBookingInput[] | PaymentUncheckedCreateWithoutBookingInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutBookingInput | PaymentCreateOrConnectWithoutBookingInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutBookingInput | PaymentUpsertWithWhereUniqueWithoutBookingInput[]
+    createMany?: PaymentCreateManyBookingInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutBookingInput | PaymentUpdateWithWhereUniqueWithoutBookingInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutBookingInput | PaymentUpdateManyWithWhereWithoutBookingInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
   }
 
   export type ConditionReportUncheckedUpdateManyWithoutBookingNestedInput = {
@@ -58055,6 +60200,24 @@ export namespace Prisma {
     update?: BookingUpdateWithWhereUniqueWithoutDepositHoldInput | BookingUpdateWithWhereUniqueWithoutDepositHoldInput[]
     updateMany?: BookingUpdateManyWithWhereWithoutDepositHoldInput | BookingUpdateManyWithWhereWithoutDepositHoldInput[]
     deleteMany?: BookingScalarWhereInput | BookingScalarWhereInput[]
+  }
+
+  export type BookingCreateNestedOneWithoutPaymentsInput = {
+    create?: XOR<BookingCreateWithoutPaymentsInput, BookingUncheckedCreateWithoutPaymentsInput>
+    connectOrCreate?: BookingCreateOrConnectWithoutPaymentsInput
+    connect?: BookingWhereUniqueInput
+  }
+
+  export type EnumPaymentStatusFieldUpdateOperationsInput = {
+    set?: $Enums.PaymentStatus
+  }
+
+  export type BookingUpdateOneRequiredWithoutPaymentsNestedInput = {
+    create?: XOR<BookingCreateWithoutPaymentsInput, BookingUncheckedCreateWithoutPaymentsInput>
+    connectOrCreate?: BookingCreateOrConnectWithoutPaymentsInput
+    upsert?: BookingUpsertWithoutPaymentsInput
+    connect?: BookingWhereUniqueInput
+    update?: XOR<XOR<BookingUpdateToOneWithWhereWithoutPaymentsInput, BookingUpdateWithoutPaymentsInput>, BookingUncheckedUpdateWithoutPaymentsInput>
   }
 
   export type EnumRefundStatusFieldUpdateOperationsInput = {
@@ -58370,6 +60533,12 @@ export namespace Prisma {
     connect?: BookingWhereUniqueInput
   }
 
+  export type UserCreateNestedOneWithoutConditionReportsReportedInput = {
+    create?: XOR<UserCreateWithoutConditionReportsReportedInput, UserUncheckedCreateWithoutConditionReportsReportedInput>
+    connectOrCreate?: UserCreateOrConnectWithoutConditionReportsReportedInput
+    connect?: UserWhereUniqueInput
+  }
+
   export type DisputeCreateNestedOneWithoutConditionReportInput = {
     create?: XOR<DisputeCreateWithoutConditionReportInput, DisputeUncheckedCreateWithoutConditionReportInput>
     connectOrCreate?: DisputeCreateOrConnectWithoutConditionReportInput
@@ -58417,6 +60586,14 @@ export namespace Prisma {
     upsert?: BookingUpsertWithoutConditionReportsInput
     connect?: BookingWhereUniqueInput
     update?: XOR<XOR<BookingUpdateToOneWithWhereWithoutConditionReportsInput, BookingUpdateWithoutConditionReportsInput>, BookingUncheckedUpdateWithoutConditionReportsInput>
+  }
+
+  export type UserUpdateOneRequiredWithoutConditionReportsReportedNestedInput = {
+    create?: XOR<UserCreateWithoutConditionReportsReportedInput, UserUncheckedCreateWithoutConditionReportsReportedInput>
+    connectOrCreate?: UserCreateOrConnectWithoutConditionReportsReportedInput
+    upsert?: UserUpsertWithoutConditionReportsReportedInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutConditionReportsReportedInput, UserUpdateWithoutConditionReportsReportedInput>, UserUncheckedUpdateWithoutConditionReportsReportedInput>
   }
 
   export type DisputeUpdateOneWithoutConditionReportNestedInput = {
@@ -59418,6 +61595,23 @@ export namespace Prisma {
     _max?: NestedEnumDepositStatusFilter<$PrismaModel>
   }
 
+  export type NestedEnumPaymentStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentStatus | EnumPaymentStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentStatusFilter<$PrismaModel> | $Enums.PaymentStatus
+  }
+
+  export type NestedEnumPaymentStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentStatus | EnumPaymentStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentStatusWithAggregatesFilter<$PrismaModel> | $Enums.PaymentStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumPaymentStatusFilter<$PrismaModel>
+    _max?: NestedEnumPaymentStatusFilter<$PrismaModel>
+  }
+
   export type NestedEnumRefundStatusFilter<$PrismaModel = never> = {
     equals?: $Enums.RefundStatus | EnumRefundStatusFieldRefInput<$PrismaModel>
     in?: $Enums.RefundStatus[] | ListEnumRefundStatusFieldRefInput<$PrismaModel>
@@ -59577,6 +61771,29 @@ export namespace Prisma {
     _min?: NestedEnumReportTypeFilter<$PrismaModel>
     _max?: NestedEnumReportTypeFilter<$PrismaModel>
   }
+  export type NestedJsonNullableFilter<$PrismaModel = never> =
+    | PatchUndefined<
+        Either<Required<NestedJsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<NestedJsonNullableFilterBase<$PrismaModel>>, 'path'>>,
+        Required<NestedJsonNullableFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<NestedJsonNullableFilterBase<$PrismaModel>>, 'path'>>
+
+  export type NestedJsonNullableFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string[]
+    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+  }
 
   export type NestedEnumReportStatusWithAggregatesFilter<$PrismaModel = never> = {
     equals?: $Enums.ReportStatus | EnumReportStatusFieldRefInput<$PrismaModel>
@@ -59688,29 +61905,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumNotificationTypeFilter<$PrismaModel>
     _max?: NestedEnumNotificationTypeFilter<$PrismaModel>
-  }
-  export type NestedJsonNullableFilter<$PrismaModel = never> =
-    | PatchUndefined<
-        Either<Required<NestedJsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<NestedJsonNullableFilterBase<$PrismaModel>>, 'path'>>,
-        Required<NestedJsonNullableFilterBase<$PrismaModel>>
-      >
-    | OptionalFlat<Omit<Required<NestedJsonNullableFilterBase<$PrismaModel>>, 'path'>>
-
-  export type NestedJsonNullableFilterBase<$PrismaModel = never> = {
-    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
-    path?: string[]
-    mode?: QueryMode | EnumQueryModeFieldRefInput<$PrismaModel>
-    string_contains?: string | StringFieldRefInput<$PrismaModel>
-    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
-    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
-    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
-    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
-    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
 
   export type NestedEnumInsuranceStatusFilter<$PrismaModel = never> = {
@@ -59909,15 +62103,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -59940,6 +62137,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
@@ -59953,15 +62151,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -59982,6 +62183,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
@@ -60003,15 +62205,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -60034,6 +62239,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
@@ -60047,15 +62253,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -60076,6 +62285,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
@@ -60516,6 +62726,7 @@ export namespace Prisma {
     actionLabel?: string | null
     read?: boolean
     readAt?: Date | string | null
+    status?: string | null
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: Date | string
@@ -60533,6 +62744,7 @@ export namespace Prisma {
     actionLabel?: string | null
     read?: boolean
     readAt?: Date | string | null
+    status?: string | null
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: Date | string
@@ -60643,6 +62855,62 @@ export namespace Prisma {
   export type UserPreferencesCreateOrConnectWithoutUserInput = {
     where: UserPreferencesWhereUniqueInput
     create: XOR<UserPreferencesCreateWithoutUserInput, UserPreferencesUncheckedCreateWithoutUserInput>
+  }
+
+  export type ConditionReportCreateWithoutReportedByUserInput = {
+    id?: string
+    reportType: $Enums.ReportType
+    type: $Enums.ReportType
+    reportedAt?: Date | string
+    checklistData: JsonNullValueInput | InputJsonValue
+    overallCondition?: string | null
+    condition?: string | null
+    notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
+    issuesFound?: boolean
+    damageAmount?: number | null
+    acknowledgedBy?: string | null
+    acknowledgedAt?: Date | string | null
+    disputeRaised?: boolean
+    status?: $Enums.ReportStatus
+    createdAt?: Date | string
+    completedAt?: Date | string | null
+    photos?: ReportPhotoCreateNestedManyWithoutReportInput
+    booking: BookingCreateNestedOneWithoutConditionReportsInput
+    dispute?: DisputeCreateNestedOneWithoutConditionReportInput
+  }
+
+  export type ConditionReportUncheckedCreateWithoutReportedByUserInput = {
+    id?: string
+    bookingId: string
+    reportType: $Enums.ReportType
+    type: $Enums.ReportType
+    reportedAt?: Date | string
+    checklistData: JsonNullValueInput | InputJsonValue
+    overallCondition?: string | null
+    condition?: string | null
+    notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
+    issuesFound?: boolean
+    damageAmount?: number | null
+    acknowledgedBy?: string | null
+    acknowledgedAt?: Date | string | null
+    disputeRaised?: boolean
+    status?: $Enums.ReportStatus
+    createdAt?: Date | string
+    completedAt?: Date | string | null
+    photos?: ReportPhotoUncheckedCreateNestedManyWithoutReportInput
+    dispute?: DisputeUncheckedCreateNestedOneWithoutConditionReportInput
+  }
+
+  export type ConditionReportCreateOrConnectWithoutReportedByUserInput = {
+    where: ConditionReportWhereUniqueInput
+    create: XOR<ConditionReportCreateWithoutReportedByUserInput, ConditionReportUncheckedCreateWithoutReportedByUserInput>
+  }
+
+  export type ConditionReportCreateManyReportedByUserInputEnvelope = {
+    data: ConditionReportCreateManyReportedByUserInput | ConditionReportCreateManyReportedByUserInput[]
+    skipDuplicates?: boolean
   }
 
   export type SessionUpsertWithWhereUniqueWithoutUserInput = {
@@ -60784,15 +63052,18 @@ export namespace Prisma {
     startDate?: DateTimeFilter<"Booking"> | Date | string
     endDate?: DateTimeFilter<"Booking"> | Date | string
     duration?: IntFilter<"Booking"> | number
+    guestCount?: IntFilter<"Booking"> | number
     basePrice?: FloatFilter<"Booking"> | number
     serviceFee?: FloatFilter<"Booking"> | number
     tax?: FloatFilter<"Booking"> | number
     depositAmount?: FloatFilter<"Booking"> | number
     discountAmount?: FloatFilter<"Booking"> | number
     totalPrice?: FloatFilter<"Booking"> | number
+    totalAmount?: FloatFilter<"Booking"> | number
     ownerEarnings?: FloatFilter<"Booking"> | number
     platformFee?: FloatFilter<"Booking"> | number
     currency?: StringFilter<"Booking"> | string
+    renterMessage?: StringNullableFilter<"Booking"> | string | null
     status?: EnumBookingStatusFilter<"Booking"> | $Enums.BookingStatus
     cancellationReason?: StringNullableFilter<"Booking"> | string | null
     cancelledBy?: StringNullableFilter<"Booking"> | string | null
@@ -61155,6 +63426,7 @@ export namespace Prisma {
     actionLabel?: StringNullableFilter<"Notification"> | string | null
     read?: BoolFilter<"Notification"> | boolean
     readAt?: DateTimeNullableFilter<"Notification"> | Date | string | null
+    status?: StringNullableFilter<"Notification"> | string | null
     sentViaEmail?: BoolFilter<"Notification"> | boolean
     sentViaPush?: BoolFilter<"Notification"> | boolean
     createdAt?: DateTimeFilter<"Notification"> | Date | string
@@ -61254,6 +63526,47 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type ConditionReportUpsertWithWhereUniqueWithoutReportedByUserInput = {
+    where: ConditionReportWhereUniqueInput
+    update: XOR<ConditionReportUpdateWithoutReportedByUserInput, ConditionReportUncheckedUpdateWithoutReportedByUserInput>
+    create: XOR<ConditionReportCreateWithoutReportedByUserInput, ConditionReportUncheckedCreateWithoutReportedByUserInput>
+  }
+
+  export type ConditionReportUpdateWithWhereUniqueWithoutReportedByUserInput = {
+    where: ConditionReportWhereUniqueInput
+    data: XOR<ConditionReportUpdateWithoutReportedByUserInput, ConditionReportUncheckedUpdateWithoutReportedByUserInput>
+  }
+
+  export type ConditionReportUpdateManyWithWhereWithoutReportedByUserInput = {
+    where: ConditionReportScalarWhereInput
+    data: XOR<ConditionReportUpdateManyMutationInput, ConditionReportUncheckedUpdateManyWithoutReportedByUserInput>
+  }
+
+  export type ConditionReportScalarWhereInput = {
+    AND?: ConditionReportScalarWhereInput | ConditionReportScalarWhereInput[]
+    OR?: ConditionReportScalarWhereInput[]
+    NOT?: ConditionReportScalarWhereInput | ConditionReportScalarWhereInput[]
+    id?: StringFilter<"ConditionReport"> | string
+    bookingId?: StringFilter<"ConditionReport"> | string
+    reportType?: EnumReportTypeFilter<"ConditionReport"> | $Enums.ReportType
+    type?: EnumReportTypeFilter<"ConditionReport"> | $Enums.ReportType
+    reportedBy?: StringFilter<"ConditionReport"> | string
+    reportedAt?: DateTimeFilter<"ConditionReport"> | Date | string
+    checklistData?: JsonFilter<"ConditionReport">
+    overallCondition?: StringNullableFilter<"ConditionReport"> | string | null
+    condition?: StringNullableFilter<"ConditionReport"> | string | null
+    notes?: StringNullableFilter<"ConditionReport"> | string | null
+    damages?: JsonNullableFilter<"ConditionReport">
+    issuesFound?: BoolFilter<"ConditionReport"> | boolean
+    damageAmount?: FloatNullableFilter<"ConditionReport"> | number | null
+    acknowledgedBy?: StringNullableFilter<"ConditionReport"> | string | null
+    acknowledgedAt?: DateTimeNullableFilter<"ConditionReport"> | Date | string | null
+    disputeRaised?: BoolFilter<"ConditionReport"> | boolean
+    status?: EnumReportStatusFilter<"ConditionReport"> | $Enums.ReportStatus
+    createdAt?: DateTimeFilter<"ConditionReport"> | Date | string
+    completedAt?: DateTimeNullableFilter<"ConditionReport"> | Date | string | null
+  }
+
   export type UserCreateWithoutSessionsInput = {
     id?: string
     email: string
@@ -61263,6 +63576,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -61281,6 +63595,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -61316,6 +63632,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutSessionsInput = {
@@ -61327,6 +63644,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -61345,6 +63663,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -61380,6 +63700,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutSessionsInput = {
@@ -61407,6 +63728,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -61425,6 +63747,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -61460,6 +63784,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutSessionsInput = {
@@ -61471,6 +63796,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -61489,6 +63815,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -61524,6 +63852,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type OrganizationMemberCreateWithoutOrganizationInput = {
@@ -61737,6 +64066,8 @@ export namespace Prisma {
     description?: string | null
     logoUrl?: string | null
     websiteUrl?: string | null
+    businessType?: string | null
+    taxId?: string | null
     email: string
     phoneNumber?: string | null
     addressLine1?: string | null
@@ -61759,6 +64090,8 @@ export namespace Prisma {
     description?: string | null
     logoUrl?: string | null
     websiteUrl?: string | null
+    businessType?: string | null
+    taxId?: string | null
     email: string
     phoneNumber?: string | null
     addressLine1?: string | null
@@ -61788,6 +64121,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -61806,6 +64140,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -61841,6 +64177,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutOrganizationsInput = {
@@ -61852,6 +64189,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -61870,6 +64208,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -61905,6 +64245,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutOrganizationsInput = {
@@ -61930,6 +64271,8 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     websiteUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: NullableStringFieldUpdateOperationsInput | string | null
+    taxId?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
     addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
@@ -61952,6 +64295,8 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     websiteUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: NullableStringFieldUpdateOperationsInput | string | null
+    taxId?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
     addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
@@ -61987,6 +64332,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -62005,6 +64351,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -62040,6 +64388,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutOrganizationsInput = {
@@ -62051,6 +64400,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -62069,6 +64419,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -62104,6 +64456,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type ListingCreateWithoutCategoryInput = {
@@ -62275,6 +64628,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -62293,6 +64647,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -62328,6 +64684,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutListingsInput = {
@@ -62339,6 +64696,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -62357,6 +64715,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -62392,6 +64752,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutListingsInput = {
@@ -62406,6 +64767,8 @@ export namespace Prisma {
     description?: string | null
     logoUrl?: string | null
     websiteUrl?: string | null
+    businessType?: string | null
+    taxId?: string | null
     email: string
     phoneNumber?: string | null
     addressLine1?: string | null
@@ -62428,6 +64791,8 @@ export namespace Prisma {
     description?: string | null
     logoUrl?: string | null
     websiteUrl?: string | null
+    businessType?: string | null
+    taxId?: string | null
     email: string
     phoneNumber?: string | null
     addressLine1?: string | null
@@ -62555,15 +64920,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -62586,6 +64954,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
@@ -62599,15 +64968,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -62628,6 +65000,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
@@ -62794,6 +65167,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -62812,6 +65186,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -62847,6 +65223,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutListingsInput = {
@@ -62858,6 +65235,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -62876,6 +65254,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -62911,6 +65291,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type OrganizationUpsertWithoutListingsInput = {
@@ -62931,6 +65312,8 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     websiteUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: NullableStringFieldUpdateOperationsInput | string | null
+    taxId?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
     addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
@@ -62953,6 +65336,8 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     websiteUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: NullableStringFieldUpdateOperationsInput | string | null
+    taxId?: NullableStringFieldUpdateOperationsInput | string | null
     email?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
     addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
@@ -63599,6 +65984,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -63617,6 +66003,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -63652,6 +66040,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutFavoriteListingsInput = {
@@ -63663,6 +66052,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -63681,6 +66071,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -63716,6 +66108,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutFavoriteListingsInput = {
@@ -63882,6 +66275,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -63900,6 +66294,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -63935,6 +66331,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutFavoriteListingsInput = {
@@ -63946,6 +66343,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -63964,6 +66362,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -63999,6 +66399,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type ListingUpsertWithoutFavoritesInput = {
@@ -64294,6 +66695,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -64312,6 +66714,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -64347,6 +66751,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutBookingsAsRenterInput = {
@@ -64358,6 +66763,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -64376,6 +66782,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -64411,6 +66819,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutBookingsAsRenterInput = {
@@ -64427,6 +66836,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -64445,6 +66855,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -64480,6 +66892,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutBookingsAsOwnerInput = {
@@ -64491,6 +66904,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -64509,6 +66923,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -64544,6 +66960,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutBookingsAsOwnerInput = {
@@ -64658,14 +67075,52 @@ export namespace Prisma {
     create: XOR<DepositHoldCreateWithoutBookingsInput, DepositHoldUncheckedCreateWithoutBookingsInput>
   }
 
+  export type PaymentCreateWithoutBookingInput = {
+    id?: string
+    amount: number
+    currency?: string
+    stripePaymentIntentId?: string | null
+    stripeChargeId?: string | null
+    status?: $Enums.PaymentStatus
+    failureReason?: string | null
+    processedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentUncheckedCreateWithoutBookingInput = {
+    id?: string
+    amount: number
+    currency?: string
+    stripePaymentIntentId?: string | null
+    stripeChargeId?: string | null
+    status?: $Enums.PaymentStatus
+    failureReason?: string | null
+    processedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentCreateOrConnectWithoutBookingInput = {
+    where: PaymentWhereUniqueInput
+    create: XOR<PaymentCreateWithoutBookingInput, PaymentUncheckedCreateWithoutBookingInput>
+  }
+
+  export type PaymentCreateManyBookingInputEnvelope = {
+    data: PaymentCreateManyBookingInput | PaymentCreateManyBookingInput[]
+    skipDuplicates?: boolean
+  }
+
   export type ConditionReportCreateWithoutBookingInput = {
     id?: string
     reportType: $Enums.ReportType
-    reportedBy: string
+    type: $Enums.ReportType
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -64675,17 +67130,21 @@ export namespace Prisma {
     createdAt?: Date | string
     completedAt?: Date | string | null
     photos?: ReportPhotoCreateNestedManyWithoutReportInput
+    reportedByUser: UserCreateNestedOneWithoutConditionReportsReportedInput
     dispute?: DisputeCreateNestedOneWithoutConditionReportInput
   }
 
   export type ConditionReportUncheckedCreateWithoutBookingInput = {
     id?: string
     reportType: $Enums.ReportType
+    type: $Enums.ReportType
     reportedBy: string
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -65029,6 +67488,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -65047,6 +67507,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -65082,6 +67544,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutBookingsAsRenterInput = {
@@ -65093,6 +67556,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -65111,6 +67575,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -65146,6 +67612,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUpsertWithoutBookingsAsOwnerInput = {
@@ -65168,6 +67635,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -65186,6 +67654,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -65221,6 +67691,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutBookingsAsOwnerInput = {
@@ -65232,6 +67703,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -65250,6 +67722,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -65285,6 +67759,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type BookingStateHistoryUpsertWithWhereUniqueWithoutBookingInput = {
@@ -65395,6 +67870,39 @@ export namespace Prisma {
     expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type PaymentUpsertWithWhereUniqueWithoutBookingInput = {
+    where: PaymentWhereUniqueInput
+    update: XOR<PaymentUpdateWithoutBookingInput, PaymentUncheckedUpdateWithoutBookingInput>
+    create: XOR<PaymentCreateWithoutBookingInput, PaymentUncheckedCreateWithoutBookingInput>
+  }
+
+  export type PaymentUpdateWithWhereUniqueWithoutBookingInput = {
+    where: PaymentWhereUniqueInput
+    data: XOR<PaymentUpdateWithoutBookingInput, PaymentUncheckedUpdateWithoutBookingInput>
+  }
+
+  export type PaymentUpdateManyWithWhereWithoutBookingInput = {
+    where: PaymentScalarWhereInput
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyWithoutBookingInput>
+  }
+
+  export type PaymentScalarWhereInput = {
+    AND?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+    OR?: PaymentScalarWhereInput[]
+    NOT?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+    id?: StringFilter<"Payment"> | string
+    bookingId?: StringFilter<"Payment"> | string
+    amount?: FloatFilter<"Payment"> | number
+    currency?: StringFilter<"Payment"> | string
+    stripePaymentIntentId?: StringNullableFilter<"Payment"> | string | null
+    stripeChargeId?: StringNullableFilter<"Payment"> | string | null
+    status?: EnumPaymentStatusFilter<"Payment"> | $Enums.PaymentStatus
+    failureReason?: StringNullableFilter<"Payment"> | string | null
+    processedAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    createdAt?: DateTimeFilter<"Payment"> | Date | string
+    updatedAt?: DateTimeFilter<"Payment"> | Date | string
+  }
+
   export type ConditionReportUpsertWithWhereUniqueWithoutBookingInput = {
     where: ConditionReportWhereUniqueInput
     update: XOR<ConditionReportUpdateWithoutBookingInput, ConditionReportUncheckedUpdateWithoutBookingInput>
@@ -65409,28 +67917,6 @@ export namespace Prisma {
   export type ConditionReportUpdateManyWithWhereWithoutBookingInput = {
     where: ConditionReportScalarWhereInput
     data: XOR<ConditionReportUpdateManyMutationInput, ConditionReportUncheckedUpdateManyWithoutBookingInput>
-  }
-
-  export type ConditionReportScalarWhereInput = {
-    AND?: ConditionReportScalarWhereInput | ConditionReportScalarWhereInput[]
-    OR?: ConditionReportScalarWhereInput[]
-    NOT?: ConditionReportScalarWhereInput | ConditionReportScalarWhereInput[]
-    id?: StringFilter<"ConditionReport"> | string
-    bookingId?: StringFilter<"ConditionReport"> | string
-    reportType?: EnumReportTypeFilter<"ConditionReport"> | $Enums.ReportType
-    reportedBy?: StringFilter<"ConditionReport"> | string
-    reportedAt?: DateTimeFilter<"ConditionReport"> | Date | string
-    checklistData?: JsonFilter<"ConditionReport">
-    overallCondition?: StringNullableFilter<"ConditionReport"> | string | null
-    notes?: StringNullableFilter<"ConditionReport"> | string | null
-    issuesFound?: BoolFilter<"ConditionReport"> | boolean
-    damageAmount?: FloatNullableFilter<"ConditionReport"> | number | null
-    acknowledgedBy?: StringNullableFilter<"ConditionReport"> | string | null
-    acknowledgedAt?: DateTimeNullableFilter<"ConditionReport"> | Date | string | null
-    disputeRaised?: BoolFilter<"ConditionReport"> | boolean
-    status?: EnumReportStatusFilter<"ConditionReport"> | $Enums.ReportStatus
-    createdAt?: DateTimeFilter<"ConditionReport"> | Date | string
-    completedAt?: DateTimeNullableFilter<"ConditionReport"> | Date | string | null
   }
 
   export type ReviewUpsertWithWhereUniqueWithoutBookingInput = {
@@ -65502,15 +67988,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -65533,6 +68022,7 @@ export namespace Prisma {
     owner: UserCreateNestedOneWithoutBookingsAsOwnerInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
@@ -65547,15 +68037,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -65575,6 +68068,7 @@ export namespace Prisma {
     confirmedAt?: Date | string | null
     completedAt?: Date | string | null
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
@@ -65602,15 +68096,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -65633,6 +68130,7 @@ export namespace Prisma {
     owner?: UserUpdateOneRequiredWithoutBookingsAsOwnerNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
@@ -65647,15 +68145,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -65675,6 +68176,7 @@ export namespace Prisma {
     confirmedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
@@ -65686,15 +68188,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -65717,6 +68222,7 @@ export namespace Prisma {
     owner: UserCreateNestedOneWithoutBookingsAsOwnerInput
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
@@ -65731,15 +68237,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -65759,6 +68268,7 @@ export namespace Prisma {
     confirmedAt?: Date | string | null
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
@@ -65786,15 +68296,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -65817,6 +68330,7 @@ export namespace Prisma {
     owner?: UserUpdateOneRequiredWithoutBookingsAsOwnerNestedInput
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
@@ -65831,15 +68345,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -65859,6 +68376,7 @@ export namespace Prisma {
     confirmedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
@@ -65870,15 +68388,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -65901,6 +68422,7 @@ export namespace Prisma {
     owner: UserCreateNestedOneWithoutBookingsAsOwnerInput
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
@@ -65915,15 +68437,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -65943,6 +68468,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
@@ -65975,20 +68501,23 @@ export namespace Prisma {
     data: XOR<BookingUpdateManyMutationInput, BookingUncheckedUpdateManyWithoutDepositHoldInput>
   }
 
-  export type BookingCreateWithoutReviewsInput = {
+  export type BookingCreateWithoutPaymentsInput = {
     id?: string
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -66013,11 +68542,12 @@ export namespace Prisma {
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
+    reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
     conversations?: ConversationCreateNestedManyWithoutBookingInput
   }
 
-  export type BookingUncheckedCreateWithoutReviewsInput = {
+  export type BookingUncheckedCreateWithoutPaymentsInput = {
     id?: string
     listingId: string
     renterId: string
@@ -66025,15 +68555,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -66054,6 +68587,207 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
+    reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
+    disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
+    conversations?: ConversationUncheckedCreateNestedManyWithoutBookingInput
+  }
+
+  export type BookingCreateOrConnectWithoutPaymentsInput = {
+    where: BookingWhereUniqueInput
+    create: XOR<BookingCreateWithoutPaymentsInput, BookingUncheckedCreateWithoutPaymentsInput>
+  }
+
+  export type BookingUpsertWithoutPaymentsInput = {
+    update: XOR<BookingUpdateWithoutPaymentsInput, BookingUncheckedUpdateWithoutPaymentsInput>
+    create: XOR<BookingCreateWithoutPaymentsInput, BookingUncheckedCreateWithoutPaymentsInput>
+    where?: BookingWhereInput
+  }
+
+  export type BookingUpdateToOneWithWhereWithoutPaymentsInput = {
+    where?: BookingWhereInput
+    data: XOR<BookingUpdateWithoutPaymentsInput, BookingUncheckedUpdateWithoutPaymentsInput>
+  }
+
+  export type BookingUpdateWithoutPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    startDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    endDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
+    basePrice?: FloatFieldUpdateOperationsInput | number
+    serviceFee?: FloatFieldUpdateOperationsInput | number
+    tax?: FloatFieldUpdateOperationsInput | number
+    depositAmount?: FloatFieldUpdateOperationsInput | number
+    discountAmount?: FloatFieldUpdateOperationsInput | number
+    totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    ownerEarnings?: FloatFieldUpdateOperationsInput | number
+    platformFee?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
+    cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    depositReleased?: BoolFieldUpdateOperationsInput | boolean
+    depositReleasedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkOutTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    actualReturnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    categoryData?: JsonNullValueInput | InputJsonValue
+    renterNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    ownerNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    confirmedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    listing?: ListingUpdateOneRequiredWithoutBookingsNestedInput
+    renter?: UserUpdateOneRequiredWithoutBookingsAsRenterNestedInput
+    owner?: UserUpdateOneRequiredWithoutBookingsAsOwnerNestedInput
+    stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
+    ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
+    depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
+    reviews?: ReviewUpdateManyWithoutBookingNestedInput
+    disputes?: DisputeUpdateManyWithoutBookingNestedInput
+    conversations?: ConversationUpdateManyWithoutBookingNestedInput
+  }
+
+  export type BookingUncheckedUpdateWithoutPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    listingId?: StringFieldUpdateOperationsInput | string
+    renterId?: StringFieldUpdateOperationsInput | string
+    ownerId?: StringFieldUpdateOperationsInput | string
+    startDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    endDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
+    basePrice?: FloatFieldUpdateOperationsInput | number
+    serviceFee?: FloatFieldUpdateOperationsInput | number
+    tax?: FloatFieldUpdateOperationsInput | number
+    depositAmount?: FloatFieldUpdateOperationsInput | number
+    discountAmount?: FloatFieldUpdateOperationsInput | number
+    totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    ownerEarnings?: FloatFieldUpdateOperationsInput | number
+    platformFee?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
+    cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    depositHoldId?: NullableStringFieldUpdateOperationsInput | string | null
+    depositReleased?: BoolFieldUpdateOperationsInput | boolean
+    depositReleasedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkInTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkOutTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    actualReturnTime?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    categoryData?: JsonNullValueInput | InputJsonValue
+    renterNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    ownerNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    confirmedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
+    ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
+    reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
+    disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
+    conversations?: ConversationUncheckedUpdateManyWithoutBookingNestedInput
+  }
+
+  export type BookingCreateWithoutReviewsInput = {
+    id?: string
+    startDate: Date | string
+    endDate: Date | string
+    duration: number
+    guestCount?: number
+    basePrice: number
+    serviceFee: number
+    tax: number
+    depositAmount?: number
+    discountAmount?: number
+    totalPrice: number
+    totalAmount: number
+    ownerEarnings: number
+    platformFee: number
+    currency?: string
+    renterMessage?: string | null
+    status?: $Enums.BookingStatus
+    cancellationReason?: string | null
+    cancelledBy?: string | null
+    cancelledAt?: Date | string | null
+    paymentIntentId?: string | null
+    depositReleased?: boolean
+    depositReleasedAt?: Date | string | null
+    checkInTime?: Date | string | null
+    checkOutTime?: Date | string | null
+    actualReturnTime?: Date | string | null
+    categoryData?: JsonNullValueInput | InputJsonValue
+    renterNotes?: string | null
+    ownerNotes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    confirmedAt?: Date | string | null
+    completedAt?: Date | string | null
+    listing: ListingCreateNestedOneWithoutBookingsInput
+    renter: UserCreateNestedOneWithoutBookingsAsRenterInput
+    owner: UserCreateNestedOneWithoutBookingsAsOwnerInput
+    stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
+    ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
+    depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
+    conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
+    disputes?: DisputeCreateNestedManyWithoutBookingInput
+    conversations?: ConversationCreateNestedManyWithoutBookingInput
+  }
+
+  export type BookingUncheckedCreateWithoutReviewsInput = {
+    id?: string
+    listingId: string
+    renterId: string
+    ownerId: string
+    startDate: Date | string
+    endDate: Date | string
+    duration: number
+    guestCount?: number
+    basePrice: number
+    serviceFee: number
+    tax: number
+    depositAmount?: number
+    discountAmount?: number
+    totalPrice: number
+    totalAmount: number
+    ownerEarnings: number
+    platformFee: number
+    currency?: string
+    renterMessage?: string | null
+    status?: $Enums.BookingStatus
+    cancellationReason?: string | null
+    cancelledBy?: string | null
+    cancelledAt?: Date | string | null
+    paymentIntentId?: string | null
+    depositHoldId?: string | null
+    depositReleased?: boolean
+    depositReleasedAt?: Date | string | null
+    checkInTime?: Date | string | null
+    checkOutTime?: Date | string | null
+    actualReturnTime?: Date | string | null
+    categoryData?: JsonNullValueInput | InputJsonValue
+    renterNotes?: string | null
+    ownerNotes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    confirmedAt?: Date | string | null
+    completedAt?: Date | string | null
+    stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
+    ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
     conversations?: ConversationUncheckedCreateNestedManyWithoutBookingInput
@@ -66212,6 +68946,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -66230,6 +68965,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -66265,6 +69002,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutReviewsGivenInput = {
@@ -66276,6 +69014,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -66294,6 +69033,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -66329,6 +69070,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutReviewsGivenInput = {
@@ -66345,6 +69087,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -66363,6 +69106,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -66398,6 +69143,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutReviewsReceivedInput = {
@@ -66409,6 +69155,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -66427,6 +69174,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -66462,6 +69211,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutReviewsReceivedInput = {
@@ -66485,15 +69235,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -66517,6 +69270,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
     conversations?: ConversationUpdateManyWithoutBookingNestedInput
@@ -66530,15 +69284,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -66559,6 +69316,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
     conversations?: ConversationUncheckedUpdateManyWithoutBookingNestedInput
@@ -66729,6 +69487,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -66747,6 +69506,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -66782,6 +69543,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutReviewsGivenInput = {
@@ -66793,6 +69555,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -66811,6 +69574,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -66846,6 +69611,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUpsertWithoutReviewsReceivedInput = {
@@ -66868,6 +69634,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -66886,6 +69653,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -66921,6 +69690,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutReviewsReceivedInput = {
@@ -66932,6 +69702,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -66950,6 +69721,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -66985,6 +69758,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type BookingCreateWithoutConversationsInput = {
@@ -66992,15 +69766,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -67024,6 +69801,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
@@ -67037,15 +69815,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -67066,6 +69847,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
@@ -67156,15 +69938,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67188,6 +69973,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
@@ -67201,15 +69987,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67230,6 +70019,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
@@ -67309,6 +70099,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -67327,6 +70118,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -67362,6 +70155,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutConversationParticipantsInput = {
@@ -67373,6 +70167,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -67391,6 +70186,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -67426,6 +70223,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutConversationParticipantsInput = {
@@ -67492,6 +70290,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67510,6 +70309,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -67545,6 +70346,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutConversationParticipantsInput = {
@@ -67556,6 +70358,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67574,6 +70377,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -67609,6 +70414,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type ConversationCreateWithoutMessagesInput = {
@@ -67653,6 +70459,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -67671,6 +70478,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -67706,6 +70515,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutMessagesInput = {
@@ -67717,6 +70527,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -67735,6 +70546,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -67770,6 +70583,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutMessagesInput = {
@@ -67858,6 +70672,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67876,6 +70691,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -67911,6 +70728,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutMessagesInput = {
@@ -67922,6 +70740,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67940,6 +70759,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -67975,6 +70796,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type MessageReadReceiptUpsertWithWhereUniqueWithoutMessageInput = {
@@ -68112,15 +70934,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -68144,6 +70969,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     disputes?: DisputeCreateNestedManyWithoutBookingInput
     conversations?: ConversationCreateNestedManyWithoutBookingInput
@@ -68157,15 +70983,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -68186,6 +71015,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     disputes?: DisputeUncheckedCreateNestedManyWithoutBookingInput
     conversations?: ConversationUncheckedCreateNestedManyWithoutBookingInput
@@ -68194,6 +71024,147 @@ export namespace Prisma {
   export type BookingCreateOrConnectWithoutConditionReportsInput = {
     where: BookingWhereUniqueInput
     create: XOR<BookingCreateWithoutConditionReportsInput, BookingUncheckedCreateWithoutConditionReportsInput>
+  }
+
+  export type UserCreateWithoutConditionReportsReportedInput = {
+    id?: string
+    email: string
+    emailVerified?: boolean
+    emailVerificationToken?: string | null
+    passwordHash: string
+    firstName: string
+    lastName: string
+    phoneNumber?: string | null
+    phone?: string | null
+    phoneVerified?: boolean
+    dateOfBirth?: Date | string | null
+    profilePhotoUrl?: string | null
+    bio?: string | null
+    addressLine1?: string | null
+    addressLine2?: string | null
+    city?: string | null
+    state?: string | null
+    postalCode?: string | null
+    country?: string | null
+    idVerificationStatus?: $Enums.VerificationStatus
+    idVerificationUrl?: string | null
+    governmentIdUrl?: string | null
+    governmentIdType?: $Enums.GovernmentIdType | null
+    governmentIdNumber?: string | null
+    stripeCustomerId?: string | null
+    stripeConnectId?: string | null
+    stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
+    role?: $Enums.UserRole
+    status?: $Enums.UserStatus
+    preferredLanguage?: string
+    preferredCurrency?: string
+    timezone?: string
+    mfaEnabled?: boolean
+    mfaSecret?: string | null
+    passwordResetToken?: string | null
+    passwordResetExpires?: Date | string | null
+    lastLoginAt?: Date | string | null
+    lastLoginIp?: string | null
+    averageRating?: number
+    totalReviews?: number
+    responseRate?: number
+    responseTime?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    deletedAt?: Date | string | null
+    sessions?: SessionCreateNestedManyWithoutUserInput
+    listings?: ListingCreateNestedManyWithoutOwnerInput
+    bookingsAsRenter?: BookingCreateNestedManyWithoutRenterInput
+    bookingsAsOwner?: BookingCreateNestedManyWithoutOwnerInput
+    reviewsGiven?: ReviewCreateNestedManyWithoutReviewerInput
+    reviewsReceived?: ReviewCreateNestedManyWithoutRevieweeInput
+    conversationParticipants?: ConversationParticipantCreateNestedManyWithoutUserInput
+    messages?: MessageCreateNestedManyWithoutSenderInput
+    auditLogs?: AuditLogCreateNestedManyWithoutUserInput
+    disputesInitiated?: DisputeCreateNestedManyWithoutInitiatorInput
+    disputesDefended?: DisputeCreateNestedManyWithoutDefendantInput
+    disputeResponses?: DisputeResponseCreateNestedManyWithoutUserInput
+    organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
+    favoriteListings?: FavoriteListingCreateNestedManyWithoutUserInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
+    deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
+    userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+  }
+
+  export type UserUncheckedCreateWithoutConditionReportsReportedInput = {
+    id?: string
+    email: string
+    emailVerified?: boolean
+    emailVerificationToken?: string | null
+    passwordHash: string
+    firstName: string
+    lastName: string
+    phoneNumber?: string | null
+    phone?: string | null
+    phoneVerified?: boolean
+    dateOfBirth?: Date | string | null
+    profilePhotoUrl?: string | null
+    bio?: string | null
+    addressLine1?: string | null
+    addressLine2?: string | null
+    city?: string | null
+    state?: string | null
+    postalCode?: string | null
+    country?: string | null
+    idVerificationStatus?: $Enums.VerificationStatus
+    idVerificationUrl?: string | null
+    governmentIdUrl?: string | null
+    governmentIdType?: $Enums.GovernmentIdType | null
+    governmentIdNumber?: string | null
+    stripeCustomerId?: string | null
+    stripeConnectId?: string | null
+    stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
+    role?: $Enums.UserRole
+    status?: $Enums.UserStatus
+    preferredLanguage?: string
+    preferredCurrency?: string
+    timezone?: string
+    mfaEnabled?: boolean
+    mfaSecret?: string | null
+    passwordResetToken?: string | null
+    passwordResetExpires?: Date | string | null
+    lastLoginAt?: Date | string | null
+    lastLoginIp?: string | null
+    averageRating?: number
+    totalReviews?: number
+    responseRate?: number
+    responseTime?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    deletedAt?: Date | string | null
+    sessions?: SessionUncheckedCreateNestedManyWithoutUserInput
+    listings?: ListingUncheckedCreateNestedManyWithoutOwnerInput
+    bookingsAsRenter?: BookingUncheckedCreateNestedManyWithoutRenterInput
+    bookingsAsOwner?: BookingUncheckedCreateNestedManyWithoutOwnerInput
+    reviewsGiven?: ReviewUncheckedCreateNestedManyWithoutReviewerInput
+    reviewsReceived?: ReviewUncheckedCreateNestedManyWithoutRevieweeInput
+    conversationParticipants?: ConversationParticipantUncheckedCreateNestedManyWithoutUserInput
+    messages?: MessageUncheckedCreateNestedManyWithoutSenderInput
+    auditLogs?: AuditLogUncheckedCreateNestedManyWithoutUserInput
+    disputesInitiated?: DisputeUncheckedCreateNestedManyWithoutInitiatorInput
+    disputesDefended?: DisputeUncheckedCreateNestedManyWithoutDefendantInput
+    disputeResponses?: DisputeResponseUncheckedCreateNestedManyWithoutUserInput
+    organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
+    favoriteListings?: FavoriteListingUncheckedCreateNestedManyWithoutUserInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
+    deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
+    userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+  }
+
+  export type UserCreateOrConnectWithoutConditionReportsReportedInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutConditionReportsReportedInput, UserUncheckedCreateWithoutConditionReportsReportedInput>
   }
 
   export type DisputeCreateWithoutConditionReportInput = {
@@ -68298,15 +71269,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -68330,6 +71304,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
     conversations?: ConversationUpdateManyWithoutBookingNestedInput
@@ -68343,15 +71318,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -68372,9 +71350,157 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
     conversations?: ConversationUncheckedUpdateManyWithoutBookingNestedInput
+  }
+
+  export type UserUpsertWithoutConditionReportsReportedInput = {
+    update: XOR<UserUpdateWithoutConditionReportsReportedInput, UserUncheckedUpdateWithoutConditionReportsReportedInput>
+    create: XOR<UserCreateWithoutConditionReportsReportedInput, UserUncheckedCreateWithoutConditionReportsReportedInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutConditionReportsReportedInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutConditionReportsReportedInput, UserUncheckedUpdateWithoutConditionReportsReportedInput>
+  }
+
+  export type UserUpdateWithoutConditionReportsReportedInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    emailVerified?: BoolFieldUpdateOperationsInput | boolean
+    emailVerificationToken?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    firstName?: StringFieldUpdateOperationsInput | string
+    lastName?: StringFieldUpdateOperationsInput | string
+    phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    phoneVerified?: BoolFieldUpdateOperationsInput | boolean
+    dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
+    addressLine2?: NullableStringFieldUpdateOperationsInput | string | null
+    city?: NullableStringFieldUpdateOperationsInput | string | null
+    state?: NullableStringFieldUpdateOperationsInput | string | null
+    postalCode?: NullableStringFieldUpdateOperationsInput | string | null
+    country?: NullableStringFieldUpdateOperationsInput | string | null
+    idVerificationStatus?: EnumVerificationStatusFieldUpdateOperationsInput | $Enums.VerificationStatus
+    idVerificationUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    governmentIdUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    governmentIdType?: NullableEnumGovernmentIdTypeFieldUpdateOperationsInput | $Enums.GovernmentIdType | null
+    governmentIdNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
+    role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+    status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
+    preferredLanguage?: StringFieldUpdateOperationsInput | string
+    preferredCurrency?: StringFieldUpdateOperationsInput | string
+    timezone?: StringFieldUpdateOperationsInput | string
+    mfaEnabled?: BoolFieldUpdateOperationsInput | boolean
+    mfaSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordResetToken?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordResetExpires?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastLoginIp?: NullableStringFieldUpdateOperationsInput | string | null
+    averageRating?: FloatFieldUpdateOperationsInput | number
+    totalReviews?: IntFieldUpdateOperationsInput | number
+    responseRate?: FloatFieldUpdateOperationsInput | number
+    responseTime?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sessions?: SessionUpdateManyWithoutUserNestedInput
+    listings?: ListingUpdateManyWithoutOwnerNestedInput
+    bookingsAsRenter?: BookingUpdateManyWithoutRenterNestedInput
+    bookingsAsOwner?: BookingUpdateManyWithoutOwnerNestedInput
+    reviewsGiven?: ReviewUpdateManyWithoutReviewerNestedInput
+    reviewsReceived?: ReviewUpdateManyWithoutRevieweeNestedInput
+    conversationParticipants?: ConversationParticipantUpdateManyWithoutUserNestedInput
+    messages?: MessageUpdateManyWithoutSenderNestedInput
+    auditLogs?: AuditLogUpdateManyWithoutUserNestedInput
+    disputesInitiated?: DisputeUpdateManyWithoutInitiatorNestedInput
+    disputesDefended?: DisputeUpdateManyWithoutDefendantNestedInput
+    disputeResponses?: DisputeResponseUpdateManyWithoutUserNestedInput
+    organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
+    favoriteListings?: FavoriteListingUpdateManyWithoutUserNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
+    deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
+    userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutConditionReportsReportedInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    emailVerified?: BoolFieldUpdateOperationsInput | boolean
+    emailVerificationToken?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: StringFieldUpdateOperationsInput | string
+    firstName?: StringFieldUpdateOperationsInput | string
+    lastName?: StringFieldUpdateOperationsInput | string
+    phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    phoneVerified?: BoolFieldUpdateOperationsInput | boolean
+    dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    addressLine1?: NullableStringFieldUpdateOperationsInput | string | null
+    addressLine2?: NullableStringFieldUpdateOperationsInput | string | null
+    city?: NullableStringFieldUpdateOperationsInput | string | null
+    state?: NullableStringFieldUpdateOperationsInput | string | null
+    postalCode?: NullableStringFieldUpdateOperationsInput | string | null
+    country?: NullableStringFieldUpdateOperationsInput | string | null
+    idVerificationStatus?: EnumVerificationStatusFieldUpdateOperationsInput | $Enums.VerificationStatus
+    idVerificationUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    governmentIdUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    governmentIdType?: NullableEnumGovernmentIdTypeFieldUpdateOperationsInput | $Enums.GovernmentIdType | null
+    governmentIdNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
+    role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+    status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
+    preferredLanguage?: StringFieldUpdateOperationsInput | string
+    preferredCurrency?: StringFieldUpdateOperationsInput | string
+    timezone?: StringFieldUpdateOperationsInput | string
+    mfaEnabled?: BoolFieldUpdateOperationsInput | boolean
+    mfaSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordResetToken?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordResetExpires?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastLoginIp?: NullableStringFieldUpdateOperationsInput | string | null
+    averageRating?: FloatFieldUpdateOperationsInput | number
+    totalReviews?: IntFieldUpdateOperationsInput | number
+    responseRate?: FloatFieldUpdateOperationsInput | number
+    responseTime?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sessions?: SessionUncheckedUpdateManyWithoutUserNestedInput
+    listings?: ListingUncheckedUpdateManyWithoutOwnerNestedInput
+    bookingsAsRenter?: BookingUncheckedUpdateManyWithoutRenterNestedInput
+    bookingsAsOwner?: BookingUncheckedUpdateManyWithoutOwnerNestedInput
+    reviewsGiven?: ReviewUncheckedUpdateManyWithoutReviewerNestedInput
+    reviewsReceived?: ReviewUncheckedUpdateManyWithoutRevieweeNestedInput
+    conversationParticipants?: ConversationParticipantUncheckedUpdateManyWithoutUserNestedInput
+    messages?: MessageUncheckedUpdateManyWithoutSenderNestedInput
+    auditLogs?: AuditLogUncheckedUpdateManyWithoutUserNestedInput
+    disputesInitiated?: DisputeUncheckedUpdateManyWithoutInitiatorNestedInput
+    disputesDefended?: DisputeUncheckedUpdateManyWithoutDefendantNestedInput
+    disputeResponses?: DisputeResponseUncheckedUpdateManyWithoutUserNestedInput
+    organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
+    favoriteListings?: FavoriteListingUncheckedUpdateManyWithoutUserNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
+    deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
+    userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
   }
 
   export type DisputeUpsertWithoutConditionReportInput = {
@@ -68441,11 +71567,13 @@ export namespace Prisma {
   export type ConditionReportCreateWithoutPhotosInput = {
     id?: string
     reportType: $Enums.ReportType
-    reportedBy: string
+    type: $Enums.ReportType
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -68455,6 +71583,7 @@ export namespace Prisma {
     createdAt?: Date | string
     completedAt?: Date | string | null
     booking: BookingCreateNestedOneWithoutConditionReportsInput
+    reportedByUser: UserCreateNestedOneWithoutConditionReportsReportedInput
     dispute?: DisputeCreateNestedOneWithoutConditionReportInput
   }
 
@@ -68462,11 +71591,14 @@ export namespace Prisma {
     id?: string
     bookingId: string
     reportType: $Enums.ReportType
+    type: $Enums.ReportType
     reportedBy: string
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -68497,11 +71629,13 @@ export namespace Prisma {
   export type ConditionReportUpdateWithoutPhotosInput = {
     id?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
-    reportedBy?: StringFieldUpdateOperationsInput | string
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -68511,6 +71645,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     booking?: BookingUpdateOneRequiredWithoutConditionReportsNestedInput
+    reportedByUser?: UserUpdateOneRequiredWithoutConditionReportsReportedNestedInput
     dispute?: DisputeUpdateOneWithoutConditionReportNestedInput
   }
 
@@ -68518,11 +71653,14 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     bookingId?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedBy?: StringFieldUpdateOperationsInput | string
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -68566,15 +71704,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -68598,6 +71739,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryCreateNestedManyWithoutBookingInput
     depositHold?: DepositHoldCreateNestedOneWithoutBookingsInput
+    payments?: PaymentCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportCreateNestedManyWithoutBookingInput
     reviews?: ReviewCreateNestedManyWithoutBookingInput
     conversations?: ConversationCreateNestedManyWithoutBookingInput
@@ -68611,15 +71753,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -68640,6 +71785,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     stateHistory?: BookingStateHistoryUncheckedCreateNestedManyWithoutBookingInput
     ledgerEntries?: LedgerEntryUncheckedCreateNestedManyWithoutBookingInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutBookingInput
     conditionReports?: ConditionReportUncheckedCreateNestedManyWithoutBookingInput
     reviews?: ReviewUncheckedCreateNestedManyWithoutBookingInput
     conversations?: ConversationUncheckedCreateNestedManyWithoutBookingInput
@@ -68653,11 +71799,13 @@ export namespace Prisma {
   export type ConditionReportCreateWithoutDisputeInput = {
     id?: string
     reportType: $Enums.ReportType
-    reportedBy: string
+    type: $Enums.ReportType
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -68668,17 +71816,21 @@ export namespace Prisma {
     completedAt?: Date | string | null
     photos?: ReportPhotoCreateNestedManyWithoutReportInput
     booking: BookingCreateNestedOneWithoutConditionReportsInput
+    reportedByUser: UserCreateNestedOneWithoutConditionReportsReportedInput
   }
 
   export type ConditionReportUncheckedCreateWithoutDisputeInput = {
     id?: string
     bookingId: string
     reportType: $Enums.ReportType
+    type: $Enums.ReportType
     reportedBy: string
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -68704,6 +71856,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -68722,6 +71875,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -68757,6 +71912,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutDisputesInitiatedInput = {
@@ -68768,6 +71924,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -68786,6 +71943,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -68821,6 +71980,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutDisputesInitiatedInput = {
@@ -68837,6 +71997,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -68855,6 +72016,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -68890,6 +72053,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutDisputesDefendedInput = {
@@ -68901,6 +72065,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -68919,6 +72084,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -68954,6 +72121,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutDisputesDefendedInput = {
@@ -69092,15 +72260,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69124,6 +72295,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     conversations?: ConversationUpdateManyWithoutBookingNestedInput
@@ -69137,15 +72309,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69166,6 +72341,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     conversations?: ConversationUncheckedUpdateManyWithoutBookingNestedInput
@@ -69185,11 +72361,13 @@ export namespace Prisma {
   export type ConditionReportUpdateWithoutDisputeInput = {
     id?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
-    reportedBy?: StringFieldUpdateOperationsInput | string
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69200,17 +72378,21 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     photos?: ReportPhotoUpdateManyWithoutReportNestedInput
     booking?: BookingUpdateOneRequiredWithoutConditionReportsNestedInput
+    reportedByUser?: UserUpdateOneRequiredWithoutConditionReportsReportedNestedInput
   }
 
   export type ConditionReportUncheckedUpdateWithoutDisputeInput = {
     id?: StringFieldUpdateOperationsInput | string
     bookingId?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedBy?: StringFieldUpdateOperationsInput | string
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69242,6 +72424,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69260,6 +72443,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -69295,6 +72480,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutDisputesInitiatedInput = {
@@ -69306,6 +72492,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69324,6 +72511,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -69359,6 +72548,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUpsertWithoutDisputesDefendedInput = {
@@ -69381,6 +72571,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69399,6 +72590,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -69434,6 +72627,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutDisputesDefendedInput = {
@@ -69445,6 +72639,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69463,6 +72658,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -69498,6 +72695,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type DisputeResponseUpsertWithWhereUniqueWithoutDisputeInput = {
@@ -69638,6 +72836,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -69656,6 +72855,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -69691,6 +72892,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutDisputeResponsesInput = {
@@ -69702,6 +72904,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -69720,6 +72923,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -69755,6 +72960,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutDisputeResponsesInput = {
@@ -69843,6 +73049,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69861,6 +73068,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -69896,6 +73105,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutDisputeResponsesInput = {
@@ -69907,6 +73117,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69925,6 +73136,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -69960,6 +73173,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type DisputeCreateWithoutEvidenceInput = {
@@ -70319,6 +73533,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -70337,6 +73552,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -70372,6 +73589,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutNotificationsInput = {
@@ -70383,6 +73601,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -70401,6 +73620,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -70436,6 +73657,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutNotificationsInput = {
@@ -70463,6 +73685,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70481,6 +73704,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -70516,6 +73741,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutNotificationsInput = {
@@ -70527,6 +73753,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70545,6 +73772,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -70580,6 +73809,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserCreateWithoutAuditLogsInput = {
@@ -70591,6 +73821,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -70609,6 +73840,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -70644,6 +73877,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutAuditLogsInput = {
@@ -70655,6 +73889,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -70673,6 +73908,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -70708,6 +73945,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutAuditLogsInput = {
@@ -70735,6 +73973,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70753,6 +73992,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -70788,6 +74029,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutAuditLogsInput = {
@@ -70799,6 +74041,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70817,6 +74060,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -70852,6 +74097,7 @@ export namespace Prisma {
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserCreateWithoutInsurancePoliciesInput = {
@@ -70863,6 +74109,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -70881,6 +74128,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -70916,6 +74165,7 @@ export namespace Prisma {
     notifications?: NotificationCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutInsurancePoliciesInput = {
@@ -70927,6 +74177,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -70945,6 +74196,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -70980,6 +74233,7 @@ export namespace Prisma {
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutInsurancePoliciesInput = {
@@ -71146,6 +74400,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71164,6 +74419,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -71199,6 +74456,7 @@ export namespace Prisma {
     notifications?: NotificationUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutInsurancePoliciesInput = {
@@ -71210,6 +74468,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71228,6 +74487,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -71263,6 +74524,7 @@ export namespace Prisma {
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type ListingUpsertWithoutInsurancePoliciesInput = {
@@ -71419,6 +74681,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -71437,6 +74700,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -71472,6 +74737,7 @@ export namespace Prisma {
     notifications?: NotificationCreateNestedManyWithoutUserInput
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutDeviceTokensInput = {
@@ -71483,6 +74749,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -71501,6 +74768,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -71536,6 +74805,7 @@ export namespace Prisma {
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     userPreferences?: UserPreferencesUncheckedCreateNestedOneWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutDeviceTokensInput = {
@@ -71563,6 +74833,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71581,6 +74852,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -71616,6 +74889,7 @@ export namespace Prisma {
     notifications?: NotificationUpdateManyWithoutUserNestedInput
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutDeviceTokensInput = {
@@ -71627,6 +74901,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71645,6 +74920,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -71680,6 +74957,7 @@ export namespace Prisma {
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     userPreferences?: UserPreferencesUncheckedUpdateOneWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserCreateWithoutUserPreferencesInput = {
@@ -71691,6 +74969,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -71709,6 +74988,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -71744,6 +75025,7 @@ export namespace Prisma {
     notifications?: NotificationCreateNestedManyWithoutUserInput
     insurancePolicies?: InsurancePolicyCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenCreateNestedManyWithoutUserInput
+    conditionReportsReported?: ConditionReportCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserUncheckedCreateWithoutUserPreferencesInput = {
@@ -71755,6 +75037,7 @@ export namespace Prisma {
     firstName: string
     lastName: string
     phoneNumber?: string | null
+    phone?: string | null
     phoneVerified?: boolean
     dateOfBirth?: Date | string | null
     profilePhotoUrl?: string | null
@@ -71773,6 +75056,8 @@ export namespace Prisma {
     stripeCustomerId?: string | null
     stripeConnectId?: string | null
     stripeOnboardingComplete?: boolean
+    stripeChargesEnabled?: boolean
+    stripePayoutsEnabled?: boolean
     role?: $Enums.UserRole
     status?: $Enums.UserStatus
     preferredLanguage?: string
@@ -71808,6 +75093,7 @@ export namespace Prisma {
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
     insurancePolicies?: InsurancePolicyUncheckedCreateNestedManyWithoutUserInput
     deviceTokens?: DeviceTokenUncheckedCreateNestedManyWithoutUserInput
+    conditionReportsReported?: ConditionReportUncheckedCreateNestedManyWithoutReportedByUserInput
   }
 
   export type UserCreateOrConnectWithoutUserPreferencesInput = {
@@ -71835,6 +75121,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71853,6 +75140,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -71888,6 +75177,7 @@ export namespace Prisma {
     notifications?: NotificationUpdateManyWithoutUserNestedInput
     insurancePolicies?: InsurancePolicyUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUpdateManyWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutUserPreferencesInput = {
@@ -71899,6 +75189,7 @@ export namespace Prisma {
     firstName?: StringFieldUpdateOperationsInput | string
     lastName?: StringFieldUpdateOperationsInput | string
     phoneNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
     phoneVerified?: BoolFieldUpdateOperationsInput | boolean
     dateOfBirth?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     profilePhotoUrl?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71917,6 +75208,8 @@ export namespace Prisma {
     stripeCustomerId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeConnectId?: NullableStringFieldUpdateOperationsInput | string | null
     stripeOnboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    stripeChargesEnabled?: BoolFieldUpdateOperationsInput | boolean
+    stripePayoutsEnabled?: BoolFieldUpdateOperationsInput | boolean
     role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
     status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
     preferredLanguage?: StringFieldUpdateOperationsInput | string
@@ -71952,6 +75245,7 @@ export namespace Prisma {
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
     insurancePolicies?: InsurancePolicyUncheckedUpdateManyWithoutUserNestedInput
     deviceTokens?: DeviceTokenUncheckedUpdateManyWithoutUserNestedInput
+    conditionReportsReported?: ConditionReportUncheckedUpdateManyWithoutReportedByUserNestedInput
   }
 
   export type SessionCreateManyUserInput = {
@@ -72033,15 +75327,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -72069,15 +75366,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -72257,6 +75557,7 @@ export namespace Prisma {
     actionLabel?: string | null
     read?: boolean
     readAt?: Date | string | null
+    status?: string | null
     sentViaEmail?: boolean
     sentViaPush?: boolean
     createdAt?: Date | string
@@ -72289,6 +75590,27 @@ export namespace Prisma {
     active?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+  }
+
+  export type ConditionReportCreateManyReportedByUserInput = {
+    id?: string
+    bookingId: string
+    reportType: $Enums.ReportType
+    type: $Enums.ReportType
+    reportedAt?: Date | string
+    checklistData: JsonNullValueInput | InputJsonValue
+    overallCondition?: string | null
+    condition?: string | null
+    notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
+    issuesFound?: boolean
+    damageAmount?: number | null
+    acknowledgedBy?: string | null
+    acknowledgedAt?: Date | string | null
+    disputeRaised?: boolean
+    status?: $Enums.ReportStatus
+    createdAt?: Date | string
+    completedAt?: Date | string | null
   }
 
   export type SessionUpdateWithoutUserInput = {
@@ -72522,15 +75844,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -72553,6 +75878,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
@@ -72566,15 +75892,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -72595,6 +75924,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
@@ -72608,15 +75938,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -72642,15 +75975,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -72673,6 +76009,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
@@ -72686,15 +76023,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -72715,6 +76055,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
@@ -72728,15 +76069,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -73228,6 +76572,7 @@ export namespace Prisma {
     actionLabel?: NullableStringFieldUpdateOperationsInput | string | null
     read?: BoolFieldUpdateOperationsInput | boolean
     readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: NullableStringFieldUpdateOperationsInput | string | null
     sentViaEmail?: BoolFieldUpdateOperationsInput | boolean
     sentViaPush?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -73245,6 +76590,7 @@ export namespace Prisma {
     actionLabel?: NullableStringFieldUpdateOperationsInput | string | null
     read?: BoolFieldUpdateOperationsInput | boolean
     readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: NullableStringFieldUpdateOperationsInput | string | null
     sentViaEmail?: BoolFieldUpdateOperationsInput | boolean
     sentViaPush?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -73262,6 +76608,7 @@ export namespace Prisma {
     actionLabel?: NullableStringFieldUpdateOperationsInput | string | null
     read?: BoolFieldUpdateOperationsInput | boolean
     readAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: NullableStringFieldUpdateOperationsInput | string | null
     sentViaEmail?: BoolFieldUpdateOperationsInput | boolean
     sentViaPush?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -73352,6 +76699,73 @@ export namespace Prisma {
     active?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ConditionReportUpdateWithoutReportedByUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    checklistData?: JsonNullValueInput | InputJsonValue
+    overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
+    issuesFound?: BoolFieldUpdateOperationsInput | boolean
+    damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    disputeRaised?: BoolFieldUpdateOperationsInput | boolean
+    status?: EnumReportStatusFieldUpdateOperationsInput | $Enums.ReportStatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    photos?: ReportPhotoUpdateManyWithoutReportNestedInput
+    booking?: BookingUpdateOneRequiredWithoutConditionReportsNestedInput
+    dispute?: DisputeUpdateOneWithoutConditionReportNestedInput
+  }
+
+  export type ConditionReportUncheckedUpdateWithoutReportedByUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bookingId?: StringFieldUpdateOperationsInput | string
+    reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    checklistData?: JsonNullValueInput | InputJsonValue
+    overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
+    issuesFound?: BoolFieldUpdateOperationsInput | boolean
+    damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    disputeRaised?: BoolFieldUpdateOperationsInput | boolean
+    status?: EnumReportStatusFieldUpdateOperationsInput | $Enums.ReportStatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    photos?: ReportPhotoUncheckedUpdateManyWithoutReportNestedInput
+    dispute?: DisputeUncheckedUpdateOneWithoutConditionReportNestedInput
+  }
+
+  export type ConditionReportUncheckedUpdateManyWithoutReportedByUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bookingId?: StringFieldUpdateOperationsInput | string
+    reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    checklistData?: JsonNullValueInput | InputJsonValue
+    overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
+    issuesFound?: BoolFieldUpdateOperationsInput | boolean
+    damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    disputeRaised?: BoolFieldUpdateOperationsInput | boolean
+    status?: EnumReportStatusFieldUpdateOperationsInput | $Enums.ReportStatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
   export type OrganizationMemberCreateManyOrganizationInput = {
@@ -73923,15 +77337,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -74037,15 +77454,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -74068,6 +77488,7 @@ export namespace Prisma {
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
     depositHold?: DepositHoldUpdateOneWithoutBookingsNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
@@ -74081,15 +77502,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -74110,6 +77534,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
@@ -74123,15 +77548,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -74585,14 +78013,30 @@ export namespace Prisma {
     settledAt?: Date | string | null
   }
 
+  export type PaymentCreateManyBookingInput = {
+    id?: string
+    amount: number
+    currency?: string
+    stripePaymentIntentId?: string | null
+    stripeChargeId?: string | null
+    status?: $Enums.PaymentStatus
+    failureReason?: string | null
+    processedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
   export type ConditionReportCreateManyBookingInput = {
     id?: string
     reportType: $Enums.ReportType
+    type: $Enums.ReportType
     reportedBy: string
     reportedAt?: Date | string
     checklistData: JsonNullValueInput | InputJsonValue
     overallCondition?: string | null
+    condition?: string | null
     notes?: string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: boolean
     damageAmount?: number | null
     acknowledgedBy?: string | null
@@ -74735,14 +78179,55 @@ export namespace Prisma {
     settledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
+  export type PaymentUpdateWithoutBookingInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    amount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    stripePaymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeChargeId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    failureReason?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUncheckedUpdateWithoutBookingInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    amount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    stripePaymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeChargeId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    failureReason?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUncheckedUpdateManyWithoutBookingInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    amount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    stripePaymentIntentId?: NullableStringFieldUpdateOperationsInput | string | null
+    stripeChargeId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    failureReason?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type ConditionReportUpdateWithoutBookingInput = {
     id?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
-    reportedBy?: StringFieldUpdateOperationsInput | string
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -74752,17 +78237,21 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     photos?: ReportPhotoUpdateManyWithoutReportNestedInput
+    reportedByUser?: UserUpdateOneRequiredWithoutConditionReportsReportedNestedInput
     dispute?: DisputeUpdateOneWithoutConditionReportNestedInput
   }
 
   export type ConditionReportUncheckedUpdateWithoutBookingInput = {
     id?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedBy?: StringFieldUpdateOperationsInput | string
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -74778,11 +78267,14 @@ export namespace Prisma {
   export type ConditionReportUncheckedUpdateManyWithoutBookingInput = {
     id?: StringFieldUpdateOperationsInput | string
     reportType?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
+    type?: EnumReportTypeFieldUpdateOperationsInput | $Enums.ReportType
     reportedBy?: StringFieldUpdateOperationsInput | string
     reportedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     checklistData?: JsonNullValueInput | InputJsonValue
     overallCondition?: NullableStringFieldUpdateOperationsInput | string | null
+    condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    damages?: NullableJsonNullValueInput | InputJsonValue
     issuesFound?: BoolFieldUpdateOperationsInput | boolean
     damageAmount?: NullableFloatFieldUpdateOperationsInput | number | null
     acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -74984,15 +78476,18 @@ export namespace Prisma {
     startDate: Date | string
     endDate: Date | string
     duration: number
+    guestCount?: number
     basePrice: number
     serviceFee: number
     tax: number
     depositAmount?: number
     discountAmount?: number
     totalPrice: number
+    totalAmount: number
     ownerEarnings: number
     platformFee: number
     currency?: string
+    renterMessage?: string | null
     status?: $Enums.BookingStatus
     cancellationReason?: string | null
     cancelledBy?: string | null
@@ -75017,15 +78512,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -75048,6 +78546,7 @@ export namespace Prisma {
     owner?: UserUpdateOneRequiredWithoutBookingsAsOwnerNestedInput
     stateHistory?: BookingStateHistoryUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUpdateManyWithoutBookingNestedInput
@@ -75062,15 +78561,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
@@ -75090,6 +78592,7 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stateHistory?: BookingStateHistoryUncheckedUpdateManyWithoutBookingNestedInput
     ledgerEntries?: LedgerEntryUncheckedUpdateManyWithoutBookingNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutBookingNestedInput
     conditionReports?: ConditionReportUncheckedUpdateManyWithoutBookingNestedInput
     reviews?: ReviewUncheckedUpdateManyWithoutBookingNestedInput
     disputes?: DisputeUncheckedUpdateManyWithoutBookingNestedInput
@@ -75104,15 +78607,18 @@ export namespace Prisma {
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
     endDate?: DateTimeFieldUpdateOperationsInput | Date | string
     duration?: IntFieldUpdateOperationsInput | number
+    guestCount?: IntFieldUpdateOperationsInput | number
     basePrice?: FloatFieldUpdateOperationsInput | number
     serviceFee?: FloatFieldUpdateOperationsInput | number
     tax?: FloatFieldUpdateOperationsInput | number
     depositAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalPrice?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
     ownerEarnings?: FloatFieldUpdateOperationsInput | number
     platformFee?: FloatFieldUpdateOperationsInput | number
     currency?: StringFieldUpdateOperationsInput | string
+    renterMessage?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumBookingStatusFieldUpdateOperationsInput | $Enums.BookingStatus
     cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null

@@ -27,9 +27,12 @@ export interface PaymentProcessedEvent {
   paymentId: string;
   bookingId: string;
   amount: number;
+  currency?: string;
   status: PaymentStatus;
   renterId: string;
   ownerId: string;
+  reason?: string;
+  refundId?: string;
 }
 
 export interface ListingCreatedEvent {

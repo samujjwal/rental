@@ -145,12 +145,19 @@ export class PaymentsController {
 
     const deposit = await this.stripe['prisma'].depositHold.findUnique({
       where: { id: depositId },
-      include: { booking: true },
+    });
+
+    if (!deposit || !deposit.bookingId) {
+      throw new Error('Deposit or booking not found');
+    }
+
+    const booking = await this.stripe['prisma'].booking.findUnique({
+      where: { id: deposit.bookingId },
     });
 
     await this.ledger.recordDepositRelease(
       deposit.bookingId,
-      deposit.booking.renterId,
+      booking.renterId,
       deposit.amount,
       deposit.currency,
     );

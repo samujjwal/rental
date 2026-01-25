@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
-import { PrismaService } from '@/common/database/prisma.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import { EventsService } from '@/common/events/events.service';
+import { BookingStatus } from '@rental-portal/database';
 
 @Injectable()
 export class WebhookService {
@@ -16,7 +17,7 @@ export class WebhookService {
     private eventsService: EventsService,
   ) {
     this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY'), {
-      apiVersion: '2023-10-16',
+      apiVersion: '2025-12-15.clover',
     });
     this.webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET');
   }
@@ -122,15 +123,15 @@ export class WebhookService {
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: {
-          status: 'COMPLETED',
-          paidAt: new Date(),
+          status: 'SUCCEEDED',
+          processedAt: new Date(),
         },
       });
 
       // Update booking status to CONFIRMED
       await this.prisma.booking.update({
         where: { id: payment.bookingId },
-        data: { status: 'CONFIRMED' },
+        data: { status: BookingStatus.CONFIRMED },
       });
 
       // Emit payment succeeded event
@@ -139,8 +140,9 @@ export class WebhookService {
         bookingId: payment.bookingId,
         amount: amount / 100, // Convert from cents
         currency,
+        status: 'SUCCEEDED',
         renterId: payment.booking.renterId,
-        ownerId: payment.booking.listing.ownerId,
+        ownerId: payment.booking.ownerId,
       });
 
       this.logger.log(`Payment ${payment.id} marked as completed`);
@@ -178,14 +180,18 @@ export class WebhookService {
       // Cancel booking
       await this.prisma.booking.update({
         where: { id: payment.bookingId },
-        data: { status: 'CANCELLED' },
+        data: { status: BookingStatus.CANCELLED },
       });
 
       // Emit payment failed event
       this.eventsService.emitPaymentFailed({
         paymentId: payment.id,
         bookingId: payment.bookingId,
+        amount: 0,
+        currency: payment.booking.currency,
+        status: 'FAILED',
         renterId: payment.booking.renterId,
+        ownerId: payment.booking.ownerId,
         reason: last_payment_error?.message || 'Payment failed',
       });
 
@@ -256,10 +262,11 @@ export class WebhookService {
       // Create refund record
       const refund = await this.prisma.refund.create({
         data: {
-          paymentId: payment.id,
+          bookingId: payment.bookingId,
           amount: amount_refunded / 100,
-          status: 'COMPLETED',
-          stripeRefundId: refunds.data[0]?.id,
+          currency: charge.currency,
+          status: 'SUCCEEDED',
+          refundId: refunds.data[0]?.id || `refund_${Date.now()}`,
           reason: refunds.data[0]?.reason || 'requested_by_customer',
         },
       });
@@ -267,9 +274,13 @@ export class WebhookService {
       // Emit refund event
       this.eventsService.emitPaymentRefunded({
         paymentId: payment.id,
-        refundId: refund.id,
+        bookingId: payment.bookingId,
         amount: amount_refunded / 100,
+        currency: charge.currency,
+        status: 'REFUNDED',
+        refundId: refund.id,
         renterId: payment.booking.renterId,
+        ownerId: payment.booking.ownerId,
       });
 
       this.logger.log(`Refund processed for payment ${payment.id}`);

@@ -10,11 +10,11 @@ import { Dispute, DisputeStatus, UserRole } from '@rental-portal/database';
 
 export interface CreateDisputeDto {
   bookingId: string;
-  reason: 'DAMAGE' | 'NO_SHOW' | 'CONDITION' | 'PRICING' | 'OTHER';
+  title: string;
+  type: 'PROPERTY_DAMAGE' | 'MISSING_ITEMS' | 'CONDITION_MISMATCH' | 'REFUND_REQUEST' | 'PAYMENT_ISSUE' | 'OTHER';
   description: string;
-  evidence: string[];
-  requestedResolution: string;
-  requestedAmount?: number;
+  evidence?: string[];
+  amount?: number;
 }
 
 export interface UpdateDisputeDto {
@@ -40,7 +40,7 @@ export class DisputesService {
    * Create a dispute
    */
   async createDispute(userId: string, dto: CreateDisputeDto): Promise<Dispute> {
-    const { bookingId, reason, description, evidence, requestedResolution, requestedAmount } = dto;
+    const { bookingId, title, type, description, evidence, amount } = dto;
 
     // Verify booking exists
     const booking = await this.prisma.booking.findUnique({
@@ -62,23 +62,26 @@ export class DisputesService {
 
     // Check if there's already an active dispute
     const activeDispute = booking.disputes.find(
-      (d) => d.status === DisputeStatus.OPEN || d.status === DisputeStatus.UNDER_REVIEW,
+      (d) => d.status === DisputeStatus.OPEN || d.status === DisputeStatus.UNDER_REVIEW || d.status === DisputeStatus.INVESTIGATING,
     );
 
     if (activeDispute) {
       throw new BadRequestException('An active dispute already exists for this booking');
     }
 
+    // Determine defendant (opposite party)
+    const defendantId = userId === booking.renterId ? booking.listing.ownerId : booking.renterId;
+
     // Create dispute
     const dispute = await this.prisma.dispute.create({
       data: {
         bookingId,
-        reportedBy: userId,
-        reason,
+        initiatorId: userId,
+        defendantId,
+        title,
+        type,
         description,
-        evidence,
-        requestedResolution,
-        requestedAmount,
+        amount,
         status: DisputeStatus.OPEN,
       },
       include: {
@@ -89,16 +92,14 @@ export class DisputesService {
               select: {
                 id: true,
                 email: true,
-                profile: true,
               },
             },
           },
         },
-        reportedByUser: {
+        initiator: {
           select: {
             id: true,
             email: true,
-            profile: true,
           },
         },
       },
@@ -114,8 +115,8 @@ export class DisputesService {
     if (targetUser) {
       await this.emailService.sendEmail(
         targetUser.email,
-        `New Dispute Created: ${reason}`,
-        `<p>A dispute has been opened for booking #${booking.id}. Reason: ${reason}. Please log in to view details.</p>`,
+        `New Dispute Created: ${title}`,
+        `<p>A dispute has been opened for booking #${booking.id}. ${description}. Please log in to view details.</p>`,
       );
     }
 
@@ -140,7 +141,6 @@ export class DisputesService {
                   select: {
                     id: true,
                     email: true,
-                    profile: true,
                   },
                 },
               },
@@ -149,23 +149,20 @@ export class DisputesService {
               select: {
                 id: true,
                 email: true,
-                profile: true,
               },
             },
           },
         },
-        reportedByUser: {
+        initiator: {
           select: {
             id: true,
             email: true,
-            profile: true,
           },
         },
-        resolvedByUser: {
+        defendant: {
           select: {
             id: true,
             email: true,
-            profile: true,
           },
         },
         responses: {
@@ -174,7 +171,6 @@ export class DisputesService {
               select: {
                 id: true,
                 email: true,
-                profile: true,
               },
             },
           },
@@ -196,9 +192,8 @@ export class DisputesService {
 
     const isAdmin = user?.role === UserRole.ADMIN;
     const isParty =
-      dispute.reportedBy === userId ||
-      dispute.booking.renterId === userId ||
-      dispute.booking.listing.ownerId === userId;
+      dispute.initiatorId === userId ||
+      dispute.defendantId === userId;
 
     if (!isAdmin && !isParty) {
       throw new ForbiddenException('Not authorized to view this dispute');
@@ -222,9 +217,8 @@ export class DisputesService {
 
     const where: any = {
       OR: [
-        { reportedBy: userId },
-        { booking: { renterId: userId } },
-        { booking: { listing: { ownerId: userId } } },
+        { initiatorId: userId },
+        { defendantId: userId },
       ],
     };
 
@@ -242,7 +236,6 @@ export class DisputesService {
                 select: {
                   id: true,
                   title: true,
-                  images: true,
                   ownerId: true,
                 },
               },
@@ -250,16 +243,20 @@ export class DisputesService {
                 select: {
                   id: true,
                   email: true,
-                  profile: true,
                 },
               },
             },
           },
-          reportedByUser: {
+          initiator: {
             select: {
               id: true,
               email: true,
-              profile: true,
+            },
+          },
+          defendant: {
+            select: {
+              id: true,
+              email: true,
             },
           },
           _count: {
@@ -308,9 +305,8 @@ export class DisputesService {
 
     const isAdmin = user?.role === UserRole.ADMIN;
     const isParty =
-      dispute.reportedBy === userId ||
-      dispute.booking.renterId === userId ||
-      dispute.booking.listing.ownerId === userId;
+      dispute.initiatorId === userId ||
+      dispute.defendantId === userId;
 
     if (!isAdmin && !isParty) {
       throw new ForbiddenException('Not authorized to respond to this dispute');
@@ -321,15 +317,14 @@ export class DisputesService {
       data: {
         disputeId,
         userId,
-        message: response.message,
-        evidence: response.evidence || [],
+        content: response.message,
+        attachments: response.evidence || [],
       },
       include: {
         user: {
           select: {
             id: true,
             email: true,
-            profile: true,
           },
         },
       },
@@ -372,13 +367,16 @@ export class DisputesService {
     const updateData: any = {};
 
     if (dto.status) updateData.status = dto.status;
-    if (dto.resolution) updateData.resolution = dto.resolution;
-    if (dto.resolvedAmount !== undefined) updateData.resolvedAmount = dto.resolvedAmount;
-    if (dto.adminNotes) updateData.adminNotes = dto.adminNotes;
+    // Note: resolution is a relation, not a string field - use adminNotes for text notes
+    if (dto.resolvedAmount !== undefined) updateData.amount = dto.resolvedAmount;
+    if (dto.adminNotes) {
+      // Store admin notes in description or create a DisputeTimelineEvent
+      updateData.description = `${dispute.description}\n\n[Admin Note]: ${dto.adminNotes}`;
+    }
 
     // If resolving dispute
     if (dto.status && [DisputeStatus.RESOLVED, DisputeStatus.CLOSED].includes(dto.status)) {
-      updateData.resolvedBy = userId;
+      updateData.assignedTo = userId;
       updateData.resolvedAt = new Date();
     }
 
@@ -407,15 +405,15 @@ export class DisputesService {
       throw new NotFoundException('Dispute not found');
     }
 
-    // Can be closed by reporter or admin
+    // Can be closed by initiator or admin
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
 
     const isAdmin = user?.role === UserRole.ADMIN;
-    const isReporter = dispute.reportedBy === userId;
+    const isInitiator = dispute.initiatorId === userId;
 
-    if (!isAdmin && !isReporter) {
+    if (!isAdmin && !isInitiator) {
       throw new ForbiddenException('Not authorized to close this dispute');
     }
 
@@ -423,8 +421,8 @@ export class DisputesService {
       where: { id: disputeId },
       data: {
         status: DisputeStatus.CLOSED,
-        resolution: reason,
-        resolvedBy: userId,
+        description: `${dispute.description}\n\n[Closed]: ${reason}`,
+        assignedTo: userId,
         resolvedAt: new Date(),
       },
     });
@@ -455,7 +453,8 @@ export class DisputesService {
 
     const where: any = {};
     if (status) where.status = status;
-    if (reason) where.reason = reason;
+    // Note: 'reason' parameter is for display - the schema uses 'type'
+    // if (reason) where.type = reason;
 
     const [disputes, total] = await Promise.all([
       this.prisma.dispute.findMany({
@@ -474,16 +473,20 @@ export class DisputesService {
                 select: {
                   id: true,
                   email: true,
-                  profile: true,
                 },
               },
             },
           },
-          reportedByUser: {
+          initiator: {
             select: {
               id: true,
               email: true,
-              profile: true,
+            },
+          },
+          defendant: {
+            select: {
+              id: true,
+              email: true,
             },
           },
           _count: {

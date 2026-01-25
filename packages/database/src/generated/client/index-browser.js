@@ -129,6 +129,7 @@ exports.Prisma.UserScalarFieldEnum = {
   firstName: 'firstName',
   lastName: 'lastName',
   phoneNumber: 'phoneNumber',
+  phone: 'phone',
   phoneVerified: 'phoneVerified',
   dateOfBirth: 'dateOfBirth',
   profilePhotoUrl: 'profilePhotoUrl',
@@ -147,6 +148,8 @@ exports.Prisma.UserScalarFieldEnum = {
   stripeCustomerId: 'stripeCustomerId',
   stripeConnectId: 'stripeConnectId',
   stripeOnboardingComplete: 'stripeOnboardingComplete',
+  stripeChargesEnabled: 'stripeChargesEnabled',
+  stripePayoutsEnabled: 'stripePayoutsEnabled',
   role: 'role',
   status: 'status',
   preferredLanguage: 'preferredLanguage',
@@ -185,6 +188,8 @@ exports.Prisma.OrganizationScalarFieldEnum = {
   description: 'description',
   logoUrl: 'logoUrl',
   websiteUrl: 'websiteUrl',
+  businessType: 'businessType',
+  taxId: 'taxId',
   email: 'email',
   phoneNumber: 'phoneNumber',
   addressLine1: 'addressLine1',
@@ -329,15 +334,18 @@ exports.Prisma.BookingScalarFieldEnum = {
   startDate: 'startDate',
   endDate: 'endDate',
   duration: 'duration',
+  guestCount: 'guestCount',
   basePrice: 'basePrice',
   serviceFee: 'serviceFee',
   tax: 'tax',
   depositAmount: 'depositAmount',
   discountAmount: 'discountAmount',
   totalPrice: 'totalPrice',
+  totalAmount: 'totalAmount',
   ownerEarnings: 'ownerEarnings',
   platformFee: 'platformFee',
   currency: 'currency',
+  renterMessage: 'renterMessage',
   status: 'status',
   cancellationReason: 'cancellationReason',
   cancelledBy: 'cancelledBy',
@@ -399,6 +407,20 @@ exports.Prisma.DepositHoldScalarFieldEnum = {
   deductionReason: 'deductionReason',
   createdAt: 'createdAt',
   expiresAt: 'expiresAt'
+};
+
+exports.Prisma.PaymentScalarFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  amount: 'amount',
+  currency: 'currency',
+  stripePaymentIntentId: 'stripePaymentIntentId',
+  stripeChargeId: 'stripeChargeId',
+  status: 'status',
+  failureReason: 'failureReason',
+  processedAt: 'processedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.RefundScalarFieldEnum = {
@@ -498,11 +520,14 @@ exports.Prisma.ConditionReportScalarFieldEnum = {
   id: 'id',
   bookingId: 'bookingId',
   reportType: 'reportType',
+  type: 'type',
   reportedBy: 'reportedBy',
   reportedAt: 'reportedAt',
   checklistData: 'checklistData',
   overallCondition: 'overallCondition',
+  condition: 'condition',
   notes: 'notes',
+  damages: 'damages',
   issuesFound: 'issuesFound',
   damageAmount: 'damageAmount',
   acknowledgedBy: 'acknowledgedBy',
@@ -601,6 +626,7 @@ exports.Prisma.NotificationScalarFieldEnum = {
   actionLabel: 'actionLabel',
   read: 'read',
   readAt: 'readAt',
+  status: 'status',
   sentViaEmail: 'sentViaEmail',
   sentViaPush: 'sentViaPush',
   createdAt: 'createdAt'
@@ -691,6 +717,7 @@ exports.Prisma.UserOrderByRelevanceFieldEnum = {
   firstName: 'firstName',
   lastName: 'lastName',
   phoneNumber: 'phoneNumber',
+  phone: 'phone',
   profilePhotoUrl: 'profilePhotoUrl',
   bio: 'bio',
   addressLine1: 'addressLine1',
@@ -728,6 +755,8 @@ exports.Prisma.OrganizationOrderByRelevanceFieldEnum = {
   description: 'description',
   logoUrl: 'logoUrl',
   websiteUrl: 'websiteUrl',
+  businessType: 'businessType',
+  taxId: 'taxId',
   email: 'email',
   phoneNumber: 'phoneNumber',
   addressLine1: 'addressLine1',
@@ -806,6 +835,7 @@ exports.Prisma.BookingOrderByRelevanceFieldEnum = {
   renterId: 'renterId',
   ownerId: 'ownerId',
   currency: 'currency',
+  renterMessage: 'renterMessage',
   cancellationReason: 'cancellationReason',
   cancelledBy: 'cancelledBy',
   paymentIntentId: 'paymentIntentId',
@@ -837,6 +867,15 @@ exports.Prisma.DepositHoldOrderByRelevanceFieldEnum = {
   currency: 'currency',
   paymentIntentId: 'paymentIntentId',
   deductionReason: 'deductionReason'
+};
+
+exports.Prisma.PaymentOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  currency: 'currency',
+  stripePaymentIntentId: 'stripePaymentIntentId',
+  stripeChargeId: 'stripeChargeId',
+  failureReason: 'failureReason'
 };
 
 exports.Prisma.RefundOrderByRelevanceFieldEnum = {
@@ -900,6 +939,7 @@ exports.Prisma.ConditionReportOrderByRelevanceFieldEnum = {
   bookingId: 'bookingId',
   reportedBy: 'reportedBy',
   overallCondition: 'overallCondition',
+  condition: 'condition',
   notes: 'notes',
   acknowledgedBy: 'acknowledgedBy'
 };
@@ -961,7 +1001,8 @@ exports.Prisma.NotificationOrderByRelevanceFieldEnum = {
   relatedId: 'relatedId',
   relatedType: 'relatedType',
   actionUrl: 'actionUrl',
-  actionLabel: 'actionLabel'
+  actionLabel: 'actionLabel',
+  status: 'status'
 };
 
 exports.Prisma.AuditLogOrderByRelevanceFieldEnum = {
@@ -1085,6 +1126,7 @@ exports.BookingStatus = exports.$Enums.BookingStatus = {
   PENDING_OWNER_APPROVAL: 'PENDING_OWNER_APPROVAL',
   PENDING_PAYMENT: 'PENDING_PAYMENT',
   CONFIRMED: 'CONFIRMED',
+  ACTIVE: 'ACTIVE',
   IN_PROGRESS: 'IN_PROGRESS',
   AWAITING_RETURN_INSPECTION: 'AWAITING_RETURN_INSPECTION',
   COMPLETED: 'COMPLETED',
@@ -1112,6 +1154,15 @@ exports.DepositStatus = exports.$Enums.DepositStatus = {
   RELEASED: 'RELEASED',
   EXPIRED: 'EXPIRED',
   FAILED: 'FAILED'
+};
+
+exports.PaymentStatus = exports.$Enums.PaymentStatus = {
+  PENDING: 'PENDING',
+  PROCESSING: 'PROCESSING',
+  SUCCEEDED: 'SUCCEEDED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+  REFUNDED: 'REFUNDED'
 };
 
 exports.RefundStatus = exports.$Enums.RefundStatus = {
@@ -1194,6 +1245,7 @@ exports.DisputeType = exports.$Enums.DisputeType = {
 
 exports.DisputeStatus = exports.$Enums.DisputeStatus = {
   OPEN: 'OPEN',
+  UNDER_REVIEW: 'UNDER_REVIEW',
   INVESTIGATING: 'INVESTIGATING',
   AWAITING_RESPONSE: 'AWAITING_RESPONSE',
   IN_MEDIATION: 'IN_MEDIATION',
@@ -1264,6 +1316,7 @@ exports.Prisma.ModelName = {
   BookingStateHistory: 'BookingStateHistory',
   LedgerEntry: 'LedgerEntry',
   DepositHold: 'DepositHold',
+  Payment: 'Payment',
   Refund: 'Refund',
   Payout: 'Payout',
   Review: 'Review',

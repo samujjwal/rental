@@ -4,7 +4,8 @@
   "description": "NestJS API for Rental Portal",
   "private": true,
   "scripts": {
-    "build": "nest build",
+    "build": "nest build --builder swc",
+    "dev": "nest start --watch --builder swc",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
