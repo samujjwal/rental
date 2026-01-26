@@ -71,13 +71,23 @@ fi
 echo -e "\n${BLUE}==> Applying Database Migrations...${NC}"
 cd packages/database
 npx prisma migrate deploy 2>/dev/null || npx prisma migrate dev --name init
+
+# 5. Seed Database (Dev/Test Data)
+echo -e "\n${BLUE}==> Seeding Database with Test Data...${NC}"
+npm run seed
+echo -e "${GREEN}✓ Database seeded successfully!${NC}"
 cd ../..
 
-
-# 5. Start Applications
+# 6. Start Applications
 echo -e "\n${BLUE}==> Starting Applications (API & Web)...${NC}"
-echo -e "${GREEN}✓ API will be available at: http://localhost:3400${NC}"
-echo -e "${GREEN}✓ Web will be available at: http://localhost:3401${NC}"
-echo -e "${YELLOW}Press Ctrl+C to stop all services.${NC}\n"
+echo -e "${GREEN}✓ Customer Portal: http://localhost:3401${NC}"
+echo -e "${GREEN}✓ Admin Portal: http://localhost:3401/admin${NC}"
+echo -e "${GREEN}✓ API Backend: http://localhost:3400${NC}"
+echo -e "${GREEN}✓ API Docs: http://localhost:3400/api/docs${NC}"
+echo -e "\n${BLUE}Test Users (Password: password123):${NC}"
+echo -e "${YELLOW}  Admin: admin@rental.local${NC}"
+echo -e "${YELLOW}  Customer: mike.customer@rental.local${NC}"
+echo -e "${YELLOW}  Owner: john.owner@rental.local${NC}"
+echo -e "\n${YELLOW}Press Ctrl+C to stop all services.${NC}\n"
 
 npm run dev
