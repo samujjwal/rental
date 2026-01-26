@@ -1,4 +1,4 @@
-import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router';
+import { type LoaderFunctionArgs, type ActionFunctionArgs, Link } from 'react-router';
 import { useLoaderData, useActionData, Form, useNavigation } from 'react-router';
 import { requireAdmin } from '~/utils/auth.server';
 import { apiClient } from '~/lib/api-client';
@@ -10,7 +10,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const timeline = await apiClient.get(`/disputes/${params.id}/timeline`);
   const evidence = await apiClient.get(`/disputes/${params.id}/evidence`);
 
-  return json({ dispute: dispute.data, timeline: timeline.data, evidence: evidence.data });
+  return { dispute: dispute.data, timeline: timeline.data, evidence: evidence.data };
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -31,7 +31,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         resolvedAmount: resolvedAmount ? parseFloat(resolvedAmount as string) : undefined,
       });
 
-      return json({ success: true, message: 'Dispute updated' });
+      return { success: true, message: 'Dispute updated' };
     }
 
     case 'add_response': {
@@ -41,11 +41,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         message,
       });
 
-      return json({ success: true, message: 'Response added' });
+      return { success: true, message: 'Response added' };
     }
 
     default:
-      return json({ error: 'Invalid action' }, { status: 400 });
+      return { error: 'Invalid action' };
   }
 }
 

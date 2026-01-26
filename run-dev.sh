@@ -70,7 +70,7 @@ fi
 # 4. Run Database Migrations
 echo -e "\n${BLUE}==> Applying Database Migrations...${NC}"
 cd packages/database
-npx prisma migrate deploy 2>/dev/null || npx prisma migrate dev --name init --skip-generate
+npx prisma migrate deploy 2>/dev/null || npx prisma migrate dev --name init
 cd ../..
 
 

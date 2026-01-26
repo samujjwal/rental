@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
-import { Organization, OrganizationRole, OrganizationStatus } from '@rental-portal/database';
+import { Organization, OrgRole, OrganizationStatus } from '@rental-portal/database';
 
 export interface CreateOrganizationDto {
   name: string;
@@ -39,7 +39,7 @@ export interface UpdateOrganizationDto {
 
 export interface InviteMemberDto {
   email: string;
-  role: OrganizationRole;
+  role: OrgRole;
 }
 
 @Injectable()
@@ -66,7 +66,7 @@ export class OrganizationsService {
     }
 
     // Check if user already owns an organization
-    const existingOrg = user.organizations.find((m) => m.role === OrganizationRole.OWNER);
+    const existingOrg = user.organizations.find((m) => m.role === OrgRole.OWNER);
     if (existingOrg) {
       throw new BadRequestException('User already owns an organization');
     }
@@ -75,6 +75,7 @@ export class OrganizationsService {
     const organization = await this.prisma.organization.create({
       data: {
         name: dto.name,
+        slug: dto.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         description: dto.description,
         businessType: dto.businessType,
         taxId: dto.taxId,
@@ -87,11 +88,10 @@ export class OrganizationsService {
         postalCode: dto.postalCode,
         country: dto.country,
         status: OrganizationStatus.ACTIVE,
-        ownerId: userId,
         members: {
           create: {
             userId,
-            role: OrganizationRole.OWNER,
+            role: OrgRole.OWNER,
           },
         },
       },
@@ -270,7 +270,7 @@ export class OrganizationsService {
       throw new NotFoundException('Member not found');
     }
 
-    if (member.role === OrganizationRole.OWNER) {
+    if (member.role === OrgRole.OWNER) {
       throw new BadRequestException('Cannot remove organization owner');
     }
 
@@ -291,7 +291,7 @@ export class OrganizationsService {
     orgId: string,
     userId: string,
     memberUserId: string,
-    role: OrganizationRole,
+    role: OrgRole,
   ): Promise<any> {
     await this.verifyMemberPermission(orgId, userId, ['OWNER']);
 
@@ -308,7 +308,7 @@ export class OrganizationsService {
       throw new NotFoundException('Member not found');
     }
 
-    if (member.role === OrganizationRole.OWNER) {
+    if (member.role === OrgRole.OWNER) {
       throw new BadRequestException('Cannot change owner role');
     }
 
@@ -362,7 +362,7 @@ export class OrganizationsService {
   private async verifyMemberPermission(
     orgId: string,
     userId: string,
-    allowedRoles: OrganizationRole[],
+    allowedRoles: OrgRole[],
   ): Promise<void> {
     const member = await this.prisma.organizationMember.findUnique({
       where: {
@@ -386,7 +386,7 @@ export class OrganizationsService {
    * Get organization statistics
    */
   async getOrganizationStats(orgId: string, userId: string): Promise<any> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER', 'ADMIN', 'MANAGER']);
+    await this.verifyMemberPermission(orgId, userId, ['OWNER', 'ADMIN']);
 
     const [totalListings, activeListings, totalBookings, revenue] = await Promise.all([
       this.prisma.listing.count({

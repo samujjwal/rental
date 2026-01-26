@@ -8,7 +8,7 @@ import {
   MemoryHealthIndicator,
   DiskHealthIndicator,
 } from '@nestjs/terminus';
-import { PrismaService } from '@/common/database/prisma.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 

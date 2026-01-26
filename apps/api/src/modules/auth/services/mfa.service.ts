@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { authenticator } from 'otplib';
+import * as otplib from 'otplib';
 import * as QRCode from 'qrcode';
 
 @Injectable()
 export class MfaService {
   async generateSecret(email: string): Promise<{ secret: string; qrCode: string }> {
-    const secret = authenticator.generateSecret();
-    const otpauth = authenticator.keyuri(email, 'Rental Portal', secret);
+    const secret = otplib.generateSecret();
+    const otpauth = otplib.generateURI({
+      secret,
+      issuer: 'Rental Portal',
+      label: email,
+    });
     const qrCode = await QRCode.toDataURL(otpauth);
 
     return { secret, qrCode };
@@ -14,7 +18,7 @@ export class MfaService {
 
   verifyToken(secret: string, token: string): boolean {
     try {
-      return authenticator.verify({ token, secret });
+      return otplib.verifySync({ token, secret }).valid;
     } catch (error) {
       return false;
     }

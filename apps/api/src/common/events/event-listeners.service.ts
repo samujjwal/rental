@@ -38,7 +38,7 @@ export class EventListeners {
     // Send notification to owner
     await this.notificationsQueue.add('send', {
       userId: payload.ownerId,
-      type: NotificationType.BOOKING_CREATED,
+      type: NotificationType.BOOKING_REQUEST,
       title: 'New Booking Request',
       message: `You have a new booking request for your listing.`,
       data: { bookingId: payload.bookingId },
@@ -136,7 +136,7 @@ export class EventListeners {
     for (const prompt of reviewPrompts) {
       await this.notificationsQueue.add('send', {
         userId: prompt.userId,
-        type: NotificationType.REVIEW_REQUEST,
+        type: NotificationType.REVIEW_RECEIVED,
         title: 'Review Request',
         message: prompt.message,
         data: { bookingId: payload.bookingId },
@@ -156,7 +156,7 @@ export class EventListeners {
       notifications: [
         {
           userId: payload.renterId,
-          type: NotificationType.PAYMENT_RECEIVED,
+          type: NotificationType.PAYOUT_PROCESSED,
           title: 'Payment Successful',
           message: `Your payment of $${payload.amount} has been processed.`,
           data: { paymentId: payload.paymentId },
@@ -164,7 +164,7 @@ export class EventListeners {
         },
         {
           userId: payload.ownerId,
-          type: NotificationType.PAYMENT_RECEIVED,
+          type: NotificationType.PAYOUT_PROCESSED,
           title: 'Payment Received',
           message: `You received a payment of $${payload.amount}.`,
           data: { paymentId: payload.paymentId },
@@ -180,7 +180,7 @@ export class EventListeners {
 
     await this.notificationsQueue.add('send', {
       userId: payload.renterId,
-      type: NotificationType.PAYMENT_FAILED,
+      type: NotificationType.BOOKING_CANCELLED,
       title: 'Payment Failed',
       message: 'Your payment could not be processed. Please update your payment method.',
       data: {
@@ -198,7 +198,7 @@ export class EventListeners {
 
     await this.notificationsQueue.add('send', {
       userId: payload.renterId,
-      type: NotificationType.REFUND_PROCESSED,
+      type: NotificationType.PAYOUT_PROCESSED,
       title: 'Refund Processed',
       message: `A refund of $${payload.amount} has been issued to your account.`,
       data: { paymentId: payload.paymentId },
@@ -221,7 +221,7 @@ export class EventListeners {
     // Notify owner
     await this.notificationsQueue.add('send', {
       userId: payload.ownerId,
-      type: NotificationType.LISTING_PUBLISHED,
+      type: NotificationType.LISTING_APPROVED,
       title: 'Listing Created',
       message: 'Your listing has been created and is pending review.',
       data: { listingId: payload.listingId },
@@ -257,7 +257,7 @@ export class EventListeners {
 
     await this.notificationsQueue.add('send', {
       userId: payload.ownerId,
-      type: NotificationType.LISTING_PUBLISHED,
+      type: NotificationType.LISTING_APPROVED,
       title: 'Listing Approved',
       message: 'Your listing is now live and visible to renters!',
       data: { listingId: payload.listingId },
@@ -302,7 +302,7 @@ export class EventListeners {
     // Notify admin team
     await this.notificationsQueue.add('send', {
       userId: 'admin', // Would need to fetch admin users
-      type: NotificationType.DISPUTE_CREATED,
+      type: NotificationType.DISPUTE_OPENED,
       title: 'New Dispute',
       message: `A new ${payload.type} dispute has been created.`,
       data: {
@@ -343,7 +343,7 @@ export class EventListeners {
     // Send welcome email
     await this.notificationsQueue.add('send', {
       userId: payload.userId,
-      type: NotificationType.WELCOME,
+      type: NotificationType.SYSTEM_ANNOUNCEMENT,
       title: 'Welcome to Rental Portal!',
       message: 'Thank you for joining our community.',
       data: {},
@@ -357,7 +357,7 @@ export class EventListeners {
 
     await this.notificationsQueue.add('send', {
       userId: payload.userId,
-      type: NotificationType.ACCOUNT_VERIFIED,
+      type: NotificationType.VERIFICATION_COMPLETE,
       title: 'Email Verified',
       message: 'Your email has been successfully verified!',
       data: {},

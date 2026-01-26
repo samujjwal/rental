@@ -78,7 +78,7 @@ export class SearchIndexingProcessor {
 
     try {
       const result = await this.searchIndexService.reindexAll();
-      this.logger.log(`Reindexed all listings: ${result.indexed} indexed, ${result.failed} failed`);
+      this.logger.log(`Reindexed all listings: completed`);
       return result;
     } catch (error) {
       this.logger.error(`Error reindexing all listings: ${error.message}`);

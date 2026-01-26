@@ -1,4 +1,4 @@
-import { createCookieSessionStorage, redirect } from "@react-router/node";
+import { createCookieSessionStorage, redirect } from "react-router";
 import { apiClient } from "~/lib/api-client";
 
 const sessionSecret = process.env.SESSION_SECRET;

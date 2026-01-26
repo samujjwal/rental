@@ -54,7 +54,7 @@ export class StorageService {
       if (accountId && accessKeyId && secretAccessKey) {
         this.s3Client = new S3Client({
           region: 'auto',
-          endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+          endpoint: accountId ? `https://${accountId}.r2.cloudflarestorage.com` : undefined,
           credentials: {
             accessKeyId,
             secretAccessKey,
@@ -63,7 +63,7 @@ export class StorageService {
 
         this.publicUrl =
           this.configService.get<string>('R2_PUBLIC_URL') ||
-          `https://pub-${accountId}.r2.dev/${this.bucketName}`;
+          (accountId ? `https://pub-${accountId}.r2.dev/${this.bucketName}` : undefined);
         this.logger.log('Using Cloudflare R2 storage for production');
       } else {
         this.logger.warn('R2 credentials not configured, falling back to local storage');

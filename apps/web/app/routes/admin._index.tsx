@@ -1,4 +1,4 @@
-import { json, type LoaderFunctionArgs } from 'react-router';
+import { type LoaderFunctionArgs } from 'react-router';
 import { useLoaderData, Link } from 'react-router';
 import { requireAdmin, getUserToken } from '~/utils/auth.server';
 import { apiClient } from '~/lib/api-client';
@@ -19,13 +19,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     apiClient.get<any>('/health'),
   ]);
 
-  return json({
+  return {
     user,
     stats,
     recentBookings,
     recentDisputes,
     systemHealth,
-  });
+  };
 }
 
 export default function AdminDashboard() {

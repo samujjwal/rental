@@ -11,7 +11,13 @@ import { Dispute, DisputeStatus, UserRole } from '@rental-portal/database';
 export interface CreateDisputeDto {
   bookingId: string;
   title: string;
-  type: 'PROPERTY_DAMAGE' | 'MISSING_ITEMS' | 'CONDITION_MISMATCH' | 'REFUND_REQUEST' | 'PAYMENT_ISSUE' | 'OTHER';
+  type:
+    | 'PROPERTY_DAMAGE'
+    | 'MISSING_ITEMS'
+    | 'CONDITION_MISMATCH'
+    | 'REFUND_REQUEST'
+    | 'PAYMENT_ISSUE'
+    | 'OTHER';
   description: string;
   evidence?: string[];
   amount?: number;
@@ -62,7 +68,10 @@ export class DisputesService {
 
     // Check if there's already an active dispute
     const activeDispute = booking.disputes.find(
-      (d) => d.status === DisputeStatus.OPEN || d.status === DisputeStatus.UNDER_REVIEW || d.status === DisputeStatus.INVESTIGATING,
+      (d) =>
+        d.status === DisputeStatus.OPEN ||
+        d.status === DisputeStatus.UNDER_REVIEW ||
+        d.status === DisputeStatus.INVESTIGATING,
     );
 
     if (activeDispute) {
@@ -191,9 +200,7 @@ export class DisputesService {
     });
 
     const isAdmin = user?.role === UserRole.ADMIN;
-    const isParty =
-      dispute.initiatorId === userId ||
-      dispute.defendantId === userId;
+    const isParty = dispute.initiatorId === userId || dispute.defendantId === userId;
 
     if (!isAdmin && !isParty) {
       throw new ForbiddenException('Not authorized to view this dispute');
@@ -216,10 +223,7 @@ export class DisputesService {
     const { status, page = 1, limit = 20 } = options;
 
     const where: any = {
-      OR: [
-        { initiatorId: userId },
-        { defendantId: userId },
-      ],
+      OR: [{ initiatorId: userId }, { defendantId: userId }],
     };
 
     if (status) {
@@ -304,9 +308,7 @@ export class DisputesService {
     });
 
     const isAdmin = user?.role === UserRole.ADMIN;
-    const isParty =
-      dispute.initiatorId === userId ||
-      dispute.defendantId === userId;
+    const isParty = dispute.initiatorId === userId || dispute.defendantId === userId;
 
     if (!isAdmin && !isParty) {
       throw new ForbiddenException('Not authorized to respond to this dispute');
@@ -375,7 +377,7 @@ export class DisputesService {
     }
 
     // If resolving dispute
-    if (dto.status && [DisputeStatus.RESOLVED, DisputeStatus.CLOSED].includes(dto.status)) {
+    if (dto.status && ['RESOLVED', 'CLOSED'].includes(dto.status)) {
       updateData.assignedTo = userId;
       updateData.resolvedAt = new Date();
     }

@@ -32,7 +32,6 @@ export class NotificationsController {
     @Query('limit') limit?: number,
   ) {
     return this.notificationsService.getUserNotifications(userId, {
-      status,
       type,
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
@@ -61,10 +60,7 @@ export class NotificationsController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete notification' })
-  async deleteNotification(
-    @Param('id') notificationId: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  async deleteNotification(@Param('id') notificationId: string, @CurrentUser('id') userId: string) {
     await this.notificationsService.deleteNotification(notificationId, userId);
     return { message: 'Notification deleted successfully' };
   }

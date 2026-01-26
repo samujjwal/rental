@@ -96,7 +96,6 @@ export class BookingsService {
         guestCount: dto.guestCount,
         renterMessage: dto.message,
         status: initialStatus,
-        subtotal: pricing.subtotal,
         platformFee: pricing.platformFee,
         serviceFee: pricing.serviceFee,
         depositAmount: pricing.depositAmount,
@@ -107,13 +106,11 @@ export class BookingsService {
           create: {
             toState: initialStatus,
             changedBy: renterId,
-            metadata: {
-              bookingMode: listing.bookingMode,
-              pricing: pricing.breakdown,
-            },
+            changedAt: new Date(),
+            reason: 'Booking created',
           },
         },
-      },
+      } as any,
       include: {
         renter: {
           select: {
@@ -248,7 +245,7 @@ export class BookingsService {
   }
 
   async approveBooking(bookingId: string, ownerId: string): Promise<Booking> {
-    const booking = await this.findById(bookingId);
+    const booking = (await this.findById(bookingId)) as any;
 
     if (booking.listing.ownerId !== ownerId) {
       throw new ForbiddenException('Not authorized to approve this booking');
@@ -260,7 +257,7 @@ export class BookingsService {
   }
 
   async rejectBooking(bookingId: string, ownerId: string, reason?: string): Promise<Booking> {
-    const booking = await this.findById(bookingId);
+    const booking = (await this.findById(bookingId)) as any;
 
     if (booking.listing.ownerId !== ownerId) {
       throw new ForbiddenException('Not authorized to reject this booking');
@@ -272,7 +269,7 @@ export class BookingsService {
   }
 
   async cancelBooking(bookingId: string, userId: string, reason?: string): Promise<Booking> {
-    const booking = await this.findById(bookingId);
+    const booking = (await this.findById(bookingId)) as any;
 
     if (booking.renterId !== userId && booking.listing.ownerId !== userId) {
       throw new ForbiddenException('Not authorized to cancel this booking');
@@ -293,7 +290,7 @@ export class BookingsService {
   }
 
   async startRental(bookingId: string, userId: string): Promise<Booking> {
-    const booking = await this.findById(bookingId);
+    const booking = (await this.findById(bookingId)) as any;
 
     if (booking.renterId !== userId && booking.listing.ownerId !== userId) {
       throw new ForbiddenException('Not authorized to start this rental');
@@ -310,7 +307,7 @@ export class BookingsService {
   }
 
   async requestReturn(bookingId: string, renterId: string): Promise<Booking> {
-    const booking = await this.findById(bookingId);
+    const booking = (await this.findById(bookingId)) as any;
 
     if (booking.renterId !== renterId) {
       throw new ForbiddenException('Not authorized');
@@ -322,7 +319,7 @@ export class BookingsService {
   }
 
   async approveReturn(bookingId: string, ownerId: string): Promise<Booking> {
-    const booking = await this.findById(bookingId);
+    const booking = (await this.findById(bookingId)) as any;
 
     if (booking.listing.ownerId !== ownerId) {
       throw new ForbiddenException('Not authorized');
@@ -334,7 +331,7 @@ export class BookingsService {
   }
 
   async initiateDispute(bookingId: string, userId: string, reason: string): Promise<Booking> {
-    const booking = await this.findById(bookingId);
+    const booking = (await this.findById(bookingId)) as any;
 
     if (booking.renterId !== userId && booking.listing.ownerId !== userId) {
       throw new ForbiddenException('Not authorized');
@@ -352,7 +349,7 @@ export class BookingsService {
   }
 
   async getBookingStats(bookingId: string) {
-    const booking = await this.findById(bookingId);
+    const booking = (await this.findById(bookingId)) as any;
     const history = await this.stateMachine.getStateHistory(bookingId);
 
     return {

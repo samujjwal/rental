@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import helmet from 'helmet';
-import * as compression from 'compression';
+import compression from 'compression';
 
 export function setupSecurity(app: INestApplication): void {
   // Enable CORS
@@ -43,5 +43,5 @@ export function setupSecurity(app: INestApplication): void {
   app.use(compression());
 
   // Trust proxy (for apps behind reverse proxy like nginx)
-  app.set('trust proxy', 1);
+  (app as any).set('trust proxy', 1);
 }

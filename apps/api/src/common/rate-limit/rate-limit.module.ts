@@ -10,8 +10,12 @@ import { RateLimitGuard } from './rate-limit.guard';
     NestThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        ttl: configService.get('RATE_LIMIT_TTL', 60), // Time window in seconds
-        limit: configService.get('RATE_LIMIT_MAX', 100), // Max requests per TTL
+        throttlers: [
+          {
+            ttl: configService.get('RATE_LIMIT_TTL', 60), // Time window in seconds
+            limit: configService.get('RATE_LIMIT_MAX', 100), // Max requests per TTL
+          },
+        ],
         storage: undefined, // Will use Redis in production
       }),
     }),

@@ -184,7 +184,7 @@ export class BookingsController {
   @ApiOperation({ summary: 'Get available state transitions for booking' })
   @ApiResponse({ status: 200, description: 'Available transitions retrieved' })
   async getAvailableTransitions(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    const booking = await this.bookingsService.findById(id);
+    const booking = (await this.bookingsService.findById(id)) as any;
 
     // Determine user role
     let role: 'RENTER' | 'OWNER' | 'ADMIN';

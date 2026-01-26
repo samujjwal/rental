@@ -1,4 +1,4 @@
-import { apiClient } from './api-client';
+import { apiClient } from "~/lib/api-client";
 
 export interface Dispute {
   id: string;
@@ -15,11 +15,16 @@ export interface Dispute {
 
 export interface CreateDisputeRequest {
   bookingId: string;
-  type: 'NON_DELIVERY' | 'DAMAGED_ITEM' | 'INCORRECT_ITEM' | 'OVERCHARGE' | 'OTHER';
+  type:
+    | "NON_DELIVERY"
+    | "DAMAGED_ITEM"
+    | "INCORRECT_ITEM"
+    | "OVERCHARGE"
+    | "OTHER";
   description: string;
   requestedAmount?: number;
   evidence?: {
-    type: 'photo' | 'document' | 'message';
+    type: "photo" | "document" | "message";
     url: string;
     description?: string;
   }[];
@@ -37,26 +42,37 @@ export const disputesApi = {
   },
 
   getMyDisputes: async (): Promise<Dispute[]> => {
-    const response = await apiClient.get('/disputes/my-disputes');
+    const response = await apiClient.get("/disputes/my-disputes");
     return response.data;
   },
 
   createDispute: async (data: CreateDisputeRequest): Promise<Dispute> => {
-    const response = await apiClient.post('/disputes', data);
+    const response = await apiClient.post("/disputes", data);
     return response.data;
   },
 
-  addEvidence: async (disputeId: string, evidence: {
-    type: 'photo' | 'document' | 'message';
-    url: string;
-    description?: string;
-  }): Promise<Dispute> => {
-    const response = await apiClient.post(`/disputes/${disputeId}/evidence`, evidence);
+  addEvidence: async (
+    disputeId: string,
+    evidence: {
+      type: "photo" | "document" | "message";
+      url: string;
+      description?: string;
+    }
+  ): Promise<Dispute> => {
+    const response = await apiClient.post(
+      `/disputes/${disputeId}/evidence`,
+      evidence
+    );
     return response.data;
   },
 
-  respondToDispute: async (disputeId: string, response: string): Promise<Dispute> => {
-    const apiResponse = await apiClient.post(`/disputes/${disputeId}/respond`, { response });
+  respondToDispute: async (
+    disputeId: string,
+    response: string
+  ): Promise<Dispute> => {
+    const apiResponse = await apiClient.post(`/disputes/${disputeId}/respond`, {
+      response,
+    });
     return apiResponse.data;
   },
 };

@@ -35,83 +35,77 @@ export class SearchIndexService implements OnModuleInit {
   async createIndex() {
     await this.elasticsearch.indices.create({
       index: this.indexName,
-      body: {
-        settings: {
-          number_of_shards: 2,
-          number_of_replicas: 1,
-          analysis: {
-            analyzer: {
-              autocomplete: {
-                tokenizer: 'autocomplete',
-                filter: ['lowercase'],
-              },
-              autocomplete_search: {
-                tokenizer: 'lowercase',
-              },
+      settings: {
+        number_of_shards: 2,
+        number_of_replicas: 1,
+        analysis: {
+          analyzer: {
+            autocomplete: {
+              type: 'custom',
+              tokenizer: 'autocomplete',
+              filter: ['lowercase'],
             },
-            tokenizer: {
-              autocomplete: {
-                type: 'edge_ngram',
-                min_gram: 2,
-                max_gram: 10,
-                token_chars: ['letter', 'digit'],
-              },
+            autocomplete_search: {
+              type: 'custom',
+              tokenizer: 'lowercase',
+            },
+          },
+          tokenizer: {
+            autocomplete: {
+              type: 'edge_ngram',
+              min_gram: 2,
+              max_gram: 10,
+              token_chars: ['letter', 'digit'],
             },
           },
         },
-        mappings: {
-          properties: {
-            id: { type: 'keyword' },
-            title: {
-              type: 'text',
-              analyzer: 'autocomplete',
-              search_analyzer: 'autocomplete_search',
-              fields: {
-                keyword: { type: 'keyword' },
-              },
+      },
+      mappings: {
+        properties: {
+          id: { type: 'keyword' },
+          title: {
+            type: 'text',
+            analyzer: 'autocomplete',
+            search_analyzer: 'autocomplete_search',
+            fields: {
+              keyword: { type: 'keyword' },
             },
-            description: { type: 'text' },
-            slug: { type: 'keyword' },
-            categoryId: { type: 'keyword' },
-            categoryName: {
-              type: 'text',
-              fields: {
-                keyword: { type: 'keyword' },
-              },
-            },
-            categorySlug: { type: 'keyword' },
-            city: {
-              type: 'text',
-              fields: {
-                keyword: { type: 'keyword' },
-              },
-            },
-            state: { type: 'keyword' },
-            country: { type: 'keyword' },
-            location: { type: 'geo_point' },
-            basePrice: { type: 'float' },
-            hourlyPrice: { type: 'float' },
-            dailyPrice: { type: 'float' },
-            weeklyPrice: { type: 'float' },
-            monthlyPrice: { type: 'float' },
-            currency: { type: 'keyword' },
-            pricingMode: { type: 'keyword' },
-            bookingMode: { type: 'keyword' },
-            status: { type: 'keyword' },
-            verificationStatus: { type: 'keyword' },
-            condition: { type: 'keyword' },
-            features: { type: 'keyword' },
-            amenities: { type: 'keyword' },
-            photos: { type: 'object', enabled: false },
-            ownerId: { type: 'keyword' },
-            ownerName: { type: 'text' },
-            ownerRating: { type: 'float' },
-            averageRating: { type: 'float' },
-            totalReviews: { type: 'integer' },
-            viewCount: { type: 'integer' },
-            createdAt: { type: 'date' },
-            updatedAt: { type: 'date' },
           },
+          description: { type: 'text' },
+          slug: { type: 'keyword' },
+          categoryId: { type: 'keyword' },
+          categoryName: {
+            type: 'text',
+            fields: {
+              keyword: { type: 'keyword' },
+            },
+          },
+          categorySlug: { type: 'keyword' },
+          city: { type: 'keyword' },
+          state: { type: 'keyword' },
+          country: { type: 'keyword' },
+          location: { type: 'geo_point' },
+          basePrice: { type: 'float' },
+          hourlyPrice: { type: 'float' },
+          dailyPrice: { type: 'float' },
+          weeklyPrice: { type: 'float' },
+          monthlyPrice: { type: 'float' },
+          securityDeposit: { type: 'float' },
+          currency: { type: 'keyword' },
+          status: { type: 'keyword' },
+          averageRating: { type: 'float' },
+          reviewCount: { type: 'integer' },
+          totalBookings: { type: 'integer' },
+          ownerId: { type: 'keyword' },
+          ownerName: { type: 'text' },
+          ownerRating: { type: 'float' },
+          amenities: { type: 'keyword' },
+          rules: { type: 'text' },
+          tags: { type: 'keyword' },
+          availability: { type: 'object' },
+          images: { type: 'object' },
+          createdAt: { type: 'date' },
+          updatedAt: { type: 'date' },
         },
       },
     });
@@ -124,7 +118,7 @@ export class SearchIndexService implements OnModuleInit {
       await this.elasticsearch.index({
         index: this.indexName,
         id: listing.id,
-        body: document,
+        document: document,
         refresh: 'wait_for',
       });
 

@@ -1,12 +1,32 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, INestApplication } from '@nestjs/common';
 import { PrismaClient } from '@rental-portal/database';
+import { ConfigService } from '@nestjs/config';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  constructor() {
+  constructor(private configService: ConfigService) {
+    const databaseUrl = configService.get<string>('DATABASE_URL') || process.env.DATABASE_URL;
+
+    if (!databaseUrl) {
+      console.log(
+        'Available env vars:',
+        Object.keys(process.env).filter((k) => k.includes('DATABASE')),
+      );
+      throw new Error('DATABASE_URL is not configured');
+    }
+
+    console.log('DATABASE_URL found:', databaseUrl.substring(0, 20) + '...');
+
+    // Create PostgreSQL pool
+    const pool = new Pool({ connectionString: databaseUrl });
+    const adapter = new PrismaPg(pool);
+
     super({
       log: ['query', 'info', 'warn', 'error'],
       errorFormat: 'pretty',
+      adapter,
     });
   }
 
@@ -39,6 +59,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         if (model && typeof model === 'object' && 'deleteMany' in model) {
           return (model as any).deleteMany();
         }
+        return Promise.resolve();
       }),
     );
   }

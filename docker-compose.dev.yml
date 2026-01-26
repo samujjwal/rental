@@ -3,6 +3,7 @@ version: "3.8"
 services:
   postgres:
     image: pgvector/pgvector:pg15
+    container_name: rental-postgres
     environment:
       POSTGRES_USER: rental_user
       POSTGRES_PASSWORD: rental_password
@@ -14,6 +15,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: rental-redis
     ports:
       - "3479:6379"
     volumes:
@@ -21,6 +23,7 @@ services:
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
+    container_name: rental-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false

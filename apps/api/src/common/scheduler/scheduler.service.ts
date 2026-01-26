@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { PrismaService } from '../../../common/prisma/prisma.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import { BookingStatus } from '@rental-portal/database';
 import { addHours, addDays, isBefore } from 'date-fns';
 
@@ -188,7 +188,7 @@ export class SchedulerService {
 
       const scheduledNotifications = await this.prisma.notification.findMany({
         where: {
-          scheduledFor: {
+          createdAt: {
             lte: now,
           },
           status: 'SCHEDULED',

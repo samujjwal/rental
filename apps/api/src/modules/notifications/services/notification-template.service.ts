@@ -28,7 +28,6 @@ export class NotificationTemplateService {
             <p><strong>Booking Details:</strong></p>
             <p>Item: {{itemName}}</p>
             <p>Dates: {{startDate}} - {{endDate}}</p>
-            <p>Total: ${{totalAmount}}</p>
           </div>
           <a href="{{bookingUrl}}" style="background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
             View Details

@@ -108,8 +108,9 @@ export class FraudDetectionService {
     }
 
     // Check recent cancellations
-    const recentCancellations = user.bookingsAsRenter.filter((b) => b.status === 'CANCELLED')
-      .length;
+    const recentCancellations = user.bookingsAsRenter.filter(
+      (b) => b.status === 'CANCELLED',
+    ).length;
     if (recentCancellations > 2) {
       riskScore += 15;
       flags.push({
@@ -238,8 +239,7 @@ export class FraudDetectionService {
     }
 
     // Check same-day booking (potential rush)
-    const hoursUntilStart =
-      (bookingData.startDate.getTime() - Date.now()) / (1000 * 60 * 60);
+    const hoursUntilStart = (bookingData.startDate.getTime() - Date.now()) / (1000 * 60 * 60);
 
     if (hoursUntilStart < 2) {
       riskScore += 10;
@@ -488,8 +488,8 @@ export class FraudDetectionService {
           metadata: {
             riskLevel: result.riskLevel,
             riskScore: result.riskScore,
-            flags: result.flags,
-          },
+            flags: result.flags as any,
+          } as any,
         },
       });
     }

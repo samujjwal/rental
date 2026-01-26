@@ -38,7 +38,7 @@ export class ListingsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('USER', 'OWNER', 'ADMIN')
+  @Roles('CUSTOMER', 'OWNER', 'ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new listing' })
   @ApiResponse({ status: 201, description: 'Listing created successfully' })

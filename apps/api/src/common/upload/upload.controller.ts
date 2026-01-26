@@ -16,6 +16,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagg
 import { UploadService, UploadOptions } from './upload.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { Request } from 'express';
 
 @ApiTags('upload')
 @ApiBearerAuth()
@@ -28,7 +29,7 @@ export class UploadController {
   @ApiOperation({ summary: 'Upload single image' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadImage(@UploadedFile() file: Express.Multer.File, @CurrentUser('id') userId: string) {
+  async uploadImage(@UploadedFile() file: any, @CurrentUser('id') userId: string) {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
@@ -47,10 +48,7 @@ export class UploadController {
   @ApiOperation({ summary: 'Upload multiple images' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FilesInterceptor('files', 10))
-  async uploadImages(
-    @UploadedFiles() files: Express.Multer.File[],
-    @CurrentUser('id') userId: string,
-  ) {
+  async uploadImages(@UploadedFiles() files: any[], @CurrentUser('id') userId: string) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');
     }
@@ -69,10 +67,7 @@ export class UploadController {
   @ApiOperation({ summary: 'Upload document' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadDocument(
-    @UploadedFile() file: Express.Multer.File,
-    @CurrentUser('id') userId: string,
-  ) {
+  async uploadDocument(@UploadedFile() file: any, @CurrentUser('id') userId: string) {
     if (!file) {
       throw new BadRequestException('No file provided');
     }

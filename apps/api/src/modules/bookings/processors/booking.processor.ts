@@ -67,11 +67,7 @@ export class BookingProcessor {
       }
 
       // Skip if booking is no longer pending
-      if (
-        ![BookingStatus.PENDING_OWNER_APPROVAL, BookingStatus.PENDING_PAYMENT].includes(
-          booking.status,
-        )
-      ) {
+      if (!['PENDING_OWNER_APPROVAL', 'PENDING_PAYMENT'].includes(booking.status)) {
         return;
       }
 
@@ -179,11 +175,12 @@ export class BookingProcessor {
       }
 
       // Check if return report exists
-      const returnReport = booking.conditionReports.find((r) => r.type === 'RETURN');
+      const returnReport = booking.conditionReports.find((r) => r.reportType === 'CHECK_OUT');
 
       if (returnReport && returnReport.status === 'COMPLETED') {
         // Auto-complete if no damages reported or minor damages
-        const hasSevereDamage = returnReport.damages?.some((d: any) => d.severity === 'SEVERE');
+        const damages = returnReport.checklistData as any;
+        const hasSevereDamage = damages?.damages?.some?.((d: any) => d.severity === 'SEVERE');
 
         if (!hasSevereDamage) {
           await this.prisma.booking.update({

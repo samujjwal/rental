@@ -6,10 +6,11 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 import * as path from 'path';
 
 export interface UploadOptions {
@@ -52,7 +53,7 @@ export class UploadService {
   /**
    * Upload a file to S3
    */
-  async uploadFile(file: Express.Multer.File, options: UploadOptions = {}): Promise<UploadResult> {
+  async uploadFile(file: any, options: UploadOptions = {}): Promise<UploadResult> {
     const {
       folder = 'uploads',
       maxSizeBytes = 10 * 1024 * 1024, // 10MB default
@@ -130,10 +131,7 @@ export class UploadService {
   /**
    * Upload multiple files
    */
-  async uploadMultiple(
-    files: Express.Multer.File[],
-    options: UploadOptions = {},
-  ): Promise<UploadResult[]> {
+  async uploadMultiple(files: any[], options: UploadOptions = {}): Promise<UploadResult[]> {
     const results = await Promise.all(files.map((file) => this.uploadFile(file, options)));
     return results;
   }
@@ -314,7 +312,7 @@ export class UploadService {
       const copySource = `${this.bucket}/${sourceKey}`;
 
       await this.s3Client.send(
-        new PutObjectCommand({
+        new CopyObjectCommand({
           Bucket: this.bucket,
           Key: destinationKey,
           CopySource: copySource,

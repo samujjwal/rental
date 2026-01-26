@@ -42,7 +42,7 @@ export class RegisterDto {
   @ApiProperty({ example: '1990-01-01', required: false })
   @IsOptional()
   @IsDateString()
-  dateOfBirth?: string;
+  dateOfBirth?: Date;
 }
 
 export class LoginDto {

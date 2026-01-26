@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Query,
   Body,
   Param,
@@ -179,6 +180,3 @@ export class SearchController {
     return this.indexService.getIndexStats();
   }
 }
-
-// Add missing decorator import
-import { Delete } from '@nestjs/common';

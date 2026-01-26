@@ -23,7 +23,6 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { SearchModule } from './modules/search/search.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
-import { FulfillmentModule } from './modules/fulfillment/fulfillment.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -38,7 +37,7 @@ import configuration from './config/configuration';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: ['../../.env', '.env.local', '.env'],
     }),
 
     // Rate limiting
@@ -63,18 +62,18 @@ import configuration from './config/configuration';
       }),
     }),
 
-    // Elasticsearch
-    ElasticsearchModule.registerAsync({
-      useFactory: () => ({
-        node: process.env.ELASTICSEARCH_NODE || 'http://localhost:3492',
-        auth: process.env.ELASTICSEARCH_USERNAME
-          ? {
-              username: process.env.ELASTICSEARCH_USERNAME,
-              password: process.env.ELASTICSEARCH_PASSWORD || '',
-            }
-          : undefined,
-      }),
-    }),
+    // Elasticsearch - temporarily disabled
+    // ElasticsearchModule.registerAsync({
+    //   useFactory: () => ({
+    //     node: process.env.ELASTICSEARCH_NODE || 'http://localhost:3492',
+    //     auth: process.env.ELASTICSEARCH_USERNAME
+    //       ? {
+    //           username: process.env.ELASTICSEARCH_USERNAME,
+    //           password: process.env.ELASTICSEARCH_PASSWORD || '',
+    //         }
+    //       : undefined,
+    //   }),
+    // }),
 
     // Common modules
     PrismaModule,
@@ -91,10 +90,9 @@ import configuration from './config/configuration';
     ListingsModule,
     BookingsModule,
     PaymentsModule,
-    SearchModule,
+    // SearchModule, // TODO: Re-enable when Elasticsearch is properly configured
     MessagingModule,
     ReviewsModule,
-    // FulfillmentModule, // TODO: Requires Fulfillment model in schema - currently disabled
     DisputesModule,
     NotificationsModule,
     AdminModule,
