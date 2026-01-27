@@ -10,6 +10,7 @@ export default [
   layout("routes/root.tsx", [
     route("auth/login", "routes/auth.login.tsx"),
     route("auth/signup", "routes/auth.signup.tsx"),
+    route("auth/logout", "routes/auth.logout.tsx"),
     route("auth/forgot-password", "routes/auth.forgot-password.tsx"),
     route("auth/reset-password", "routes/auth.reset-password.tsx"),
     route("dashboard", "routes/dashboard.tsx"),
@@ -42,6 +43,8 @@ export default [
       // User management
       route("users", "routes/admin/users/_layout.tsx", [
         index("routes/admin/users/_index.tsx"),
+        route("roles", "routes/admin/users/roles.tsx"),
+        route("sessions", "routes/admin/users/sessions.tsx"),
         route(":id", "routes/admin/users/$id.tsx"),
         route(":id/edit", "routes/admin/users/$id.edit.tsx"),
       ]),
@@ -75,9 +78,6 @@ export default [
       route("payments", "routes/admin/payments/_layout.tsx", [
         index("routes/admin/payments/_index.tsx"),
         route(":id", "routes/admin/payments/$id.tsx"),
-        route("refunds", "routes/admin/payments/refunds.tsx"),
-        route("payouts", "routes/admin/payments/payouts.tsx"),
-        route("ledger", "routes/admin/payments/ledger.tsx"),
       ]),
 
       // Settings and configuration
@@ -101,69 +101,61 @@ export default [
       // System management
       route("system", "routes/admin/system/_layout.tsx", [
         index("routes/admin/system/_index.tsx"),
+        route("settings", "routes/admin/system/settings.tsx"),
         route("health", "routes/admin/system/health.tsx"),
         route("logs", "routes/admin/system/logs.tsx"),
         route("audit", "routes/admin/system/audit.tsx"),
         route("database", "routes/admin/system/database.tsx"),
         route("backups", "routes/admin/system/backups.tsx"),
+        route("api-keys", "routes/admin/system/api-keys.tsx"),
+        route("services", "routes/admin/system/services.tsx"),
+        route("environment", "routes/admin/system/environment.tsx"),
+        route("exports", "routes/admin/system/exports.tsx"),
+        route("imports", "routes/admin/system/imports.tsx"),
       ]),
 
-      // Sidebar groups (pathless) for hierarchical organization
-      layout("routes/admin/user-management/_layout.tsx", [
-        route("roles", "routes/admin.roles.tsx"),
-        route("sessions", "routes/admin.sessions.tsx"),
+      // Monitoring
+      route("monitoring", "routes/admin/monitoring/_layout.tsx", [
+        route("performance", "routes/admin/monitoring/performance.tsx"),
       ]),
 
-      layout("routes/admin/content-management/_layout.tsx", [
-        route("categories", "routes/admin.categories.tsx"),
-        route("reviews", "routes/admin.reviews.tsx"),
-        route("messages", "routes/admin.messages.tsx"),
-        route("favorites", "routes/admin.favorites.tsx"),
+      // Content Management
+      route("content", "routes/admin/content/_layout.tsx", [
+        route("categories", "routes/admin/content/categories.tsx"),
+        route("reviews", "routes/admin/content/reviews.tsx"),
+        route("messages", "routes/admin/content/messages.tsx"),
+        route("favorites", "routes/admin/content/favorites.tsx"),
       ]),
 
-      layout("routes/admin/bookings-payments/_layout.tsx", [
-        route("refunds", "routes/admin.refunds.tsx"),
-        route("payouts", "routes/admin.payouts.tsx"),
-        route("ledger", "routes/admin.ledger.tsx"),
+      // Finance & Payments
+      route("finance", "routes/admin/finance/_layout.tsx", [
+        route("refunds", "routes/admin/finance/refunds.tsx"),
+        route("payouts", "routes/admin/finance/payouts.tsx"),
+        route("ledger", "routes/admin/finance/ledger.tsx"),
       ]),
 
-      layout("routes/admin/disputes-moderation/_layout.tsx", [
-        route("disputes", "routes/admin.disputes.tsx"),
-        route("disputes/:id", "routes/admin.disputes.$id.tsx"),
-        route("moderation", "routes/admin.moderation.tsx"),
-        route("condition-reports", "routes/admin.condition-reports.tsx"),
+      // Moderation
+      route("moderation", "routes/admin/moderation/_layout.tsx", [
+        route("disputes", "routes/admin/moderation/disputes.tsx"),
+        route("queue", "routes/admin/moderation/queue.tsx"),
+        route(
+          "condition-reports",
+          "routes/admin/moderation/condition-reports.tsx"
+        ),
       ]),
 
-      layout("routes/admin/insurance/_layout.tsx", [
-        route("insurance", "routes/admin.insurance.tsx"),
-        route("insurance-claims", "routes/admin.insurance-claims.tsx"),
+      // Insurance
+      route("insurance", "routes/admin/insurance/_layout.tsx", [
+        index("routes/admin/insurance/_index.tsx"),
+        route("claims", "routes/admin/insurance/claims.tsx"),
       ]),
 
-      layout("routes/admin/notifications/_layout.tsx", [
-        route("notifications", "routes/admin.notifications.tsx"),
-        route("email-templates", "routes/admin.email-templates.tsx"),
-        route("push-notifications", "routes/admin.push-notifications.tsx"),
-        route("device-tokens", "routes/admin.device-tokens.tsx"),
-      ]),
-
-      layout("routes/admin/system-configuration/_layout.tsx", [
-        route("api-keys", "routes/admin.api-keys.tsx"),
-        route("services", "routes/admin.services.tsx"),
-        route("environment", "routes/admin.environment.tsx"),
-        route("audit-logs", "routes/admin.audit-logs.tsx"),
-      ]),
-
-      layout("routes/admin/monitoring/_layout.tsx", [
-        route("health", "routes/admin.health.tsx"),
-        route("performance", "routes/admin.performance.tsx"),
-        route("error-logs", "routes/admin.error-logs.tsx"),
-      ]),
-
-      layout("routes/admin/data-management/_layout.tsx", [
-        route("database", "routes/admin.database.tsx"),
-        route("backups", "routes/admin.backups.tsx"),
-        route("exports", "routes/admin.exports.tsx"),
-        route("imports", "routes/admin.imports.tsx"),
+      // Notifications
+      route("notifications", "routes/admin/notifications/_layout.tsx", [
+        index("routes/admin/notifications/index.tsx"),
+        route("templates", "routes/admin/notifications/templates.tsx"),
+        route("push", "routes/admin/notifications/push.tsx"),
+        route("tokens", "routes/admin/notifications/tokens.tsx"),
       ]),
     ]),
   ]),

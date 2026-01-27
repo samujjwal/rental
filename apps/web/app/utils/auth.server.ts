@@ -6,6 +6,8 @@ if (!sessionSecret) {
   throw new Error("SESSION_SECRET must be set");
 }
 
+const API_URL = process.env.API_URL || "http://localhost:3400/api/v1";
+
 export const sessionStorage = createCookieSessionStorage({
   cookie: {
     name: "__session",
@@ -25,41 +27,67 @@ export async function getSession(request: Request) {
 
 export async function getUserId(request: Request): Promise<string | undefined> {
   const session = await getSession(request);
-  const userId = session.get("userId");
-  return userId;
+  return session.get("userId");
 }
 
 export async function getUserToken(
   request: Request
 ): Promise<string | undefined> {
   const session = await getSession(request);
-  const token = session.get("accessToken");
-  return token;
+  return session.get("accessToken");
 }
 
 export async function getUser(request: Request) {
-  const token = await getUserToken(request);
+  const session = await getSession(request);
+  const token = session.get("accessToken");
+  const refreshToken = session.get("refreshToken");
 
   if (!token) return null;
 
   try {
-    const response = await fetch(
-      `${process.env.API_URL || "http://localhost:3400/api/v1"}/auth/me`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-    if (!response.ok) {
-      return null;
+    if (response.ok) {
+      return await response.json();
     }
 
-    const user = await response.json();
-    return user;
+    // If unauthorized, try to refresh
+    if (response.status === 401 && refreshToken) {
+      console.log("Access token expired, attempting server-side refresh...");
+      const refreshResponse = await fetch(`${API_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        console.log("Server-side refresh successful");
+
+        // We can't update the cookie from directly within getUser without returning the session
+        // However, we can return the new user and tokens, and let the caller handle it.
+        // For simplicity and minimal changes to existing code, we return the user
+        // and ideally we should redirect to refresh the cookie, but that can't happen in getUser.
+
+        // Return user with a special flag so requireUser can handle the redirect
+        return {
+          ...data.user,
+          __newTokens: {
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+          },
+        };
+      }
+    }
+
+    return null;
   } catch (error) {
+    console.error("Auth server error:", error);
     return null;
   }
 }
@@ -68,7 +96,9 @@ export async function requireUserId(
   request: Request,
   redirectTo: string = new URL(request.url).pathname
 ) {
-  const userId = await getUserId(request);
+  const session = await getSession(request);
+  const userId = session.get("userId");
+
   if (!userId) {
     const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
     throw redirect(`/auth/login?${searchParams}`);
@@ -78,19 +108,39 @@ export async function requireUserId(
 
 export async function requireUser(request: Request) {
   const user = await getUser(request);
+
   if (!user) {
-    throw redirect("/auth/login");
+    const redirectTo = new URL(request.url).pathname;
+    const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
+    throw redirect(`/auth/login?${searchParams}`);
   }
+
+  // Handle silent refresh redirect if tokens were updated
+  if (user.__newTokens) {
+    const { accessToken, refreshToken } = user.__newTokens;
+    const session = await getSession(request);
+    session.set("accessToken", accessToken);
+    session.set("refreshToken", refreshToken);
+
+    // Remote the internal flag
+    delete user.__newTokens;
+
+    // Redirect to the same URL to commit the new session cookie
+    throw redirect(request.url, {
+      headers: {
+        "Set-Cookie": await sessionStorage.commitSession(session),
+      },
+    });
+  }
+
   return user;
 }
 
 export async function requireAdmin(request: Request) {
-  const user = await getUser(request);
-  if (!user) {
-    throw redirect("/auth/login");
-  }
+  const user = await requireUser(request);
+
   if (user.role !== "ADMIN") {
-    throw redirect("/auth/login");
+    throw redirect("/dashboard"); // Better to redirect to dashboard if not admin
   }
   return user;
 }

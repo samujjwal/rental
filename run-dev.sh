@@ -29,6 +29,9 @@ if [ ! -f .env ]; then
     fi
 fi
 
+# Load environment variables
+export $(cat .env | grep -v '#' | xargs)
+
 # 2. Start Infrastructure (Postgres, Redis)
 echo -e "\n${BLUE}==> Starting Infrastructure Containers...${NC}"
 if [ -f docker-compose.dev.yml ]; then

@@ -7,37 +7,66 @@ The application now implements persistent login functionality that allows users 
 ## How It Works
 
 ### 1. **Session Storage**
+
 When a user logs in, the following information is stored in browser `localStorage`:
+
 - `accessToken` - JWT token for API authentication (short-lived, typically 15min)
 - `refreshToken` - Token used to request new access tokens (long-lived, typically 7 days)
 - `user` - User profile information (cached)
 
 Additionally, session information is stored in the **server-side session cookie** for server-side rendering and security.
 
-### 2. **Session Restoration on App Load**
+### 2. **Session Restoration and Synchronization**
 
-When the application starts, the `useAuthInit()` hook is called from the root component (`root.tsx`) to:
+The application uses a **dual-sync restoration strategy** to handle both Server-Side (SSR) and Client-Side (CSR) initialization.
 
-1. Check if tokens exist in `localStorage`
-2. Verify if the access token is still valid (not expired)
-3. If access token is expired but refresh token is valid:
-   - Automatically request a new access token using the refresh token
-   - Update tokens in both storage and auth store
-4. If refresh token is also expired:
-   - Clear all stored auth data
-   - User must log in again
-5. If tokens are valid, restore the user session automatically
+#### Server-Side Initialization (Loaders/Actions)
 
-### 3. **Automatic Token Refresh**
+When a user navigates to a protected route (e.g., `/admin/users`):
 
-If an API request receives a 401 (Unauthorized) response:
-1. The API client interceptor automatically attempts to refresh the token
-2. If refresh succeeds, the failed request is retried with the new token
-3. If refresh fails, user is logged out and redirected to login page
+1. The server-side **loader** calls `requireUser(request)` or `requireAdmin(request)`.
+2. These utilities check the **HTTP-Only Session Cookie** (`__session`).
+3. If the access token is missing or expired (401 from API):
+   - The server automatically attempts a **Silent Refresh** using the `refreshToken` from the cookie.
+   - If successful, it **redirects** the user back to the same page with a new `Set-Cookie` header.
+   - This ensures the page never crashes or kicks the user out as long as the refresh token is valid.
+
+#### Client-Side Syncing
+
+To ensure `localStorage` stays in sync with the server cookie:
+
+1. The **Root Loader** (`root.tsx`) extracts the current user and tokens from the session on every request.
+2. The **Root Component** receives this data and updates the client-side `useAuthStore`.
+3. This ensures that any refresh that happened on the server is immediately propagated to the client-side API client.
+
+### 3. **Automatic Token Refresh (Client-Side Interceptor)**
+
+If an asynchronous client-side API request (via Axios) receives a 401:
+
+1. The `ApiClient` interceptor pauses the request.
+2. It attempts to refresh the token using `localStorage`.
+3. If successful, it retries the original request seamlessly.
+
+## Configuration
+
+To ensure persistence works correctly:
+
+1. **SESSION_SECRET**: Must be set in your environment variables.
+2. **API_URL**: Should point to your backend API.
+3. **Remember Me**: When checked at login, sets the session cookie to expire in 30 days instead of 7.
+
+## Key Implementation Files
+
+- `apps/web/app/utils/auth.server.ts`: Server-side session management and silent refresh.
+- `apps/web/app/root.tsx`: State synchronization between server and client.
+- `apps/web/app/lib/api-client.ts`: Client-side interceptors for direct API calls.
+- `apps/web/app/lib/store/auth.ts`: Zustand store for local persistence.
+- `apps/web/app/hooks/useAuthInit.ts`: Mount-time session restoration.
 
 ### 4. **Auth Store State Management**
 
 The auth store (`lib/store/auth.ts`) manages:
+
 - `user` - Current user profile
 - `accessToken` - Current access token
 - `refreshToken` - Current refresh token
@@ -47,6 +76,7 @@ The auth store (`lib/store/auth.ts`) manages:
 ## Files Modified
 
 ### New Files
+
 - `app/hooks/useAuthInit.ts` - Hook to initialize and restore user session
 
 ### Updated Files
@@ -77,6 +107,7 @@ The auth store (`lib/store/auth.ts`) manages:
 ## Usage
 
 ### For Users
+
 1. Users log in with their email and password
 2. Tokens and user info are automatically saved
 3. When the user returns to the app:
@@ -87,25 +118,28 @@ The auth store (`lib/store/auth.ts`) manages:
 ### For Developers
 
 #### Check if User is Authenticated
+
 ```tsx
 import { useAuthStore } from '~/lib/store/auth';
 
 function MyComponent() {
   const { user, accessToken, isInitialized } = useAuthStore();
-  
+
   if (!isInitialized) return <LoadingSpinner />;
   if (!user) return <LoginRequired />;
-  
+
   return <div>Welcome, {user.firstName}</div>;
 }
 ```
 
 #### Get Current User
+
 ```tsx
 const { user } = useAuthStore();
 ```
 
 #### Log Out User
+
 ```tsx
 const { clearAuth } = useAuthStore();
 clearAuth(); // This also clears localStorage
@@ -113,18 +147,20 @@ window.location.href = '/auth/login';
 ```
 
 #### Update User Info
+
 ```tsx
 const { updateUser } = useAuthStore();
 updateUser({ firstName: 'John', lastName: 'Doe' });
 ```
 
 #### Wait for Session Restoration
+
 ```tsx
 import { useAuthInit } from '~/hooks/useAuthInit';
 
 function MyComponent() {
   const { isInitialized } = useAuthInit();
-  
+
   if (!isInitialized) return <LoadingSpinner />;
   // Safe to access auth state now
 }
@@ -133,11 +169,13 @@ function MyComponent() {
 ## Token Lifecycle
 
 ### Access Token
+
 - **Lifespan**: 15 minutes (configurable in backend)
 - **Purpose**: Used to authenticate API requests
 - **Storage**: localStorage + session cookie
 
 ### Refresh Token
+
 - **Lifespan**: 7 days (configurable in backend)
 - **Purpose**: Used to obtain new access tokens
 - **Storage**: localStorage + session cookie
@@ -166,19 +204,23 @@ function MyComponent() {
 ## Configuration
 
 ### Token Expiration Times
+
 Set in backend environment variables:
+
 - `JWT_ACCESS_TOKEN_EXPIRY` - Access token TTL (default: 15m)
 - `JWT_REFRESH_TOKEN_EXPIRY` - Refresh token TTL (default: 7d)
 
 ### Session Cookie
+
 Set in `app/utils/auth.server.ts`:
+
 ```typescript
 const sessionSecret = process.env.SESSION_SECRET;
 sessionStorage = createCookieSessionStorage({
   cookie: {
     maxAge: 60 * 60 * 24 * 7, // 7 days
     // ... other config
-  }
+  },
 });
 ```
 
@@ -209,17 +251,20 @@ sessionStorage = createCookieSessionStorage({
 ## Troubleshooting
 
 ### User Not Auto-Logging In
+
 - Check browser `localStorage` has tokens
 - Check tokens aren't malformed
 - Check refresh token hasn't expired
 - Check backend token validation
 
 ### Token Refresh Failing
+
 - Verify refresh token is valid
 - Check backend refresh endpoint is working
 - Check CORS headers are correct
 
 ### Session Not Restoring
+
 - Check `useAuthInit` is called in root component
 - Check `isInitialized` state before accessing auth
 - Check network tab for API errors

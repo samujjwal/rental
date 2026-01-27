@@ -711,10 +711,335 @@ exports.Prisma.NullsOrder = {
   last: 'last'
 };
 
+exports.Prisma.UserOrderByRelevanceFieldEnum = {
+  id: 'id',
+  email: 'email',
+  emailVerificationToken: 'emailVerificationToken',
+  passwordHash: 'passwordHash',
+  firstName: 'firstName',
+  lastName: 'lastName',
+  phoneNumber: 'phoneNumber',
+  phone: 'phone',
+  profilePhotoUrl: 'profilePhotoUrl',
+  bio: 'bio',
+  addressLine1: 'addressLine1',
+  addressLine2: 'addressLine2',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postalCode',
+  country: 'country',
+  idVerificationUrl: 'idVerificationUrl',
+  governmentIdUrl: 'governmentIdUrl',
+  governmentIdNumber: 'governmentIdNumber',
+  stripeCustomerId: 'stripeCustomerId',
+  stripeConnectId: 'stripeConnectId',
+  preferredLanguage: 'preferredLanguage',
+  preferredCurrency: 'preferredCurrency',
+  timezone: 'timezone',
+  mfaSecret: 'mfaSecret',
+  passwordResetToken: 'passwordResetToken',
+  lastLoginIp: 'lastLoginIp'
+};
+
+exports.Prisma.SessionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  token: 'token',
+  refreshToken: 'refreshToken',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent'
+};
+
+exports.Prisma.OrganizationOrderByRelevanceFieldEnum = {
+  id: 'id',
+  name: 'name',
+  slug: 'slug',
+  description: 'description',
+  logoUrl: 'logoUrl',
+  websiteUrl: 'websiteUrl',
+  businessType: 'businessType',
+  taxId: 'taxId',
+  email: 'email',
+  phoneNumber: 'phoneNumber',
+  addressLine1: 'addressLine1',
+  addressLine2: 'addressLine2',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postalCode',
+  country: 'country',
+  stripeConnectId: 'stripeConnectId'
+};
+
 exports.Prisma.JsonNullValueFilter = {
   DbNull: Prisma.DbNull,
   JsonNull: Prisma.JsonNull,
   AnyNull: Prisma.AnyNull
+};
+
+exports.Prisma.OrganizationMemberOrderByRelevanceFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  userId: 'userId',
+  invitedBy: 'invitedBy'
+};
+
+exports.Prisma.CategoryOrderByRelevanceFieldEnum = {
+  id: 'id',
+  name: 'name',
+  slug: 'slug',
+  description: 'description',
+  iconUrl: 'iconUrl'
+};
+
+exports.Prisma.ListingOrderByRelevanceFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  organizationId: 'organizationId',
+  categoryId: 'categoryId',
+  title: 'title',
+  description: 'description',
+  slug: 'slug',
+  addressLine1: 'addressLine1',
+  addressLine2: 'addressLine2',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postalCode',
+  country: 'country',
+  currency: 'currency',
+  cancellationPolicyId: 'cancellationPolicyId',
+  insurancePolicyId: 'insurancePolicyId',
+  rejectionReason: 'rejectionReason',
+  moderatedBy: 'moderatedBy',
+  metaTitle: 'metaTitle',
+  metaDescription: 'metaDescription'
+};
+
+exports.Prisma.CancellationPolicyOrderByRelevanceFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description'
+};
+
+exports.Prisma.AvailabilityOrderByRelevanceFieldEnum = {
+  id: 'id',
+  listingId: 'listingId'
+};
+
+exports.Prisma.FavoriteListingOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  listingId: 'listingId'
+};
+
+exports.Prisma.BookingOrderByRelevanceFieldEnum = {
+  id: 'id',
+  listingId: 'listingId',
+  renterId: 'renterId',
+  ownerId: 'ownerId',
+  currency: 'currency',
+  renterMessage: 'renterMessage',
+  cancellationReason: 'cancellationReason',
+  cancelledBy: 'cancelledBy',
+  paymentIntentId: 'paymentIntentId',
+  depositHoldId: 'depositHoldId',
+  renterNotes: 'renterNotes',
+  ownerNotes: 'ownerNotes'
+};
+
+exports.Prisma.BookingStateHistoryOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  reason: 'reason',
+  changedBy: 'changedBy'
+};
+
+exports.Prisma.LedgerEntryOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  accountType: 'accountType',
+  currency: 'currency',
+  transactionType: 'transactionType',
+  description: 'description',
+  referenceId: 'referenceId'
+};
+
+exports.Prisma.DepositHoldOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  currency: 'currency',
+  paymentIntentId: 'paymentIntentId',
+  deductionReason: 'deductionReason'
+};
+
+exports.Prisma.PaymentOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  currency: 'currency',
+  stripePaymentIntentId: 'stripePaymentIntentId',
+  stripeChargeId: 'stripeChargeId',
+  failureReason: 'failureReason'
+};
+
+exports.Prisma.RefundOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  currency: 'currency',
+  reason: 'reason',
+  refundId: 'refundId'
+};
+
+exports.Prisma.PayoutOrderByRelevanceFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  currency: 'currency',
+  transferId: 'transferId',
+  failureReason: 'failureReason'
+};
+
+exports.Prisma.ReviewOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  listingId: 'listingId',
+  reviewerId: 'reviewerId',
+  revieweeId: 'revieweeId',
+  title: 'title',
+  content: 'content',
+  response: 'response',
+  flagReason: 'flagReason',
+  moderatedBy: 'moderatedBy'
+};
+
+exports.Prisma.ConversationOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  listingId: 'listingId',
+  subject: 'subject',
+  lastMessagePreview: 'lastMessagePreview'
+};
+
+exports.Prisma.ConversationParticipantOrderByRelevanceFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  userId: 'userId'
+};
+
+exports.Prisma.MessageOrderByRelevanceFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  senderId: 'senderId',
+  content: 'content'
+};
+
+exports.Prisma.MessageReadReceiptOrderByRelevanceFieldEnum = {
+  id: 'id',
+  messageId: 'messageId',
+  userId: 'userId'
+};
+
+exports.Prisma.ConditionReportOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  reportedBy: 'reportedBy',
+  overallCondition: 'overallCondition',
+  condition: 'condition',
+  notes: 'notes',
+  acknowledgedBy: 'acknowledgedBy'
+};
+
+exports.Prisma.ReportPhotoOrderByRelevanceFieldEnum = {
+  id: 'id',
+  reportId: 'reportId',
+  url: 'url',
+  thumbnailUrl: 'thumbnailUrl',
+  caption: 'caption'
+};
+
+exports.Prisma.DisputeOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  conditionReportId: 'conditionReportId',
+  initiatorId: 'initiatorId',
+  defendantId: 'defendantId',
+  title: 'title',
+  description: 'description',
+  currency: 'currency',
+  assignedTo: 'assignedTo'
+};
+
+exports.Prisma.DisputeResponseOrderByRelevanceFieldEnum = {
+  id: 'id',
+  disputeId: 'disputeId',
+  userId: 'userId',
+  content: 'content'
+};
+
+exports.Prisma.DisputeEvidenceOrderByRelevanceFieldEnum = {
+  id: 'id',
+  disputeId: 'disputeId',
+  uploadedBy: 'uploadedBy',
+  url: 'url',
+  description: 'description'
+};
+
+exports.Prisma.DisputeTimelineEventOrderByRelevanceFieldEnum = {
+  id: 'id',
+  disputeId: 'disputeId',
+  eventType: 'eventType',
+  description: 'description'
+};
+
+exports.Prisma.DisputeResolutionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  disputeId: 'disputeId',
+  summary: 'summary',
+  resolvedBy: 'resolvedBy'
+};
+
+exports.Prisma.NotificationOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  title: 'title',
+  message: 'message',
+  relatedId: 'relatedId',
+  relatedType: 'relatedType',
+  actionUrl: 'actionUrl',
+  actionLabel: 'actionLabel',
+  status: 'status'
+};
+
+exports.Prisma.AuditLogOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  action: 'action',
+  entityType: 'entityType',
+  entityId: 'entityId',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent'
+};
+
+exports.Prisma.InsurancePolicyOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  listingId: 'listingId',
+  policyNumber: 'policyNumber',
+  provider: 'provider',
+  type: 'type',
+  documentUrl: 'documentUrl',
+  certificateUrl: 'certificateUrl',
+  verifiedBy: 'verifiedBy',
+  notes: 'notes'
+};
+
+exports.Prisma.DeviceTokenOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  token: 'token',
+  platform: 'platform'
+};
+
+exports.Prisma.UserPreferencesOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId'
 };
 exports.VerificationStatus = exports.$Enums.VerificationStatus = {
   PENDING: 'PENDING',

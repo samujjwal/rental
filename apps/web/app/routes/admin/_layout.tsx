@@ -3,6 +3,7 @@ import { AdminSidebar } from "~/components/admin/AdminSidebar";
 import { AdminHeader } from "~/components/admin/AdminHeader";
 
 export default function AdminLayout() {
+    console.log("AdminLayout rendering");
     return (
         <div className="min-h-screen bg-gray-50">
             <AdminHeader />

@@ -52,18 +52,18 @@ const menuItems = [
         items: [
             { name: "Users", href: "/admin/users", icon: Users },
             { name: "Organizations", href: "/admin/organizations", icon: Building },
-            { name: "Roles & Permissions", href: "/admin/roles", icon: Shield },
-            { name: "Sessions", href: "/admin/sessions", icon: Key },
+            { name: "Roles & Permissions", href: "/admin/users/roles", icon: Shield },
+            { name: "Sessions", href: "/admin/users/sessions", icon: Key },
         ]
     },
     {
         category: "Content Management",
         items: [
             { name: "Listings", href: "/admin/listings", icon: Home },
-            { name: "Categories", href: "/admin/categories", icon: Package },
-            { name: "Reviews", href: "/admin/reviews", icon: Star },
-            { name: "Messages", href: "/admin/messages", icon: MessageSquare },
-            { name: "Favorites", href: "/admin/favorites", icon: Heart },
+            { name: "Categories", href: "/admin/content/categories", icon: Package },
+            { name: "Reviews", href: "/admin/content/reviews", icon: Star },
+            { name: "Messages", href: "/admin/content/messages", icon: MessageSquare },
+            { name: "Favorites", href: "/admin/content/favorites", icon: Heart },
         ]
     },
     {
@@ -71,60 +71,60 @@ const menuItems = [
         items: [
             { name: "Bookings", href: "/admin/bookings", icon: Calendar },
             { name: "Payments", href: "/admin/payments", icon: CreditCard },
-            { name: "Refunds", href: "/admin/refunds", icon: DollarSign },
-            { name: "Payouts", href: "/admin/payouts", icon: TrendingUp },
-            { name: "Ledger", href: "/admin/ledger", icon: FileText },
+            { name: "Refunds", href: "/admin/finance/refunds", icon: DollarSign },
+            { name: "Payouts", href: "/admin/finance/payouts", icon: TrendingUp },
+            { name: "Ledger", href: "/admin/finance/ledger", icon: FileText },
         ]
     },
     {
         category: "Disputes & Moderation",
         items: [
-            { name: "Disputes", href: "/admin/disputes", icon: AlertTriangle },
-            { name: "Moderation Queue", href: "/admin/moderation", icon: Shield },
-            { name: "Condition Reports", href: "/admin/condition-reports", icon: Camera },
+            { name: "Disputes", href: "/admin/moderation/disputes", icon: AlertTriangle },
+            { name: "Moderation Queue", href: "/admin/moderation/queue", icon: Shield },
+            { name: "Condition Reports", href: "/admin/moderation/condition-reports", icon: Camera },
         ]
     },
     {
         category: "Insurance",
         items: [
             { name: "Insurance Policies", href: "/admin/insurance", icon: Shield },
-            { name: "Claims", href: "/admin/insurance-claims", icon: FileText },
+            { name: "Claims", href: "/admin/insurance/claims", icon: FileText },
         ]
     },
     {
         category: "Notifications",
         items: [
             { name: "Notifications", href: "/admin/notifications", icon: Mail },
-            { name: "Email Templates", href: "/admin/email-templates", icon: FileText },
-            { name: "Push Notifications", href: "/admin/push-notifications", icon: Phone },
-            { name: "Device Tokens", href: "/admin/device-tokens", icon: Key },
+            { name: "Email Templates", href: "/admin/notifications/templates", icon: FileText },
+            { name: "Push Notifications", href: "/admin/notifications/push", icon: Phone },
+            { name: "Device Tokens", href: "/admin/notifications/tokens", icon: Key },
         ]
     },
     {
         category: "System Configuration",
         items: [
-            { name: "System Settings", href: "/admin/settings", icon: Settings },
-            { name: "API Keys", href: "/admin/api-keys", icon: Key },
-            { name: "Service Config", href: "/admin/services", icon: Zap },
-            { name: "Environment", href: "/admin/environment", icon: Globe },
-            { name: "Audit Logs", href: "/admin/audit-logs", icon: FileSearch },
+            { name: "System Settings", href: "/admin/system/settings", icon: Settings },
+            { name: "API Keys", href: "/admin/system/api-keys", icon: Key },
+            { name: "Service Config", href: "/admin/system/services", icon: Zap },
+            { name: "Environment", href: "/admin/system/environment", icon: Globe },
+            { name: "Audit Logs", href: "/admin/system/audit", icon: FileSearch },
         ]
     },
     {
         category: "Monitoring",
         items: [
-            { name: "System Health", href: "/admin/health", icon: Activity },
-            { name: "Performance", href: "/admin/performance", icon: TrendingUp },
-            { name: "Error Logs", href: "/admin/error-logs", icon: AlertTriangle },
+            { name: "System Health", href: "/admin/system/health", icon: Activity },
+            { name: "Performance", href: "/admin/monitoring/performance", icon: TrendingUp },
+            { name: "Error Logs", href: "/admin/system/logs", icon: AlertTriangle },
         ]
     },
     {
         category: "Data Management",
         items: [
-            { name: "Database", href: "/admin/database", icon: Database },
-            { name: "Backups", href: "/admin/backups", icon: Archive },
-            { name: "Exports", href: "/admin/exports", icon: FileText },
-            { name: "Imports", href: "/admin/imports", icon: FileText },
+            { name: "Database", href: "/admin/system/database", icon: Database },
+            { name: "Backups", href: "/admin/system/backups", icon: Archive },
+            { name: "Exports", href: "/admin/system/exports", icon: FileText },
+            { name: "Imports", href: "/admin/system/imports", icon: FileText },
         ]
     }
 ];
@@ -150,8 +150,8 @@ export function AdminSidebar() {
                                         <Link
                                             to={item.href}
                                             className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
-                                                    ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-                                                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                                ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
+                                                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                                                 }`}
                                         >
                                             <Icon className="w-4 h-4" />

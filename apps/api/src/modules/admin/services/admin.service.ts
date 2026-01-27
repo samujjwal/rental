@@ -7,6 +7,7 @@ import {
   BookingStatus,
   DisputeStatus,
   PaymentStatus,
+  OrganizationStatus,
 } from '@rental-portal/database';
 
 @Injectable()
@@ -557,53 +558,69 @@ export class AdminService {
     options: {
       search?: string;
       status?: string;
-      plan?: string;
       page?: number;
       limit?: number;
     } = {},
   ): Promise<any> {
     await this.verifyAdmin(adminId);
 
-    const { search, status, plan, page = 1, limit = 20 } = options;
+    const { search, status, page = 1, limit = 20 } = options;
     const skip = (page - 1) * limit;
 
-    // Mock organizations data
-    const organizations = [
-      {
-        id: 'org-1',
-        name: 'Camera Equipment Rentals',
-        description: 'Professional camera and photography equipment rental service',
-        status: 'ACTIVE',
-        plan: 'PREMIUM',
-        memberCount: 5,
-        listingCount: 12,
-        createdAt: new Date('2024-01-15'),
-        owner: { id: '0d084ca3-aa25-4f0f-96ea-21ff25354832', firstName: 'John', lastName: 'Smith' },
-      },
-      {
-        id: 'org-2',
-        name: 'Tools & Equipment Co',
-        description: 'Construction tools and heavy equipment rental',
-        status: 'ACTIVE',
-        plan: 'ENTERPRISE',
-        memberCount: 8,
-        listingCount: 25,
-        createdAt: new Date('2024-02-20'),
-        owner: {
-          id: '20394fd5-dfb1-480e-81a2-f5c0a36cf483',
-          firstName: 'Emily',
-          lastName: 'Johnson',
+    const where: any = {};
+    if (status) where.status = status;
+    if (search) {
+      where.OR = [{ name: { contains: search, mode: 'insensitive' } }];
+    }
+
+    const [organizations, total] = await Promise.all([
+      this.prisma.organization.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          members: {
+            where: { role: 'OWNER' },
+            include: {
+              user: { select: { id: true, firstName: true, lastName: true, email: true } },
+            },
+            take: 1,
+          },
+          _count: { select: { members: true, listings: true } },
         },
-      },
-    ];
+      }),
+      this.prisma.organization.count({ where }),
+    ]);
 
     return {
-      organizations: organizations.slice(skip, skip + limit),
-      total: organizations.length,
-      page,
-      limit,
-      totalPages: Math.ceil(organizations.length / limit),
+      organizations: organizations.map((o) => ({
+        id: o.id,
+        name: o.name,
+        slug: o.slug,
+        status: o.status,
+        owner: o.members[0]?.user || { firstName: 'Unknown', lastName: 'Owner' },
+        stats: {
+          membersCount: o._count.members,
+          listingsCount: o._count.listings,
+        },
+        createdAt: o.createdAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
+  }
+
+  async updateOrganizationStatus(adminId: string, orgId: string, status: OrganizationStatus) {
+    await this.verifyAdmin(adminId);
+    return this.prisma.organization.update({
+      where: { id: orgId },
+      data: { status },
+    });
   }
 
   /**
@@ -1414,5 +1431,294 @@ export class AdminService {
     ];
 
     return { backups };
+  }
+
+  // =================================================================================================
+  // ===================================  CONTENT MANAGEMENT  ========================================
+  // =================================================================================================
+
+  async getReviews(
+    adminId: string,
+    params: { page?: number; limit?: number; status?: string; search?: string },
+  ) {
+    await this.verifyAdmin(adminId);
+    const { page = 1, limit = 10, status, search } = params;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (status) where.status = status;
+    if (search) {
+      where.OR = [
+        { content: { contains: search, mode: 'insensitive' } },
+        { listing: { title: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [reviews, total] = await Promise.all([
+      this.prisma.review.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          reviewer: {
+            select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+          },
+          listing: { select: { id: true, title: true, photos: true } },
+        },
+      }),
+      this.prisma.review.count({ where }),
+    ]);
+
+    return {
+      reviews,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async updateReviewStatus(adminId: string, reviewId: string, status: any) {
+    await this.verifyAdmin(adminId);
+    return this.prisma.review.update({
+      where: { id: reviewId },
+      data: { status },
+    });
+  }
+
+  async getMessages(adminId: string, params: { page?: number; limit?: number; flagged?: boolean }) {
+    await this.verifyAdmin(adminId);
+    const { page = 1, limit = 10, flagged } = params;
+    const skip = (page - 1) * limit;
+
+    // TODO: Add 'flagged' logic if Conversation or Message has a flag. Schema doesn't have conversation flag, but Review has.
+    // Assuming we want conversations for now.
+    const [conversations, total] = await Promise.all([
+      this.prisma.conversation.findMany({
+        skip,
+        take: limit,
+        orderBy: { lastMessageAt: 'desc' },
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+              },
+            },
+          },
+          messages: { take: 1, orderBy: { createdAt: 'desc' } },
+          booking: { include: { listing: { select: { title: true } } } },
+        },
+      }),
+      this.prisma.conversation.count(),
+    ]);
+
+    return {
+      conversations: conversations.map((c) => ({
+        id: c.id,
+        participants: c.participants.map((p) => `${p.user.firstName} ${p.user.lastName}`),
+        lastMessage: c.messages[0]?.content || '',
+        sentAt: c.lastMessageAt || c.createdAt,
+        flagged: false, // Placeholder
+        listing: c.booking?.listing?.title || 'General Inquiry',
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  // =================================================================================================
+  // ===================================  FINANCE & LEDGER  ==========================================
+  // =================================================================================================
+
+  async getRefunds(adminId: string, params: { page?: number; limit?: number; status?: string }) {
+    await this.verifyAdmin(adminId);
+    const { page = 1, limit = 10, status } = params;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (status) where.status = status;
+
+    const [refunds, total] = await Promise.all([
+      this.prisma.refund.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.refund.count({ where }),
+    ]);
+
+    return {
+      refunds: refunds.map((r) => ({
+        id: r.id,
+        bookingRef: r.bookingId.substring(0, 8).toUpperCase(), // Mocking a ref format
+        amount: r.amount,
+        user: 'Unknown User', // Mock user data - refund doesn't have direct renter relation
+        reason: r.reason,
+        status: r.status.toLowerCase(), // frontend expects lowercase
+        date: r.createdAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getPayouts(adminId: string, params: { page?: number; limit?: number; status?: string }) {
+    await this.verifyAdmin(adminId);
+    const { page = 1, limit = 10, status } = params;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (status) where.status = status;
+
+    const [payouts, total] = await Promise.all([
+      this.prisma.payout.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        // need to fetch owner info? Payout has ownerId.
+      }),
+      this.prisma.payout.count({ where }),
+    ]);
+
+    // Need to fetch owners manually if Payout doesn't have relation in schema?
+    // Checking schema: Payout doesn't seem to have relation to User owner defined in the provided excerpt?
+    // Wait, let me check schema snippet again.
+    // "model Payout { ... ownerId String ... @@index([ownerId]) }" - No relation defined in Payout model!
+    // But User model has... wait, User doesn't have payouts relation listed in snippet.
+    // I will fetch owners separately.
+
+    const ownerIds = [...new Set(payouts.map((p) => p.ownerId))];
+    const owners = await this.prisma.user.findMany({
+      where: { id: { in: ownerIds } },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    const ownerMap = new Map(owners.map((u) => [u.id, `${u.firstName} ${u.lastName}`]));
+
+    return {
+      payouts: payouts.map((p) => ({
+        id: p.id,
+        host: ownerMap.get(p.ownerId) || 'Unknown Host',
+        amount: p.amount,
+        status: p.status.toLowerCase(),
+        scheduledDate: p.createdAt, // Using createdAt as scheduled
+        processedDate: p.processedAt,
+        method: 'stripe_transfer',
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getLedger(adminId: string, params: { page?: number; limit?: number }) {
+    await this.verifyAdmin(adminId);
+    const { page = 1, limit = 10 } = params;
+    const skip = (page - 1) * limit;
+
+    const [entries, total] = await Promise.all([
+      this.prisma.ledgerEntry.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.ledgerEntry.count(),
+    ]);
+
+    return {
+      transactions: entries.map((e) => ({
+        id: e.id,
+        type: e.side.toLowerCase(), // debit/credit
+        amount: e.amount,
+        description: e.description,
+        reference: e.referenceId || e.bookingId,
+        date: e.createdAt,
+        balanceAfter: 0, // Ledger doesn't track running balance easily in this view
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  // =================================================================================================
+  // ===================================  MODERATION & DISPUTES  =====================================
+  // =================================================================================================
+
+  async getDisputes(adminId: string, params: { page?: number; limit?: number; status?: string }) {
+    await this.verifyAdmin(adminId);
+    const { page = 1, limit = 10, status } = params;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (status) where.status = status;
+
+    const [disputes, total] = await Promise.all([
+      this.prisma.dispute.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          initiator: { select: { firstName: true, lastName: true } },
+          booking: { select: { id: true } },
+        },
+      }),
+      this.prisma.dispute.count({ where }),
+    ]);
+
+    return {
+      disputes: disputes.map((d) => ({
+        id: d.id,
+        ticketId: d.id.substring(0, 5), // Mock
+        bookingRef: d.booking.id.substring(0, 8).toUpperCase(),
+        reporter: `${d.initiator.firstName} ${d.initiator.lastName}`,
+        type: d.type.toLowerCase(),
+        priority: d.priority.toLowerCase(),
+        status: d.status.toLowerCase(),
+        created: d.createdAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async updateDisputeStatus(adminId: string, disputeId: string, status: DisputeStatus) {
+    await this.verifyAdmin(adminId);
+    return this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: { status },
+    });
+  }
+
+  async updateRefundStatus(adminId: string, refundId: string, status: any) {
+    await this.verifyAdmin(adminId);
+    return this.prisma.refund.update({
+      where: { id: refundId },
+      data: { status },
+    });
   }
 }

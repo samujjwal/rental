@@ -91,14 +91,12 @@ export class AdminController {
     @CurrentUser('id') userId: string,
     @Query('search') search?: string,
     @Query('status') status?: string,
-    @Query('plan') plan?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
     return this.adminService.getAllOrganizations(userId, {
       search,
       status,
-      plan,
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
     });
@@ -114,6 +112,16 @@ export class AdminController {
   @ApiOperation({ summary: 'Get organization members' })
   async getOrganizationMembers(@CurrentUser('id') adminId: string, @Param('id') orgId: string) {
     return this.adminService.getOrganizationMembers(adminId, orgId);
+  }
+
+  @Patch('organizations/:id/status')
+  @ApiOperation({ summary: 'Update organization status' })
+  async updateOrganizationStatus(
+    @CurrentUser('id') adminId: string,
+    @Param('id') orgId: string,
+    @Body('status') status: any,
+  ) {
+    return this.adminService.updateOrganizationStatus(adminId, orgId, status);
   }
 
   @Get('listings')
@@ -373,5 +381,130 @@ export class AdminController {
     @Query('endDate') endDate: string,
   ) {
     return this.adminService.getRevenueReport(userId, new Date(startDate), new Date(endDate));
+  }
+
+  // ==================== CONTENT MANAGEMENT ====================
+
+  @Get('reviews')
+  @ApiOperation({ summary: 'Get all reviews' })
+  async getReviews(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.adminService.getReviews(adminId, {
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+      status,
+      search,
+    });
+  }
+
+  @Patch('reviews/:id/status')
+  @ApiOperation({ summary: 'Update review status' })
+  async updateReviewStatus(
+    @CurrentUser('id') adminId: string,
+    @Param('id') reviewId: string,
+    @Body() body: { status: string },
+  ) {
+    return this.adminService.updateReviewStatus(adminId, reviewId, body.status);
+  }
+
+  @Get('messages')
+  @ApiOperation({ summary: 'Get all messages/conversations' })
+  async getMessages(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('flagged') flagged?: boolean,
+  ) {
+    return this.adminService.getMessages(adminId, {
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+      flagged,
+    });
+  }
+
+  // ==================== FINANCE ====================
+
+  @Get('refunds')
+  @ApiOperation({ summary: 'Get refunds' })
+  async getRefunds(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+  ) {
+    return this.adminService.getRefunds(adminId, {
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+      status,
+    });
+  }
+
+  @Get('payouts')
+  @ApiOperation({ summary: 'Get payouts' })
+  async getPayouts(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+  ) {
+    return this.adminService.getPayouts(adminId, {
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+      status,
+    });
+  }
+
+  @Get('ledger')
+  @ApiOperation({ summary: 'Get ledger entries' })
+  async getLedger(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getLedger(adminId, {
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+    });
+  }
+
+  // ==================== DISPUTES ====================
+
+  @Get('disputes')
+  @ApiOperation({ summary: 'Get disputes' })
+  async getDisputes(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+  ) {
+    return this.adminService.getDisputes(adminId, {
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+      status,
+    });
+  }
+  @Patch('disputes/:id/status')
+  @ApiOperation({ summary: 'Update dispute status' })
+  async updateDisputeStatus(
+    @CurrentUser('id') adminId: string,
+    @Param('id') id: string,
+    @Body('status') status: any,
+  ) {
+    return this.adminService.updateDisputeStatus(adminId, id, status);
+  }
+
+  @Patch('refunds/:id/status')
+  @ApiOperation({ summary: 'Update refund status' })
+  async updateRefundStatus(
+    @CurrentUser('id') adminId: string,
+    @Param('id') id: string,
+    @Body('status') status: any,
+  ) {
+    return this.adminService.updateRefundStatus(adminId, id, status);
   }
 }

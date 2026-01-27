@@ -7,7 +7,8 @@ export function AdminHeader() {
 
     const handleLogout = () => {
         clearAuth();
-        window.location.href = "/auth/login";
+        // Redirect to a logout route that clears the server session
+        window.location.href = "/auth/logout";
     };
 
     return (
@@ -15,9 +16,7 @@ export function AdminHeader() {
             <div className="px-6 py-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
-                        <Link to="/admin" className="text-xl font-bold text-gray-900">
-                            Admin Portal
-                        </Link>
+                        {/* Logo/Home link */}
                     </div>
 
                     <div className="flex items-center space-x-4">

@@ -680,10 +680,335 @@ exports.Prisma.NullsOrder = {
   last: 'last'
 };
 
+exports.Prisma.UserOrderByRelevanceFieldEnum = {
+  id: 'id',
+  email: 'email',
+  emailVerificationToken: 'emailVerificationToken',
+  passwordHash: 'passwordHash',
+  firstName: 'firstName',
+  lastName: 'lastName',
+  phoneNumber: 'phoneNumber',
+  phone: 'phone',
+  profilePhotoUrl: 'profilePhotoUrl',
+  bio: 'bio',
+  addressLine1: 'addressLine1',
+  addressLine2: 'addressLine2',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postalCode',
+  country: 'country',
+  idVerificationUrl: 'idVerificationUrl',
+  governmentIdUrl: 'governmentIdUrl',
+  governmentIdNumber: 'governmentIdNumber',
+  stripeCustomerId: 'stripeCustomerId',
+  stripeConnectId: 'stripeConnectId',
+  preferredLanguage: 'preferredLanguage',
+  preferredCurrency: 'preferredCurrency',
+  timezone: 'timezone',
+  mfaSecret: 'mfaSecret',
+  passwordResetToken: 'passwordResetToken',
+  lastLoginIp: 'lastLoginIp'
+};
+
+exports.Prisma.SessionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  token: 'token',
+  refreshToken: 'refreshToken',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent'
+};
+
+exports.Prisma.OrganizationOrderByRelevanceFieldEnum = {
+  id: 'id',
+  name: 'name',
+  slug: 'slug',
+  description: 'description',
+  logoUrl: 'logoUrl',
+  websiteUrl: 'websiteUrl',
+  businessType: 'businessType',
+  taxId: 'taxId',
+  email: 'email',
+  phoneNumber: 'phoneNumber',
+  addressLine1: 'addressLine1',
+  addressLine2: 'addressLine2',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postalCode',
+  country: 'country',
+  stripeConnectId: 'stripeConnectId'
+};
+
 exports.Prisma.JsonNullValueFilter = {
   DbNull: Prisma.DbNull,
   JsonNull: Prisma.JsonNull,
   AnyNull: Prisma.AnyNull
+};
+
+exports.Prisma.OrganizationMemberOrderByRelevanceFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  userId: 'userId',
+  invitedBy: 'invitedBy'
+};
+
+exports.Prisma.CategoryOrderByRelevanceFieldEnum = {
+  id: 'id',
+  name: 'name',
+  slug: 'slug',
+  description: 'description',
+  iconUrl: 'iconUrl'
+};
+
+exports.Prisma.ListingOrderByRelevanceFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  organizationId: 'organizationId',
+  categoryId: 'categoryId',
+  title: 'title',
+  description: 'description',
+  slug: 'slug',
+  addressLine1: 'addressLine1',
+  addressLine2: 'addressLine2',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postalCode',
+  country: 'country',
+  currency: 'currency',
+  cancellationPolicyId: 'cancellationPolicyId',
+  insurancePolicyId: 'insurancePolicyId',
+  rejectionReason: 'rejectionReason',
+  moderatedBy: 'moderatedBy',
+  metaTitle: 'metaTitle',
+  metaDescription: 'metaDescription'
+};
+
+exports.Prisma.CancellationPolicyOrderByRelevanceFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description'
+};
+
+exports.Prisma.AvailabilityOrderByRelevanceFieldEnum = {
+  id: 'id',
+  listingId: 'listingId'
+};
+
+exports.Prisma.FavoriteListingOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  listingId: 'listingId'
+};
+
+exports.Prisma.BookingOrderByRelevanceFieldEnum = {
+  id: 'id',
+  listingId: 'listingId',
+  renterId: 'renterId',
+  ownerId: 'ownerId',
+  currency: 'currency',
+  renterMessage: 'renterMessage',
+  cancellationReason: 'cancellationReason',
+  cancelledBy: 'cancelledBy',
+  paymentIntentId: 'paymentIntentId',
+  depositHoldId: 'depositHoldId',
+  renterNotes: 'renterNotes',
+  ownerNotes: 'ownerNotes'
+};
+
+exports.Prisma.BookingStateHistoryOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  reason: 'reason',
+  changedBy: 'changedBy'
+};
+
+exports.Prisma.LedgerEntryOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  accountType: 'accountType',
+  currency: 'currency',
+  transactionType: 'transactionType',
+  description: 'description',
+  referenceId: 'referenceId'
+};
+
+exports.Prisma.DepositHoldOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  currency: 'currency',
+  paymentIntentId: 'paymentIntentId',
+  deductionReason: 'deductionReason'
+};
+
+exports.Prisma.PaymentOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  currency: 'currency',
+  stripePaymentIntentId: 'stripePaymentIntentId',
+  stripeChargeId: 'stripeChargeId',
+  failureReason: 'failureReason'
+};
+
+exports.Prisma.RefundOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  currency: 'currency',
+  reason: 'reason',
+  refundId: 'refundId'
+};
+
+exports.Prisma.PayoutOrderByRelevanceFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  currency: 'currency',
+  transferId: 'transferId',
+  failureReason: 'failureReason'
+};
+
+exports.Prisma.ReviewOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  listingId: 'listingId',
+  reviewerId: 'reviewerId',
+  revieweeId: 'revieweeId',
+  title: 'title',
+  content: 'content',
+  response: 'response',
+  flagReason: 'flagReason',
+  moderatedBy: 'moderatedBy'
+};
+
+exports.Prisma.ConversationOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  listingId: 'listingId',
+  subject: 'subject',
+  lastMessagePreview: 'lastMessagePreview'
+};
+
+exports.Prisma.ConversationParticipantOrderByRelevanceFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  userId: 'userId'
+};
+
+exports.Prisma.MessageOrderByRelevanceFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  senderId: 'senderId',
+  content: 'content'
+};
+
+exports.Prisma.MessageReadReceiptOrderByRelevanceFieldEnum = {
+  id: 'id',
+  messageId: 'messageId',
+  userId: 'userId'
+};
+
+exports.Prisma.ConditionReportOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  reportedBy: 'reportedBy',
+  overallCondition: 'overallCondition',
+  condition: 'condition',
+  notes: 'notes',
+  acknowledgedBy: 'acknowledgedBy'
+};
+
+exports.Prisma.ReportPhotoOrderByRelevanceFieldEnum = {
+  id: 'id',
+  reportId: 'reportId',
+  url: 'url',
+  thumbnailUrl: 'thumbnailUrl',
+  caption: 'caption'
+};
+
+exports.Prisma.DisputeOrderByRelevanceFieldEnum = {
+  id: 'id',
+  bookingId: 'bookingId',
+  conditionReportId: 'conditionReportId',
+  initiatorId: 'initiatorId',
+  defendantId: 'defendantId',
+  title: 'title',
+  description: 'description',
+  currency: 'currency',
+  assignedTo: 'assignedTo'
+};
+
+exports.Prisma.DisputeResponseOrderByRelevanceFieldEnum = {
+  id: 'id',
+  disputeId: 'disputeId',
+  userId: 'userId',
+  content: 'content'
+};
+
+exports.Prisma.DisputeEvidenceOrderByRelevanceFieldEnum = {
+  id: 'id',
+  disputeId: 'disputeId',
+  uploadedBy: 'uploadedBy',
+  url: 'url',
+  description: 'description'
+};
+
+exports.Prisma.DisputeTimelineEventOrderByRelevanceFieldEnum = {
+  id: 'id',
+  disputeId: 'disputeId',
+  eventType: 'eventType',
+  description: 'description'
+};
+
+exports.Prisma.DisputeResolutionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  disputeId: 'disputeId',
+  summary: 'summary',
+  resolvedBy: 'resolvedBy'
+};
+
+exports.Prisma.NotificationOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  title: 'title',
+  message: 'message',
+  relatedId: 'relatedId',
+  relatedType: 'relatedType',
+  actionUrl: 'actionUrl',
+  actionLabel: 'actionLabel',
+  status: 'status'
+};
+
+exports.Prisma.AuditLogOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  action: 'action',
+  entityType: 'entityType',
+  entityId: 'entityId',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent'
+};
+
+exports.Prisma.InsurancePolicyOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  listingId: 'listingId',
+  policyNumber: 'policyNumber',
+  provider: 'provider',
+  type: 'type',
+  documentUrl: 'documentUrl',
+  certificateUrl: 'certificateUrl',
+  verifiedBy: 'verifiedBy',
+  notes: 'notes'
+};
+
+exports.Prisma.DeviceTokenOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  token: 'token',
+  platform: 'platform'
+};
+
+exports.Prisma.UserPreferencesOrderByRelevanceFieldEnum = {
+  id: 'id',
+  userId: 'userId'
 };
 exports.VerificationStatus = exports.$Enums.VerificationStatus = {
   PENDING: 'PENDING',
@@ -994,7 +1319,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "/Users/samujjwal/Development/rental/packages/database/src/generated/client",
+      "value": "/home/samujjwal/Developments/gharbatai-rentals/packages/database/src/generated/client",
       "fromEnvVar": null
     },
     "config": {
@@ -1003,7 +1328,7 @@ const config = {
     "binaryTargets": [
       {
         "fromEnvVar": null,
-        "value": "darwin-arm64",
+        "value": "debian-openssl-1.1.x",
         "native": true
       },
       {
@@ -1012,18 +1337,18 @@ const config = {
       },
       {
         "fromEnvVar": null,
-        "value": "darwin-arm64"
+        "value": "debian-openssl-1.1.x"
       }
     ],
     "previewFeatures": [
+      "fullTextSearch",
       "postgresqlExtensions"
     ],
-    "sourceFilePath": "/Users/samujjwal/Development/rental/packages/database/prisma/schema.prisma",
+    "sourceFilePath": "/home/samujjwal/Developments/gharbatai-rentals/packages/database/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
-    "rootEnvPath": "../../../.env",
-    "schemaEnvPath": "../../../.env"
+    "rootEnvPath": null
   },
   "relativePath": "../../../prisma",
   "clientVersion": "5.22.0",
@@ -1041,8 +1366,8 @@ const config = {
       }
     }
   },
-  "inlineSchema": "// Rental Portal - Complete Database Schema\n// Version: 1.0.0\n// Last Updated: January 23, 2026\n\ngenerator client {\n  provider        = \"prisma-client-js\"\n  previewFeatures = [\"postgresqlExtensions\"]\n  binaryTargets   = [\"native\", \"linux-musl-openssl-3.0.x\", \"darwin-arm64\"]\n  output          = \"../src/generated/client\"\n}\n\ndatasource db {\n  provider   = \"postgresql\"\n  url        = env(\"DATABASE_URL\")\n  extensions = [pgvector(map: \"vector\")]\n}\n\n// ==================== Users & Authentication ====================\n\nmodel User {\n  id                     String    @id @default(uuid())\n  email                  String    @unique\n  emailVerified          Boolean   @default(false)\n  emailVerificationToken String?\n  passwordHash           String\n  firstName              String\n  lastName               String\n  phoneNumber            String?\n  phone                  String? // Alias for phoneNumber for compatibility\n  phoneVerified          Boolean   @default(false)\n  dateOfBirth            DateTime?\n  profilePhotoUrl        String?\n  bio                    String?   @db.Text\n\n  // Address\n  addressLine1 String?\n  addressLine2 String?\n  city         String?\n  state        String?\n  postalCode   String?\n  country      String?\n\n  // Verification\n  idVerificationStatus VerificationStatus @default(PENDING)\n  idVerificationUrl    String?\n  governmentIdUrl      String?\n  governmentIdType     GovernmentIdType?\n  governmentIdNumber   String?\n\n  // Stripe\n  stripeCustomerId         String? @unique\n  stripeConnectId          String? @unique\n  stripeOnboardingComplete Boolean @default(false)\n  stripeChargesEnabled     Boolean @default(false)\n  stripePayoutsEnabled     Boolean @default(false)\n\n  // Settings\n  role              UserRole   @default(CUSTOMER)\n  status            UserStatus @default(ACTIVE)\n  preferredLanguage String     @default(\"en\")\n  preferredCurrency String     @default(\"USD\")\n  timezone          String     @default(\"UTC\")\n\n  // Security\n  mfaEnabled           Boolean   @default(false)\n  mfaSecret            String?\n  passwordResetToken   String?\n  passwordResetExpires DateTime?\n  lastLoginAt          DateTime?\n  lastLoginIp          String?\n\n  // Statistics\n  averageRating Float @default(0)\n  totalReviews  Int   @default(0)\n  responseRate  Float @default(0)\n  responseTime  Int   @default(0) // in minutes\n\n  // Timestamps\n  createdAt DateTime  @default(now())\n  updatedAt DateTime  @updatedAt\n  deletedAt DateTime?\n\n  // Relations\n  sessions                 Session[]\n  listings                 Listing[]\n  bookingsAsRenter         Booking[]                 @relation(\"RenterBookings\")\n  bookingsAsOwner          Booking[]                 @relation(\"OwnerBookings\")\n  reviewsGiven             Review[]                  @relation(\"ReviewsGiven\")\n  reviewsReceived          Review[]                  @relation(\"ReviewsReceived\")\n  conversationParticipants ConversationParticipant[]\n  messages                 Message[]\n  auditLogs                AuditLog[]\n  disputesInitiated        Dispute[]                 @relation(\"DisputesInitiated\")\n  disputesDefended         Dispute[]                 @relation(\"DisputesDefended\")\n  disputeResponses         DisputeResponse[]\n  organizations            OrganizationMember[]\n  favoriteListings         FavoriteListing[]\n  notifications            Notification[]\n  insurancePolicies        InsurancePolicy[]\n  deviceTokens             DeviceToken[]\n  userPreferences          UserPreferences?\n  conditionReportsReported ConditionReport[]         @relation(\"ReportedByUser\")\n\n  @@index([email])\n  @@index([stripeCustomerId])\n  @@index([stripeConnectId])\n  @@index([status, role])\n  @@map(\"users\")\n}\n\nenum UserRole {\n  CUSTOMER\n  OWNER\n  ADMIN\n  SUPPORT\n}\n\nenum UserStatus {\n  ACTIVE\n  SUSPENDED\n  BANNED\n  DELETED\n}\n\nenum VerificationStatus {\n  PENDING\n  IN_REVIEW\n  VERIFIED\n  REJECTED\n}\n\nenum GovernmentIdType {\n  PASSPORT\n  DRIVERS_LICENSE\n  NATIONAL_ID\n  OTHER\n}\n\nmodel Session {\n  id           String   @id @default(uuid())\n  userId       String\n  token        String   @unique\n  refreshToken String   @unique\n  expiresAt    DateTime\n  ipAddress    String?\n  userAgent    String?\n  createdAt    DateTime @default(now())\n\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@index([userId])\n  @@index([token])\n  @@index([expiresAt])\n  @@map(\"sessions\")\n}\n\n// ==================== Organizations ====================\n\nmodel Organization {\n  id           String  @id @default(uuid())\n  name         String\n  slug         String  @unique\n  description  String? @db.Text\n  logoUrl      String?\n  websiteUrl   String?\n  businessType String? // Type of business (e.g., LLC, Corporation, Sole Proprietorship)\n  taxId        String? // Tax identification number\n\n  // Contact\n  email       String\n  phoneNumber String?\n\n  // Address\n  addressLine1 String?\n  addressLine2 String?\n  city         String?\n  state        String?\n  postalCode   String?\n  country      String?\n\n  // Stripe\n  stripeConnectId String? @unique\n\n  // Settings\n  status OrganizationStatus @default(ACTIVE)\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  members  OrganizationMember[]\n  listings Listing[]\n\n  @@index([slug])\n  @@index([status])\n  @@map(\"organizations\")\n}\n\nenum OrganizationStatus {\n  ACTIVE\n  SUSPENDED\n  DELETED\n}\n\nmodel OrganizationMember {\n  id             String   @id @default(uuid())\n  organizationId String\n  userId         String\n  role           OrgRole  @default(MEMBER)\n  permissions    Json     @default(\"[]\")\n  invitedBy      String?\n  joinedAt       DateTime @default(now())\n\n  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)\n  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@unique([organizationId, userId])\n  @@index([userId])\n  @@map(\"organization_members\")\n}\n\nenum OrgRole {\n  OWNER\n  ADMIN\n  MEMBER\n}\n\n// ==================== Categories & Templates ====================\n\nmodel Category {\n  id          String  @id @default(uuid())\n  name        String  @unique\n  slug        String  @unique\n  description String? @db.Text\n  iconUrl     String?\n  order       Int     @default(0)\n  active      Boolean @default(true)\n\n  // Template configuration\n  templateSchema   Json // JSON Schema for category-specific fields\n  searchableFields Json @default(\"[]\") // Fields to index in Elasticsearch\n  requiredFields   Json @default(\"[]\") // Mandatory fields for this category\n\n  // Booking settings\n  defaultPricingMode       PricingMode @default(PER_DAY)\n  allowInstantBook         Boolean     @default(true)\n  requiresDepositDefault   Boolean     @default(false)\n  defaultDepositPercentage Float       @default(0)\n\n  // Insurance requirements\n  insuranceRequired      Boolean @default(false)\n  minimumInsuranceAmount Float?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  listings Listing[]\n\n  @@index([slug])\n  @@index([active])\n  @@map(\"categories\")\n}\n\n// ==================== Listings ====================\n\nmodel Listing {\n  id             String  @id @default(uuid())\n  ownerId        String\n  organizationId String?\n  categoryId     String\n\n  // Basic info\n  title       String\n  description String @db.Text\n  slug        String @unique\n\n  // Location\n  addressLine1 String?\n  addressLine2 String?\n  city         String\n  state        String\n  postalCode   String?\n  country      String\n  latitude     Float\n  longitude    Float\n\n  // Media\n  photos    Json @default(\"[]\") // Array of {url, order, caption}\n  videos    Json @default(\"[]\") // Array of {url, type, thumbnailUrl}\n  documents Json @default(\"[]\") // Array of {url, title, type}\n\n  // Pricing\n  pricingMode  PricingMode @default(PER_DAY)\n  basePrice    Float\n  hourlyPrice  Float?\n  dailyPrice   Float?\n  weeklyPrice  Float?\n  monthlyPrice Float?\n  currency     String      @default(\"USD\")\n\n  // Deposit\n  requiresDeposit Boolean      @default(false)\n  depositAmount   Float?\n  depositType     DepositType?\n\n  // Booking settings\n  bookingMode     BookingMode @default(REQUEST_TO_BOOK)\n  minBookingHours Int?\n  maxBookingDays  Int?\n  leadTime        Int         @default(24) // hours\n  advanceNotice   Int         @default(1) // days\n\n  // Capacity & specifications\n  capacity             Int?\n  categorySpecificData Json // Dynamic fields based on category template\n\n  // Condition & features\n  condition ListingCondition?\n  features  Json              @default(\"[]\") // Array of feature strings\n  amenities Json              @default(\"[]\") // Array of amenity objects\n\n  // Policies\n  cancellationPolicyId String?\n  rules                Json    @default(\"[]\") // Array of rule strings\n\n  // Insurance\n  insurancePolicyId   String?\n  insuranceVerified   Boolean   @default(false)\n  insuranceVerifiedAt DateTime?\n  insuranceExpiresAt  DateTime?\n\n  // Status & moderation\n  status             ListingStatus      @default(DRAFT)\n  verificationStatus VerificationStatus @default(PENDING)\n  rejectionReason    String?\n  moderatedBy        String?\n  moderatedAt        DateTime?\n\n  // Statistics\n  viewCount     Int   @default(0)\n  bookingCount  Int   @default(0)\n  favoriteCount Int   @default(0)\n  averageRating Float @default(0)\n  totalReviews  Int   @default(0)\n\n  // SEO\n  metaTitle       String?\n  metaDescription String?\n\n  // Timestamps\n  createdAt   DateTime  @default(now())\n  updatedAt   DateTime  @updatedAt\n  publishedAt DateTime?\n  deletedAt   DateTime?\n\n  // Relations\n  owner              User                @relation(fields: [ownerId], references: [id])\n  organization       Organization?       @relation(fields: [organizationId], references: [id])\n  category           Category            @relation(fields: [categoryId], references: [id])\n  cancellationPolicy CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id])\n  availability       Availability[]\n  bookings           Booking[]\n  reviews            Review[]\n  favorites          FavoriteListing[]\n  insurancePolicies  InsurancePolicy[]\n\n  @@index([ownerId])\n  @@index([organizationId])\n  @@index([categoryId])\n  @@index([slug])\n  @@index([status, verificationStatus])\n  @@index([latitude, longitude])\n  @@index([city, country])\n  @@map(\"listings\")\n}\n\nenum BookingMode {\n  INSTANT_BOOK\n  REQUEST_TO_BOOK\n}\n\nenum PricingMode {\n  PER_HOUR\n  PER_DAY\n  PER_WEEK\n  PER_MONTH\n  CUSTOM\n}\n\nenum ListingStatus {\n  DRAFT\n  PENDING_REVIEW\n  ACTIVE\n  PAUSED\n  ARCHIVED\n  REJECTED\n}\n\nenum ListingCondition {\n  NEW\n  EXCELLENT\n  GOOD\n  FAIR\n  POOR\n}\n\nenum DepositType {\n  FIXED_AMOUNT\n  PERCENTAGE\n}\n\nmodel CancellationPolicy {\n  id          String                 @id @default(uuid())\n  name        String\n  type        CancellationPolicyType\n  description String                 @db.Text\n\n  // Refund rules (array of {hoursBeforeStart, refundPercentage})\n  rules Json\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  listings Listing[]\n\n  @@map(\"cancellation_policies\")\n}\n\nenum CancellationPolicyType {\n  FLEXIBLE\n  MODERATE\n  STRICT\n  NON_REFUNDABLE\n}\n\nmodel Availability {\n  id        String @id @default(uuid())\n  listingId String\n\n  // Date range\n  startDate DateTime\n  endDate   DateTime\n\n  // Availability\n  available Boolean @default(true)\n  price     Float? // Override base price\n  minStay   Int? // Minimum nights/days\n\n  createdAt DateTime @default(now())\n\n  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)\n\n  @@index([listingId])\n  @@index([startDate, endDate])\n  @@map(\"availability\")\n}\n\nmodel FavoriteListing {\n  id        String   @id @default(uuid())\n  userId    String\n  listingId String\n  createdAt DateTime @default(now())\n\n  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)\n  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)\n\n  @@unique([userId, listingId])\n  @@index([userId])\n  @@map(\"favorite_listings\")\n}\n\n// ==================== Bookings ====================\n\nmodel Booking {\n  id        String @id @default(uuid())\n  listingId String\n  renterId  String\n  ownerId   String\n\n  // Dates\n  startDate DateTime\n  endDate   DateTime\n  duration  Int // in hours\n\n  // Guest information\n  guestCount Int @default(1)\n\n  // Pricing breakdown\n  basePrice      Float\n  serviceFee     Float\n  tax            Float\n  depositAmount  Float @default(0)\n  discountAmount Float @default(0)\n  totalPrice     Float\n  totalAmount    Float // Same as totalPrice, included for compatibility\n  ownerEarnings  Float\n  platformFee    Float\n\n  currency String @default(\"USD\")\n\n  // Additional contact info\n  renterMessage String? @db.Text\n\n  // Status\n  status             BookingStatus @default(DRAFT)\n  cancellationReason String?       @db.Text\n  cancelledBy        String?\n  cancelledAt        DateTime?\n\n  // Payment tracking\n  paymentIntentId   String?\n  depositHoldId     String?\n  depositReleased   Boolean   @default(false)\n  depositReleasedAt DateTime?\n\n  // Fulfillment\n  checkInTime      DateTime?\n  checkOutTime     DateTime?\n  actualReturnTime DateTime?\n\n  // Metadata\n  categoryData Json    @default(\"{}\")\n  renterNotes  String? @db.Text\n  ownerNotes   String? @db.Text\n\n  // Timestamps\n  createdAt   DateTime  @default(now())\n  updatedAt   DateTime  @updatedAt\n  confirmedAt DateTime?\n  completedAt DateTime?\n\n  // Relations\n  listing          Listing               @relation(fields: [listingId], references: [id])\n  renter           User                  @relation(\"RenterBookings\", fields: [renterId], references: [id])\n  owner            User                  @relation(\"OwnerBookings\", fields: [ownerId], references: [id])\n  stateHistory     BookingStateHistory[]\n  ledgerEntries    LedgerEntry[]\n  depositHold      DepositHold?          @relation(fields: [depositHoldId], references: [id])\n  payments         Payment[]\n  conditionReports ConditionReport[]\n  reviews          Review[]\n  disputes         Dispute[]\n  conversations    Conversation[]\n\n  @@index([listingId])\n  @@index([renterId])\n  @@index([ownerId])\n  @@index([status])\n  @@index([startDate, endDate])\n  @@map(\"bookings\")\n}\n\nenum BookingStatus {\n  DRAFT\n  PENDING_OWNER_APPROVAL\n  PENDING_PAYMENT\n  CONFIRMED\n  ACTIVE\n  IN_PROGRESS\n  AWAITING_RETURN_INSPECTION\n  COMPLETED\n  SETTLED\n  CANCELLED\n  DISPUTED\n  REFUNDED\n}\n\nmodel BookingStateHistory {\n  id        String         @id @default(uuid())\n  bookingId String\n  fromState BookingStatus?\n  toState   BookingStatus\n  reason    String?        @db.Text\n  metadata  Json           @default(\"{}\")\n  changedBy String?\n  createdAt DateTime       @default(now())\n\n  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)\n\n  @@index([bookingId])\n  @@index([createdAt])\n  @@map(\"booking_state_history\")\n}\n\n// ==================== Payments & Ledger ====================\n\nmodel LedgerEntry {\n  id        String @id @default(uuid())\n  bookingId String\n\n  // Double-entry accounting\n  accountType String // 'customer', 'owner', 'platform', 'deposit'\n  side        LedgerSide\n  amount      Float\n  currency    String     @default(\"USD\")\n\n  // Transaction details\n  transactionType String // 'booking_payment', 'payout', 'refund', 'deposit_hold', etc.\n  description     String\n  referenceId     String? // Stripe payment intent, transfer, etc.\n\n  // Status\n  status LedgerEntryStatus @default(PENDING)\n\n  // Metadata\n  metadata Json @default(\"{}\")\n\n  // Timestamps\n  createdAt DateTime  @default(now())\n  settledAt DateTime?\n\n  booking Booking @relation(fields: [bookingId], references: [id])\n\n  @@index([bookingId])\n  @@index([accountType])\n  @@index([status])\n  @@index([createdAt])\n  @@map(\"ledger_entries\")\n}\n\nenum LedgerSide {\n  DEBIT\n  CREDIT\n}\n\nenum LedgerEntryStatus {\n  PENDING\n  SETTLED\n  FAILED\n  REVERSED\n}\n\nmodel DepositHold {\n  id        String  @id @default(uuid())\n  bookingId String?\n  amount    Float\n  currency  String  @default(\"USD\")\n\n  // Stripe\n  paymentIntentId String @unique\n\n  // Status\n  status       DepositStatus @default(AUTHORIZED)\n  authorizedAt DateTime      @default(now())\n  capturedAt   DateTime?\n  releasedAt   DateTime?\n\n  // Deduction tracking\n  deductedAmount  Float   @default(0)\n  deductionReason String? @db.Text\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  expiresAt DateTime\n\n  // Relations\n  bookings Booking[]\n\n  @@index([status])\n  @@index([expiresAt])\n  @@map(\"deposit_holds\")\n}\n\nenum DepositStatus {\n  AUTHORIZED\n  CAPTURED\n  RELEASED\n  EXPIRED\n  FAILED\n}\n\nmodel Payment {\n  id                    String        @id @default(uuid())\n  bookingId             String\n  amount                Float\n  currency              String        @default(\"USD\")\n  stripePaymentIntentId String?       @unique\n  stripeChargeId        String?       @unique\n  status                PaymentStatus @default(PENDING)\n  failureReason         String?       @db.Text\n  processedAt           DateTime?\n  createdAt             DateTime      @default(now())\n  updatedAt             DateTime      @updatedAt\n\n  booking Booking @relation(fields: [bookingId], references: [id])\n\n  @@index([bookingId])\n  @@index([status])\n  @@index([stripePaymentIntentId])\n  @@map(\"payments\")\n}\n\nenum PaymentStatus {\n  PENDING\n  PROCESSING\n  SUCCEEDED\n  FAILED\n  CANCELLED\n  REFUNDED\n}\n\nmodel Refund {\n  id        String @id @default(uuid())\n  bookingId String\n  amount    Float\n  currency  String @default(\"USD\")\n  reason    String @db.Text\n\n  // Stripe\n  refundId String @unique\n\n  // Status\n  status      RefundStatus @default(PENDING)\n  processedAt DateTime?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n\n  @@index([bookingId])\n  @@index([status])\n  @@map(\"refunds\")\n}\n\nenum RefundStatus {\n  PENDING\n  SUCCEEDED\n  FAILED\n  CANCELLED\n}\n\nmodel Payout {\n  id       String @id @default(uuid())\n  ownerId  String\n  amount   Float\n  currency String @default(\"USD\")\n\n  // Stripe\n  transferId String? @unique\n\n  // Status\n  status        PayoutStatus @default(PENDING)\n  failureReason String?\n\n  // Timestamps\n  createdAt   DateTime  @default(now())\n  processedAt DateTime?\n  paidAt      DateTime?\n\n  @@index([ownerId])\n  @@index([status])\n  @@map(\"payouts\")\n}\n\nenum PayoutStatus {\n  PENDING\n  IN_TRANSIT\n  PAID\n  FAILED\n  CANCELLED\n}\n\n// ==================== Reviews ====================\n\nmodel Review {\n  id         String @id @default(uuid())\n  bookingId  String\n  listingId  String\n  reviewerId String\n  revieweeId String\n\n  // Review type\n  type ReviewType\n\n  // Ratings (1-5)\n  overallRating       Float\n  accuracyRating      Float?\n  communicationRating Float?\n  cleanlinessRating   Float?\n  valueRating         Float?\n\n  // Content\n  title   String?\n  content String  @db.Text\n\n  // Response\n  response    String?   @db.Text\n  respondedAt DateTime?\n\n  // Status\n  status ReviewStatus @default(PUBLISHED)\n\n  // Moderation\n  flagged     Boolean   @default(false)\n  flagReason  String?\n  moderatedBy String?\n  moderatedAt DateTime?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  booking  Booking @relation(fields: [bookingId], references: [id])\n  listing  Listing @relation(fields: [listingId], references: [id])\n  reviewer User    @relation(\"ReviewsGiven\", fields: [reviewerId], references: [id])\n  reviewee User    @relation(\"ReviewsReceived\", fields: [revieweeId], references: [id])\n\n  @@unique([bookingId, reviewerId, type])\n  @@index([listingId])\n  @@index([reviewerId])\n  @@index([revieweeId])\n  @@index([status])\n  @@map(\"reviews\")\n}\n\nenum ReviewType {\n  LISTING_REVIEW\n  RENTER_REVIEW\n  OWNER_REVIEW\n}\n\nenum ReviewStatus {\n  DRAFT\n  PUBLISHED\n  HIDDEN\n  DELETED\n}\n\n// ==================== Messaging ====================\n\nmodel Conversation {\n  id        String  @id @default(uuid())\n  bookingId String?\n  listingId String?\n\n  type    ConversationType @default(BOOKING)\n  subject String?\n\n  // Last message tracking\n  lastMessageAt      DateTime?\n  lastMessagePreview String?\n\n  // Status\n  status ConversationStatus @default(ACTIVE)\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  booking      Booking?                  @relation(fields: [bookingId], references: [id])\n  participants ConversationParticipant[]\n  messages     Message[]\n\n  @@index([bookingId])\n  @@index([listingId])\n  @@index([status])\n  @@map(\"conversations\")\n}\n\nenum ConversationType {\n  BOOKING\n  INQUIRY\n  SUPPORT\n  GENERAL\n}\n\nenum ConversationStatus {\n  ACTIVE\n  ARCHIVED\n  DELETED\n}\n\nmodel ConversationParticipant {\n  id             String @id @default(uuid())\n  conversationId String\n  userId         String\n\n  // Notification settings\n  muted Boolean @default(false)\n\n  // Read tracking\n  lastReadAt DateTime?\n\n  joinedAt DateTime @default(now())\n\n  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)\n  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@unique([conversationId, userId])\n  @@index([userId])\n  @@map(\"conversation_participants\")\n}\n\nmodel Message {\n  id             String @id @default(uuid())\n  conversationId String\n  senderId       String\n\n  // Content\n  type        MessageType @default(TEXT)\n  content     String      @db.Text\n  attachments Json        @default(\"[]\") // Array of {url, type, name}\n\n  // Metadata\n  metadata Json @default(\"{}\")\n\n  // Status\n  status MessageStatus @default(SENT)\n\n  // Timestamps\n  createdAt DateTime  @default(now())\n  editedAt  DateTime?\n  deletedAt DateTime?\n\n  // Relations\n  conversation Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)\n  sender       User                 @relation(fields: [senderId], references: [id])\n  readReceipts MessageReadReceipt[]\n\n  @@index([conversationId])\n  @@index([senderId])\n  @@index([createdAt])\n  @@map(\"messages\")\n}\n\nenum MessageType {\n  TEXT\n  IMAGE\n  FILE\n  SYSTEM\n  BOOKING_UPDATE\n}\n\nenum MessageStatus {\n  SENDING\n  SENT\n  DELIVERED\n  FAILED\n  DELETED\n}\n\nmodel MessageReadReceipt {\n  id        String   @id @default(uuid())\n  messageId String\n  userId    String\n  readAt    DateTime @default(now())\n\n  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)\n\n  @@unique([messageId, userId])\n  @@index([userId])\n  @@map(\"message_read_receipts\")\n}\n\n// ==================== Condition Reports ====================\n\nmodel ConditionReport {\n  id         String     @id @default(uuid())\n  bookingId  String\n  reportType ReportType\n  type       ReportType // Alias for reportType for compatibility\n\n  // Inspector\n  reportedBy String\n  reportedAt DateTime @default(now())\n\n  // Checklist (category-specific)\n  checklistData Json // Dynamic checklist based on category\n\n  // Overall condition\n  overallCondition String?\n  condition        String? // Alias for overallCondition\n  notes            String? @db.Text\n  damages          Json? // Array of damage objects\n\n  // Damage/issues\n  issuesFound  Boolean @default(false)\n  damageAmount Float?\n\n  // Photos\n  photos ReportPhoto[]\n\n  // Acknowledgment\n  acknowledgedBy String?\n  acknowledgedAt DateTime?\n  disputeRaised  Boolean   @default(false)\n\n  // Status\n  status ReportStatus @default(IN_PROGRESS)\n\n  // Timestamps\n  createdAt   DateTime  @default(now())\n  completedAt DateTime?\n\n  // Relations\n  booking        Booking  @relation(fields: [bookingId], references: [id])\n  reportedByUser User     @relation(\"ReportedByUser\", fields: [reportedBy], references: [id])\n  dispute        Dispute?\n\n  @@index([bookingId])\n  @@index([reportType])\n  @@index([status])\n  @@map(\"condition_reports\")\n}\n\nenum ReportType {\n  CHECK_IN\n  CHECK_OUT\n}\n\nenum ReportStatus {\n  IN_PROGRESS\n  COMPLETED\n  ACKNOWLEDGED\n  DISPUTED\n}\n\nmodel ReportPhoto {\n  id           String  @id @default(uuid())\n  reportId     String\n  url          String\n  thumbnailUrl String?\n\n  // Metadata\n  caption  String?\n  tags     Json    @default(\"[]\") // Array of tags like \"front\", \"damage\", \"scratch\"\n  metadata Json    @default(\"{}\")\n\n  order      Int      @default(0)\n  uploadedAt DateTime @default(now())\n\n  report ConditionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)\n\n  @@index([reportId])\n  @@map(\"report_photos\")\n}\n\n// ==================== Disputes ====================\n\nmodel Dispute {\n  id                String  @id @default(uuid())\n  bookingId         String\n  conditionReportId String? @unique\n\n  // Parties\n  initiatorId String\n  defendantId String\n\n  // Dispute details\n  type        DisputeType\n  title       String\n  description String      @db.Text\n  amount      Float?\n  currency    String      @default(\"USD\")\n\n  // Status\n  status   DisputeStatus   @default(OPEN)\n  priority DisputePriority @default(MEDIUM)\n\n  // SLA tracking\n  slaDeadline DateTime?\n  respondedAt DateTime?\n  resolvedAt  DateTime?\n\n  // Assignment\n  assignedTo String?\n  assignedAt DateTime?\n\n  // Resolution\n  resolution DisputeResolution?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  booking         Booking                @relation(fields: [bookingId], references: [id])\n  conditionReport ConditionReport?       @relation(fields: [conditionReportId], references: [id])\n  initiator       User                   @relation(\"DisputesInitiated\", fields: [initiatorId], references: [id])\n  defendant       User                   @relation(\"DisputesDefended\", fields: [defendantId], references: [id])\n  responses       DisputeResponse[]\n  evidence        DisputeEvidence[]\n  timeline        DisputeTimelineEvent[]\n\n  @@index([bookingId])\n  @@index([initiatorId])\n  @@index([defendantId])\n  @@index([status])\n  @@index([assignedTo])\n  @@map(\"disputes\")\n}\n\nenum DisputeType {\n  PROPERTY_DAMAGE\n  MISSING_ITEMS\n  CONDITION_MISMATCH\n  REFUND_REQUEST\n  PAYMENT_ISSUE\n  OTHER\n}\n\nenum DisputeStatus {\n  OPEN\n  UNDER_REVIEW\n  INVESTIGATING\n  AWAITING_RESPONSE\n  IN_MEDIATION\n  RESOLVED\n  CLOSED\n}\n\nenum DisputePriority {\n  CRITICAL\n  HIGH\n  MEDIUM\n  LOW\n}\n\nmodel DisputeResponse {\n  id          String   @id @default(uuid())\n  disputeId   String\n  userId      String\n  content     String   @db.Text\n  attachments Json     @default(\"[]\")\n  createdAt   DateTime @default(now())\n\n  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)\n  user    User    @relation(fields: [userId], references: [id])\n\n  @@index([disputeId])\n  @@index([userId])\n  @@map(\"dispute_responses\")\n}\n\nmodel DisputeEvidence {\n  id          String       @id @default(uuid())\n  disputeId   String\n  uploadedBy  String\n  type        EvidenceType\n  url         String\n  description String?      @db.Text\n  metadata    Json         @default(\"{}\")\n  uploadedAt  DateTime     @default(now())\n\n  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)\n\n  @@index([disputeId])\n  @@map(\"dispute_evidence\")\n}\n\nenum EvidenceType {\n  PHOTO\n  VIDEO\n  DOCUMENT\n  RECEIPT\n  OTHER\n}\n\nmodel DisputeTimelineEvent {\n  id          String   @id @default(uuid())\n  disputeId   String\n  eventType   String\n  description String\n  metadata    Json     @default(\"{}\")\n  createdAt   DateTime @default(now())\n\n  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)\n\n  @@index([disputeId])\n  @@index([createdAt])\n  @@map(\"dispute_timeline_events\")\n}\n\nmodel DisputeResolution {\n  id        String @id @default(uuid())\n  disputeId String @unique\n\n  // Resolution details\n  outcome ResolutionOutcome\n  summary String            @db.Text\n\n  // Financial\n  refundAmount     Float?\n  payoutAdjustment Float?\n\n  // Actions taken\n  actionsTaken Json @default(\"[]\")\n\n  // Resolution by\n  resolvedBy String\n  resolvedAt DateTime @default(now())\n\n  // Relations\n  dispute Dispute @relation(fields: [disputeId], references: [id])\n\n  @@map(\"dispute_resolutions\")\n}\n\nenum ResolutionOutcome {\n  RESOLVED_INITIATOR_FAVOR\n  RESOLVED_DEFENDANT_FAVOR\n  RESOLVED_COMPROMISE\n  RESOLVED_NO_ACTION\n  ESCALATED\n  CANCELLED\n}\n\n// ==================== Notifications ====================\n\nmodel Notification {\n  id     String @id @default(uuid())\n  userId String\n\n  // Notification details\n  type    NotificationType\n  title   String\n  message String           @db.Text\n  data    Json?\n\n  // Related entities\n  relatedId   String?\n  relatedType String?\n\n  // Action\n  actionUrl   String?\n  actionLabel String?\n\n  // Status\n  read   Boolean   @default(false)\n  readAt DateTime?\n  status String? // Status field for compatibility (UNREAD, READ, ARCHIVED)\n\n  // Delivery\n  sentViaEmail Boolean @default(false)\n  sentViaPush  Boolean @default(false)\n\n  // Timestamps\n  createdAt DateTime @default(now())\n\n  // Relations\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@index([userId])\n  @@index([read])\n  @@index([createdAt])\n  @@map(\"notifications\")\n}\n\nenum NotificationType {\n  BOOKING_REQUEST\n  BOOKING_CONFIRMED\n  BOOKING_CANCELLED\n  BOOKING_REMINDER\n  MESSAGE_RECEIVED\n  REVIEW_RECEIVED\n  PAYOUT_PROCESSED\n  DISPUTE_OPENED\n  DISPUTE_RESOLVED\n  LISTING_APPROVED\n  LISTING_REJECTED\n  VERIFICATION_COMPLETE\n  SYSTEM_ANNOUNCEMENT\n}\n\nenum NotificationStatus {\n  UNREAD\n  READ\n  ARCHIVED\n}\n\n// ==================== Audit Logs ====================\n\nmodel AuditLog {\n  id     String  @id @default(uuid())\n  userId String?\n\n  // Action details\n  action     String\n  entityType String\n  entityId   String\n\n  // Changes\n  oldValues Json?\n  newValues Json?\n  metadata  Json? // Additional metadata for context\n\n  // Request metadata\n  ipAddress String?\n  userAgent String?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n\n  // Relations\n  user User? @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n  @@index([entityType, entityId])\n  @@index([action])\n  @@index([createdAt])\n  @@map(\"audit_logs\")\n}\n\n// ==================== Insurance ====================\n\nmodel InsurancePolicy {\n  id               String          @id @default(uuid())\n  userId           String\n  listingId        String?\n  policyNumber     String          @unique\n  provider         String\n  type             String // LIABILITY, COMPREHENSIVE, COLLISION, DAMAGE\n  coverageAmount   Int // in cents\n  effectiveDate    DateTime\n  expirationDate   DateTime\n  documentUrl      String\n  certificateUrl   String?\n  status           InsuranceStatus @default(PENDING)\n  verificationDate DateTime?\n  verifiedBy       String?\n  notes            String?         @db.Text\n  metadata         Json?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n  listing Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)\n\n  @@index([userId])\n  @@index([listingId])\n  @@index([expirationDate])\n  @@index([status])\n  @@map(\"insurance_policies\")\n}\n\nenum InsuranceStatus {\n  NOT_REQUIRED\n  REQUIRED\n  PENDING\n  VERIFIED\n  EXPIRED\n  REJECTED\n}\n\n// ==================== Device Tokens & Preferences ====================\n\nmodel DeviceToken {\n  id       String  @id @default(uuid())\n  userId   String\n  token    String  @unique\n  platform String // ios, android, web\n  active   Boolean @default(true)\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@index([userId, active])\n  @@map(\"device_tokens\")\n}\n\nmodel UserPreferences {\n  id          String @id @default(uuid())\n  userId      String @unique\n  preferences Json // notification preferences, theme, etc.\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@map(\"user_preferences\")\n}\n",
-  "inlineSchemaHash": "bc42b7aeb8f021dfa83306dbfa0a67f6375684ebf98fa3be8e47a282eab002ea",
+  "inlineSchema": "// Rental Portal - Complete Database Schema\n// Version: 1.0.0\n// Last Updated: January 23, 2026\n\ngenerator client {\n  provider        = \"prisma-client-js\"\n  previewFeatures = [\"postgresqlExtensions\", \"fullTextSearch\"]\n  binaryTargets   = [\"native\", \"linux-musl-openssl-3.0.x\", \"debian-openssl-1.1.x\"]\n  output          = \"../src/generated/client\"\n}\n\ndatasource db {\n  provider   = \"postgresql\"\n  extensions = [pgvector(map: \"vector\")]\n  url        = env(\"DATABASE_URL\")\n}\n\n// ==================== Users & Authentication ====================\n\nmodel User {\n  id                     String    @id @default(uuid())\n  email                  String    @unique\n  emailVerified          Boolean   @default(false)\n  emailVerificationToken String?\n  passwordHash           String\n  firstName              String\n  lastName               String\n  phoneNumber            String?\n  phone                  String? // Alias for phoneNumber for compatibility\n  phoneVerified          Boolean   @default(false)\n  dateOfBirth            DateTime?\n  profilePhotoUrl        String?\n  bio                    String?   @db.Text\n\n  // Address\n  addressLine1 String?\n  addressLine2 String?\n  city         String?\n  state        String?\n  postalCode   String?\n  country      String?\n\n  // Verification\n  idVerificationStatus VerificationStatus @default(PENDING)\n  idVerificationUrl    String?\n  governmentIdUrl      String?\n  governmentIdType     GovernmentIdType?\n  governmentIdNumber   String?\n\n  // Stripe\n  stripeCustomerId         String? @unique\n  stripeConnectId          String? @unique\n  stripeOnboardingComplete Boolean @default(false)\n  stripeChargesEnabled     Boolean @default(false)\n  stripePayoutsEnabled     Boolean @default(false)\n\n  // Settings\n  role              UserRole   @default(CUSTOMER)\n  status            UserStatus @default(ACTIVE)\n  preferredLanguage String     @default(\"en\")\n  preferredCurrency String     @default(\"USD\")\n  timezone          String     @default(\"UTC\")\n\n  // Security\n  mfaEnabled           Boolean   @default(false)\n  mfaSecret            String?\n  passwordResetToken   String?\n  passwordResetExpires DateTime?\n  lastLoginAt          DateTime?\n  lastLoginIp          String?\n\n  // Statistics\n  averageRating Float @default(0)\n  totalReviews  Int   @default(0)\n  responseRate  Float @default(0)\n  responseTime  Int   @default(0) // in minutes\n\n  // Timestamps\n  createdAt DateTime  @default(now())\n  updatedAt DateTime  @updatedAt\n  deletedAt DateTime?\n\n  // Relations\n  sessions                 Session[]\n  listings                 Listing[]\n  bookingsAsRenter         Booking[]                 @relation(\"RenterBookings\")\n  bookingsAsOwner          Booking[]                 @relation(\"OwnerBookings\")\n  reviewsGiven             Review[]                  @relation(\"ReviewsGiven\")\n  reviewsReceived          Review[]                  @relation(\"ReviewsReceived\")\n  conversationParticipants ConversationParticipant[]\n  messages                 Message[]\n  auditLogs                AuditLog[]\n  disputesInitiated        Dispute[]                 @relation(\"DisputesInitiated\")\n  disputesDefended         Dispute[]                 @relation(\"DisputesDefended\")\n  disputeResponses         DisputeResponse[]\n  organizations            OrganizationMember[]\n  favoriteListings         FavoriteListing[]\n  notifications            Notification[]\n  insurancePolicies        InsurancePolicy[]\n  deviceTokens             DeviceToken[]\n  userPreferences          UserPreferences?\n  conditionReportsReported ConditionReport[]         @relation(\"ReportedByUser\")\n\n  @@index([email])\n  @@index([stripeCustomerId])\n  @@index([stripeConnectId])\n  @@index([status, role])\n  @@map(\"users\")\n}\n\nenum UserRole {\n  CUSTOMER\n  OWNER\n  ADMIN\n  SUPPORT\n}\n\nenum UserStatus {\n  ACTIVE\n  SUSPENDED\n  BANNED\n  DELETED\n}\n\nenum VerificationStatus {\n  PENDING\n  IN_REVIEW\n  VERIFIED\n  REJECTED\n}\n\nenum GovernmentIdType {\n  PASSPORT\n  DRIVERS_LICENSE\n  NATIONAL_ID\n  OTHER\n}\n\nmodel Session {\n  id           String   @id @default(uuid())\n  userId       String\n  token        String   @unique\n  refreshToken String   @unique\n  expiresAt    DateTime\n  ipAddress    String?\n  userAgent    String?\n  createdAt    DateTime @default(now())\n\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@index([userId])\n  @@index([token])\n  @@index([expiresAt])\n  @@map(\"sessions\")\n}\n\n// ==================== Organizations ====================\n\nmodel Organization {\n  id           String  @id @default(uuid())\n  name         String\n  slug         String  @unique\n  description  String? @db.Text\n  logoUrl      String?\n  websiteUrl   String?\n  businessType String? // Type of business (e.g., LLC, Corporation, Sole Proprietorship)\n  taxId        String? // Tax identification number\n\n  // Contact\n  email       String\n  phoneNumber String?\n\n  // Address\n  addressLine1 String?\n  addressLine2 String?\n  city         String?\n  state        String?\n  postalCode   String?\n  country      String?\n\n  // Stripe\n  stripeConnectId String? @unique\n\n  // Settings\n  status OrganizationStatus @default(ACTIVE)\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  members  OrganizationMember[]\n  listings Listing[]\n\n  @@index([slug])\n  @@index([status])\n  @@map(\"organizations\")\n}\n\nenum OrganizationStatus {\n  ACTIVE\n  SUSPENDED\n  DELETED\n}\n\nmodel OrganizationMember {\n  id             String   @id @default(uuid())\n  organizationId String\n  userId         String\n  role           OrgRole  @default(MEMBER)\n  permissions    Json     @default(\"[]\")\n  invitedBy      String?\n  joinedAt       DateTime @default(now())\n\n  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)\n  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@unique([organizationId, userId])\n  @@index([userId])\n  @@map(\"organization_members\")\n}\n\nenum OrgRole {\n  OWNER\n  ADMIN\n  MEMBER\n}\n\n// ==================== Categories & Templates ====================\n\nmodel Category {\n  id          String  @id @default(uuid())\n  name        String  @unique\n  slug        String  @unique\n  description String? @db.Text\n  iconUrl     String?\n  order       Int     @default(0)\n  active      Boolean @default(true)\n\n  // Template configuration\n  templateSchema   Json // JSON Schema for category-specific fields\n  searchableFields Json @default(\"[]\") // Fields to index in Elasticsearch\n  requiredFields   Json @default(\"[]\") // Mandatory fields for this category\n\n  // Booking settings\n  defaultPricingMode       PricingMode @default(PER_DAY)\n  allowInstantBook         Boolean     @default(true)\n  requiresDepositDefault   Boolean     @default(false)\n  defaultDepositPercentage Float       @default(0)\n\n  // Insurance requirements\n  insuranceRequired      Boolean @default(false)\n  minimumInsuranceAmount Float?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  listings Listing[]\n\n  @@index([slug])\n  @@index([active])\n  @@map(\"categories\")\n}\n\n// ==================== Listings ====================\n\nmodel Listing {\n  id             String  @id @default(uuid())\n  ownerId        String\n  organizationId String?\n  categoryId     String\n\n  // Basic info\n  title       String\n  description String @db.Text\n  slug        String @unique\n\n  // Location\n  addressLine1 String?\n  addressLine2 String?\n  city         String\n  state        String\n  postalCode   String?\n  country      String\n  latitude     Float\n  longitude    Float\n\n  // Media\n  photos    Json @default(\"[]\") // Array of {url, order, caption}\n  videos    Json @default(\"[]\") // Array of {url, type, thumbnailUrl}\n  documents Json @default(\"[]\") // Array of {url, title, type}\n\n  // Pricing\n  pricingMode  PricingMode @default(PER_DAY)\n  basePrice    Float\n  hourlyPrice  Float?\n  dailyPrice   Float?\n  weeklyPrice  Float?\n  monthlyPrice Float?\n  currency     String      @default(\"USD\")\n\n  // Deposit\n  requiresDeposit Boolean      @default(false)\n  depositAmount   Float?\n  depositType     DepositType?\n\n  // Booking settings\n  bookingMode     BookingMode @default(REQUEST_TO_BOOK)\n  minBookingHours Int?\n  maxBookingDays  Int?\n  leadTime        Int         @default(24) // hours\n  advanceNotice   Int         @default(1) // days\n\n  // Capacity & specifications\n  capacity             Int?\n  categorySpecificData Json // Dynamic fields based on category template\n\n  // Condition & features\n  condition ListingCondition?\n  features  Json              @default(\"[]\") // Array of feature strings\n  amenities Json              @default(\"[]\") // Array of amenity objects\n\n  // Policies\n  cancellationPolicyId String?\n  rules                Json    @default(\"[]\") // Array of rule strings\n\n  // Insurance\n  insurancePolicyId   String?\n  insuranceVerified   Boolean   @default(false)\n  insuranceVerifiedAt DateTime?\n  insuranceExpiresAt  DateTime?\n\n  // Status & moderation\n  status             ListingStatus      @default(DRAFT)\n  verificationStatus VerificationStatus @default(PENDING)\n  rejectionReason    String?\n  moderatedBy        String?\n  moderatedAt        DateTime?\n\n  // Statistics\n  viewCount     Int   @default(0)\n  bookingCount  Int   @default(0)\n  favoriteCount Int   @default(0)\n  averageRating Float @default(0)\n  totalReviews  Int   @default(0)\n\n  // SEO\n  metaTitle       String?\n  metaDescription String?\n\n  // Timestamps\n  createdAt   DateTime  @default(now())\n  updatedAt   DateTime  @updatedAt\n  publishedAt DateTime?\n  deletedAt   DateTime?\n\n  // Relations\n  owner              User                @relation(fields: [ownerId], references: [id])\n  organization       Organization?       @relation(fields: [organizationId], references: [id])\n  category           Category            @relation(fields: [categoryId], references: [id])\n  cancellationPolicy CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id])\n  availability       Availability[]\n  bookings           Booking[]\n  reviews            Review[]\n  favorites          FavoriteListing[]\n  insurancePolicies  InsurancePolicy[]\n\n  @@index([ownerId])\n  @@index([organizationId])\n  @@index([categoryId])\n  @@index([slug])\n  @@index([status, verificationStatus])\n  @@index([latitude, longitude])\n  @@index([city, country])\n  @@map(\"listings\")\n}\n\nenum BookingMode {\n  INSTANT_BOOK\n  REQUEST_TO_BOOK\n}\n\nenum PricingMode {\n  PER_HOUR\n  PER_DAY\n  PER_WEEK\n  PER_MONTH\n  CUSTOM\n}\n\nenum ListingStatus {\n  DRAFT\n  PENDING_REVIEW\n  ACTIVE\n  PAUSED\n  ARCHIVED\n  REJECTED\n}\n\nenum ListingCondition {\n  NEW\n  EXCELLENT\n  GOOD\n  FAIR\n  POOR\n}\n\nenum DepositType {\n  FIXED_AMOUNT\n  PERCENTAGE\n}\n\nmodel CancellationPolicy {\n  id          String                 @id @default(uuid())\n  name        String\n  type        CancellationPolicyType\n  description String                 @db.Text\n\n  // Refund rules (array of {hoursBeforeStart, refundPercentage})\n  rules Json\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  listings Listing[]\n\n  @@map(\"cancellation_policies\")\n}\n\nenum CancellationPolicyType {\n  FLEXIBLE\n  MODERATE\n  STRICT\n  NON_REFUNDABLE\n}\n\nmodel Availability {\n  id        String @id @default(uuid())\n  listingId String\n\n  // Date range\n  startDate DateTime\n  endDate   DateTime\n\n  // Availability\n  available Boolean @default(true)\n  price     Float? // Override base price\n  minStay   Int? // Minimum nights/days\n\n  createdAt DateTime @default(now())\n\n  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)\n\n  @@index([listingId])\n  @@index([startDate, endDate])\n  @@map(\"availability\")\n}\n\nmodel FavoriteListing {\n  id        String   @id @default(uuid())\n  userId    String\n  listingId String\n  createdAt DateTime @default(now())\n\n  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)\n  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)\n\n  @@unique([userId, listingId])\n  @@index([userId])\n  @@map(\"favorite_listings\")\n}\n\n// ==================== Bookings ====================\n\nmodel Booking {\n  id        String @id @default(uuid())\n  listingId String\n  renterId  String\n  ownerId   String\n\n  // Dates\n  startDate DateTime\n  endDate   DateTime\n  duration  Int // in hours\n\n  // Guest information\n  guestCount Int @default(1)\n\n  // Pricing breakdown\n  basePrice      Float\n  serviceFee     Float\n  tax            Float\n  depositAmount  Float @default(0)\n  discountAmount Float @default(0)\n  totalPrice     Float\n  totalAmount    Float // Same as totalPrice, included for compatibility\n  ownerEarnings  Float\n  platformFee    Float\n\n  currency String @default(\"USD\")\n\n  // Additional contact info\n  renterMessage String? @db.Text\n\n  // Status\n  status             BookingStatus @default(DRAFT)\n  cancellationReason String?       @db.Text\n  cancelledBy        String?\n  cancelledAt        DateTime?\n\n  // Payment tracking\n  paymentIntentId   String?\n  depositHoldId     String?\n  depositReleased   Boolean   @default(false)\n  depositReleasedAt DateTime?\n\n  // Fulfillment\n  checkInTime      DateTime?\n  checkOutTime     DateTime?\n  actualReturnTime DateTime?\n\n  // Metadata\n  categoryData Json    @default(\"{}\")\n  renterNotes  String? @db.Text\n  ownerNotes   String? @db.Text\n\n  // Timestamps\n  createdAt   DateTime  @default(now())\n  updatedAt   DateTime  @updatedAt\n  confirmedAt DateTime?\n  completedAt DateTime?\n\n  // Relations\n  listing          Listing               @relation(fields: [listingId], references: [id])\n  renter           User                  @relation(\"RenterBookings\", fields: [renterId], references: [id])\n  owner            User                  @relation(\"OwnerBookings\", fields: [ownerId], references: [id])\n  stateHistory     BookingStateHistory[]\n  ledgerEntries    LedgerEntry[]\n  depositHold      DepositHold?          @relation(fields: [depositHoldId], references: [id])\n  payments         Payment[]\n  conditionReports ConditionReport[]\n  reviews          Review[]\n  disputes         Dispute[]\n  conversations    Conversation[]\n\n  @@index([listingId])\n  @@index([renterId])\n  @@index([ownerId])\n  @@index([status])\n  @@index([startDate, endDate])\n  @@map(\"bookings\")\n}\n\nenum BookingStatus {\n  DRAFT\n  PENDING_OWNER_APPROVAL\n  PENDING_PAYMENT\n  CONFIRMED\n  ACTIVE\n  IN_PROGRESS\n  AWAITING_RETURN_INSPECTION\n  COMPLETED\n  SETTLED\n  CANCELLED\n  DISPUTED\n  REFUNDED\n}\n\nmodel BookingStateHistory {\n  id        String         @id @default(uuid())\n  bookingId String\n  fromState BookingStatus?\n  toState   BookingStatus\n  reason    String?        @db.Text\n  metadata  Json           @default(\"{}\")\n  changedBy String?\n  createdAt DateTime       @default(now())\n\n  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)\n\n  @@index([bookingId])\n  @@index([createdAt])\n  @@map(\"booking_state_history\")\n}\n\n// ==================== Payments & Ledger ====================\n\nmodel LedgerEntry {\n  id        String @id @default(uuid())\n  bookingId String\n\n  // Double-entry accounting\n  accountType String // 'customer', 'owner', 'platform', 'deposit'\n  side        LedgerSide\n  amount      Float\n  currency    String     @default(\"USD\")\n\n  // Transaction details\n  transactionType String // 'booking_payment', 'payout', 'refund', 'deposit_hold', etc.\n  description     String\n  referenceId     String? // Stripe payment intent, transfer, etc.\n\n  // Status\n  status LedgerEntryStatus @default(PENDING)\n\n  // Metadata\n  metadata Json @default(\"{}\")\n\n  // Timestamps\n  createdAt DateTime  @default(now())\n  settledAt DateTime?\n\n  booking Booking @relation(fields: [bookingId], references: [id])\n\n  @@index([bookingId])\n  @@index([accountType])\n  @@index([status])\n  @@index([createdAt])\n  @@map(\"ledger_entries\")\n}\n\nenum LedgerSide {\n  DEBIT\n  CREDIT\n}\n\nenum LedgerEntryStatus {\n  PENDING\n  SETTLED\n  FAILED\n  REVERSED\n}\n\nmodel DepositHold {\n  id        String  @id @default(uuid())\n  bookingId String?\n  amount    Float\n  currency  String  @default(\"USD\")\n\n  // Stripe\n  paymentIntentId String @unique\n\n  // Status\n  status       DepositStatus @default(AUTHORIZED)\n  authorizedAt DateTime      @default(now())\n  capturedAt   DateTime?\n  releasedAt   DateTime?\n\n  // Deduction tracking\n  deductedAmount  Float   @default(0)\n  deductionReason String? @db.Text\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  expiresAt DateTime\n\n  // Relations\n  bookings Booking[]\n\n  @@index([status])\n  @@index([expiresAt])\n  @@map(\"deposit_holds\")\n}\n\nenum DepositStatus {\n  AUTHORIZED\n  CAPTURED\n  RELEASED\n  EXPIRED\n  FAILED\n}\n\nmodel Payment {\n  id                    String        @id @default(uuid())\n  bookingId             String\n  amount                Float\n  currency              String        @default(\"USD\")\n  stripePaymentIntentId String?       @unique\n  stripeChargeId        String?       @unique\n  status                PaymentStatus @default(PENDING)\n  failureReason         String?       @db.Text\n  processedAt           DateTime?\n  createdAt             DateTime      @default(now())\n  updatedAt             DateTime      @updatedAt\n\n  booking Booking @relation(fields: [bookingId], references: [id])\n\n  @@index([bookingId])\n  @@index([status])\n  @@index([stripePaymentIntentId])\n  @@map(\"payments\")\n}\n\nenum PaymentStatus {\n  PENDING\n  PROCESSING\n  SUCCEEDED\n  FAILED\n  CANCELLED\n  REFUNDED\n}\n\nmodel Refund {\n  id        String @id @default(uuid())\n  bookingId String\n  amount    Float\n  currency  String @default(\"USD\")\n  reason    String @db.Text\n\n  // Stripe\n  refundId String @unique\n\n  // Status\n  status      RefundStatus @default(PENDING)\n  processedAt DateTime?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n\n  @@index([bookingId])\n  @@index([status])\n  @@map(\"refunds\")\n}\n\nenum RefundStatus {\n  PENDING\n  SUCCEEDED\n  FAILED\n  CANCELLED\n}\n\nmodel Payout {\n  id       String @id @default(uuid())\n  ownerId  String\n  amount   Float\n  currency String @default(\"USD\")\n\n  // Stripe\n  transferId String? @unique\n\n  // Status\n  status        PayoutStatus @default(PENDING)\n  failureReason String?\n\n  // Timestamps\n  createdAt   DateTime  @default(now())\n  processedAt DateTime?\n  paidAt      DateTime?\n\n  @@index([ownerId])\n  @@index([status])\n  @@map(\"payouts\")\n}\n\nenum PayoutStatus {\n  PENDING\n  IN_TRANSIT\n  PAID\n  FAILED\n  CANCELLED\n}\n\n// ==================== Reviews ====================\n\nmodel Review {\n  id         String @id @default(uuid())\n  bookingId  String\n  listingId  String\n  reviewerId String\n  revieweeId String\n\n  // Review type\n  type ReviewType\n\n  // Ratings (1-5)\n  overallRating       Float\n  accuracyRating      Float?\n  communicationRating Float?\n  cleanlinessRating   Float?\n  valueRating         Float?\n\n  // Content\n  title   String?\n  content String  @db.Text\n\n  // Response\n  response    String?   @db.Text\n  respondedAt DateTime?\n\n  // Status\n  status ReviewStatus @default(PUBLISHED)\n\n  // Moderation\n  flagged     Boolean   @default(false)\n  flagReason  String?\n  moderatedBy String?\n  moderatedAt DateTime?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  booking  Booking @relation(fields: [bookingId], references: [id])\n  listing  Listing @relation(fields: [listingId], references: [id])\n  reviewer User    @relation(\"ReviewsGiven\", fields: [reviewerId], references: [id])\n  reviewee User    @relation(\"ReviewsReceived\", fields: [revieweeId], references: [id])\n\n  @@unique([bookingId, reviewerId, type])\n  @@index([listingId])\n  @@index([reviewerId])\n  @@index([revieweeId])\n  @@index([status])\n  @@map(\"reviews\")\n}\n\nenum ReviewType {\n  LISTING_REVIEW\n  RENTER_REVIEW\n  OWNER_REVIEW\n}\n\nenum ReviewStatus {\n  DRAFT\n  PUBLISHED\n  HIDDEN\n  DELETED\n}\n\n// ==================== Messaging ====================\n\nmodel Conversation {\n  id        String  @id @default(uuid())\n  bookingId String?\n  listingId String?\n\n  type    ConversationType @default(BOOKING)\n  subject String?\n\n  // Last message tracking\n  lastMessageAt      DateTime?\n  lastMessagePreview String?\n\n  // Status\n  status ConversationStatus @default(ACTIVE)\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  booking      Booking?                  @relation(fields: [bookingId], references: [id])\n  participants ConversationParticipant[]\n  messages     Message[]\n\n  @@index([bookingId])\n  @@index([listingId])\n  @@index([status])\n  @@map(\"conversations\")\n}\n\nenum ConversationType {\n  BOOKING\n  INQUIRY\n  SUPPORT\n  GENERAL\n}\n\nenum ConversationStatus {\n  ACTIVE\n  ARCHIVED\n  DELETED\n}\n\nmodel ConversationParticipant {\n  id             String @id @default(uuid())\n  conversationId String\n  userId         String\n\n  // Notification settings\n  muted Boolean @default(false)\n\n  // Read tracking\n  lastReadAt DateTime?\n\n  joinedAt DateTime @default(now())\n\n  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)\n  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@unique([conversationId, userId])\n  @@index([userId])\n  @@map(\"conversation_participants\")\n}\n\nmodel Message {\n  id             String @id @default(uuid())\n  conversationId String\n  senderId       String\n\n  // Content\n  type        MessageType @default(TEXT)\n  content     String      @db.Text\n  attachments Json        @default(\"[]\") // Array of {url, type, name}\n\n  // Metadata\n  metadata Json @default(\"{}\")\n\n  // Status\n  status MessageStatus @default(SENT)\n\n  // Timestamps\n  createdAt DateTime  @default(now())\n  editedAt  DateTime?\n  deletedAt DateTime?\n\n  // Relations\n  conversation Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)\n  sender       User                 @relation(fields: [senderId], references: [id])\n  readReceipts MessageReadReceipt[]\n\n  @@index([conversationId])\n  @@index([senderId])\n  @@index([createdAt])\n  @@map(\"messages\")\n}\n\nenum MessageType {\n  TEXT\n  IMAGE\n  FILE\n  SYSTEM\n  BOOKING_UPDATE\n}\n\nenum MessageStatus {\n  SENDING\n  SENT\n  DELIVERED\n  FAILED\n  DELETED\n}\n\nmodel MessageReadReceipt {\n  id        String   @id @default(uuid())\n  messageId String\n  userId    String\n  readAt    DateTime @default(now())\n\n  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)\n\n  @@unique([messageId, userId])\n  @@index([userId])\n  @@map(\"message_read_receipts\")\n}\n\n// ==================== Condition Reports ====================\n\nmodel ConditionReport {\n  id         String     @id @default(uuid())\n  bookingId  String\n  reportType ReportType\n  type       ReportType // Alias for reportType for compatibility\n\n  // Inspector\n  reportedBy String\n  reportedAt DateTime @default(now())\n\n  // Checklist (category-specific)\n  checklistData Json // Dynamic checklist based on category\n\n  // Overall condition\n  overallCondition String?\n  condition        String? // Alias for overallCondition\n  notes            String? @db.Text\n  damages          Json? // Array of damage objects\n\n  // Damage/issues\n  issuesFound  Boolean @default(false)\n  damageAmount Float?\n\n  // Photos\n  photos ReportPhoto[]\n\n  // Acknowledgment\n  acknowledgedBy String?\n  acknowledgedAt DateTime?\n  disputeRaised  Boolean   @default(false)\n\n  // Status\n  status ReportStatus @default(IN_PROGRESS)\n\n  // Timestamps\n  createdAt   DateTime  @default(now())\n  completedAt DateTime?\n\n  // Relations\n  booking        Booking  @relation(fields: [bookingId], references: [id])\n  reportedByUser User     @relation(\"ReportedByUser\", fields: [reportedBy], references: [id])\n  dispute        Dispute?\n\n  @@index([bookingId])\n  @@index([reportType])\n  @@index([status])\n  @@map(\"condition_reports\")\n}\n\nenum ReportType {\n  CHECK_IN\n  CHECK_OUT\n}\n\nenum ReportStatus {\n  IN_PROGRESS\n  COMPLETED\n  ACKNOWLEDGED\n  DISPUTED\n}\n\nmodel ReportPhoto {\n  id           String  @id @default(uuid())\n  reportId     String\n  url          String\n  thumbnailUrl String?\n\n  // Metadata\n  caption  String?\n  tags     Json    @default(\"[]\") // Array of tags like \"front\", \"damage\", \"scratch\"\n  metadata Json    @default(\"{}\")\n\n  order      Int      @default(0)\n  uploadedAt DateTime @default(now())\n\n  report ConditionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)\n\n  @@index([reportId])\n  @@map(\"report_photos\")\n}\n\n// ==================== Disputes ====================\n\nmodel Dispute {\n  id                String  @id @default(uuid())\n  bookingId         String\n  conditionReportId String? @unique\n\n  // Parties\n  initiatorId String\n  defendantId String\n\n  // Dispute details\n  type        DisputeType\n  title       String\n  description String      @db.Text\n  amount      Float?\n  currency    String      @default(\"USD\")\n\n  // Status\n  status   DisputeStatus   @default(OPEN)\n  priority DisputePriority @default(MEDIUM)\n\n  // SLA tracking\n  slaDeadline DateTime?\n  respondedAt DateTime?\n  resolvedAt  DateTime?\n\n  // Assignment\n  assignedTo String?\n  assignedAt DateTime?\n\n  // Resolution\n  resolution DisputeResolution?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  booking         Booking                @relation(fields: [bookingId], references: [id])\n  conditionReport ConditionReport?       @relation(fields: [conditionReportId], references: [id])\n  initiator       User                   @relation(\"DisputesInitiated\", fields: [initiatorId], references: [id])\n  defendant       User                   @relation(\"DisputesDefended\", fields: [defendantId], references: [id])\n  responses       DisputeResponse[]\n  evidence        DisputeEvidence[]\n  timeline        DisputeTimelineEvent[]\n\n  @@index([bookingId])\n  @@index([initiatorId])\n  @@index([defendantId])\n  @@index([status])\n  @@index([assignedTo])\n  @@map(\"disputes\")\n}\n\nenum DisputeType {\n  PROPERTY_DAMAGE\n  MISSING_ITEMS\n  CONDITION_MISMATCH\n  REFUND_REQUEST\n  PAYMENT_ISSUE\n  OTHER\n}\n\nenum DisputeStatus {\n  OPEN\n  UNDER_REVIEW\n  INVESTIGATING\n  AWAITING_RESPONSE\n  IN_MEDIATION\n  RESOLVED\n  CLOSED\n}\n\nenum DisputePriority {\n  CRITICAL\n  HIGH\n  MEDIUM\n  LOW\n}\n\nmodel DisputeResponse {\n  id          String   @id @default(uuid())\n  disputeId   String\n  userId      String\n  content     String   @db.Text\n  attachments Json     @default(\"[]\")\n  createdAt   DateTime @default(now())\n\n  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)\n  user    User    @relation(fields: [userId], references: [id])\n\n  @@index([disputeId])\n  @@index([userId])\n  @@map(\"dispute_responses\")\n}\n\nmodel DisputeEvidence {\n  id          String       @id @default(uuid())\n  disputeId   String\n  uploadedBy  String\n  type        EvidenceType\n  url         String\n  description String?      @db.Text\n  metadata    Json         @default(\"{}\")\n  uploadedAt  DateTime     @default(now())\n\n  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)\n\n  @@index([disputeId])\n  @@map(\"dispute_evidence\")\n}\n\nenum EvidenceType {\n  PHOTO\n  VIDEO\n  DOCUMENT\n  RECEIPT\n  OTHER\n}\n\nmodel DisputeTimelineEvent {\n  id          String   @id @default(uuid())\n  disputeId   String\n  eventType   String\n  description String\n  metadata    Json     @default(\"{}\")\n  createdAt   DateTime @default(now())\n\n  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)\n\n  @@index([disputeId])\n  @@index([createdAt])\n  @@map(\"dispute_timeline_events\")\n}\n\nmodel DisputeResolution {\n  id        String @id @default(uuid())\n  disputeId String @unique\n\n  // Resolution details\n  outcome ResolutionOutcome\n  summary String            @db.Text\n\n  // Financial\n  refundAmount     Float?\n  payoutAdjustment Float?\n\n  // Actions taken\n  actionsTaken Json @default(\"[]\")\n\n  // Resolution by\n  resolvedBy String\n  resolvedAt DateTime @default(now())\n\n  // Relations\n  dispute Dispute @relation(fields: [disputeId], references: [id])\n\n  @@map(\"dispute_resolutions\")\n}\n\nenum ResolutionOutcome {\n  RESOLVED_INITIATOR_FAVOR\n  RESOLVED_DEFENDANT_FAVOR\n  RESOLVED_COMPROMISE\n  RESOLVED_NO_ACTION\n  ESCALATED\n  CANCELLED\n}\n\n// ==================== Notifications ====================\n\nmodel Notification {\n  id     String @id @default(uuid())\n  userId String\n\n  // Notification details\n  type    NotificationType\n  title   String\n  message String           @db.Text\n  data    Json?\n\n  // Related entities\n  relatedId   String?\n  relatedType String?\n\n  // Action\n  actionUrl   String?\n  actionLabel String?\n\n  // Status\n  read   Boolean   @default(false)\n  readAt DateTime?\n  status String? // Status field for compatibility (UNREAD, READ, ARCHIVED)\n\n  // Delivery\n  sentViaEmail Boolean @default(false)\n  sentViaPush  Boolean @default(false)\n\n  // Timestamps\n  createdAt DateTime @default(now())\n\n  // Relations\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@index([userId])\n  @@index([read])\n  @@index([createdAt])\n  @@map(\"notifications\")\n}\n\nenum NotificationType {\n  BOOKING_REQUEST\n  BOOKING_CONFIRMED\n  BOOKING_CANCELLED\n  BOOKING_REMINDER\n  MESSAGE_RECEIVED\n  REVIEW_RECEIVED\n  PAYOUT_PROCESSED\n  DISPUTE_OPENED\n  DISPUTE_RESOLVED\n  LISTING_APPROVED\n  LISTING_REJECTED\n  VERIFICATION_COMPLETE\n  SYSTEM_ANNOUNCEMENT\n}\n\nenum NotificationStatus {\n  UNREAD\n  READ\n  ARCHIVED\n}\n\n// ==================== Audit Logs ====================\n\nmodel AuditLog {\n  id     String  @id @default(uuid())\n  userId String?\n\n  // Action details\n  action     String\n  entityType String\n  entityId   String\n\n  // Changes\n  oldValues Json?\n  newValues Json?\n  metadata  Json? // Additional metadata for context\n\n  // Request metadata\n  ipAddress String?\n  userAgent String?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n\n  // Relations\n  user User? @relation(fields: [userId], references: [id])\n\n  @@index([userId])\n  @@index([entityType, entityId])\n  @@index([action])\n  @@index([createdAt])\n  @@map(\"audit_logs\")\n}\n\n// ==================== Insurance ====================\n\nmodel InsurancePolicy {\n  id               String          @id @default(uuid())\n  userId           String\n  listingId        String?\n  policyNumber     String          @unique\n  provider         String\n  type             String // LIABILITY, COMPREHENSIVE, COLLISION, DAMAGE\n  coverageAmount   Int // in cents\n  effectiveDate    DateTime\n  expirationDate   DateTime\n  documentUrl      String\n  certificateUrl   String?\n  status           InsuranceStatus @default(PENDING)\n  verificationDate DateTime?\n  verifiedBy       String?\n  notes            String?         @db.Text\n  metadata         Json?\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n  listing Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)\n\n  @@index([userId])\n  @@index([listingId])\n  @@index([expirationDate])\n  @@index([status])\n  @@map(\"insurance_policies\")\n}\n\nenum InsuranceStatus {\n  NOT_REQUIRED\n  REQUIRED\n  PENDING\n  VERIFIED\n  EXPIRED\n  REJECTED\n}\n\n// ==================== Device Tokens & Preferences ====================\n\nmodel DeviceToken {\n  id       String  @id @default(uuid())\n  userId   String\n  token    String  @unique\n  platform String // ios, android, web\n  active   Boolean @default(true)\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@index([userId, active])\n  @@map(\"device_tokens\")\n}\n\nmodel UserPreferences {\n  id          String @id @default(uuid())\n  userId      String @unique\n  preferences Json // notification preferences, theme, etc.\n\n  // Timestamps\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  // Relations\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@map(\"user_preferences\")\n}\n",
+  "inlineSchemaHash": "133133fe5a765fb5390e43b27d17fe0b1fed396eea2825ec4616ac88b631bf1b",
   "copyEngine": true
 }
 
@@ -1080,8 +1405,8 @@ exports.PrismaClient = PrismaClient
 Object.assign(exports, Prisma)
 
 // file annotations for bundling tools to include these files
-path.join(__dirname, "libquery_engine-darwin-arm64.dylib.node");
-path.join(process.cwd(), "src/generated/client/libquery_engine-darwin-arm64.dylib.node")
+path.join(__dirname, "libquery_engine-debian-openssl-1.1.x.so.node");
+path.join(process.cwd(), "src/generated/client/libquery_engine-debian-openssl-1.1.x.so.node")
 
 // file annotations for bundling tools to include these files
 path.join(__dirname, "libquery_engine-linux-musl-openssl-3.0.x.so.node");

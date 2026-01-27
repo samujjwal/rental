@@ -4,15 +4,15 @@
 
 generator client {
     provider        = "prisma-client-js"
-    previewFeatures = ["postgresqlExtensions"]
-    binaryTargets   = ["native", "linux-musl-openssl-3.0.x", "darwin-arm64"]
+    previewFeatures = ["postgresqlExtensions", "fullTextSearch"]
+    binaryTargets   = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-1.1.x"]
     output          = "../src/generated/client"
 }
 
 datasource db {
     provider   = "postgresql"
-    url        = env("DATABASE_URL")
     extensions = [pgvector(map: "vector")]
+    url        = env("DATABASE_URL")
 }
 
 // ==================== Users & Authentication ====================
@@ -48,11 +48,11 @@ model User {
     governmentIdNumber   String?
 
     // Stripe
-    stripeCustomerId         String?  @unique
-    stripeConnectId          String?  @unique
-    stripeOnboardingComplete Boolean  @default(false)
-    stripeChargesEnabled     Boolean  @default(false)
-    stripePayoutsEnabled     Boolean  @default(false)
+    stripeCustomerId         String? @unique
+    stripeConnectId          String? @unique
+    stripeOnboardingComplete Boolean @default(false)
+    stripeChargesEnabled     Boolean @default(false)
+    stripePayoutsEnabled     Boolean @default(false)
 
     // Settings
     role              UserRole   @default(CUSTOMER)
@@ -357,10 +357,10 @@ model Listing {
     deletedAt   DateTime?
 
     // Relations
-    owner              User                 @relation(fields: [ownerId], references: [id])
-    organization       Organization?        @relation(fields: [organizationId], references: [id])
-    category           Category             @relation(fields: [categoryId], references: [id])
-    cancellationPolicy CancellationPolicy?  @relation(fields: [cancellationPolicyId], references: [id])
+    owner              User                @relation(fields: [ownerId], references: [id])
+    organization       Organization?       @relation(fields: [organizationId], references: [id])
+    category           Category            @relation(fields: [categoryId], references: [id])
+    cancellationPolicy CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id])
     availability       Availability[]
     bookings           Booking[]
     reviews            Review[]
@@ -675,17 +675,17 @@ enum DepositStatus {
 }
 
 model Payment {
-    id                     String        @id @default(uuid())
-    bookingId              String
-    amount                 Float
-    currency               String        @default("USD")
-    stripePaymentIntentId  String?       @unique
-    stripeChargeId         String?       @unique
-    status                 PaymentStatus @default(PENDING)
-    failureReason          String?       @db.Text
-    processedAt            DateTime?
-    createdAt              DateTime      @default(now())
-    updatedAt              DateTime      @updatedAt
+    id                    String        @id @default(uuid())
+    bookingId             String
+    amount                Float
+    currency              String        @default("USD")
+    stripePaymentIntentId String?       @unique
+    stripeChargeId        String?       @unique
+    status                PaymentStatus @default(PENDING)
+    failureReason         String?       @db.Text
+    processedAt           DateTime?
+    createdAt             DateTime      @default(now())
+    updatedAt             DateTime      @updatedAt
 
     booking Booking @relation(fields: [bookingId], references: [id])
 
@@ -977,7 +977,7 @@ model ConditionReport {
     overallCondition String?
     condition        String? // Alias for overallCondition
     notes            String? @db.Text
-    damages          Json?   // Array of damage objects
+    damages          Json? // Array of damage objects
 
     // Damage/issues
     issuesFound  Boolean @default(false)
@@ -999,9 +999,9 @@ model ConditionReport {
     completedAt DateTime?
 
     // Relations
-    booking         Booking  @relation(fields: [bookingId], references: [id])
-    reportedByUser  User     @relation("ReportedByUser", fields: [reportedBy], references: [id])
-    dispute         Dispute?
+    booking        Booking  @relation(fields: [bookingId], references: [id])
+    reportedByUser User     @relation("ReportedByUser", fields: [reportedBy], references: [id])
+    dispute        Dispute?
 
     @@index([bookingId])
     @@index([reportType])
@@ -1310,22 +1310,22 @@ model AuditLog {
 // ==================== Insurance ====================
 
 model InsurancePolicy {
-    id              String   @id @default(uuid())
-    userId          String
-    listingId       String?
-    policyNumber    String   @unique
-    provider        String
-    type            String // LIABILITY, COMPREHENSIVE, COLLISION, DAMAGE
-    coverageAmount  Int // in cents
-    effectiveDate   DateTime
-    expirationDate  DateTime
-    documentUrl     String
-    certificateUrl  String?
-    status          InsuranceStatus @default(PENDING)
+    id               String          @id @default(uuid())
+    userId           String
+    listingId        String?
+    policyNumber     String          @unique
+    provider         String
+    type             String // LIABILITY, COMPREHENSIVE, COLLISION, DAMAGE
+    coverageAmount   Int // in cents
+    effectiveDate    DateTime
+    expirationDate   DateTime
+    documentUrl      String
+    certificateUrl   String?
+    status           InsuranceStatus @default(PENDING)
     verificationDate DateTime?
-    verifiedBy      String?
-    notes           String?  @db.Text
-    metadata        Json?
+    verifiedBy       String?
+    notes            String?         @db.Text
+    metadata         Json?
 
     // Timestamps
     createdAt DateTime @default(now())

@@ -4,9 +4,12 @@ import {
     Outlet,
     Scripts,
     ScrollRestoration,
+    useLoaderData,
 } from "react-router";
 import { useAuthInit } from './hooks/useAuthInit';
 import { useAuthStore } from './lib/store/auth';
+import { getUser, getUserToken, getSession } from "~/utils/auth.server";
+import { useEffect } from "react";
 
 import type { Route } from "./+types/root";
 import stylesheet from "./tailwind.css?url";
@@ -24,6 +27,22 @@ export const links: Route.LinksFunction = () => [
     },
     { rel: "stylesheet", href: stylesheet },
 ];
+
+export async function loader({ request }: { request: Request }) {
+    const user = await getUser(request);
+    const session = await getSession(request);
+    const accessToken = session.get("accessToken");
+    const refreshToken = session.get("refreshToken");
+
+    return {
+        user,
+        accessToken,
+        refreshToken,
+        ENV: {
+            API_URL: process.env.API_URL || "http://localhost:3400/api/v1",
+        },
+    };
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
     return (
@@ -44,10 +63,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 function RootContent() {
+    const loaderData = useLoaderData<typeof loader>();
     const isInitialized = useAuthStore((state) => state.isInitialized);
     const isLoading = useAuthStore((state) => state.isLoading);
+    const setAuth = useAuthStore((state) => state.setAuth);
 
     useAuthInit();
+
+    // Sync server-side auth to client-side store if needed
+    useEffect(() => {
+        if (loaderData?.user && loaderData?.accessToken && loaderData?.refreshToken) {
+            const currentStore = useAuthStore.getState();
+            if (!currentStore.user || currentStore.accessToken !== loaderData.accessToken) {
+                setAuth(loaderData.user, loaderData.accessToken, loaderData.refreshToken);
+            }
+        }
+    }, [loaderData, setAuth]);
 
     // Show loading state while restoring session
     if (!isInitialized || isLoading) {

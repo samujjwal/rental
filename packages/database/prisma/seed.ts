@@ -13,7 +13,7 @@ import { faker } from '@faker-js/faker';
 // Load environment variables from the root .env file
 dotenv.config({ path: '../../.env' });
 
-const prisma = new PrismaClient({});
+const prisma = new PrismaClient();
 
 // Helper function to generate random index
 function randomIndex<T>(array: T[]): T {
@@ -29,6 +29,7 @@ async function main() {
   await prisma.conversationParticipant.deleteMany();
   await prisma.conversation.deleteMany();
   await prisma.review.deleteMany();
+  await prisma.payment.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.availability.deleteMany();
   await prisma.listing.deleteMany();
@@ -106,7 +107,7 @@ async function main() {
 
   // Create Users (150+ total users)
   console.log('👤 Creating 150+ users...');
-  
+
   // Create special test users
   const adminUser = await prisma.user.create({
     data: {
@@ -150,12 +151,12 @@ async function main() {
 
   // Create 150+ regular users (mix of owners and customers)
   const users: any[] = [adminUser, supportUser];
-  
+
   for (let i = 0; i < 150; i++) {
     const isOwner = Math.random() > 0.6; // 40% owners, 60% customers
     const firstName = faker.person.firstName();
     const lastName = faker.person.lastName();
-    
+
     const user = await prisma.user.create({
       data: {
         email: faker.internet.email({ firstName, lastName }).toLowerCase(),
@@ -189,20 +190,22 @@ async function main() {
         }),
       },
     });
-    
+
     users.push(user);
   }
 
   // Separate owners and customers
-  const owners = users.filter(u => u.role === UserRole.OWNER);
-  const customers = users.filter(u => u.role === UserRole.CUSTOMER);
+  const owners = users.filter((u) => u.role === UserRole.OWNER);
+  const customers = users.filter((u) => u.role === UserRole.CUSTOMER);
 
-  console.log(`   ✓ Created ${users.length} users (${owners.length} owners, ${customers.length} customers)`);
+  console.log(
+    `   ✓ Created ${users.length} users (${owners.length} owners, ${customers.length} customers)`,
+  );
 
   // Create Listings (150+ listings)
   console.log('📦 Creating 150+ listings...');
   const listings: any[] = [];
-  
+
   const listingTitles = [
     'Professional Camera',
     'Cordless Drill',
@@ -224,7 +227,7 @@ async function main() {
   for (let i = 0; i < 150; i++) {
     const owner = randomIndex(owners);
     const category = randomIndex(categories);
-    
+
     const listing = await prisma.listing.create({
       data: {
         title: `${randomIndex(listingTitles)} ${i + 1}`,
@@ -254,7 +257,7 @@ async function main() {
         categorySpecificData: {},
       },
     });
-    
+
     listings.push(listing);
   }
 
@@ -263,16 +266,16 @@ async function main() {
   // Create Bookings (100+ bookings)
   console.log('📅 Creating 100+ bookings...');
   const bookings: any[] = [];
-  
+
   for (let i = 0; i < 120; i++) {
     const listing = randomIndex(listings);
     const renter = randomIndex(customers);
-    const owner = users.find(u => u.id === listing.ownerId) || randomIndex(owners);
-    
+    const owner = users.find((u) => u.id === listing.ownerId) || randomIndex(owners);
+
     const startDate = faker.date.past();
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + faker.number.int({ min: 1, max: 30 }));
-    
+
     const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
     const basePrice = listing.dailyPrice * duration;
     const serviceFee = Math.floor(basePrice * 0.1);
@@ -306,7 +309,7 @@ async function main() {
         guestCount: faker.number.int({ min: 1, max: 6 }),
       },
     });
-    
+
     bookings.push(booking);
   }
 
@@ -315,12 +318,12 @@ async function main() {
   // Create Reviews (100+ reviews)
   console.log('⭐ Creating 100+ reviews...');
   const reviews: any[] = [];
-  
-  const completedBookings = bookings.filter(b => b.status === BookingStatus.COMPLETED);
-  
+
+  const completedBookings = bookings.filter((b) => b.status === BookingStatus.COMPLETED);
+
   for (let i = 0; i < Math.min(110, completedBookings.length); i++) {
     const booking = completedBookings[i];
-    
+
     // Listing review
     const listingReview = await prisma.review.create({
       data: {
@@ -333,9 +336,9 @@ async function main() {
         type: 'LISTING_REVIEW',
       },
     });
-    
+
     reviews.push(listingReview);
-    
+
     // Renter review (from owner)
     const renterReview = await prisma.review.create({
       data: {
@@ -348,7 +351,7 @@ async function main() {
         type: 'RENTER_REVIEW',
       },
     });
-    
+
     reviews.push(renterReview);
   }
 
@@ -357,11 +360,11 @@ async function main() {
   // Create Sessions (105+ sessions)
   console.log('🔐 Creating 105+ sessions...');
   let sessionCount = 0;
-  
+
   for (let i = 0; i < Math.min(105, users.length); i++) {
     const user = users[i];
     const expiresAt = faker.date.future();
-    
+
     await prisma.session.create({
       data: {
         userId: user.id,
@@ -372,7 +375,7 @@ async function main() {
         userAgent: faker.internet.userAgent(),
       },
     });
-    
+
     sessionCount++;
   }
 
@@ -382,12 +385,12 @@ async function main() {
   console.log('💬 Creating conversations and 100+ messages...');
   let messageCount = 0;
   const conversations: any[] = [];
-  
+
   for (let i = 0; i < 25; i++) {
     const booking = randomIndex(bookings);
     const user1 = randomIndex(users);
-    const user2 = randomIndex(users.filter(u => u.id !== user1.id));
-    
+    const user2 = randomIndex(users.filter((u) => u.id !== user1.id));
+
     const conversation = await prisma.conversation.create({
       data: {
         bookingId: booking.id,
@@ -395,9 +398,9 @@ async function main() {
         subject: faker.lorem.words({ min: 2, max: 5 }),
       },
     });
-    
+
     conversations.push(conversation);
-    
+
     // Add participants
     await prisma.conversationParticipant.create({
       data: {
@@ -405,18 +408,18 @@ async function main() {
         userId: user1.id,
       },
     });
-    
+
     await prisma.conversationParticipant.create({
       data: {
         conversationId: conversation.id,
         userId: user2.id,
       },
     });
-    
+
     // Create 4-5 messages per conversation
     for (let j = 0; j < faker.number.int({ min: 4, max: 5 }); j++) {
       const sender = Math.random() > 0.5 ? user1 : user2;
-      
+
       const message = await prisma.message.create({
         data: {
           conversationId: conversation.id,
@@ -425,7 +428,7 @@ async function main() {
           status: randomIndex(['SENT', 'DELIVERED']),
         },
       });
-      
+
       // Create read receipt if message should be read
       if (Math.random() > 0.3) {
         const receiver = sender.id === user1.id ? user2 : user1;
@@ -437,7 +440,7 @@ async function main() {
           },
         });
       }
-      
+
       messageCount++;
     }
   }
@@ -446,7 +449,9 @@ async function main() {
 
   console.log('\n✅ Database seed completed successfully!');
   console.log('\n📊 Database Statistics:');
-  console.log(`   - Users: ${users.length} (${owners.length} owners, ${customers.length} customers, 2 admin/support)`);
+  console.log(
+    `   - Users: ${users.length} (${owners.length} owners, ${customers.length} customers, 2 admin/support)`,
+  );
   console.log(`   - Categories: ${categories.length}`);
   console.log(`   - Listings: ${listings.length}`);
   console.log(`   - Bookings: ${bookings.length}`);
@@ -457,7 +462,9 @@ async function main() {
   console.log('\n📝 Test User Accounts:');
   console.log('   Email: admin@rental.local (Admin, Password: password123)');
   console.log('   Email: support@rental.local (Support, Password: password123)');
-  console.log('   + 150 additional randomly generated user accounts (all with password: password123)');
+  console.log(
+    '   + 150 additional randomly generated user accounts (all with password: password123)',
+  );
 }
 
 main()

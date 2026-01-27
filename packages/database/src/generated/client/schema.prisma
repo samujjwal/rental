@@ -4,15 +4,15 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
-  binaryTargets   = ["native", "linux-musl-openssl-3.0.x", "darwin-arm64"]
+  previewFeatures = ["postgresqlExtensions", "fullTextSearch"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-1.1.x"]
   output          = "../src/generated/client"
 }
 
 datasource db {
   provider   = "postgresql"
-  url        = env("DATABASE_URL")
   extensions = [pgvector(map: "vector")]
+  url        = env("DATABASE_URL")
 }
 
 // ==================== Users & Authentication ====================
