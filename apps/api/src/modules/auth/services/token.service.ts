@@ -38,6 +38,7 @@ export class TokenService {
   async createSession(
     userId: string,
     refreshToken: string,
+    accessToken: string,
     metadata: { ipAddress?: string; userAgent?: string },
   ): Promise<void> {
     const expiresAt = new Date();
@@ -46,7 +47,7 @@ export class TokenService {
     await this.prisma.session.create({
       data: {
         userId,
-        token: '', // Will be set when access token is generated
+        token: accessToken,
         refreshToken,
         expiresAt,
         ipAddress: metadata.ipAddress,

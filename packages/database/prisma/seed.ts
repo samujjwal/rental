@@ -1,5 +1,16 @@
-import { PrismaClient, UserRole, UserStatus, VerificationStatus, BookingStatus, ListingStatus, CategoryType } from '../src/generated/client';
+import * as dotenv from 'dotenv';
+import {
+  PrismaClient,
+  UserRole,
+  UserStatus,
+  VerificationStatus,
+  BookingStatus,
+  ListingStatus,
+} from '../src/generated/client';
 import * as bcrypt from 'bcrypt';
+
+// Load environment variables from the root .env file
+dotenv.config({ path: '../../.env' });
 
 const prisma = new PrismaClient();
 
@@ -13,7 +24,7 @@ async function main() {
   await prisma.conversation.deleteMany();
   await prisma.review.deleteMany();
   await prisma.booking.deleteMany();
-  await prisma.listingAvailability.deleteMany();
+  await prisma.availability.deleteMany();
   await prisma.listing.deleteMany();
   await prisma.category.deleteMany();
   await prisma.session.deleteMany();
@@ -27,9 +38,11 @@ async function main() {
         name: 'Tools & Equipment',
         slug: 'tools-equipment',
         description: 'Power tools, hand tools, and equipment for DIY and professional projects',
-        type: CategoryType.ITEM,
-        iconName: 'Hammer',
-        isActive: true,
+        iconUrl: 'hammer',
+        active: true,
+        templateSchema: {},
+        searchableFields: [],
+        requiredFields: [],
       },
     }),
     prisma.category.create({
@@ -37,9 +50,11 @@ async function main() {
         name: 'Camera & Photography',
         slug: 'camera-photography',
         description: 'Professional cameras, lenses, lighting, and photography equipment',
-        type: CategoryType.ITEM,
-        iconName: 'Camera',
-        isActive: true,
+        iconUrl: 'camera',
+        active: true,
+        templateSchema: {},
+        searchableFields: [],
+        requiredFields: [],
       },
     }),
     prisma.category.create({
@@ -47,9 +62,11 @@ async function main() {
         name: 'Outdoor & Camping',
         slug: 'outdoor-camping',
         description: 'Tents, camping gear, hiking equipment, and outdoor supplies',
-        type: CategoryType.ITEM,
-        iconName: 'Mountain',
-        isActive: true,
+        iconUrl: 'mountain',
+        active: true,
+        templateSchema: {},
+        searchableFields: [],
+        requiredFields: [],
       },
     }),
     prisma.category.create({
@@ -57,9 +74,11 @@ async function main() {
         name: 'Party & Events',
         slug: 'party-events',
         description: 'Tables, chairs, decorations, and equipment for events and parties',
-        type: CategoryType.ITEM,
-        iconName: 'PartyPopper',
-        isActive: true,
+        iconUrl: 'party-popper',
+        active: true,
+        templateSchema: {},
+        searchableFields: [],
+        requiredFields: [],
       },
     }),
     prisma.category.create({
@@ -67,9 +86,11 @@ async function main() {
         name: 'Electronics',
         slug: 'electronics',
         description: 'Laptops, gaming consoles, tablets, and electronic devices',
-        type: CategoryType.ITEM,
-        iconName: 'Laptop',
-        isActive: true,
+        iconUrl: 'laptop',
+        active: true,
+        templateSchema: {},
+        searchableFields: [],
+        requiredFields: [],
       },
     }),
   ]);
@@ -229,32 +250,30 @@ async function main() {
     data: {
       title: 'Canon EOS R5 Mirrorless Camera Body',
       slug: 'canon-eos-r5-mirrorless-camera',
-      description: 'Professional full-frame mirrorless camera with 45MP sensor, 8K video recording, and advanced autofocus. Perfect for professional photography and videography projects. Includes battery, charger, and camera strap.',
+      description:
+        'Professional full-frame mirrorless camera with 45MP sensor, 8K video recording, and advanced autofocus. Perfect for professional photography and videography projects. Includes battery, charger, and camera strap.',
       categoryId: categories[1].id, // Camera & Photography
       ownerId: owner1.id,
-      pricePerDay: 150,
-      pricePerWeek: 900,
-      pricePerMonth: 3200,
-      securityDeposit: 500,
+      basePrice: 150,
+      dailyPrice: 150,
+      weeklyPrice: 900,
+      monthlyPrice: 3200,
+      depositAmount: 500,
       currency: 'USD',
       city: 'Los Angeles',
       state: 'CA',
       country: 'USA',
       latitude: 34.0522,
       longitude: -118.2437,
-      status: ListingStatus.PUBLISHED,
+      status: ListingStatus.ACTIVE,
       condition: 'EXCELLENT',
-      availableQuantity: 1,
-      minRentalPeriod: 1,
-      maxRentalPeriod: 30,
-      isInsuranceRequired: true,
-      images: JSON.stringify([
+      photos: JSON.stringify([
         'https://images.unsplash.com/photo-1606986628878-ddd62f3e0e5d?w=800',
         'https://images.unsplash.com/photo-1606980707972-7a0c4e3b7c6d?w=800',
       ]),
-      instantBooking: true,
       viewCount: 245,
       favoriteCount: 32,
+      categorySpecificData: {},
     },
   });
 
@@ -262,32 +281,30 @@ async function main() {
     data: {
       title: 'Sony A7 IV + 24-70mm f/2.8 Lens Kit',
       slug: 'sony-a7-iv-24-70mm-lens-kit',
-      description: 'Complete professional photography kit with Sony A7 IV camera and versatile 24-70mm f/2.8 lens. Ideal for weddings, events, and portrait photography. Kit includes 2 batteries, charger, lens hood, and camera bag.',
+      description:
+        'Complete professional photography kit with Sony A7 IV camera and versatile 24-70mm f/2.8 lens. Ideal for weddings, events, and portrait photography. Kit includes 2 batteries, charger, lens hood, and camera bag.',
       categoryId: categories[1].id,
       ownerId: owner1.id,
-      pricePerDay: 180,
-      pricePerWeek: 1080,
-      pricePerMonth: 3800,
-      securityDeposit: 600,
+      basePrice: 180,
+      dailyPrice: 180,
+      weeklyPrice: 1080,
+      monthlyPrice: 3800,
+      depositAmount: 600,
       currency: 'USD',
       city: 'Los Angeles',
       state: 'CA',
       country: 'USA',
       latitude: 34.0522,
       longitude: -118.2437,
-      status: ListingStatus.PUBLISHED,
+      status: ListingStatus.ACTIVE,
       condition: 'EXCELLENT',
-      availableQuantity: 1,
-      minRentalPeriod: 1,
-      maxRentalPeriod: 30,
-      isInsuranceRequired: true,
-      images: JSON.stringify([
+      photos: JSON.stringify([
         'https://images.unsplash.com/photo-1614853316629-951c74dce744?w=800',
         'https://images.unsplash.com/photo-1606980654336-aef85d0d2f3f?w=800',
       ]),
-      instantBooking: true,
       viewCount: 189,
       favoriteCount: 28,
+      categorySpecificData: {},
     },
   });
 
@@ -297,32 +314,30 @@ async function main() {
     data: {
       title: 'DeWalt 20V Cordless Drill & Impact Driver Combo Kit',
       slug: 'dewalt-20v-cordless-drill-impact-driver-kit',
-      description: 'Professional-grade combo kit perfect for construction, woodworking, and home improvement. Includes drill driver, impact driver, 2 batteries, charger, and carrying case. Both tools feature LED lights and ergonomic design.',
+      description:
+        'Professional-grade combo kit perfect for construction, woodworking, and home improvement. Includes drill driver, impact driver, 2 batteries, charger, and carrying case. Both tools feature LED lights and ergonomic design.',
       categoryId: categories[0].id, // Tools & Equipment
       ownerId: owner2.id,
-      pricePerDay: 35,
-      pricePerWeek: 180,
-      pricePerMonth: 600,
-      securityDeposit: 150,
+      basePrice: 35,
+      dailyPrice: 35,
+      weeklyPrice: 180,
+      monthlyPrice: 600,
+      depositAmount: 150,
       currency: 'USD',
       city: 'Seattle',
       state: 'WA',
       country: 'USA',
       latitude: 47.6062,
       longitude: -122.3321,
-      status: ListingStatus.PUBLISHED,
+      status: ListingStatus.ACTIVE,
       condition: 'GOOD',
-      availableQuantity: 2,
-      minRentalPeriod: 1,
-      maxRentalPeriod: 14,
-      isInsuranceRequired: false,
-      images: JSON.stringify([
+      photos: JSON.stringify([
         'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800',
         'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=800',
       ]),
-      instantBooking: true,
       viewCount: 312,
       favoriteCount: 45,
+      categorySpecificData: {},
     },
   });
 
@@ -330,31 +345,29 @@ async function main() {
     data: {
       title: 'Milwaukee M18 Table Saw',
       slug: 'milwaukee-m18-table-saw',
-      description: 'Portable 10-inch table saw with excellent precision and power. Perfect for jobsite use or home workshops. Includes rip fence, miter gauge, push stick, and blade guard. Battery and charger included.',
+      description:
+        'Portable 10-inch table saw with excellent precision and power. Perfect for jobsite use or home workshops. Includes rip fence, miter gauge, push stick, and blade guard. Battery and charger included.',
       categoryId: categories[0].id,
       ownerId: owner2.id,
-      pricePerDay: 55,
-      pricePerWeek: 300,
-      pricePerMonth: 1000,
-      securityDeposit: 200,
+      basePrice: 55,
+      dailyPrice: 55,
+      weeklyPrice: 300,
+      monthlyPrice: 1000,
+      depositAmount: 200,
       currency: 'USD',
       city: 'Seattle',
       state: 'WA',
       country: 'USA',
       latitude: 47.6062,
       longitude: -122.3321,
-      status: ListingStatus.PUBLISHED,
+      status: ListingStatus.ACTIVE,
       condition: 'GOOD',
-      availableQuantity: 1,
-      minRentalPeriod: 1,
-      maxRentalPeriod: 14,
-      isInsuranceRequired: false,
-      images: JSON.stringify([
+      photos: JSON.stringify([
         'https://images.unsplash.com/photo-1572981779307-38b8cabb2407?w=800',
       ]),
-      instantBooking: false,
       viewCount: 178,
       favoriteCount: 22,
+      categorySpecificData: {},
     },
   });
 
@@ -362,37 +375,35 @@ async function main() {
     data: {
       title: '4-Person Camping Tent - Waterproof',
       slug: '4-person-camping-tent-waterproof',
-      description: 'Spacious 4-person camping tent with excellent weather protection. Features easy setup, rain fly, ventilation windows, and gear loft. Perfect for family camping trips or weekend getaways. Includes tent stakes and carrying bag.',
+      description:
+        'Spacious 4-person camping tent with excellent weather protection. Features easy setup, rain fly, ventilation windows, and gear loft. Perfect for family camping trips or weekend getaways. Includes tent stakes and carrying bag.',
       categoryId: categories[2].id, // Outdoor & Camping
       ownerId: owner2.id,
-      pricePerDay: 25,
-      pricePerWeek: 120,
-      pricePerMonth: 400,
-      securityDeposit: 50,
+      basePrice: 25,
+      dailyPrice: 25,
+      weeklyPrice: 120,
+      monthlyPrice: 400,
+      depositAmount: 50,
       currency: 'USD',
       city: 'Seattle',
       state: 'WA',
       country: 'USA',
       latitude: 47.6062,
       longitude: -122.3321,
-      status: ListingStatus.PUBLISHED,
+      status: ListingStatus.ACTIVE,
       condition: 'EXCELLENT',
-      availableQuantity: 2,
-      minRentalPeriod: 2,
-      maxRentalPeriod: 14,
-      isInsuranceRequired: false,
-      images: JSON.stringify([
+      photos: JSON.stringify([
         'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800',
       ]),
-      instantBooking: true,
       viewCount: 267,
       favoriteCount: 38,
+      categorySpecificData: {},
     },
   });
 
   // Create some bookings
   console.log('📅 Creating bookings...');
-  
+
   // Completed booking with review
   const booking1 = await prisma.booking.create({
     data: {
@@ -403,10 +414,17 @@ async function main() {
       endDate: new Date('2024-01-15'),
       status: BookingStatus.COMPLETED,
       totalPrice: 750,
-      securityDeposit: 500,
+      depositAmount: 500,
       currency: 'USD',
-      rentalDays: 5,
-      pricePerDay: 150,
+      duration: 5,
+      basePrice: 750,
+      serviceFee: 75,
+      tax: 0,
+      discountAmount: 0,
+      totalAmount: 750,
+      ownerEarnings: 675,
+      platformFee: 75,
+      guestCount: 1,
     },
   });
 
@@ -426,10 +444,17 @@ async function main() {
       endDate: nextWeek,
       status: BookingStatus.CONFIRMED,
       totalPrice: 245,
-      securityDeposit: 150,
+      depositAmount: 150,
       currency: 'USD',
-      rentalDays: 7,
-      pricePerDay: 35,
+      duration: 5,
+      basePrice: 750,
+      serviceFee: 75,
+      tax: 0,
+      discountAmount: 0,
+      totalAmount: 750,
+      ownerEarnings: 675,
+      platformFee: 75,
+      guestCount: 1,
     },
   });
 
@@ -446,12 +471,19 @@ async function main() {
       ownerId: owner2.id,
       startDate: futureDate,
       endDate: futureEndDate,
-      status: BookingStatus.PENDING,
+      status: BookingStatus.PENDING_OWNER_APPROVAL,
       totalPrice: 165,
-      securityDeposit: 200,
+      depositAmount: 200,
       currency: 'USD',
-      rentalDays: 3,
-      pricePerDay: 55,
+      duration: 5,
+      basePrice: 750,
+      serviceFee: 75,
+      tax: 0,
+      discountAmount: 0,
+      totalAmount: 750,
+      ownerEarnings: 675,
+      platformFee: 75,
+      guestCount: 1,
     },
   });
 
@@ -463,9 +495,10 @@ async function main() {
       listingId: listing1.id,
       reviewerId: customer1.id,
       revieweeId: owner1.id,
-      rating: 5,
-      comment: 'Amazing camera! John was professional and the equipment was in perfect condition. The camera performed flawlessly throughout my shoot. Highly recommend!',
-      reviewType: 'LISTING',
+      overallRating: 5,
+      content:
+        'Amazing camera! John was professional and the equipment was in perfect condition. The camera performed flawlessly throughout my shoot. Highly recommend!',
+      type: 'LISTING_REVIEW',
     },
   });
 
@@ -475,9 +508,10 @@ async function main() {
       listingId: listing1.id,
       reviewerId: owner1.id,
       revieweeId: customer1.id,
-      rating: 5,
-      comment: 'Great renter! Mike took excellent care of the equipment and returned it on time in perfect condition. Would definitely rent to him again.',
-      reviewType: 'USER',
+      overallRating: 5,
+      content:
+        'Great renter! Mike took excellent care of the equipment and returned it on time in perfect condition. Would definitely rent to him again.',
+      type: 'RENTER_REVIEW',
     },
   });
 

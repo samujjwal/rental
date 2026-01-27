@@ -1,8 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, INestApplication } from '@nestjs/common';
 import { PrismaClient } from '@rental-portal/database';
 import { ConfigService } from '@nestjs/config';
-import { Pool } from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -19,14 +17,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     console.log('DATABASE_URL found:', databaseUrl.substring(0, 20) + '...');
 
-    // Create PostgreSQL pool
-    const pool = new Pool({ connectionString: databaseUrl });
-    const adapter = new PrismaPg(pool);
-
     super({
       log: ['query', 'info', 'warn', 'error'],
       errorFormat: 'pretty',
-      adapter,
     });
   }
 

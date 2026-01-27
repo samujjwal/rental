@@ -1,6 +1,5 @@
 import { useLoaderData, Form } from 'react-router';
 import { useState } from 'react';
-import type { Route } from './+types/admin.insurance';
 
 interface InsurancePolicy {
   id: string;
@@ -38,9 +37,10 @@ interface LoaderData {
     verifiedToday: number;
     expiringSoon: number;
   };
+  activeTab: string;
 }
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+export async function clientLoader({ request }: { request: Request }) {
   const url = new URL(request.url);
   const tab = url.searchParams.get('tab') || 'pending';
 
@@ -56,16 +56,18 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     }),
   ]);
 
-  const [pendingPolicies, expiringPolicies, stats] = await Promise.all([
-    pendingRes.json(),
-    expiringRes.json(),
-    statsRes.json(),
-  ]);
+  const pendingPolicies = pendingRes.ok ? await pendingRes.json() : [];
+  const expiringPolicies = expiringRes.ok ? await expiringRes.json() : [];
+  const stats = statsRes.ok ? await statsRes.json() : {
+    totalPending: 0,
+    verifiedToday: 0,
+    expiringSoon: 0,
+  };
 
   return { pendingPolicies, expiringPolicies, stats, activeTab: tab };
 }
 
-export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
+export default function AdminInsurance({ loaderData }: { loaderData: LoaderData }) {
   const { pendingPolicies, expiringPolicies, stats, activeTab } = loaderData;
   const [selectedPolicy, setSelectedPolicy] = useState<InsurancePolicy | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -196,21 +198,19 @@ export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
             <nav className="flex -mb-px">
               <a
                 href="?tab=pending"
-                className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'pending'
-                    ? 'border-b-2 border-indigo-500 text-indigo-600'
-                    : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                className={`px-6 py-3 text-sm font-medium ${activeTab === 'pending'
+                  ? 'border-b-2 border-indigo-500 text-indigo-600'
+                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
               >
                 Pending Review ({pendingPolicies.length})
               </a>
               <a
                 href="?tab=expiring"
-                className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'expiring'
-                    ? 'border-b-2 border-indigo-500 text-indigo-600'
-                    : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                className={`px-6 py-3 text-sm font-medium ${activeTab === 'expiring'
+                  ? 'border-b-2 border-indigo-500 text-indigo-600'
+                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
               >
                 Expiring Soon ({expiringPolicies.length})
               </a>
@@ -252,7 +252,7 @@ export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {pendingPolicies.map((policy) => (
+                    {Array.isArray(pendingPolicies) ? pendingPolicies.map((policy: InsurancePolicy) => (
                       <tr key={policy.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">{policy.policyNumber}</div>
@@ -309,7 +309,7 @@ export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    )) : null}
                   </tbody>
                 </table>
               )}
@@ -319,7 +319,7 @@ export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
           {/* Expiring Policies Table */}
           {activeTab === 'expiring' && (
             <div className="overflow-x-auto">
-              {expiringPolicies.length === 0 ? (
+              {Array.isArray(expiringPolicies) && expiringPolicies.length === 0 ? (
                 <div className="text-center py-12">
                   <svg
                     className="mx-auto h-12 w-12 text-gray-400"
@@ -349,7 +349,7 @@ export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {expiringPolicies.map((policy) => {
+                    {Array.isArray(expiringPolicies) ? expiringPolicies.map((policy: InsurancePolicy) => {
                       const days = daysUntilExpiration(policy.expirationDate);
                       return (
                         <tr key={policy.id} className="hover:bg-gray-50">
@@ -367,9 +367,8 @@ export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{formatDate(policy.expirationDate)}</div>
                             <div
-                              className={`text-xs ${
-                                days <= 7 ? 'text-red-600' : days <= 14 ? 'text-orange-600' : 'text-yellow-600'
-                              }`}
+                              className={`text-xs ${days <= 7 ? 'text-red-600' : days <= 14 ? 'text-orange-600' : 'text-yellow-600'
+                                }`}
                             >
                               {days} days remaining
                             </div>
@@ -385,7 +384,7 @@ export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
                           </td>
                         </tr>
                       );
-                    })}
+                    }) : null}
                   </tbody>
                 </table>
               )}
@@ -419,11 +418,10 @@ export default function AdminInsurance({ loaderData }: Route.ComponentProps) {
               </button>
               <button
                 onClick={submitAction}
-                className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
-                  actionType === 'approve'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-red-600 hover:bg-red-700'
-                }`}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-md ${actionType === 'approve'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-red-600 hover:bg-red-700'
+                  }`}
               >
                 {actionType === 'approve' ? 'Approve' : 'Reject'}
               </button>

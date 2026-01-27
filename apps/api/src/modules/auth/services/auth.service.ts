@@ -77,7 +77,7 @@ export class AuthService {
     const { accessToken, refreshToken } = await this.tokenService.generateTokens(user);
 
     // Create session
-    await this.tokenService.createSession(user.id, refreshToken, {
+    await this.tokenService.createSession(user.id, refreshToken, accessToken, {
       ipAddress: '',
       userAgent: '',
     });
@@ -128,7 +128,7 @@ export class AuthService {
     const { accessToken, refreshToken } = await this.tokenService.generateTokens(user);
 
     // Create session
-    await this.tokenService.createSession(user.id, refreshToken, {
+    await this.tokenService.createSession(user.id, refreshToken, accessToken, {
       ipAddress,
       userAgent,
     });

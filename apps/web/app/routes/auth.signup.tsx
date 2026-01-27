@@ -89,12 +89,12 @@ export default function Signup() {
     const passwordStrength = getPasswordStrength(password);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-white px-4 py-8">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-white px-4 py-8">
             <div className="w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <Link to="/" className="inline-block">
-                        <h1 className="text-3xl font-bold text-primary-600">
+                        <h1 className="text-3xl font-bold text-blue-600">
                             Rental Portal
                         </h1>
                     </Link>
@@ -117,7 +117,7 @@ export default function Signup() {
                                 I want to
                             </label>
                             <div className="grid grid-cols-2 gap-4">
-                                <label className="relative flex items-center justify-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 has-[:checked]:border-primary-600 has-[:checked]:bg-primary-50">
+                                <label className="relative flex items-center justify-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
                                     <input
                                         {...register("role")}
                                         type="radio"
@@ -126,7 +126,7 @@ export default function Signup() {
                                     />
                                     <span className="text-sm font-medium">Rent items</span>
                                 </label>
-                                <label className="relative flex items-center justify-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 has-[:checked]:border-primary-600 has-[:checked]:bg-primary-50">
+                                <label className="relative flex items-center justify-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
                                     <input
                                         {...register("role")}
                                         type="radio"
@@ -155,7 +155,7 @@ export default function Signup() {
                                     type="text"
                                     id="firstName"
                                     name="firstName"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     placeholder="John"
                                 />
                                 {errors.firstName && (
@@ -176,7 +176,7 @@ export default function Signup() {
                                     type="text"
                                     id="lastName"
                                     name="lastName"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     placeholder="Doe"
                                 />
                                 {errors.lastName && (
@@ -200,7 +200,7 @@ export default function Signup() {
                                 type="email"
                                 id="email"
                                 name="email"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="you@example.com"
                             />
                             {errors.email && (
@@ -221,7 +221,7 @@ export default function Signup() {
                                 type="tel"
                                 id="phone"
                                 name="phone"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="+1234567890"
                             />
                             {errors.phone && (
@@ -328,7 +328,7 @@ export default function Signup() {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+                            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
                         >
                             {isSubmitting ? (
                                 <>
@@ -350,7 +350,7 @@ export default function Signup() {
                             Already have an account?{" "}
                             <Link
                                 to="/auth/login"
-                                className="text-primary-600 hover:text-primary-700 font-medium"
+                                className="text-blue-600 hover:text-blue-700 font-medium"
                             >
                                 Sign in
                             </Link>

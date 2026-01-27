@@ -12,7 +12,7 @@ import {
     CheckCircle,
     AlertCircle,
 } from "lucide-react";
-import { bookingApi } from "~/lib/api/bookings";
+import { bookingsApi } from "~/lib/api/bookings";
 import type { Booking } from "~/types/booking";
 import { format } from "date-fns";
 
@@ -31,8 +31,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     try {
         const bookings =
             view === "owner"
-                ? await bookingApi.getOwnerBookings(status)
-                : await bookingApi.getMyBookings(status);
+                ? await bookingsApi.getOwnerBookings(status)
+                : await bookingsApi.getMyBookings(status);
         return { bookings, view, status };
     } catch (error) {
         console.error("Bookings error:", error);
@@ -83,7 +83,7 @@ export default function BookingsPage() {
         if (!selectedBooking || !cancelReason) return;
 
         try {
-            await bookingApi.cancelBooking(selectedBooking.id, cancelReason);
+            await bookingsApi.cancelBooking(selectedBooking.id, cancelReason);
             setShowCancelModal(false);
             setCancelReason("");
             window.location.reload();
@@ -95,7 +95,7 @@ export default function BookingsPage() {
 
     const handleConfirmBooking = async (bookingId: string) => {
         try {
-            await bookingApi.confirmBooking(bookingId);
+            await bookingsApi.confirmBooking(bookingId);
             window.location.reload();
         } catch (error) {
             console.error("Confirm error:", error);
@@ -105,7 +105,7 @@ export default function BookingsPage() {
 
     const handleCompleteBooking = async (bookingId: string) => {
         try {
-            await bookingApi.completeBooking(bookingId);
+            await bookingsApi.completeBooking(bookingId);
             window.location.reload();
         } catch (error) {
             console.error("Complete error:", error);
@@ -143,8 +143,8 @@ export default function BookingsPage() {
                         <button
                             onClick={() => handleViewChange("renter")}
                             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${view === "renter"
-                                    ? "bg-primary-600 text-white"
-                                    : "text-gray-600 hover:bg-gray-100"
+                                ? "bg-primary-600 text-white"
+                                : "text-gray-600 hover:bg-gray-100"
                                 }`}
                         >
                             My Rentals
@@ -152,8 +152,8 @@ export default function BookingsPage() {
                         <button
                             onClick={() => handleViewChange("owner")}
                             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${view === "owner"
-                                    ? "bg-primary-600 text-white"
-                                    : "text-gray-600 hover:bg-gray-100"
+                                ? "bg-primary-600 text-white"
+                                : "text-gray-600 hover:bg-gray-100"
                                 }`}
                         >
                             My Listings
@@ -167,8 +167,8 @@ export default function BookingsPage() {
                         <button
                             onClick={() => handleStatusFilter("")}
                             className={`px-4 py-2 rounded-lg whitespace-nowrap ${!status
-                                    ? "bg-primary-600 text-white"
-                                    : "bg-white text-gray-700 border hover:bg-gray-50"
+                                ? "bg-primary-600 text-white"
+                                : "bg-white text-gray-700 border hover:bg-gray-50"
                                 }`}
                         >
                             All
@@ -179,8 +179,8 @@ export default function BookingsPage() {
                                     key={s}
                                     onClick={() => handleStatusFilter(s)}
                                     className={`px-4 py-2 rounded-lg capitalize whitespace-nowrap ${status === s
-                                            ? "bg-primary-600 text-white"
-                                            : "bg-white text-gray-700 border hover:bg-gray-50"
+                                        ? "bg-primary-600 text-white"
+                                        : "bg-white text-gray-700 border hover:bg-gray-50"
                                         }`}
                                 >
                                     {s}
@@ -312,8 +312,8 @@ export default function BookingsPage() {
                                                 <span className="text-gray-600">Payment Status:</span>
                                                 <span
                                                     className={`ml-2 font-medium capitalize ${booking.paymentStatus === "paid"
-                                                            ? "text-green-600"
-                                                            : "text-yellow-600"
+                                                        ? "text-green-600"
+                                                        : "text-yellow-600"
                                                         }`}
                                                 >
                                                     {booking.paymentStatus}

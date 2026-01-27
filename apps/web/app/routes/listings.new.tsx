@@ -10,7 +10,7 @@ import {
     X,
     CheckCircle,
 } from "lucide-react";
-import { listingApi } from "~/lib/api/listings";
+import { listingsApi } from "~/lib/api/listings";
 import { listingSchema, type ListingInput } from "~/lib/validation/listing";
 import { redirect } from "react-router";
 
@@ -26,7 +26,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const data = JSON.parse(formData.get("data") as string);
 
     try {
-        const listing = await listingApi.createListing(data);
+        const listing = await listingsApi.createListing(data);
         return redirect(`/listings/${listing.id}`);
     } catch (error: any) {
         return {
@@ -178,10 +178,10 @@ export default function CreateListing() {
                             <div key={step.id} className="flex items-center">
                                 <div
                                     className={`flex items-center justify-center w-10 h-10 rounded-full ${currentStep > step.id
-                                            ? "bg-green-500 text-white"
-                                            : currentStep === step.id
-                                                ? "bg-primary-600 text-white"
-                                                : "bg-gray-200 text-gray-600"
+                                        ? "bg-green-500 text-white"
+                                        : currentStep === step.id
+                                            ? "bg-primary-600 text-white"
+                                            : "bg-gray-200 text-gray-600"
                                         }`}
                                 >
                                     {currentStep > step.id ? (

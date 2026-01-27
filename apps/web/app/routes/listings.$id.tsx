@@ -13,8 +13,8 @@ import {
     CheckCircle,
     X,
 } from "lucide-react";
-import { listingApi } from "~/lib/api/listings";
-import { bookingApi } from "~/lib/api/bookings";
+import { listingsApi } from "~/lib/api/listings";
+import { bookingsApi } from "~/lib/api/bookings";
 import type { Listing } from "~/types/listing";
 import type { BookingCalculation } from "~/types/booking";
 import { useAuthStore } from "~/lib/store/auth";
@@ -34,8 +34,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!id) throw new Error("Listing ID is required");
 
     try {
-        const listing = await listingApi.getListingById(id);
-        const blockedDates = await bookingApi.getBlockedDates(id);
+        const listing = await listingsApi.getListingById(id);
+        const blockedDates = await bookingsApi.getBlockedDates(id);
         return { listing, blockedDates };
     } catch (error) {
         throw new Response("Listing not found", { status: 404 });
@@ -75,7 +75,7 @@ export default function ListingDetail() {
 
         setLoading(true);
         try {
-            const calc = await bookingApi.calculatePrice(
+            const calc = await bookingsApi.calculatePrice(
                 listing.id,
                 startDate,
                 endDate,
@@ -158,8 +158,8 @@ export default function ListingDetail() {
                                                             key={index}
                                                             onClick={() => setCurrentImageIndex(index)}
                                                             className={`w-2 h-2 rounded-full ${index === currentImageIndex
-                                                                    ? "bg-white"
-                                                                    : "bg-white/50"
+                                                                ? "bg-white"
+                                                                : "bg-white/50"
                                                                 }`}
                                                         />
                                                     ))}

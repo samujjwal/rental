@@ -1,12 +1,9 @@
 import type { MetaFunction, ActionFunctionArgs } from "react-router";
 import { Form, Link, useActionData, useNavigation } from "react-router";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import { useState } from "react";
 import { authApi } from "~/lib/api/auth";
 import { createUserSession } from "~/utils/auth.server";
-import { loginSchema, type LoginInput } from "~/lib/validation/auth";
 
 export const meta: MetaFunction = () => {
     return [
@@ -20,6 +17,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const remember = formData.get("remember") === "true";
+    const redirectTo = formData.get("redirectTo") as string || "/dashboard";
 
     try {
         const response = await authApi.login({ email, password });
@@ -29,7 +27,7 @@ export async function action({ request }: ActionFunctionArgs) {
             accessToken: response.accessToken,
             refreshToken: response.refreshToken,
             remember,
-            redirectTo: "/dashboard",
+            redirectTo,
         });
     } catch (error: any) {
         return {
@@ -44,21 +42,13 @@ export default function Login() {
     const [showPassword, setShowPassword] = useState(false);
     const isSubmitting = navigation.state === "submitting";
 
-    const {
-        register,
-        handleSubmit,
-        formState: { errors },
-    } = useForm<LoginInput>({
-        resolver: zodResolver(loginSchema),
-    });
-
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-white px-4">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-white px-4">
             <div className="w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <Link to="/" className="inline-block">
-                        <h1 className="text-3xl font-bold text-primary-600">
+                        <h1 className="text-3xl font-bold text-blue-600">
                             Rental Portal
                         </h1>
                     </Link>
@@ -67,7 +57,7 @@ export default function Login() {
 
                 {/* Login Form */}
                 <div className="bg-white rounded-lg shadow-lg p-8">
-                    <Form method="post" onSubmit={handleSubmit(() => { })}>
+                    <Form method="post" className="space-y-6">
                         {/* Error Message */}
                         {actionData?.error && (
                             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -84,18 +74,13 @@ export default function Login() {
                                 Email Address
                             </label>
                             <input
-                                {...register("email")}
                                 type="email"
                                 id="email"
                                 name="email"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="you@example.com"
+                                required
                             />
-                            {errors.email && (
-                                <p className="mt-1 text-sm text-red-600">
-                                    {errors.email.message}
-                                </p>
-                            )}
                         </div>
 
                         {/* Password Field */}
@@ -108,12 +93,12 @@ export default function Login() {
                             </label>
                             <div className="relative">
                                 <input
-                                    {...register("password")}
                                     type={showPassword ? "text" : "password"}
                                     id="password"
                                     name="password"
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent pr-12"
-                                    placeholder="••••••••"
+                                    placeholder="•••••••••"
+                                    required
                                 />
                                 <button
                                     type="button"
@@ -127,18 +112,13 @@ export default function Login() {
                                     )}
                                 </button>
                             </div>
-                            {errors.password && (
-                                <p className="mt-1 text-sm text-red-600">
-                                    {errors.password.message}
-                                </p>
-                            )}
                         </div>
 
                         {/* Forgot Password Link */}
                         <div className="mb-6 text-right">
                             <Link
                                 to="/auth/forgot-password"
-                                className="text-sm text-primary-600 hover:text-primary-700"
+                                className="text-sm text-blue-600 hover:text-blue-700"
                             >
                                 Forgot password?
                             </Link>
@@ -148,7 +128,7 @@ export default function Login() {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+                            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
                         >
                             {isSubmitting ? (
                                 <>
@@ -170,7 +150,7 @@ export default function Login() {
                             Don't have an account?{" "}
                             <Link
                                 to="/auth/signup"
-                                className="text-primary-600 hover:text-primary-700 font-medium"
+                                className="text-blue-600 hover:text-blue-700 font-medium"
                             >
                                 Sign up
                             </Link>

@@ -1,6 +1,7 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { Link, redirect } from "react-router";
 import { useAuthStore } from "~/lib/store/auth";
+import { getUser } from "~/utils/auth.server";
 import {
     Home,
     Search,
@@ -19,15 +20,28 @@ export const meta: MetaFunction = () => {
     ];
 };
 
-export async function loader() {
-    // Check if user is authenticated (this will be handled by middleware later)
-    if (typeof window !== "undefined") {
-        const token = localStorage.getItem("accessToken");
-        if (!token) {
-            return redirect("/auth/login");
-        }
+export async function loader({ request }: LoaderFunctionArgs) {
+    const user = await getUser(request);
+
+    if (!user) {
+        return redirect("/auth/login");
     }
-    return {};
+
+    // Redirect admin users to admin dashboard
+    if (user.role === "ADMIN") {
+        return redirect("/admin");
+    }
+
+    // Redirect owners and renters to their specific dashboards
+    if (user.role === "OWNER") {
+        return redirect("/dashboard/owner");
+    }
+
+    if (user.role === "RENTER") {
+        return redirect("/dashboard/renter");
+    }
+
+    return { user };
 }
 
 export default function Dashboard() {

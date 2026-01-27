@@ -13,7 +13,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { NotificationsService, NotificationPreferences } from '../services/notifications.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { NotificationType, NotificationStatus } from '@rental-portal/database';
+import { NotificationType } from '@rental-portal/database';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
@@ -26,7 +26,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Get user notifications' })
   async getNotifications(
     @CurrentUser('id') userId: string,
-    @Query('status') status?: NotificationStatus,
+    @Query('status') status?: string,
     @Query('type') type?: NotificationType,
     @Query('page') page?: number,
     @Query('limit') limit?: number,

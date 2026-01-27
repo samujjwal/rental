@@ -57,6 +57,12 @@ export class AdminController {
     });
   }
 
+  @Get('users/:id')
+  @ApiOperation({ summary: 'Get user by ID' })
+  async getUserById(@CurrentUser('id') adminId: string, @Param('id') userId: string) {
+    return this.adminService.getUserById(adminId, userId);
+  }
+
   @Patch('users/:id/role')
   @ApiOperation({ summary: 'Update user role' })
   async updateUserRole(
@@ -79,6 +85,37 @@ export class AdminController {
     return this.adminService.toggleUserStatus(adminId, userId, false);
   }
 
+  @Get('organizations')
+  @ApiOperation({ summary: 'Get all organizations' })
+  async getAllOrganizations(
+    @CurrentUser('id') userId: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('plan') plan?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getAllOrganizations(userId, {
+      search,
+      status,
+      plan,
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+    });
+  }
+
+  @Get('organizations/:id')
+  @ApiOperation({ summary: 'Get organization by ID' })
+  async getOrganizationById(@CurrentUser('id') adminId: string, @Param('id') orgId: string) {
+    return this.adminService.getOrganizationById(adminId, orgId);
+  }
+
+  @Get('organizations/:id/members')
+  @ApiOperation({ summary: 'Get organization members' })
+  async getOrganizationMembers(@CurrentUser('id') adminId: string, @Param('id') orgId: string) {
+    return this.adminService.getOrganizationMembers(adminId, orgId);
+  }
+
   @Get('listings')
   @ApiOperation({ summary: 'Get all listings' })
   async getAllListings(
@@ -98,6 +135,24 @@ export class AdminController {
     });
   }
 
+  @Get('listings/:id')
+  @ApiOperation({ summary: 'Get listing by ID' })
+  async getListingById(@CurrentUser('id') adminId: string, @Param('id') listingId: string) {
+    return this.adminService.getListingById(adminId, listingId);
+  }
+
+  @Get('listings/categories')
+  @ApiOperation({ summary: 'Get all categories' })
+  async getAllCategories(@CurrentUser('id') adminId: string) {
+    return this.adminService.getAllCategories(adminId);
+  }
+
+  @Get('listings/pending')
+  @ApiOperation({ summary: 'Get pending listings' })
+  async getPendingListings(@CurrentUser('id') adminId: string) {
+    return this.adminService.getPendingListings(adminId);
+  }
+
   @Patch('listings/:id/status')
   @ApiOperation({ summary: 'Update listing status' })
   async updateListingStatus(
@@ -115,6 +170,201 @@ export class AdminController {
     return { message: 'Listing deleted successfully' };
   }
 
+  @Get('bookings')
+  @ApiOperation({ summary: 'Get all bookings' })
+  async getAllBookings(
+    @CurrentUser('id') userId: string,
+    @Query('status') status?: string,
+    @Query('listingId') listingId?: string,
+    @Query('renterId') renterId?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getAllBookings(userId, {
+      status,
+      listingId,
+      renterId,
+      ownerId,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+    });
+  }
+
+  @Get('bookings/:id')
+  @ApiOperation({ summary: 'Get booking by ID' })
+  async getBookingById(@CurrentUser('id') adminId: string, @Param('id') bookingId: string) {
+    return this.adminService.getBookingById(adminId, bookingId);
+  }
+
+  @Get('bookings/calendar')
+  @ApiOperation({ summary: 'Get booking calendar' })
+  async getBookingCalendar(@CurrentUser('id') adminId: string, @Query('month') month?: string) {
+    return this.adminService.getBookingCalendar(adminId, month);
+  }
+
+  @Get('payments')
+  @ApiOperation({ summary: 'Get all payments' })
+  async getAllPayments(
+    @CurrentUser('id') userId: string,
+    @Query('status') status?: string,
+    @Query('method') method?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('minAmount') minAmount?: number,
+    @Query('maxAmount') maxAmount?: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getAllPayments(userId, {
+      status,
+      method,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      minAmount,
+      maxAmount,
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+    });
+  }
+
+  @Get('payments/:id')
+  @ApiOperation({ summary: 'Get payment by ID' })
+  async getPaymentById(@CurrentUser('id') adminId: string, @Param('id') paymentId: string) {
+    return this.adminService.getPaymentById(adminId, paymentId);
+  }
+
+  @Get('payments/refunds')
+  @ApiOperation({ summary: 'Get all refunds' })
+  async getAllRefunds(@CurrentUser('id') adminId: string) {
+    return this.adminService.getAllRefunds(adminId);
+  }
+
+  @Get('payments/payouts')
+  @ApiOperation({ summary: 'Get all payouts' })
+  async getAllPayouts(@CurrentUser('id') adminId: string) {
+    return this.adminService.getAllPayouts(adminId);
+  }
+
+  @Get('payments/ledger')
+  @ApiOperation({ summary: 'Get financial ledger' })
+  async getFinancialLedger(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getFinancialLedger(adminId, {
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+    });
+  }
+
+  @Get('settings/general')
+  @ApiOperation({ summary: 'Get general settings' })
+  async getGeneralSettings(@CurrentUser('id') adminId: string) {
+    return this.adminService.getGeneralSettings(adminId);
+  }
+
+  @Get('settings/api-keys')
+  @ApiOperation({ summary: 'Get API keys' })
+  async getApiKeys(@CurrentUser('id') adminId: string) {
+    return this.adminService.getApiKeys(adminId);
+  }
+
+  @Get('settings/services')
+  @ApiOperation({ summary: 'Get service configuration' })
+  async getServiceConfig(@CurrentUser('id') adminId: string) {
+    return this.adminService.getServiceConfig(adminId);
+  }
+
+  @Get('settings/environment')
+  @ApiOperation({ summary: 'Get environment variables' })
+  async getEnvironmentConfig(@CurrentUser('id') adminId: string) {
+    return this.adminService.getEnvironmentConfig(adminId);
+  }
+
+  @Get('analytics/users')
+  @ApiOperation({ summary: 'Get user analytics' })
+  async getUserAnalytics(@CurrentUser('id') adminId: string, @Query('period') period?: string) {
+    return this.adminService.getUserAnalytics(adminId, period);
+  }
+
+  @Get('analytics/business')
+  @ApiOperation({ summary: 'Get business analytics' })
+  async getBusinessAnalytics(@CurrentUser('id') adminId: string, @Query('period') period?: string) {
+    return this.adminService.getBusinessAnalytics(adminId, period);
+  }
+
+  @Get('analytics/performance')
+  @ApiOperation({ summary: 'Get performance analytics' })
+  async getPerformanceAnalytics(
+    @CurrentUser('id') adminId: string,
+    @Query('period') period?: string,
+  ) {
+    return this.adminService.getPerformanceAnalytics(adminId, period);
+  }
+
+  @Get('analytics/reports')
+  @ApiOperation({ summary: 'Get custom reports' })
+  async getCustomReports(@CurrentUser('id') adminId: string) {
+    return this.adminService.getCustomReports(adminId);
+  }
+
+  @Get('system/overview')
+  @ApiOperation({ summary: 'Get system overview' })
+  async getSystemOverview(@CurrentUser('id') adminId: string) {
+    return this.adminService.getSystemOverview(adminId);
+  }
+
+  @Get('system/health')
+  @ApiOperation({ summary: 'Get system health' })
+  async getSystemHealth(@CurrentUser('id') adminId: string) {
+    return this.adminService.getSystemHealth(adminId);
+  }
+
+  @Get('system/logs')
+  @ApiOperation({ summary: 'Get system logs' })
+  async getSystemLogs(
+    @CurrentUser('id') adminId: string,
+    @Query('level') level?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getSystemLogs(adminId, level, limit);
+  }
+
+  @Get('system/audit')
+  @ApiOperation({ summary: 'Get audit logs' })
+  async getAuditLogs(
+    @CurrentUser('id') adminId: string,
+    @Query('action') action?: string,
+    @Query('userId') targetUserId?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getAuditLogs(adminId, {
+      action,
+      userId: targetUserId,
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+    });
+  }
+
+  @Get('system/database')
+  @ApiOperation({ summary: 'Get database information' })
+  async getDatabaseInfo(@CurrentUser('id') adminId: string) {
+    return this.adminService.getDatabaseInfo(adminId);
+  }
+
+  @Get('system/backups')
+  @ApiOperation({ summary: 'Get backup information' })
+  async getBackupInfo(@CurrentUser('id') adminId: string) {
+    return this.adminService.getBackupInfo(adminId);
+  }
+
   @Get('revenue')
   @ApiOperation({ summary: 'Get revenue report' })
   async getRevenueReport(
@@ -123,22 +373,5 @@ export class AdminController {
     @Query('endDate') endDate: string,
   ) {
     return this.adminService.getRevenueReport(userId, new Date(startDate), new Date(endDate));
-  }
-
-  @Get('audit-logs')
-  @ApiOperation({ summary: 'Get audit logs' })
-  async getAuditLogs(
-    @CurrentUser('id') userId: string,
-    @Query('action') action?: string,
-    @Query('targetUserId') targetUserId?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-  ) {
-    return this.adminService.getAuditLogs(userId, {
-      action,
-      targetUserId,
-      page: page ? parseInt(page.toString()) : undefined,
-      limit: limit ? parseInt(limit.toString()) : undefined,
-    });
   }
 }

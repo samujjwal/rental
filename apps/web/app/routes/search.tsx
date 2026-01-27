@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams, Link, Form } from "react-router";
 import { Search, SlidersHorizontal, MapPin, X } from "lucide-react";
-import { listingApi } from "~/lib/api/listings";
+import { listingsApi } from "~/lib/api/listings";
 import type { ListingSearchResponse } from "~/types/listing";
 import { useState } from "react";
 
@@ -36,7 +36,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
 
     try {
-        const results = await listingApi.searchListings(searchParams);
+        const results = await listingsApi.searchListings(searchParams);
         return { results, searchParams };
     } catch (error) {
         console.error("Search error:", error);
@@ -409,8 +409,8 @@ export default function SearchPage() {
                                                             handleFilterChange("page", String(page))
                                                         }
                                                         className={`px-4 py-2 rounded-lg ${page === results.page
-                                                                ? "bg-primary-600 text-white"
-                                                                : "border border-gray-300 hover:bg-gray-50"
+                                                            ? "bg-primary-600 text-white"
+                                                            : "border border-gray-300 hover:bg-gray-50"
                                                             }`}
                                                     >
                                                         {page}

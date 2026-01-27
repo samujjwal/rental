@@ -39,15 +39,26 @@ export async function getUserToken(
 
 export async function getUser(request: Request) {
   const token = await getUserToken(request);
+
   if (!token) return null;
 
   try {
-    const response = await apiClient.get("/auth/me", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    return response.data;
+    const response = await fetch(
+      `${process.env.API_URL || "http://localhost:3400/api/v1"}/auth/me`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const user = await response.json();
+    return user;
   } catch (error) {
     return null;
   }
@@ -75,8 +86,11 @@ export async function requireUser(request: Request) {
 
 export async function requireAdmin(request: Request) {
   const user = await getUser(request);
-  if (!user || user.role !== "admin") {
-    throw redirect("/dashboard");
+  if (!user) {
+    throw redirect("/auth/login");
+  }
+  if (user.role !== "ADMIN") {
+    throw redirect("/auth/login");
   }
   return user;
 }
