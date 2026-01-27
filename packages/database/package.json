@@ -15,7 +15,7 @@
     "format": "prisma format"
   },
   "dependencies": {
-    "@prisma/client": "^7.3.0",
+    "@prisma/client": "^5.22.0",
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0"
   },
@@ -23,7 +23,7 @@
     "@faker-js/faker": "^10.2.0",
     "@types/node": "^25.0.10",
     "dotenv": "^17.2.3",
-    "prisma": "^7.3.0",
+    "prisma": "^5.22.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

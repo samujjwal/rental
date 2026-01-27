@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
+import { useAuthStore } from "./store/auth";
 
 const API_BASE_URL = process.env.API_URL || "http://localhost:3400/api/v1";
 
@@ -44,10 +45,16 @@ class ApiClient {
                 refreshToken,
               });
 
-              const { accessToken, refreshToken: newRefreshToken } =
+              const { accessToken, refreshToken: newRefreshToken, user } =
                 response.data;
+              
+              // Update both localStorage and auth store
               localStorage.setItem("accessToken", accessToken);
               localStorage.setItem("refreshToken", newRefreshToken);
+              
+              // Update the auth store with new tokens
+              const authStore = useAuthStore.getState();
+              authStore.setTokens(accessToken, newRefreshToken);
 
               originalRequest.headers.Authorization = `Bearer ${accessToken}`;
               return this.client(originalRequest);
@@ -56,6 +63,12 @@ class ApiClient {
             // Refresh failed, logout user
             localStorage.removeItem("accessToken");
             localStorage.removeItem("refreshToken");
+            localStorage.removeItem("user");
+            
+            // Clear auth store
+            const authStore = useAuthStore.getState();
+            authStore.clearAuth();
+            
             window.location.href = "/auth/login";
             return Promise.reject(refreshError);
           }

@@ -3,10 +3,11 @@ import { Form, Link, useActionData, useNavigation } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { authApi } from "~/lib/api/auth";
 import { createUserSession } from "~/utils/auth.server";
 import { signupSchema, type SignupInput } from "~/lib/validation/auth";
+import { useAuthStore } from "~/lib/store/auth";
 
 export const meta: MetaFunction = () => {
     return [

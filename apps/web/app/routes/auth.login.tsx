@@ -1,9 +1,10 @@
 import type { MetaFunction, ActionFunctionArgs } from "react-router";
-import { Form, Link, useActionData, useNavigation } from "react-router";
+import { Form, Link, useActionData, useNavigation, redirect } from "react-router";
 import { Eye, EyeOff, LogIn } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { authApi } from "~/lib/api/auth";
 import { createUserSession } from "~/utils/auth.server";
+import { useAuthStore } from "~/lib/store/auth";
 
 export const meta: MetaFunction = () => {
     return [
@@ -22,13 +23,16 @@ export async function action({ request }: ActionFunctionArgs) {
     try {
         const response = await authApi.login({ email, password });
 
-        return createUserSession({
+        // Store in server session
+        const sessionResponse = await createUserSession({
             userId: response.user.id,
             accessToken: response.accessToken,
             refreshToken: response.refreshToken,
             remember,
             redirectTo,
         });
+
+        return sessionResponse;
     } catch (error: any) {
         return {
             error: error.response?.data?.message || "Login failed. Please try again.",
@@ -41,6 +45,14 @@ export default function Login() {
     const navigation = useNavigation();
     const [showPassword, setShowPassword] = useState(false);
     const isSubmitting = navigation.state === "submitting";
+    
+    // Update auth store when login succeeds
+    useEffect(() => {
+        if (actionData && !actionData.error && typeof window !== 'undefined') {
+            // The session action will handle redirect
+            // Auth store will be restored via useAuthInit on the next page load
+        }
+    }, [actionData]);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-white px-4">

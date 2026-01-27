@@ -8,11 +8,17 @@ import {
   ListingStatus,
 } from '../src/generated/client';
 import * as bcrypt from 'bcrypt';
+import { faker } from '@faker-js/faker';
 
 // Load environment variables from the root .env file
 dotenv.config({ path: '../../.env' });
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({});
+
+// Helper function to generate random index
+function randomIndex<T>(array: T[]): T {
+  return array[Math.floor(Math.random() * array.length)];
+}
 
 async function main() {
   console.log('🌱 Starting database seed...');
@@ -98,8 +104,10 @@ async function main() {
   // Hash password for all users (password: "password123")
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  // Create Admin User (auto-login for dev)
-  console.log('👤 Creating admin user...');
+  // Create Users (150+ total users)
+  console.log('👤 Creating 150+ users...');
+  
+  // Create special test users
   const adminUser = await prisma.user.create({
     data: {
       email: 'admin@rental.local',
@@ -121,8 +129,6 @@ async function main() {
     },
   });
 
-  // Create Support User
-  console.log('👤 Creating support user...');
   const supportUser = await prisma.user.create({
     data: {
       email: 'support@rental.local',
@@ -142,434 +148,316 @@ async function main() {
     },
   });
 
-  // Create Owner User 1 (has listings)
-  console.log('👤 Creating owner user 1...');
-  const owner1 = await prisma.user.create({
-    data: {
-      email: 'john.owner@rental.local',
-      emailVerified: true,
-      passwordHash: hashedPassword,
-      firstName: 'John',
-      lastName: 'Smith',
-      phoneNumber: '+1-555-0201',
-      phoneVerified: true,
-      role: UserRole.OWNER,
-      status: UserStatus.ACTIVE,
-      idVerificationStatus: VerificationStatus.VERIFIED,
-      bio: 'Professional photographer renting out high-quality camera equipment. Over 10 years of experience in the industry.',
-      city: 'Los Angeles',
-      state: 'CA',
-      country: 'USA',
-      averageRating: 4.8,
-      totalReviews: 24,
-      stripeConnectId: 'acct_test_owner1',
-      stripeOnboardingComplete: true,
-      stripeChargesEnabled: true,
-      stripePayoutsEnabled: true,
-    },
-  });
+  // Create 150+ regular users (mix of owners and customers)
+  const users: any[] = [adminUser, supportUser];
+  
+  for (let i = 0; i < 150; i++) {
+    const isOwner = Math.random() > 0.6; // 40% owners, 60% customers
+    const firstName = faker.person.firstName();
+    const lastName = faker.person.lastName();
+    
+    const user = await prisma.user.create({
+      data: {
+        email: faker.internet.email({ firstName, lastName }).toLowerCase(),
+        emailVerified: true,
+        passwordHash: hashedPassword,
+        firstName,
+        lastName,
+        phoneNumber: faker.phone.number('+1-555-####'),
+        phoneVerified: Math.random() > 0.2,
+        role: isOwner ? UserRole.OWNER : UserRole.CUSTOMER,
+        status: UserStatus.ACTIVE,
+        idVerificationStatus: randomIndex([
+          VerificationStatus.VERIFIED,
+          VerificationStatus.VERIFIED,
+          VerificationStatus.PENDING,
+        ]),
+        bio: faker.person.bio(),
+        city: faker.location.city(),
+        state: faker.location.state({ abbreviated: true }),
+        country: 'USA',
+        averageRating: parseFloat((Math.random() * 5).toFixed(1)),
+        totalReviews: Math.floor(Math.random() * 50),
+        ...(isOwner && {
+          stripeConnectId: `acct_test_${i}`,
+          stripeOnboardingComplete: true,
+          stripeChargesEnabled: true,
+          stripePayoutsEnabled: true,
+        }),
+        ...(!isOwner && {
+          stripeCustomerId: `cus_test_${i}`,
+        }),
+      },
+    });
+    
+    users.push(user);
+  }
 
-  // Create Owner User 2 (has listings)
-  console.log('👤 Creating owner user 2...');
-  const owner2 = await prisma.user.create({
-    data: {
-      email: 'emily.tools@rental.local',
-      emailVerified: true,
-      passwordHash: hashedPassword,
-      firstName: 'Emily',
-      lastName: 'Johnson',
-      phoneNumber: '+1-555-0202',
-      phoneVerified: true,
-      role: UserRole.OWNER,
-      status: UserStatus.ACTIVE,
-      idVerificationStatus: VerificationStatus.VERIFIED,
-      bio: 'DIY enthusiast and contractor. I rent out professional-grade tools and equipment for home improvement projects.',
-      city: 'Seattle',
-      state: 'WA',
-      country: 'USA',
-      averageRating: 4.9,
-      totalReviews: 42,
-      stripeConnectId: 'acct_test_owner2',
-      stripeOnboardingComplete: true,
-      stripeChargesEnabled: true,
-      stripePayoutsEnabled: true,
-    },
-  });
+  // Separate owners and customers
+  const owners = users.filter(u => u.role === UserRole.OWNER);
+  const customers = users.filter(u => u.role === UserRole.CUSTOMER);
 
-  // Create Regular Customer User 1
-  console.log('👤 Creating customer user 1...');
-  const customer1 = await prisma.user.create({
-    data: {
-      email: 'mike.customer@rental.local',
-      emailVerified: true,
-      passwordHash: hashedPassword,
-      firstName: 'Mike',
-      lastName: 'Davis',
-      phoneNumber: '+1-555-0301',
-      phoneVerified: true,
-      role: UserRole.CUSTOMER,
-      status: UserStatus.ACTIVE,
-      idVerificationStatus: VerificationStatus.VERIFIED,
-      bio: 'Weekend warrior who loves DIY projects and outdoor adventures.',
-      city: 'Portland',
-      state: 'OR',
-      country: 'USA',
-      averageRating: 4.7,
-      totalReviews: 8,
-      stripeCustomerId: 'cus_test_customer1',
-    },
-  });
+  console.log(`   ✓ Created ${users.length} users (${owners.length} owners, ${customers.length} customers)`);
 
-  // Create Regular Customer User 2
-  console.log('👤 Creating customer user 2...');
-  const customer2 = await prisma.user.create({
-    data: {
-      email: 'lisa.renter@rental.local',
-      emailVerified: true,
-      passwordHash: hashedPassword,
-      firstName: 'Lisa',
-      lastName: 'Anderson',
-      phoneNumber: '+1-555-0302',
-      phoneVerified: true,
-      role: UserRole.CUSTOMER,
-      status: UserStatus.ACTIVE,
-      idVerificationStatus: VerificationStatus.VERIFIED,
-      bio: 'Event planner always looking for quality equipment for special occasions.',
-      city: 'Austin',
-      state: 'TX',
-      country: 'USA',
-      averageRating: 5.0,
-      totalReviews: 12,
-      stripeCustomerId: 'cus_test_customer2',
-    },
-  });
+  // Create Listings (150+ listings)
+  console.log('📦 Creating 150+ listings...');
+  const listings: any[] = [];
+  
+  const listingTitles = [
+    'Professional Camera',
+    'Cordless Drill',
+    'Camping Tent',
+    'Party Supplies',
+    'Laptop',
+    'Photography Lens',
+    'Power Saw',
+    'Hiking Backpack',
+    'Projector',
+    'DJ Equipment',
+    'Table Saw',
+    'Telescope',
+    'Video Camera',
+    'Portable Generator',
+    'Chainsaw',
+  ];
 
-  // Create Listings for Owner 1 (Camera Equipment)
-  console.log('📦 Creating listings for owner 1...');
-  const listing1 = await prisma.listing.create({
-    data: {
-      title: 'Canon EOS R5 Mirrorless Camera Body',
-      slug: 'canon-eos-r5-mirrorless-camera',
-      description:
-        'Professional full-frame mirrorless camera with 45MP sensor, 8K video recording, and advanced autofocus. Perfect for professional photography and videography projects. Includes battery, charger, and camera strap.',
-      categoryId: categories[1].id, // Camera & Photography
-      ownerId: owner1.id,
-      basePrice: 150,
-      dailyPrice: 150,
-      weeklyPrice: 900,
-      monthlyPrice: 3200,
-      depositAmount: 500,
-      currency: 'USD',
-      city: 'Los Angeles',
-      state: 'CA',
-      country: 'USA',
-      latitude: 34.0522,
-      longitude: -118.2437,
-      status: ListingStatus.ACTIVE,
-      condition: 'EXCELLENT',
-      photos: JSON.stringify([
-        'https://images.unsplash.com/photo-1606986628878-ddd62f3e0e5d?w=800',
-        'https://images.unsplash.com/photo-1606980707972-7a0c4e3b7c6d?w=800',
-      ]),
-      viewCount: 245,
-      favoriteCount: 32,
-      categorySpecificData: {},
-    },
-  });
+  for (let i = 0; i < 150; i++) {
+    const owner = randomIndex(owners);
+    const category = randomIndex(categories);
+    
+    const listing = await prisma.listing.create({
+      data: {
+        title: `${randomIndex(listingTitles)} ${i + 1}`,
+        slug: `listing-${i + 1}-${faker.string.alpha(8)}`,
+        description: faker.lorem.paragraphs(2),
+        categoryId: category.id,
+        ownerId: owner.id,
+        basePrice: Math.floor(Math.random() * 500) + 25,
+        dailyPrice: Math.floor(Math.random() * 200) + 25,
+        weeklyPrice: Math.floor(Math.random() * 800) + 150,
+        monthlyPrice: Math.floor(Math.random() * 2000) + 500,
+        depositAmount: Math.floor(Math.random() * 500) + 50,
+        currency: 'USD',
+        city: faker.location.city(),
+        state: faker.location.state({ abbreviated: true }),
+        country: 'USA',
+        latitude: parseFloat(faker.location.latitude()),
+        longitude: parseFloat(faker.location.longitude()),
+        status: randomIndex([ListingStatus.ACTIVE, ListingStatus.ACTIVE, ListingStatus.INACTIVE]),
+        condition: randomIndex(['EXCELLENT', 'GOOD', 'FAIR']),
+        photos: JSON.stringify([
+          faker.image.url({ width: 800, height: 600 }),
+          faker.image.url({ width: 800, height: 600 }),
+        ]),
+        viewCount: Math.floor(Math.random() * 500),
+        favoriteCount: Math.floor(Math.random() * 100),
+        categorySpecificData: {},
+      },
+    });
+    
+    listings.push(listing);
+  }
 
-  const listing2 = await prisma.listing.create({
-    data: {
-      title: 'Sony A7 IV + 24-70mm f/2.8 Lens Kit',
-      slug: 'sony-a7-iv-24-70mm-lens-kit',
-      description:
-        'Complete professional photography kit with Sony A7 IV camera and versatile 24-70mm f/2.8 lens. Ideal for weddings, events, and portrait photography. Kit includes 2 batteries, charger, lens hood, and camera bag.',
-      categoryId: categories[1].id,
-      ownerId: owner1.id,
-      basePrice: 180,
-      dailyPrice: 180,
-      weeklyPrice: 1080,
-      monthlyPrice: 3800,
-      depositAmount: 600,
-      currency: 'USD',
-      city: 'Los Angeles',
-      state: 'CA',
-      country: 'USA',
-      latitude: 34.0522,
-      longitude: -118.2437,
-      status: ListingStatus.ACTIVE,
-      condition: 'EXCELLENT',
-      photos: JSON.stringify([
-        'https://images.unsplash.com/photo-1614853316629-951c74dce744?w=800',
-        'https://images.unsplash.com/photo-1606980654336-aef85d0d2f3f?w=800',
-      ]),
-      viewCount: 189,
-      favoriteCount: 28,
-      categorySpecificData: {},
-    },
-  });
+  console.log(`   ✓ Created ${listings.length} listings`);
 
-  // Create Listings for Owner 2 (Tools)
-  console.log('📦 Creating listings for owner 2...');
-  const listing3 = await prisma.listing.create({
-    data: {
-      title: 'DeWalt 20V Cordless Drill & Impact Driver Combo Kit',
-      slug: 'dewalt-20v-cordless-drill-impact-driver-kit',
-      description:
-        'Professional-grade combo kit perfect for construction, woodworking, and home improvement. Includes drill driver, impact driver, 2 batteries, charger, and carrying case. Both tools feature LED lights and ergonomic design.',
-      categoryId: categories[0].id, // Tools & Equipment
-      ownerId: owner2.id,
-      basePrice: 35,
-      dailyPrice: 35,
-      weeklyPrice: 180,
-      monthlyPrice: 600,
-      depositAmount: 150,
-      currency: 'USD',
-      city: 'Seattle',
-      state: 'WA',
-      country: 'USA',
-      latitude: 47.6062,
-      longitude: -122.3321,
-      status: ListingStatus.ACTIVE,
-      condition: 'GOOD',
-      photos: JSON.stringify([
-        'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800',
-        'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=800',
-      ]),
-      viewCount: 312,
-      favoriteCount: 45,
-      categorySpecificData: {},
-    },
-  });
+  // Create Bookings (100+ bookings)
+  console.log('📅 Creating 100+ bookings...');
+  const bookings: any[] = [];
+  
+  for (let i = 0; i < 120; i++) {
+    const listing = randomIndex(listings);
+    const renter = randomIndex(customers);
+    const owner = users.find(u => u.id === listing.ownerId) || randomIndex(owners);
+    
+    const startDate = faker.date.past();
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + faker.number.int({ min: 1, max: 30 }));
+    
+    const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const basePrice = listing.dailyPrice * duration;
+    const serviceFee = Math.floor(basePrice * 0.1);
+    const totalPrice = basePrice + serviceFee;
 
-  const listing4 = await prisma.listing.create({
-    data: {
-      title: 'Milwaukee M18 Table Saw',
-      slug: 'milwaukee-m18-table-saw',
-      description:
-        'Portable 10-inch table saw with excellent precision and power. Perfect for jobsite use or home workshops. Includes rip fence, miter gauge, push stick, and blade guard. Battery and charger included.',
-      categoryId: categories[0].id,
-      ownerId: owner2.id,
-      basePrice: 55,
-      dailyPrice: 55,
-      weeklyPrice: 300,
-      monthlyPrice: 1000,
-      depositAmount: 200,
-      currency: 'USD',
-      city: 'Seattle',
-      state: 'WA',
-      country: 'USA',
-      latitude: 47.6062,
-      longitude: -122.3321,
-      status: ListingStatus.ACTIVE,
-      condition: 'GOOD',
-      photos: JSON.stringify([
-        'https://images.unsplash.com/photo-1572981779307-38b8cabb2407?w=800',
-      ]),
-      viewCount: 178,
-      favoriteCount: 22,
-      categorySpecificData: {},
-    },
-  });
+    const booking = await prisma.booking.create({
+      data: {
+        listingId: listing.id,
+        renterId: renter.id,
+        ownerId: owner.id,
+        startDate,
+        endDate,
+        status: randomIndex([
+          BookingStatus.COMPLETED,
+          BookingStatus.COMPLETED,
+          BookingStatus.CONFIRMED,
+          BookingStatus.PENDING_OWNER_APPROVAL,
+          BookingStatus.CANCELLED,
+        ]),
+        totalPrice,
+        depositAmount: listing.depositAmount,
+        currency: 'USD',
+        duration,
+        basePrice,
+        serviceFee,
+        tax: 0,
+        discountAmount: 0,
+        totalAmount: totalPrice,
+        ownerEarnings: basePrice - serviceFee,
+        platformFee: serviceFee,
+        guestCount: faker.number.int({ min: 1, max: 6 }),
+      },
+    });
+    
+    bookings.push(booking);
+  }
 
-  const listing5 = await prisma.listing.create({
-    data: {
-      title: '4-Person Camping Tent - Waterproof',
-      slug: '4-person-camping-tent-waterproof',
-      description:
-        'Spacious 4-person camping tent with excellent weather protection. Features easy setup, rain fly, ventilation windows, and gear loft. Perfect for family camping trips or weekend getaways. Includes tent stakes and carrying bag.',
-      categoryId: categories[2].id, // Outdoor & Camping
-      ownerId: owner2.id,
-      basePrice: 25,
-      dailyPrice: 25,
-      weeklyPrice: 120,
-      monthlyPrice: 400,
-      depositAmount: 50,
-      currency: 'USD',
-      city: 'Seattle',
-      state: 'WA',
-      country: 'USA',
-      latitude: 47.6062,
-      longitude: -122.3321,
-      status: ListingStatus.ACTIVE,
-      condition: 'EXCELLENT',
-      photos: JSON.stringify([
-        'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800',
-      ]),
-      viewCount: 267,
-      favoriteCount: 38,
-      categorySpecificData: {},
-    },
-  });
+  console.log(`   ✓ Created ${bookings.length} bookings`);
 
-  // Create some bookings
-  console.log('📅 Creating bookings...');
+  // Create Reviews (100+ reviews)
+  console.log('⭐ Creating 100+ reviews...');
+  const reviews: any[] = [];
+  
+  const completedBookings = bookings.filter(b => b.status === BookingStatus.COMPLETED);
+  
+  for (let i = 0; i < Math.min(110, completedBookings.length); i++) {
+    const booking = completedBookings[i];
+    
+    // Listing review
+    const listingReview = await prisma.review.create({
+      data: {
+        bookingId: booking.id,
+        listingId: booking.listingId,
+        reviewerId: booking.renterId,
+        revieweeId: booking.ownerId,
+        overallRating: faker.number.int({ min: 3, max: 5 }),
+        content: faker.lorem.sentence(),
+        type: 'LISTING_REVIEW',
+      },
+    });
+    
+    reviews.push(listingReview);
+    
+    // Renter review (from owner)
+    const renterReview = await prisma.review.create({
+      data: {
+        bookingId: booking.id,
+        listingId: booking.listingId,
+        reviewerId: booking.ownerId,
+        revieweeId: booking.renterId,
+        overallRating: faker.number.int({ min: 3, max: 5 }),
+        content: faker.lorem.sentence(),
+        type: 'RENTER_REVIEW',
+      },
+    });
+    
+    reviews.push(renterReview);
+  }
 
-  // Completed booking with review
-  const booking1 = await prisma.booking.create({
-    data: {
-      listingId: listing1.id,
-      renterId: customer1.id,
-      ownerId: owner1.id,
-      startDate: new Date('2024-01-10'),
-      endDate: new Date('2024-01-15'),
-      status: BookingStatus.COMPLETED,
-      totalPrice: 750,
-      depositAmount: 500,
-      currency: 'USD',
-      duration: 5,
-      basePrice: 750,
-      serviceFee: 75,
-      tax: 0,
-      discountAmount: 0,
-      totalAmount: 750,
-      ownerEarnings: 675,
-      platformFee: 75,
-      guestCount: 1,
-    },
-  });
+  console.log(`   ✓ Created ${reviews.length} reviews`);
 
-  // Active booking
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const nextWeek = new Date(today);
-  nextWeek.setDate(nextWeek.getDate() + 7);
+  // Create Sessions (105+ sessions)
+  console.log('🔐 Creating 105+ sessions...');
+  let sessionCount = 0;
+  
+  for (let i = 0; i < Math.min(105, users.length); i++) {
+    const user = users[i];
+    const expiresAt = faker.date.future();
+    
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        token: `dev_token_${i}_${faker.string.alpha(32)}`,
+        refreshToken: `dev_refresh_${i}_${faker.string.alpha(32)}`,
+        expiresAt,
+        ipAddress: faker.internet.ipv4(),
+        userAgent: faker.internet.userAgent(),
+      },
+    });
+    
+    sessionCount++;
+  }
 
-  await prisma.booking.create({
-    data: {
-      listingId: listing3.id,
-      renterId: customer2.id,
-      ownerId: owner2.id,
-      startDate: tomorrow,
-      endDate: nextWeek,
-      status: BookingStatus.CONFIRMED,
-      totalPrice: 245,
-      depositAmount: 150,
-      currency: 'USD',
-      duration: 5,
-      basePrice: 750,
-      serviceFee: 75,
-      tax: 0,
-      discountAmount: 0,
-      totalAmount: 750,
-      ownerEarnings: 675,
-      platformFee: 75,
-      guestCount: 1,
-    },
-  });
+  console.log(`   ✓ Created ${sessionCount} sessions`);
 
-  // Pending booking
-  const futureDate = new Date(today);
-  futureDate.setDate(futureDate.getDate() + 14);
-  const futureEndDate = new Date(futureDate);
-  futureEndDate.setDate(futureEndDate.getDate() + 3);
+  // Create Conversations and Messages (100+ messages)
+  console.log('💬 Creating conversations and 100+ messages...');
+  let messageCount = 0;
+  const conversations: any[] = [];
+  
+  for (let i = 0; i < 25; i++) {
+    const booking = randomIndex(bookings);
+    const user1 = randomIndex(users);
+    const user2 = randomIndex(users.filter(u => u.id !== user1.id));
+    
+    const conversation = await prisma.conversation.create({
+      data: {
+        bookingId: booking.id,
+        type: 'BOOKING',
+        subject: faker.lorem.words({ min: 2, max: 5 }),
+      },
+    });
+    
+    conversations.push(conversation);
+    
+    // Add participants
+    await prisma.conversationParticipant.create({
+      data: {
+        conversationId: conversation.id,
+        userId: user1.id,
+      },
+    });
+    
+    await prisma.conversationParticipant.create({
+      data: {
+        conversationId: conversation.id,
+        userId: user2.id,
+      },
+    });
+    
+    // Create 4-5 messages per conversation
+    for (let j = 0; j < faker.number.int({ min: 4, max: 5 }); j++) {
+      const sender = Math.random() > 0.5 ? user1 : user2;
+      
+      const message = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: sender.id,
+          content: faker.lorem.sentence(),
+          status: randomIndex(['SENT', 'DELIVERED']),
+        },
+      });
+      
+      // Create read receipt if message should be read
+      if (Math.random() > 0.3) {
+        const receiver = sender.id === user1.id ? user2 : user1;
+        await prisma.messageReadReceipt.create({
+          data: {
+            messageId: message.id,
+            userId: receiver.id,
+            readAt: new Date(),
+          },
+        });
+      }
+      
+      messageCount++;
+    }
+  }
 
-  await prisma.booking.create({
-    data: {
-      listingId: listing4.id,
-      renterId: customer1.id,
-      ownerId: owner2.id,
-      startDate: futureDate,
-      endDate: futureEndDate,
-      status: BookingStatus.PENDING_OWNER_APPROVAL,
-      totalPrice: 165,
-      depositAmount: 200,
-      currency: 'USD',
-      duration: 5,
-      basePrice: 750,
-      serviceFee: 75,
-      tax: 0,
-      discountAmount: 0,
-      totalAmount: 750,
-      ownerEarnings: 675,
-      platformFee: 75,
-      guestCount: 1,
-    },
-  });
+  console.log(`   ✓ Created ${messageCount} messages in ${conversations.length} conversations`);
 
-  // Create reviews
-  console.log('⭐ Creating reviews...');
-  await prisma.review.create({
-    data: {
-      bookingId: booking1.id,
-      listingId: listing1.id,
-      reviewerId: customer1.id,
-      revieweeId: owner1.id,
-      overallRating: 5,
-      content:
-        'Amazing camera! John was professional and the equipment was in perfect condition. The camera performed flawlessly throughout my shoot. Highly recommend!',
-      type: 'LISTING_REVIEW',
-    },
-  });
-
-  await prisma.review.create({
-    data: {
-      bookingId: booking1.id,
-      listingId: listing1.id,
-      reviewerId: owner1.id,
-      revieweeId: customer1.id,
-      overallRating: 5,
-      content:
-        'Great renter! Mike took excellent care of the equipment and returned it on time in perfect condition. Would definitely rent to him again.',
-      type: 'RENTER_REVIEW',
-    },
-  });
-
-  // Create admin session for auto-login
-  console.log('🔐 Creating admin session...');
-  const adminSessionExpiry = new Date();
-  adminSessionExpiry.setDate(adminSessionExpiry.getDate() + 7); // 7 days
-
-  await prisma.session.create({
-    data: {
-      userId: adminUser.id,
-      token: 'dev_admin_token_' + Math.random().toString(36).substring(7),
-      refreshToken: 'dev_admin_refresh_' + Math.random().toString(36).substring(7),
-      expiresAt: adminSessionExpiry,
-      ipAddress: '127.0.0.1',
-      userAgent: 'Development Browser',
-    },
-  });
-
-  console.log('✅ Database seed completed successfully!');
-  console.log('\n📋 Test Users Created:');
-  console.log('┌─────────────────────────────────────────────────────────┐');
-  console.log('│ Admin User:                                             │');
-  console.log('│   Email: admin@rental.local                             │');
-  console.log('│   Password: password123                                 │');
-  console.log('│   Role: ADMIN (auto-login enabled)                      │');
-  console.log('├─────────────────────────────────────────────────────────┤');
-  console.log('│ Support User:                                           │');
-  console.log('│   Email: support@rental.local                           │');
-  console.log('│   Password: password123                                 │');
-  console.log('│   Role: SUPPORT                                         │');
-  console.log('├─────────────────────────────────────────────────────────┤');
-  console.log('│ Owner 1 (Camera Equipment):                             │');
-  console.log('│   Email: john.owner@rental.local                        │');
-  console.log('│   Password: password123                                 │');
-  console.log('│   Listings: 2 camera listings                           │');
-  console.log('├─────────────────────────────────────────────────────────┤');
-  console.log('│ Owner 2 (Tools & Camping):                              │');
-  console.log('│   Email: emily.tools@rental.local                       │');
-  console.log('│   Password: password123                                 │');
-  console.log('│   Listings: 3 tool/camping listings                     │');
-  console.log('├─────────────────────────────────────────────────────────┤');
-  console.log('│ Customer 1:                                             │');
-  console.log('│   Email: mike.customer@rental.local                     │');
-  console.log('│   Password: password123                                 │');
-  console.log('│   Bookings: 2 (1 completed, 1 pending)                  │');
-  console.log('├─────────────────────────────────────────────────────────┤');
-  console.log('│ Customer 2:                                             │');
-  console.log('│   Email: lisa.renter@rental.local                       │');
-  console.log('│   Password: password123                                 │');
-  console.log('│   Bookings: 1 active                                    │');
-  console.log('└─────────────────────────────────────────────────────────┘');
+  console.log('\n✅ Database seed completed successfully!');
   console.log('\n📊 Database Statistics:');
-  console.log(`   - Users: 6`);
-  console.log(`   - Categories: 5`);
-  console.log(`   - Listings: 5`);
-  console.log(`   - Bookings: 3`);
-  console.log(`   - Reviews: 2`);
+  console.log(`   - Users: ${users.length} (${owners.length} owners, ${customers.length} customers, 2 admin/support)`);
+  console.log(`   - Categories: ${categories.length}`);
+  console.log(`   - Listings: ${listings.length}`);
+  console.log(`   - Bookings: ${bookings.length}`);
+  console.log(`   - Reviews: ${reviews.length}`);
+  console.log(`   - Sessions: ${sessionCount}`);
+  console.log(`   - Messages: ${messageCount}`);
+  console.log(`   - Conversations: ${conversations.length}`);
+  console.log('\n📝 Test User Accounts:');
+  console.log('   Email: admin@rental.local (Admin, Password: password123)');
+  console.log('   Email: support@rental.local (Support, Password: password123)');
+  console.log('   + 150 additional randomly generated user accounts (all with password: password123)');
 }
 
 main()

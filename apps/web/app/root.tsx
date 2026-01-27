@@ -5,6 +5,8 @@ import {
     Scripts,
     ScrollRestoration,
 } from "react-router";
+import { useAuthInit } from './hooks/useAuthInit';
+import { useAuthStore } from './lib/store/auth';
 
 import type { Route } from "./+types/root";
 import stylesheet from "./tailwind.css?url";
@@ -41,8 +43,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
     );
 }
 
-export default function Root() {
+function RootContent() {
+    const isInitialized = useAuthStore((state) => state.isInitialized);
+    const isLoading = useAuthStore((state) => state.isLoading);
+
+    useAuthInit();
+
+    // Show loading state while restoring session
+    if (!isInitialized || isLoading) {
+        return (
+            <div className="flex h-screen items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                    <p className="text-muted-foreground">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
     return <Outlet />;
+}
+
+export default function Root() {
+    return <RootContent />;
 }
 
 export function HydrateFallback() {
