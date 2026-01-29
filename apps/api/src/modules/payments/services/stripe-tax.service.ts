@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { toNumber } from '@rental-portal/database';
 
 export interface TaxCalculationRequest {
   amount: number;
@@ -69,7 +70,7 @@ export class StripeTaxService {
     }
 
     this.stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2025-12-15.clover',
+      apiVersion: '2026-01-28.clover',
     });
   }
 
@@ -207,11 +208,11 @@ export class StripeTaxService {
       for (const booking of bookings) {
         if (booking.listing.ownerId === userId) {
           // Owner income
-          totalIncome += booking.totalPrice;
+          totalIncome += toNumber(booking.totalPrice);
           // totalTax would be calculated from payments in a real implementation
         } else {
           // Renter expenses
-          totalExpenses += booking.totalPrice;
+          totalExpenses += toNumber(booking.totalPrice);
         }
       }
 

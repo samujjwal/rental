@@ -258,7 +258,7 @@ export class ContentModerationService {
         entityType,
         entityId,
         userId: adminId,
-        metadata: { notes },
+        newValues: JSON.stringify({ notes }),
       },
     });
   }
@@ -280,7 +280,7 @@ export class ContentModerationService {
         entityType,
         entityId,
         userId: adminId,
-        metadata: { reason },
+        newValues: JSON.stringify({ reason }),
       },
     });
   }

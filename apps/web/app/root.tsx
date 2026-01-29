@@ -10,9 +10,23 @@ import { useAuthInit } from './hooks/useAuthInit';
 import { useAuthStore } from './lib/store/auth';
 import { getUser, getUserToken, getSession } from "~/utils/auth.server";
 import { useEffect } from "react";
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { CssBaseline } from '@mui/material';
 
 import type { Route } from "./+types/root";
 import stylesheet from "./tailwind.css?url";
+
+// Create a Material-UI theme
+const theme = createTheme({
+    palette: {
+        primary: {
+            main: '#1976d2',
+        },
+        secondary: {
+            main: '#dc004e',
+        },
+    },
+});
 
 export const links: Route.LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -92,7 +106,12 @@ function RootContent() {
         );
     }
 
-    return <Outlet />;
+    return (
+        <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <Outlet />
+        </ThemeProvider>
+    );
 }
 
 export default function Root() {

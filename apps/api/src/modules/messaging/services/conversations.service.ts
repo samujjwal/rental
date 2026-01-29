@@ -1,6 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { Conversation, Message, Prisma } from '@rental-portal/database';
+import { Conversation, Message } from '@rental-portal/database';
 
 export interface CreateConversationDto {
   listingId: string;
@@ -119,7 +119,7 @@ export class ConversationsService {
   ): Promise<{ conversations: any[]; total: number }> {
     const { page = 1, limit = 20, search } = options;
 
-    const where: Prisma.ConversationWhereInput = {
+    const where: any = {
       participants: {
         some: {
           userId,

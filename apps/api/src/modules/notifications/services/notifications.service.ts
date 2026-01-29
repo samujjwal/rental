@@ -96,7 +96,7 @@ export class NotificationsService {
         type,
         title,
         message,
-        data: { ...data, priority, scheduledFor },
+        data: JSON.stringify({ ...data, priority, scheduledFor }),
       },
     });
 

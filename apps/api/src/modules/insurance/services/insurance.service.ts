@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceVerificationService } from './insurance-verification.service';
 import { InsurancePolicyService } from './insurance-policy.service';
+import { toNumber } from '@rental-portal/database';
 
 export enum InsuranceStatus {
   NOT_REQUIRED = 'NOT_REQUIRED',
@@ -60,7 +61,7 @@ export class InsuranceService {
 
     // Determine insurance requirements based on category and value
     const categoryRequirements = this.getCategoryRequirements(listing.category.name);
-    const listingPrice = listing.dailyPrice || listing.basePrice;
+    const listingPrice = toNumber(listing.basePrice); // dailyPrice doesn't exist in schema
     const valueRequirements = this.getValueRequirements(listingPrice);
 
     const required =
@@ -151,16 +152,17 @@ export class InsuranceService {
     });
 
     // Update listing insurance status
-    if (policy.listingId) {
-      await this.prisma.listing.update({
-        where: { id: policy.listingId },
-        data: {
-          insuranceVerified: approved,
-          insurancePolicyId: approved ? policyId : null,
-          insuranceVerifiedAt: approved ? new Date() : null,
-        },
-      });
-    }
+    // Insurance verification fields don't exist in Property schema, skipping update
+    // if (policy.listingId) {
+    //   await this.prisma.listing.update({
+    //     where: { id: policy.listingId },
+    //     data: {
+    //       insuranceVerified: approved,
+    //       insurancePolicyId: approved ? policyId : null,
+    //       insuranceVerifiedAt: approved ? new Date() : null,
+    //     },
+    //   });
+    // }
 
     this.logger.log(`Insurance policy ${approved ? 'verified' : 'rejected'}: ${policyId}`);
   }

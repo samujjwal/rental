@@ -33,7 +33,7 @@ export class HealthController {
   check() {
     return this.health.check([
       // Database check
-      () => this.prismaHealth.pingCheck('database', this.prisma),
+      () => this.prismaHealth.pingCheck('database', this.prisma as any),
 
       // Memory check - heap should not exceed 300MB
       () => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024),
@@ -54,7 +54,7 @@ export class HealthController {
   @HealthCheck()
   @ApiOperation({ summary: 'Database health check' })
   checkDatabase() {
-    return this.health.check([() => this.prismaHealth.pingCheck('database', this.prisma)]);
+    return this.health.check([() => this.prismaHealth.pingCheck('database', this.prisma as any)]);
   }
 
   @Get('queues')
@@ -142,7 +142,7 @@ export class HealthController {
   @ApiOperation({ summary: 'Readiness probe for Kubernetes' })
   readiness() {
     return this.health.check([
-      () => this.prismaHealth.pingCheck('database', this.prisma),
+      () => this.prismaHealth.pingCheck('database', this.prisma as any),
       async () => {
         try {
           await this.bookingsQueue.isReady();

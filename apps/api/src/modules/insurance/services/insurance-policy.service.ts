@@ -20,7 +20,7 @@ export class InsurancePolicyService {
         entityType: 'INSURANCE_POLICY',
         entityId: data.listingId || data.userId || '',
         userId: data.userId,
-        metadata: data,
+        newValues: JSON.stringify(data),
       },
     });
 
@@ -90,10 +90,10 @@ export class InsurancePolicyService {
         action: 'INSURANCE_POLICY_STATUS_UPDATED',
         entityType: 'INSURANCE_POLICY',
         entityId: policyId,
-        metadata: {
+        newValues: JSON.stringify({
           status,
           ...metadata,
-        },
+        }),
       },
     });
   }

@@ -1,9 +1,9 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, INestApplication } from '@nestjs/common';
-import { PrismaClient } from '@rental-portal/database';
+import { PrismaWrapper } from '@rental-portal/database';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService extends PrismaWrapper implements OnModuleInit, OnModuleDestroy {
   constructor(private configService: ConfigService) {
     const databaseUrl = configService.get<string>('DATABASE_URL') || process.env.DATABASE_URL;
 
@@ -17,10 +17,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     console.log('DATABASE_URL found:', databaseUrl.substring(0, 20) + '...');
 
-    super({
-      log: ['query', 'info', 'warn', 'error'],
-      errorFormat: 'pretty',
-    });
+    super();
   }
 
   async onModuleInit() {

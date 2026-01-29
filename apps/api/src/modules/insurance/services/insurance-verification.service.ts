@@ -20,10 +20,10 @@ export class InsuranceVerificationService {
         action: 'INSURANCE_VERIFICATION_QUEUED',
         entityType: 'INSURANCE_POLICY',
         entityId: policyId,
-        metadata: {
+        newValues: JSON.stringify({
           status: 'PENDING',
           queuedAt: new Date(),
-        },
+        }),
       },
     });
 

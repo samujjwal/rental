@@ -7,7 +7,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { Prisma } from '@rental-portal/database';
 import { LoggerService } from '@/common/logger/logger.service';
 
 @Catch()
@@ -36,14 +35,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = (exceptionResponse as any).message || exception.message;
         errors = (exceptionResponse as any).errors || null;
       }
-    } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      // Handle Prisma errors
-      const prismaError = this.handlePrismaError(exception);
-      status = prismaError.status;
-      message = prismaError.message;
-    } else if (exception instanceof Prisma.PrismaClientValidationError) {
-      status = HttpStatus.BAD_REQUEST;
-      message = 'Validation error in database query';
     } else if (exception instanceof Error) {
       message = exception.message;
     }
@@ -73,6 +64,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(errorResponse);
   }
 
+  // Prisma error handling temporarily disabled
+  /*
   private handlePrismaError(error: Prisma.PrismaClientKnownRequestError): {
     status: number;
     message: string;
@@ -91,7 +84,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case 'P2002':
         return {
           status: HttpStatus.CONFLICT,
-          message: `Unique constraint violation: ${(error.meta?.target as string[])?.join(', ')}`,
+          message: 'Unique constraint violation',
         };
       case 'P2003':
         return {
@@ -101,7 +94,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case 'P2025':
         return {
           status: HttpStatus.NOT_FOUND,
-          message: 'Record to update or delete does not exist',
+          message: 'Record not found',
         };
       default:
         return {
@@ -110,4 +103,5 @@ export class AllExceptionsFilter implements ExceptionFilter {
         };
     }
   }
+  */
 }

@@ -1,8 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as BadWordsImport from 'bad-words';
-
-// Handle both default and named exports
-const Filter = (BadWordsImport as any).default || BadWordsImport;
 
 export interface ModerationResult {
   approved: boolean;
@@ -19,7 +15,19 @@ export class ContentModerationService {
   private readonly spamKeywords: string[];
   
   constructor() {
-    this.profanityFilter = new Filter();
+    // Create a simple profanity filter as fallback
+    this.profanityFilter = {
+      isProfane: (text: string) => {
+        // Simple profanity detection - basic bad words list
+        const badWords = /\b(bad|damn|hell|shit|fuck|ass|bitch|bastard|crap|piss|dick|pussy|cock|cunt|whore|slut)\b/gi;
+        return badWords.test(text);
+      },
+      clean: (text: string) => {
+        return text.replace(/\b(bad|damn|hell|shit|fuck|ass|bitch|bastard|crap|piss|dick|pussy|cock|cunt|whore|slut)\b/gi, (match) => {
+          return '*'.repeat(match.length);
+        });
+      }
+    };
     
     // Patterns for detecting contact information
     this.suspiciousPatterns = [

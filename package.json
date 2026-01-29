@@ -2,7 +2,7 @@
   "name": "gharbatai-rentals",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@10.27.0",
+  "packageManager": "pnpm@10.28.2",
   "description": "Universal Rental Portal - Multi-category marketplace platform",
   "workspaces": [
     "apps/*",
@@ -20,9 +20,9 @@
     "db:seed": "cd packages/database && npm run seed"
   },
   "devDependencies": {
-    "@types/node": "^25.0.10",
+    "@types/node": "^25.1.0",
     "prettier": "^3.8.1",
-    "turbo": "^2.7.5",
+    "turbo": "^2.8.0",
     "typescript": "^5.9.3"
   },
   "engines": {

@@ -115,7 +115,7 @@ export class SchedulerService {
 
       const returnDueBookings = await this.prisma.booking.findMany({
         where: {
-          status: BookingStatus.ACTIVE,
+          status: BookingStatus.IN_PROGRESS,
           endDate: {
             gte: now,
             lt: tomorrow,

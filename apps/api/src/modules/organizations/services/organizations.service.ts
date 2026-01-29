@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
-import { Organization, OrgRole, OrganizationStatus } from '@rental-portal/database';
+import { Organization, OrganizationRole, OrganizationStatus } from '@rental-portal/database';
 
 export interface CreateOrganizationDto {
   name: string;
@@ -39,7 +39,7 @@ export interface UpdateOrganizationDto {
 
 export interface InviteMemberDto {
   email: string;
-  role: OrgRole;
+  role: OrganizationRole;
 }
 
 @Injectable()
@@ -56,9 +56,6 @@ export class OrganizationsService {
     // Verify user exists and doesn't already own an organization
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        organizations: true,
-      },
     });
 
     if (!user) {
@@ -66,7 +63,12 @@ export class OrganizationsService {
     }
 
     // Check if user already owns an organization
-    const existingOrg = user.organizations.find((m) => m.role === OrgRole.OWNER);
+    const existingOrg = await this.prisma.organizationMember.findFirst({
+      where: { 
+        userId,
+        role: 'OWNER'
+      },
+    });
     if (existingOrg) {
       throw new BadRequestException('User already owns an organization');
     }
@@ -77,21 +79,18 @@ export class OrganizationsService {
         name: dto.name,
         slug: dto.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         description: dto.description,
-        businessType: dto.businessType,
-        taxId: dto.taxId,
         email: dto.email,
-        phoneNumber: dto.phoneNumber,
-        addressLine1: dto.addressLine1,
-        addressLine2: dto.addressLine2,
+        phone: dto.phoneNumber,
+        address: dto.addressLine1,
         city: dto.city,
         state: dto.state,
-        postalCode: dto.postalCode,
+        zipCode: dto.postalCode,
         country: dto.country,
         status: OrganizationStatus.ACTIVE,
         members: {
           create: {
             userId,
-            role: OrgRole.OWNER,
+            role: OrganizationRole.OWNER as any,
           },
         },
       },
@@ -136,7 +135,7 @@ export class OrganizationsService {
             },
           },
         },
-        listings: {
+        properties: {
           select: {
             id: true,
             title: true,
@@ -148,7 +147,7 @@ export class OrganizationsService {
         },
         _count: {
           select: {
-            listings: true,
+            properties: true,
             members: true,
           },
         },
@@ -176,7 +175,7 @@ export class OrganizationsService {
     userId: string,
     dto: UpdateOrganizationDto,
   ): Promise<Organization> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER', 'ADMIN']);
+    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
 
     return this.prisma.organization.update({
       where: { id: orgId },
@@ -188,7 +187,7 @@ export class OrganizationsService {
    * Invite member to organization
    */
   async inviteMember(orgId: string, userId: string, dto: InviteMemberDto): Promise<any> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER', 'ADMIN']);
+    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
 
     // Find user by email
     const invitedUser = await this.prisma.user.findUnique({
@@ -254,7 +253,7 @@ export class OrganizationsService {
    * Remove member from organization
    */
   async removeMember(orgId: string, userId: string, memberUserId: string): Promise<void> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER', 'ADMIN']);
+    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
 
     // Cannot remove owner
     const member = await this.prisma.organizationMember.findUnique({
@@ -270,7 +269,7 @@ export class OrganizationsService {
       throw new NotFoundException('Member not found');
     }
 
-    if (member.role === OrgRole.OWNER) {
+    if (member.role === OrganizationRole.OWNER) {
       throw new BadRequestException('Cannot remove organization owner');
     }
 
@@ -291,9 +290,9 @@ export class OrganizationsService {
     orgId: string,
     userId: string,
     memberUserId: string,
-    role: OrgRole,
+    role: OrganizationRole,
   ): Promise<any> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER']);
+    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any]);
 
     const member = await this.prisma.organizationMember.findUnique({
       where: {
@@ -308,7 +307,7 @@ export class OrganizationsService {
       throw new NotFoundException('Member not found');
     }
 
-    if (member.role === OrgRole.OWNER) {
+    if (member.role === OrganizationRole.OWNER) {
       throw new BadRequestException('Cannot change owner role');
     }
 
@@ -344,7 +343,7 @@ export class OrganizationsService {
           include: {
             _count: {
               select: {
-                listings: true,
+                properties: true,
                 members: true,
               },
             },
@@ -362,7 +361,7 @@ export class OrganizationsService {
   private async verifyMemberPermission(
     orgId: string,
     userId: string,
-    allowedRoles: OrgRole[],
+    allowedRoles: OrganizationRole[],
   ): Promise<void> {
     const member = await this.prisma.organizationMember.findUnique({
       where: {
@@ -377,7 +376,7 @@ export class OrganizationsService {
       throw new ForbiddenException('Not a member of this organization');
     }
 
-    if (!allowedRoles.includes(member.role)) {
+    if (!allowedRoles.includes(member.role as any)) {
       throw new ForbiddenException('Insufficient permissions');
     }
   }
@@ -386,14 +385,14 @@ export class OrganizationsService {
    * Get organization statistics
    */
   async getOrganizationStats(orgId: string, userId: string): Promise<any> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER', 'ADMIN']);
+    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
 
     const [totalListings, activeListings, totalBookings, revenue] = await Promise.all([
       this.prisma.listing.count({
         where: { organizationId: orgId },
       }),
       this.prisma.listing.count({
-        where: { organizationId: orgId, status: 'ACTIVE' },
+        where: { organizationId: orgId, status: 'ACTIVE' as any },
       }),
       this.prisma.booking.count({
         where: { listing: { organizationId: orgId } },

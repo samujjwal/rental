@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EventsService } from '@/common/events/events.service';
-import { BookingStatus } from '@rental-portal/database';
+import { BookingStatus, PayoutStatus } from '@rental-portal/database';
 
 @Injectable()
 export class WebhookService {
@@ -17,7 +17,7 @@ export class WebhookService {
     private eventsService: EventsService,
   ) {
     this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY'), {
-      apiVersion: '2025-12-15.clover',
+      apiVersion: '2026-01-28.clover',
     });
     this.webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET');
   }
@@ -140,7 +140,7 @@ export class WebhookService {
         bookingId: payment.bookingId,
         amount: amount / 100, // Convert from cents
         currency,
-        status: 'SUCCEEDED',
+        status: PayoutStatus.COMPLETED,
         renterId: payment.booking.renterId,
         ownerId: payment.booking.ownerId,
       });
@@ -189,7 +189,7 @@ export class WebhookService {
         bookingId: payment.bookingId,
         amount: 0,
         currency: payment.booking.currency,
-        status: 'FAILED',
+        status: PayoutStatus.FAILED,
         renterId: payment.booking.renterId,
         ownerId: payment.booking.ownerId,
         reason: last_payment_error?.message || 'Payment failed',
@@ -265,7 +265,7 @@ export class WebhookService {
           bookingId: payment.bookingId,
           amount: amount_refunded / 100,
           currency: charge.currency,
-          status: 'SUCCEEDED',
+          status: PayoutStatus.CANCELLED,
           refundId: refunds.data[0]?.id || `refund_${Date.now()}`,
           reason: refunds.data[0]?.reason || 'requested_by_customer',
         },
@@ -277,7 +277,7 @@ export class WebhookService {
         bookingId: payment.bookingId,
         amount: amount_refunded / 100,
         currency: charge.currency,
-        status: 'REFUNDED',
+        status: PayoutStatus.CANCELLED,
         refundId: refund.id,
         renterId: payment.booking.renterId,
         ownerId: payment.booking.ownerId,

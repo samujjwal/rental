@@ -1,6 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { Message, Prisma } from '@rental-portal/database';
+import { Message } from '@rental-portal/database';
 
 export interface SendMessageDto {
   conversationId: string;
@@ -100,7 +100,7 @@ export class MessagesService {
       throw new ForbiddenException('Not a participant in this conversation');
     }
 
-    const where: Prisma.MessageWhereInput = {
+    const where: any = {
       conversationId,
     };
 

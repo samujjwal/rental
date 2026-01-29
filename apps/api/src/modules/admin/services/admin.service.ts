@@ -1,13 +1,16 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import {
-  UserRole,
-  UserStatus,
+import { 
+  UserRole, 
+  UserStatus, 
+  PropertyStatus, 
   ListingStatus,
-  BookingStatus,
+  BookingStatus, 
   DisputeStatus,
-  PaymentStatus,
+  PayoutStatus,
   OrganizationStatus,
+  NotificationType,
+  toNumber
 } from '@rental-portal/database';
 
 @Injectable()
@@ -60,18 +63,18 @@ export class AdminService {
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.listing.count(),
-      this.prisma.listing.count({ where: { status: ListingStatus.ACTIVE } }),
+      this.prisma.listing.count({ where: { status: PropertyStatus.AVAILABLE } }),
       this.prisma.booking.count(),
       this.prisma.booking.count({
         where: {
           status: {
-            in: [BookingStatus.CONFIRMED, BookingStatus.ACTIVE],
+            in: [BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS],
           },
         },
       }),
       this.prisma.payment.aggregate({
         _sum: { amount: true },
-        where: { status: PaymentStatus.SUCCEEDED },
+        where: { status: PayoutStatus.COMPLETED },
       }),
       this.prisma.dispute.count({
         where: {
@@ -171,7 +174,7 @@ export class AdminService {
         _sum: { amount: true },
         where: {
           createdAt: { gte: startDate },
-          status: PaymentStatus.SUCCEEDED,
+          status: PayoutStatus.COMPLETED,
         },
       }),
       this.prisma.listing.groupBy({
@@ -182,14 +185,14 @@ export class AdminService {
       }),
       this.prisma.listing.findMany({
         take: 10,
-        orderBy: { viewCount: 'desc' },
+        orderBy: { createdAt: 'desc' },
         select: {
           id: true,
           title: true,
           viewCount: true,
           averageRating: true,
           _count: {
-            select: { bookings: true },
+            select: { reviews: true },
           },
         },
       }),
@@ -257,8 +260,6 @@ export class AdminService {
         include: {
           _count: {
             select: {
-              listings: true,
-              bookingsAsRenter: true,
               reviewsGiven: true,
             },
           },
@@ -307,10 +308,10 @@ export class AdminService {
       await this.prisma.listing.updateMany({
         where: {
           ownerId: targetUserId,
-          status: ListingStatus.ACTIVE,
+          status: PropertyStatus.AVAILABLE,
         },
         data: {
-          status: ListingStatus.PAUSED,
+          status: PropertyStatus.SUSPENDED,
         },
       });
     }
@@ -366,7 +367,6 @@ export class AdminService {
           category: true,
           _count: {
             select: {
-              bookings: true,
               reviews: true,
             },
           },
@@ -417,7 +417,7 @@ export class AdminService {
     await this.prisma.listing.update({
       where: { id: listingId },
       data: {
-        status: ListingStatus.ARCHIVED,
+        status: PropertyStatus.ARCHIVED,
         deletedAt: new Date(),
       },
     });
@@ -435,7 +435,7 @@ export class AdminService {
           gte: startDate,
           lte: endDate,
         },
-        status: PaymentStatus.SUCCEEDED,
+        status: PayoutStatus.COMPLETED,
       },
       include: {
         booking: {
@@ -455,14 +455,14 @@ export class AdminService {
       },
     });
 
-    const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
-    const platformFees = payments.reduce((sum, p) => sum + (p.booking.platformFee || 0), 0);
+    const totalRevenue = payments.reduce((sum, p) => sum + toNumber(p.amount), 0);
+    const platformFees = payments.reduce((sum, p) => sum + toNumber(p.booking.platformFee || 0), 0);
 
     // Group by category
     const revenueByCategory: Record<string, number> = {};
     for (const payment of payments) {
       const categoryId = payment.booking.listing.categoryId;
-      revenueByCategory[categoryId] = (revenueByCategory[categoryId] || 0) + payment.amount;
+      revenueByCategory[categoryId] = (revenueByCategory[categoryId] || 0) + toNumber(payment.amount);
     }
 
     return {
@@ -602,7 +602,7 @@ export class AdminService {
             },
             take: 1,
           },
-          _count: { select: { members: true, listings: true } },
+          _count: { select: { members: true } },
         },
       }),
       this.prisma.organization.count({ where }),
@@ -616,8 +616,7 @@ export class AdminService {
         status: o.status,
         owner: o.members[0]?.user || { firstName: 'Unknown', lastName: 'Owner' },
         stats: {
-          membersCount: o._count.members,
-          listingsCount: o._count.listings,
+          membersCount: o._count?.members || 0,
         },
         createdAt: o.createdAt,
       })),
@@ -712,7 +711,6 @@ export class AdminService {
         category: true,
         _count: {
           select: {
-            bookings: true,
             reviews: true,
           },
         },
@@ -736,7 +734,7 @@ export class AdminService {
       include: {
         _count: {
           select: {
-            listings: true,
+            properties: true,
           },
         },
       },
@@ -753,7 +751,7 @@ export class AdminService {
     await this.verifyAdmin(adminId);
 
     const listings = await this.prisma.listing.findMany({
-      where: { status: ListingStatus.PENDING_REVIEW },
+      where: { status: PropertyStatus.AVAILABLE },
       include: {
         owner: {
           select: { id: true, firstName: true, lastName: true, email: true },

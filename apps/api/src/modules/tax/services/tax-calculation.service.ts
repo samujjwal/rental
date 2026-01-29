@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { toNumber, decimalAdd, decimalSubtract, decimalCompare } from '@rental-portal/database';
 
 export interface TaxBreakdown {
   subtotal: number;
@@ -358,7 +359,7 @@ export class TaxCalculationService {
 
     // Calculate tax breakdown
     const taxBreakdown = await this.calculateTax({
-      amount: booking.basePrice,
+      amount: toNumber(booking.basePrice),
       currency: booking.currency,
       listingId: booking.listingId,
       country: booking.listing.country || 'US',
@@ -419,7 +420,7 @@ export class TaxCalculationService {
 
     // Calculate total income
     const totalIncome = user.bookingsAsOwner.reduce((sum, booking) => {
-      return sum + (booking.ownerEarnings || 0);
+      return decimalAdd(sum, booking.ownerEarnings || 0);
     }, 0);
 
     // Only need to issue 1099 if > $600 (US requirement)
@@ -498,15 +499,15 @@ export class TaxCalculationService {
     return {
       year,
       rentalIncome: {
-        gross: rentalIncome._sum.ownerEarnings || 0,
-        platformFees: rentalExpenses._sum.platformFee || 0,
-        net: (rentalIncome._sum.ownerEarnings || 0) - (rentalExpenses._sum.platformFee || 0),
+        gross: toNumber(rentalIncome._sum.ownerEarnings || 0),
+        platformFees: toNumber(rentalExpenses._sum.platformFee || 0),
+        net: decimalSubtract(rentalIncome._sum.ownerEarnings || 0, rentalExpenses._sum.platformFee || 0),
       },
       rentalExpenses: {
         serviceFees: serviceFeesPaid._sum.serviceFee || 0,
       },
       taxDocuments: {
-        form1099Available: (rentalIncome._sum.ownerEarnings || 0) >= 600,
+        form1099Available: decimalCompare(rentalIncome._sum.ownerEarnings || 0, '>=', 600),
       },
     };
   }

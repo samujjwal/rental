@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { StripeService } from './stripe.service';
 import { LedgerService } from './ledger.service';
-import { PayoutStatus } from '@rental-portal/database';
+import { PayoutStatus, UserRole, toNumber, decimalSubtract } from '@rental-portal/database';
 
 @Injectable()
 export class PayoutsService {
@@ -66,7 +66,7 @@ export class PayoutsService {
     // We need to attach this payout to a booking in the ledger for DB consistency.
     // Ideally we track which bookings are being paid out, but for now we attach to the latest valid booking.
     const lastBooking = await this.prisma.booking.findFirst({
-      where: { ownerId: ownerId, status: { in: ['COMPLETED', 'SETTLED'] } },
+      where: { owner: { id: ownerId }, status: { in: ['COMPLETED', 'SETTLED'] } },
       orderBy: { updatedAt: 'desc' },
     });
 
@@ -118,11 +118,11 @@ export class PayoutsService {
       },
     });
 
-    const totalEarnings = earnings._sum.ownerEarnings || 0;
-    const totalPayouts = payouts._sum.amount || 0;
+    const totalEarnings = toNumber(earnings._sum.ownerEarnings || 0);
+    const totalPayouts = toNumber(payouts._sum.amount || 0);
 
     return {
-      amount: totalEarnings - totalPayouts,
+      amount: decimalSubtract(totalEarnings, totalPayouts),
       currency: 'USD',
     };
   }
@@ -148,9 +148,7 @@ export class PayoutsService {
     // Find all owners with earnings > threshold and auto-payout enabled
     const owners = await this.prisma.user.findMany({
       where: {
-        role: 'OWNER',
-        stripeOnboardingComplete: true,
-        // Add settings field check for auto-payout enabled
+        role: UserRole.HOST,
       },
       select: {
         id: true,

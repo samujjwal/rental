@@ -118,16 +118,11 @@ export class ReviewsService {
     const review = await this.prisma.review.create({
       data: {
         bookingId: dto.bookingId,
-        listingId,
         reviewerId,
         revieweeId,
         type: dbReviewType,
-        overallRating: dto.overallRating,
-        accuracyRating: dto.accuracyRating,
-        communicationRating: dto.communicationRating,
-        cleanlinessRating: dto.cleanlinessRating,
-        valueRating: dto.valueRating,
-        content: dto.comment || '',
+        rating: dto.overallRating,
+        comment: dto.comment || '',
       },
       include: {
         reviewer: {

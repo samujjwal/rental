@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { PROPERTY_STATUS, VERIFICATION_STATUS, toNumber } from '@rental-portal/database';
 
 export interface SearchQuery {
   query?: string;
@@ -92,8 +93,8 @@ export class SearchService {
 
     // Build where clause
     const where: any = {
-      status: 'ACTIVE',
-      verificationStatus: 'VERIFIED',
+      status: PROPERTY_STATUS.AVAILABLE,
+      verificationStatus: VERIFICATION_STATUS.VERIFIED,
     };
 
     // Text search
@@ -175,10 +176,10 @@ export class SearchService {
 
     try {
       // Get total count
-      const total = await this.prisma.listing.count({ where });
+      const total = await this.prisma.property.count({ where });
 
       // Get listings with relations
-      const listings = await this.prisma.listing.findMany({
+      const listings = await this.prisma.property.findMany({
         where,
         include: {
           owner: {
@@ -259,10 +260,10 @@ export class SearchService {
     if (cached) return cached;
 
     try {
-      const listings = await this.prisma.listing.findMany({
+      const listings = await this.prisma.property.findMany({
         where: {
-          status: 'ACTIVE',
-          verificationStatus: 'VERIFIED',
+          status: PROPERTY_STATUS.AVAILABLE,
+          verificationStatus: VERIFICATION_STATUS.VERIFIED,
           OR: [
             {
               title: {
@@ -310,8 +311,8 @@ export class SearchService {
       const [listings, categories, locations] = await Promise.all([
         this.prisma.listing.findMany({
           where: {
-            status: 'ACTIVE',
-            verificationStatus: 'VERIFIED',
+            status: PROPERTY_STATUS.AVAILABLE,
+            verificationStatus: VERIFICATION_STATUS.VERIFIED,
             OR: [
               {
                 title: {
@@ -354,8 +355,8 @@ export class SearchService {
         }),
         this.prisma.listing.findMany({
           where: {
-            status: 'ACTIVE',
-            verificationStatus: 'VERIFIED',
+            status: PROPERTY_STATUS.AVAILABLE,
+            verificationStatus: VERIFICATION_STATUS.VERIFIED,
             OR: [
               {
                 city: {
@@ -433,8 +434,8 @@ export class SearchService {
       const similarListings = await this.prisma.listing.findMany({
         where: {
           id: { not: listingId },
-          status: 'ACTIVE',
-          verificationStatus: 'VERIFIED',
+          status: PROPERTY_STATUS.AVAILABLE,
+          verificationStatus: VERIFICATION_STATUS.VERIFIED,
           categoryId: listing.categoryId,
           OR: [
             {
@@ -443,8 +444,8 @@ export class SearchService {
             },
             {
               basePrice: {
-                gte: listing.basePrice * 0.8,
-                lte: listing.basePrice * 1.2,
+                gte: toNumber(listing.basePrice) * 0.8,
+                lte: toNumber(listing.basePrice) * 1.2,
               },
             },
           ],

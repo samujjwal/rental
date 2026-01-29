@@ -1,6 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { Availability } from '@rental-portal/database';
 
 export interface RecurrenceRule {
   frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
@@ -10,7 +9,7 @@ export interface RecurrenceRule {
 }
 
 export interface CreateAvailabilityDto {
-  listingId: string;
+  propertyId: string;
   startDate: Date;
   endDate: Date;
   isAvailable: boolean;
@@ -21,7 +20,7 @@ export interface CreateAvailabilityDto {
 export interface UpdateAvailabilityDto extends Partial<CreateAvailabilityDto> {}
 
 export interface AvailabilityCheckDto {
-  listingId: string;
+  propertyId: string;
   startDate: Date;
   endDate: Date;
 }
@@ -40,7 +39,7 @@ export interface AvailabilityResult {
 export class AvailabilityService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createAvailability(dto: CreateAvailabilityDto): Promise<Availability> {
+  async createAvailability(dto: CreateAvailabilityDto): Promise<any> {
     // Validate dates
     if (dto.startDate >= dto.endDate) {
       throw new BadRequestException('End date must be after start date');
@@ -49,7 +48,7 @@ export class AvailabilityService {
     // Check for overlapping availability rules
     const overlapping = await this.prisma.availability.findMany({
       where: {
-        listingId: dto.listingId,
+        propertyId: dto.propertyId,
         OR: [
           {
             AND: [{ startDate: { lte: dto.startDate } }, { endDate: { gte: dto.startDate } }],
@@ -70,15 +69,15 @@ export class AvailabilityService {
 
     return this.prisma.availability.create({
       data: {
-        listingId: dto.listingId,
+        propertyId: dto.propertyId,
         startDate: dto.startDate,
         endDate: dto.endDate,
-        available: dto.isAvailable,
+        status: dto.isAvailable ? 'available' : 'blocked',
       },
     });
   }
 
-  async updateAvailability(id: string, dto: UpdateAvailabilityDto): Promise<Availability> {
+  async updateAvailability(id: string, dto: UpdateAvailabilityDto): Promise<any> {
     if (dto.startDate && dto.endDate && dto.startDate >= dto.endDate) {
       throw new BadRequestException('End date must be after start date');
     }
@@ -96,13 +95,13 @@ export class AvailabilityService {
   }
 
   async getListingAvailability(
-    listingId: string,
+    propertyId: string,
     startDate: Date,
     endDate: Date,
-  ): Promise<Availability[]> {
+  ): Promise<any[]> {
     return this.prisma.availability.findMany({
       where: {
-        listingId,
+        propertyId,
         OR: [
           {
             AND: [{ startDate: { lte: endDate } }, { endDate: { gte: startDate } }],
@@ -114,7 +113,7 @@ export class AvailabilityService {
   }
 
   async checkAvailability(dto: AvailabilityCheckDto): Promise<AvailabilityResult> {
-    const { listingId, startDate, endDate } = dto;
+    const { propertyId, startDate, endDate } = dto;
 
     // Validate dates
     if (startDate >= endDate) {
@@ -127,9 +126,9 @@ export class AvailabilityService {
     }
 
     // Check availability rules
-    const availabilityRules = await this.getListingAvailability(listingId, startDate, endDate);
+    const availabilityRules = await this.getListingAvailability(propertyId, startDate, endDate);
 
-    const unavailableRules = availabilityRules.filter((rule) => !rule.available);
+    const unavailableRules = availabilityRules.filter((rule) => rule.status !== 'available');
     if (unavailableRules.length > 0) {
       return {
         isAvailable: false,
@@ -145,8 +144,8 @@ export class AvailabilityService {
     // Check for existing bookings
     const existingBookings = await this.prisma.booking.findMany({
       where: {
-        listingId,
-        status: { in: ['CONFIRMED', 'IN_PROGRESS', 'PENDING_PAYMENT'] },
+        listingId: propertyId,
+        status: { in: ['CONFIRMED', 'COMPLETED'] },
         OR: [
           {
             AND: [{ startDate: { lte: endDate } }, { endDate: { gte: startDate } }],
@@ -169,28 +168,9 @@ export class AvailabilityService {
 
     // Check listing advance notice and lead time
     const listing = await this.prisma.listing.findUnique({
-      where: { id: listingId },
-      select: { advanceNotice: true, leadTime: true },
+      where: { id: propertyId },
+      select: { id: true },
     });
-
-    if (listing) {
-      const advanceNoticeHours = listing.advanceNotice || 0;
-      const minStartDate = new Date(now.getTime() + advanceNoticeHours * 60 * 60 * 1000);
-
-      if (startDate < minStartDate) {
-        return {
-          isAvailable: false,
-          conflicts: [
-            {
-              id: 'advance-notice',
-              startDate: now,
-              endDate: minStartDate,
-              reason: `Requires ${advanceNoticeHours} hours advance notice`,
-            },
-          ],
-        };
-      }
-    }
 
     return {
       isAvailable: true,
@@ -198,7 +178,7 @@ export class AvailabilityService {
   }
 
   async bulkUpdateAvailability(
-    listingId: string,
+    propertyId: string,
     dates: Array<{ date: Date; isAvailable: boolean }>,
   ): Promise<number> {
     let count = 0;
@@ -213,7 +193,7 @@ export class AvailabilityService {
       // Check if availability exists for this date
       const existing = await this.prisma.availability.findFirst({
         where: {
-          listingId,
+          propertyId,
           startDate: startOfDay,
         },
       });
@@ -221,15 +201,15 @@ export class AvailabilityService {
       if (existing) {
         await this.prisma.availability.update({
           where: { id: existing.id },
-          data: { available: isAvailable },
+          data: { status: isAvailable ? 'available' : 'blocked' },
         });
       } else {
         await this.prisma.availability.create({
           data: {
-            listingId,
+            propertyId,
             startDate: startOfDay,
             endDate: endOfDay,
-            available: isAvailable,
+            status: isAvailable ? 'available' : 'blocked',
           },
         });
       }
@@ -240,7 +220,7 @@ export class AvailabilityService {
     return count;
   }
 
-  async getAvailableDates(listingId: string, startDate: Date, endDate: Date): Promise<Date[]> {
+  async getAvailableDates(propertyId: string, startDate: Date, endDate: Date): Promise<Date[]> {
     const availableDates: Date[] = [];
     const currentDate = new Date(startDate);
 
@@ -249,7 +229,7 @@ export class AvailabilityService {
       nextDate.setDate(nextDate.getDate() + 1);
 
       const result = await this.checkAvailability({
-        listingId,
+        propertyId,
         startDate: currentDate,
         endDate: nextDate,
       });

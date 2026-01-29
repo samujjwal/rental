@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { UserRole, UserStatus } from '@rental-portal/database';
+import * as bcrypt from 'bcrypt';
 
 @Controller('admin/dev')
 export class DevController {
@@ -23,15 +24,18 @@ export class DevController {
       return { message: 'Admin user already exists', userId: existingAdmin.id };
     }
 
-    // Create admin user (password would be properly hashed in real implementation)
+    // Create admin user with properly hashed password
+    const passwordHash = await bcrypt.hash('admin123', 10);
     const adminUser = await this.prisma.user.create({
       data: {
         email: 'admin@dev.local',
+        username: 'admin',
+        password: 'admin123',
         firstName: 'Dev',
         lastName: 'Admin',
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
-        passwordHash: '$2b$10$demo', // This is just a placeholder - would be properly hashed
+        passwordHash,
       },
     });
 

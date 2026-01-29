@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { BookingStatus, PaymentStatus, ListingStatus } from '@rental-portal/database';
+import { BookingStatus, PayoutStatus, ListingStatus } from '@rental-portal/database';
 
 // Event payloads
 export interface BookingCreatedEvent {
@@ -28,7 +28,7 @@ export interface PaymentProcessedEvent {
   bookingId: string;
   amount: number;
   currency?: string;
-  status: PaymentStatus;
+  status: PayoutStatus;
   renterId: string;
   ownerId: string;
   reason?: string;

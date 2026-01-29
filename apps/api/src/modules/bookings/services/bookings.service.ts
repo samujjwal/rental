@@ -48,7 +48,7 @@ export class BookingsService {
       throw new NotFoundException('Listing not found');
     }
 
-    if (listing.status !== 'ACTIVE') {
+    if (listing.status !== 'AVAILABLE') {
       throw new BadRequestException('Listing is not available for booking');
     }
 
@@ -58,7 +58,7 @@ export class BookingsService {
 
     // Check availability
     const availabilityCheck = await this.availabilityService.checkAvailability({
-      listingId: dto.listingId,
+      propertyId: dto.listingId,
       startDate: dto.startDate,
       endDate: dto.endDate,
     });

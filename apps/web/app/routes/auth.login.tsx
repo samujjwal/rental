@@ -26,8 +26,6 @@ export const meta: MetaFunction = () => {
 };
 
 export async function action({ request }: ActionFunctionArgs) {
-    console.log("=== LOGIN ACTION START ===");
-    debugger
     try {
         const formData = await request.formData();
         const email = formData.get("email") as string;
@@ -35,24 +33,15 @@ export async function action({ request }: ActionFunctionArgs) {
         const remember = formData.get("remember") === "true";
         const redirectTo = formData.get("redirectTo") as string || "/dashboard";
 
-        console.log("Login action: email:", email);
-        console.log("Login action: redirectTo:", redirectTo);
-        console.log("Login action: remember:", remember);
-
         if (!email || !password) {
-            console.log("Login action: missing email or password");
             return {
                 error: "Email and password are required.",
             };
         }
 
-        console.log("Login action: calling authApi.login");
         const response = await authApi.login({ email, password });
-        console.log("Login action: API login successful, user role:", response.user.role);
-        console.log("Login action: user ID:", response.user.id);
 
         // Store in server session
-        console.log("Login action: calling createUserSession");
         const sessionResponse = await createUserSession({
             userId: response.user.id,
             accessToken: response.accessToken,
@@ -61,15 +50,9 @@ export async function action({ request }: ActionFunctionArgs) {
             redirectTo,
         });
 
-        console.log("Login action: session created, returning response");
-        console.log("=== LOGIN ACTION END ===");
         return sessionResponse;
     } catch (error: any) {
-        console.error("Login action: ERROR:", error);
-        console.error("Login action: error response:", error.response?.data);
-        console.error("Login action: error message:", error.message);
-        console.log("=== LOGIN ACTION END WITH ERROR ===");
-
+        console.error("Login error:", error.response?.data?.message || error.message);
         return {
             error: error.response?.data?.message || error.message || "Login failed. Please try again.",
         };
@@ -108,11 +91,6 @@ export default function Login() {
                     <form
                         method="post"
                         className="space-y-6"
-                        onSubmit={(e) => {
-                            console.log("Form onSubmit triggered");
-                            console.log("Event:", e);
-                            debugger;
-                        }}
                     >
                         {/* Error Message */}
                         {actionData?.error && (

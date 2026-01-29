@@ -1,475 +1,444 @@
-import * as dotenv from 'dotenv';
-import {
-  PrismaClient,
-  UserRole,
-  UserStatus,
-  VerificationStatus,
-  BookingStatus,
-  ListingStatus,
-} from '../src/generated/client';
-import * as bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 import { faker } from '@faker-js/faker';
-
-// Load environment variables from the root .env file
-dotenv.config({ path: '../../.env' });
 
 const prisma = new PrismaClient();
 
-// Helper function to generate random index
-function randomIndex<T>(array: T[]): T {
-  return array[Math.floor(Math.random() * array.length)];
-}
-
 async function main() {
-  console.log('🌱 Starting database seed...');
+  console.log('🌱 Starting database seeding...');
 
-  // Clear existing data
-  console.log('🗑️  Cleaning up existing data...');
-  await prisma.message.deleteMany();
+  // Clean existing data
+  await prisma.disputeResponse.deleteMany();
+  await prisma.disputeTimelineEvent.deleteMany();
+  await prisma.disputeEvidence.deleteMany();
+  await prisma.disputeResolution.deleteMany();
+  await prisma.dispute.deleteMany();
+  await prisma.messageReadReceipt.deleteMany();
   await prisma.conversationParticipant.deleteMany();
+  await prisma.message.deleteMany();
   await prisma.conversation.deleteMany();
-  await prisma.review.deleteMany();
-  await prisma.payment.deleteMany();
-  await prisma.booking.deleteMany();
-  await prisma.availability.deleteMany();
-  await prisma.listing.deleteMany();
-  await prisma.category.deleteMany();
+  await prisma.conditionReport.deleteMany();
+  await prisma.insurancePolicy.deleteMany();
+  await prisma.favoriteListing.deleteMany();
+  await prisma.userPreferences.deleteMany();
+  await prisma.deviceToken.deleteMany();
   await prisma.session.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.refund.deleteMany();
+  await prisma.payment.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.booking.deleteMany();
+  await prisma.property.deleteMany();
+  await prisma.organizationMember.deleteMany();
+  await prisma.organization.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.cancellationPolicy.deleteMany();
   await prisma.user.deleteMany();
 
-  // Create Categories
-  console.log('📁 Creating categories...');
-  const categories = await Promise.all([
-    prisma.category.create({
+  console.log('🧹 Cleaned existing data');
+
+  // Create cancellation policies
+  const policies = await Promise.all([
+    prisma.cancellationPolicy.create({
       data: {
-        name: 'Tools & Equipment',
-        slug: 'tools-equipment',
-        description: 'Power tools, hand tools, and equipment for DIY and professional projects',
-        iconUrl: 'hammer',
-        active: true,
-        templateSchema: {},
-        searchableFields: [],
-        requiredFields: [],
+        name: 'Flexible',
+        description: 'Full refund up to 24 hours before check-in',
+        type: 'flexible',
+        fullRefundHours: 24,
+        partialRefundHours: 48,
+        partialRefundPercent: 0.5,
+        noRefundHours: 0,
       },
     }),
-    prisma.category.create({
+    prisma.cancellationPolicy.create({
       data: {
-        name: 'Camera & Photography',
-        slug: 'camera-photography',
-        description: 'Professional cameras, lenses, lighting, and photography equipment',
-        iconUrl: 'camera',
-        active: true,
-        templateSchema: {},
-        searchableFields: [],
-        requiredFields: [],
+        name: 'Moderate',
+        description: 'Full refund up to 5 days before check-in',
+        type: 'moderate',
+        fullRefundHours: 120,
+        partialRefundHours: 168,
+        partialRefundPercent: 0.5,
+        noRefundHours: 24,
       },
     }),
-    prisma.category.create({
+    prisma.cancellationPolicy.create({
       data: {
-        name: 'Outdoor & Camping',
-        slug: 'outdoor-camping',
-        description: 'Tents, camping gear, hiking equipment, and outdoor supplies',
-        iconUrl: 'mountain',
-        active: true,
-        templateSchema: {},
-        searchableFields: [],
-        requiredFields: [],
-      },
-    }),
-    prisma.category.create({
-      data: {
-        name: 'Party & Events',
-        slug: 'party-events',
-        description: 'Tables, chairs, decorations, and equipment for events and parties',
-        iconUrl: 'party-popper',
-        active: true,
-        templateSchema: {},
-        searchableFields: [],
-        requiredFields: [],
-      },
-    }),
-    prisma.category.create({
-      data: {
-        name: 'Electronics',
-        slug: 'electronics',
-        description: 'Laptops, gaming consoles, tablets, and electronic devices',
-        iconUrl: 'laptop',
-        active: true,
-        templateSchema: {},
-        searchableFields: [],
-        requiredFields: [],
+        name: 'Strict',
+        description: 'Full refund up to 14 days before check-in',
+        type: 'strict',
+        fullRefundHours: 336,
+        partialRefundHours: 168,
+        partialRefundPercent: 0.25,
+        noRefundHours: 48,
       },
     }),
   ]);
 
-  // Hash password for all users (password: "password123")
+  console.log(`📋 Created ${policies.length} cancellation policies`);
+
+  // Create categories
+  const categories = await Promise.all([
+    prisma.category.create({
+      data: {
+        name: 'Apartment',
+        slug: 'apartment',
+        description: 'Self-contained living units within larger buildings',
+        icon: 'apartment',
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'House',
+        slug: 'house',
+        description: 'Detached single-family homes',
+        icon: 'house',
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Villa',
+        slug: 'villa',
+        description: 'Luxury private homes with amenities',
+        icon: 'villa',
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Studio',
+        slug: 'studio',
+        description: 'Open-plan single room apartments',
+        icon: 'studio',
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Condo',
+        slug: 'condo',
+        description: 'Condominiums with shared amenities',
+        icon: 'condo',
+      },
+    }),
+  ]);
+
+  console.log(`📂 Created ${categories.length} categories`);
+
+  // Create users
+  const users = [];
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  // Create Users (150+ total users)
-  console.log('👤 Creating 150+ users...');
-
-  // Create special test users
+  // Create admin user
   const adminUser = await prisma.user.create({
     data: {
-      email: 'admin@rental.local',
-      emailVerified: true,
+      email: 'admin@rental-portal.com',
+      username: 'admin',
+      password: 'password123',
       passwordHash: hashedPassword,
       firstName: 'Admin',
       lastName: 'User',
-      phoneNumber: '+1-555-0100',
-      phoneVerified: true,
-      role: UserRole.ADMIN,
-      status: UserStatus.ACTIVE,
-      idVerificationStatus: VerificationStatus.VERIFIED,
-      bio: 'Platform administrator with full access rights',
-      city: 'San Francisco',
-      state: 'CA',
-      country: 'USA',
-      averageRating: 5.0,
-      totalReviews: 0,
-    },
-  });
-
-  const supportUser = await prisma.user.create({
-    data: {
-      email: 'support@rental.local',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      isActive: true,
       emailVerified: true,
-      passwordHash: hashedPassword,
-      firstName: 'Sarah',
-      lastName: 'Support',
-      phoneNumber: '+1-555-0101',
-      phoneVerified: true,
-      role: UserRole.SUPPORT,
-      status: UserStatus.ACTIVE,
-      idVerificationStatus: VerificationStatus.VERIFIED,
-      bio: 'Customer support representative',
-      city: 'San Francisco',
-      state: 'CA',
-      country: 'USA',
     },
   });
+  users.push(adminUser);
 
-  // Create 150+ regular users (mix of owners and customers)
-  const users: any[] = [adminUser, supportUser];
-
-  for (let i = 0; i < 150; i++) {
-    const isOwner = Math.random() > 0.6; // 40% owners, 60% customers
-    const firstName = faker.person.firstName();
-    const lastName = faker.person.lastName();
-
+  // Create regular users
+  for (let i = 0; i < 15; i++) {
     const user = await prisma.user.create({
       data: {
-        email: faker.internet.email({ firstName, lastName }).toLowerCase(),
-        emailVerified: true,
+        email: faker.internet.email(),
+        username: faker.internet.username(),
+        password: 'password123',
         passwordHash: hashedPassword,
-        firstName,
-        lastName,
-        phoneNumber: faker.phone.number('+1-555-####'),
-        phoneVerified: Math.random() > 0.2,
-        role: isOwner ? UserRole.OWNER : UserRole.CUSTOMER,
-        status: UserStatus.ACTIVE,
-        idVerificationStatus: randomIndex([
-          VerificationStatus.VERIFIED,
-          VerificationStatus.VERIFIED,
-          VerificationStatus.PENDING,
-        ]),
-        bio: faker.person.bio(),
-        city: faker.location.city(),
-        state: faker.location.state({ abbreviated: true }),
-        country: 'USA',
-        averageRating: parseFloat((Math.random() * 5).toFixed(1)),
-        totalReviews: Math.floor(Math.random() * 50),
-        ...(isOwner && {
-          stripeConnectId: `acct_test_${i}`,
-          stripeOnboardingComplete: true,
-          stripeChargesEnabled: true,
-          stripePayoutsEnabled: true,
-        }),
-        ...(!isOwner && {
-          stripeCustomerId: `cus_test_${i}`,
-        }),
+        firstName: faker.person.firstName(),
+        lastName: faker.person.lastName(),
+        phone: faker.phone.number(),
+        role: 'USER',
+        status: 'ACTIVE',
+        isActive: true,
+        emailVerified: true,
       },
     });
-
     users.push(user);
   }
 
-  // Separate owners and customers
-  const owners = users.filter((u) => u.role === UserRole.OWNER);
-  const customers = users.filter((u) => u.role === UserRole.CUSTOMER);
+  console.log(`👥 Created ${users.length} users`);
 
-  console.log(
-    `   ✓ Created ${users.length} users (${owners.length} owners, ${customers.length} customers)`,
-  );
+  // Create organizations
+  const organizations = await Promise.all([
+    prisma.organization.create({
+      data: {
+        name: 'Premium Properties',
+        slug: 'premium-properties',
+        description: 'Luxury rental management company',
+        email: 'contact@premium.com',
+        phone: faker.phone.number(),
+        address: faker.location.streetAddress(),
+        city: faker.location.city(),
+        state: faker.location.state(),
+        zipCode: faker.location.zipCode(),
+        country: 'USA',
+        status: 'ACTIVE',
+        verificationStatus: 'VERIFIED',
+      },
+    }),
+    prisma.organization.create({
+      data: {
+        name: 'Cozy Homes',
+        slug: 'cozy-homes',
+        description: 'Budget-friendly rental solutions',
+        email: 'info@cozyhomes.com',
+        phone: faker.phone.number(),
+        address: faker.location.streetAddress(),
+        city: faker.location.city(),
+        state: faker.location.state(),
+        zipCode: faker.location.zipCode(),
+        country: 'USA',
+        status: 'ACTIVE',
+        verificationStatus: 'VERIFIED',
+      },
+    }),
+  ]);
 
-  // Create Listings (150+ listings)
-  console.log('📦 Creating 150+ listings...');
-  const listings: any[] = [];
+  console.log(`🏢 Created ${organizations.length} organizations`);
 
-  const listingTitles = [
-    'Professional Camera',
-    'Cordless Drill',
-    'Camping Tent',
-    'Party Supplies',
-    'Laptop',
-    'Photography Lens',
-    'Power Saw',
-    'Hiking Backpack',
-    'Projector',
-    'DJ Equipment',
-    'Table Saw',
-    'Telescope',
-    'Video Camera',
-    'Portable Generator',
-    'Chainsaw',
+  // Add organization members
+  for (const org of organizations) {
+    await Promise.all([
+      prisma.organizationMember.create({
+        data: {
+          organizationId: org.id,
+          userId: users[1].id,
+          role: 'OWNER',
+        },
+      }),
+      prisma.organizationMember.create({
+        data: {
+          organizationId: org.id,
+          userId: users[2].id,
+          role: 'ADMIN',
+        },
+      }),
+    ]);
+  }
+
+  // Create properties
+  const properties = [];
+  const propertyTypes = ['APARTMENT', 'HOUSE', 'VILLA', 'STUDIO', 'CONDO', 'TOWNHOUSE', 'COTTAGE', 'CABIN', 'LOFT'];
+  const amenities = [
+    'WiFi', 'Kitchen', 'Parking', 'Air Conditioning', 'Heating', 'Washer', 'Dryer',
+    'TV', 'Essentials', 'Hot Water', 'Shampoo', 'Workspace', 'Pool', 'Gym', 'Elevator',
+    'Fire Extinguisher', 'Smoke Detector', 'First Aid Kit', 'Lock on bedroom door'
   ];
 
-  for (let i = 0; i < 150; i++) {
-    const owner = randomIndex(owners);
-    const category = randomIndex(categories);
-
-    const listing = await prisma.listing.create({
+  for (let i = 0; i < 25; i++) {
+    const owner = users[faker.number.int({ min: 1, max: users.length - 1 })];
+    const selectedAmenities = faker.helpers.arrayElements(amenities, { min: 5, max: 15 });
+    const selectedFeatures = faker.helpers.arrayElements([
+      'Ocean View', 'Mountain View', 'Pet Friendly', 'Smoking Allowed', 'Wheelchair Accessible', 
+      'Elevator', 'Balcony', 'Garden', 'BBQ Grill', 'Fire Pit', 'Hot Tub', 'Sauna', 
+      'Gym Access', 'Pool Access', 'Parking Included', 'Air Conditioning', 'Heating', 
+      'Smart Home', 'High-Speed Internet', 'Workspace'
+    ], { min: 3, max: 8 });
+    const category = categories[faker.number.int({ min: 0, max: categories.length - 1 })];
+    const policy = policies[faker.number.int({ min: 0, max: policies.length - 1 })];
+    const organization = faker.datatype.boolean() ? organizations[faker.number.int({ min: 0, max: organizations.length - 1 })] : null;
+    
+    const property = await prisma.property.create({
       data: {
-        title: `${randomIndex(listingTitles)} ${i + 1}`,
-        slug: `listing-${i + 1}-${faker.string.alpha(8)}`,
-        description: faker.lorem.paragraphs(2),
-        categoryId: category.id,
-        ownerId: owner.id,
-        basePrice: Math.floor(Math.random() * 500) + 25,
-        dailyPrice: Math.floor(Math.random() * 200) + 25,
-        weeklyPrice: Math.floor(Math.random() * 800) + 150,
-        monthlyPrice: Math.floor(Math.random() * 2000) + 500,
-        depositAmount: Math.floor(Math.random() * 500) + 50,
-        currency: 'USD',
-        city: faker.location.city(),
-        state: faker.location.state({ abbreviated: true }),
-        country: 'USA',
-        latitude: parseFloat(faker.location.latitude()),
-        longitude: parseFloat(faker.location.longitude()),
-        status: randomIndex([ListingStatus.ACTIVE, ListingStatus.ACTIVE, ListingStatus.INACTIVE]),
-        condition: randomIndex(['EXCELLENT', 'GOOD', 'FAIR']),
-        photos: JSON.stringify([
-          faker.image.url({ width: 800, height: 600 }),
-          faker.image.url({ width: 800, height: 600 }),
+        title: faker.helpers.arrayElement([
+          'Modern Downtown Apartment',
+          'Cozy Beach House',
+          'Luxury Villa with Pool',
+          'Charming Studio in City Center',
+          'Spacious Family Home',
+          'Romantic Cottage Getaway',
+          'Mountain View Cabin',
+          'Urban Loft with Terrace',
+          'Historic Townhouse',
+          'Contemporary Condo'
         ]),
-        viewCount: Math.floor(Math.random() * 500),
-        favoriteCount: Math.floor(Math.random() * 100),
-        categorySpecificData: {},
+        slug: faker.lorem.slug(),
+        description: faker.lorem.paragraphs(3),
+        address: faker.location.streetAddress(),
+        city: faker.location.city(),
+        state: faker.location.state(),
+        zipCode: faker.location.zipCode(),
+        country: 'USA',
+        latitude: faker.location.latitude(),
+        longitude: faker.location.longitude(),
+        type: faker.helpers.arrayElement(propertyTypes) as any,
+        status: 'AVAILABLE',
+        verificationStatus: 'VERIFIED',
+        condition: faker.helpers.arrayElement(['EXCELLENT', 'GOOD', 'FAIR']) as any,
+        bedrooms: faker.number.int({ min: 1, max: 5 }),
+        bathrooms: faker.number.int({ min: 1, max: 4 }),
+        maxGuests: faker.number.int({ min: 1, max: 10 }),
+        basePrice: parseFloat(faker.commerce.price({ min: 50, max: 500 })),
+        currency: 'USD',
+        securityDeposit: parseFloat(faker.commerce.price({ min: 100, max: 1000 })),
+        cleaningFee: parseFloat(faker.commerce.price({ min: 25, max: 150 })),
+        amenities: selectedAmenities,
+        features: selectedFeatures,
+        images: Array.from({ length: faker.number.int({ min: 3, max: 8 }) }, () => 
+          `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`
+        ),
+        photos: Array.from({ length: faker.number.int({ min: 3, max: 8 }) }, () => 
+          `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`
+        ),
+        rules: [
+          'No smoking',
+          'No parties',
+          'Quiet hours after 10 PM',
+          'Remove shoes indoors',
+          'Respect neighbors'
+        ],
+        ownerId: owner.id,
+        categoryId: category.id,
+        cancellationPolicyId: policy.id,
+        organizationId: organization?.id,
       },
     });
-
-    listings.push(listing);
+    properties.push(property);
   }
 
-  console.log(`   ✓ Created ${listings.length} listings`);
+  console.log(`🏠 Created ${properties.length} properties`);
 
-  // Create Bookings (100+ bookings)
-  console.log('📅 Creating 100+ bookings...');
-  const bookings: any[] = [];
+  // Create bookings
+  const bookings = [];
+  const bookingStatuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'];
 
-  for (let i = 0; i < 120; i++) {
-    const listing = randomIndex(listings);
-    const renter = randomIndex(customers);
-    const owner = users.find((u) => u.id === listing.ownerId) || randomIndex(owners);
+  for (let i = 0; i < 40; i++) {
+    const property = properties[faker.number.int({ min: 0, max: properties.length - 1 })];
+    const guest = users[faker.number.int({ min: 1, max: users.length - 1 })];
+    
+    // Ensure guest is not the property owner
+    if (guest.id === property.ownerId) continue;
 
-    const startDate = faker.date.past();
+    const startDate = faker.date.past({ years: 1 });
     const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + faker.number.int({ min: 1, max: 30 }));
+    endDate.setDate(startDate.getDate() + faker.number.int({ min: 1, max: 14 }));
 
-    const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const basePrice = listing.dailyPrice * duration;
-    const serviceFee = Math.floor(basePrice * 0.1);
+    const nights = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const basePrice = Number(property.basePrice) * nights;
+    const serviceFee = basePrice * 0.1;
     const totalPrice = basePrice + serviceFee;
 
-    const booking = await prisma.booking.create({
-      data: {
-        listingId: listing.id,
-        renterId: renter.id,
-        ownerId: owner.id,
-        startDate,
-        endDate,
-        status: randomIndex([
-          BookingStatus.COMPLETED,
-          BookingStatus.COMPLETED,
-          BookingStatus.CONFIRMED,
-          BookingStatus.PENDING_OWNER_APPROVAL,
-          BookingStatus.CANCELLED,
-        ]),
-        totalPrice,
-        depositAmount: listing.depositAmount,
-        currency: 'USD',
-        duration,
-        basePrice,
-        serviceFee,
-        tax: 0,
-        discountAmount: 0,
-        totalAmount: totalPrice,
-        ownerEarnings: basePrice - serviceFee,
-        platformFee: serviceFee,
-        guestCount: faker.number.int({ min: 1, max: 6 }),
-      },
-    });
-
-    bookings.push(booking);
-  }
-
-  console.log(`   ✓ Created ${bookings.length} bookings`);
-
-  // Create Reviews (100+ reviews)
-  console.log('⭐ Creating 100+ reviews...');
-  const reviews: any[] = [];
-
-  const completedBookings = bookings.filter((b) => b.status === BookingStatus.COMPLETED);
-
-  for (let i = 0; i < Math.min(110, completedBookings.length); i++) {
-    const booking = completedBookings[i];
-
-    // Listing review
-    const listingReview = await prisma.review.create({
-      data: {
-        bookingId: booking.id,
-        listingId: booking.listingId,
-        reviewerId: booking.renterId,
-        revieweeId: booking.ownerId,
-        overallRating: faker.number.int({ min: 3, max: 5 }),
-        content: faker.lorem.sentence(),
-        type: 'LISTING_REVIEW',
-      },
-    });
-
-    reviews.push(listingReview);
-
-    // Renter review (from owner)
-    const renterReview = await prisma.review.create({
-      data: {
-        bookingId: booking.id,
-        listingId: booking.listingId,
-        reviewerId: booking.ownerId,
-        revieweeId: booking.renterId,
-        overallRating: faker.number.int({ min: 3, max: 5 }),
-        content: faker.lorem.sentence(),
-        type: 'RENTER_REVIEW',
-      },
-    });
-
-    reviews.push(renterReview);
-  }
-
-  console.log(`   ✓ Created ${reviews.length} reviews`);
-
-  // Create Sessions (105+ sessions)
-  console.log('🔐 Creating 105+ sessions...');
-  let sessionCount = 0;
-
-  for (let i = 0; i < Math.min(105, users.length); i++) {
-    const user = users[i];
-    const expiresAt = faker.date.future();
-
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        token: `dev_token_${i}_${faker.string.alpha(32)}`,
-        refreshToken: `dev_refresh_${i}_${faker.string.alpha(32)}`,
-        expiresAt,
-        ipAddress: faker.internet.ipv4(),
-        userAgent: faker.internet.userAgent(),
-      },
-    });
-
-    sessionCount++;
-  }
-
-  console.log(`   ✓ Created ${sessionCount} sessions`);
-
-  // Create Conversations and Messages (100+ messages)
-  console.log('💬 Creating conversations and 100+ messages...');
-  let messageCount = 0;
-  const conversations: any[] = [];
-
-  for (let i = 0; i < 25; i++) {
-    const booking = randomIndex(bookings);
-    const user1 = randomIndex(users);
-    const user2 = randomIndex(users.filter((u) => u.id !== user1.id));
-
-    const conversation = await prisma.conversation.create({
-      data: {
-        bookingId: booking.id,
-        type: 'BOOKING',
-        subject: faker.lorem.words({ min: 2, max: 5 }),
-      },
-    });
-
-    conversations.push(conversation);
-
-    // Add participants
-    await prisma.conversationParticipant.create({
-      data: {
-        conversationId: conversation.id,
-        userId: user1.id,
-      },
-    });
-
-    await prisma.conversationParticipant.create({
-      data: {
-        conversationId: conversation.id,
-        userId: user2.id,
-      },
-    });
-
-    // Create 4-5 messages per conversation
-    for (let j = 0; j < faker.number.int({ min: 4, max: 5 }); j++) {
-      const sender = Math.random() > 0.5 ? user1 : user2;
-
-      const message = await prisma.message.create({
+    try {
+      const booking = await prisma.booking.create({
         data: {
-          conversationId: conversation.id,
-          senderId: sender.id,
-          content: faker.lorem.sentence(),
-          status: randomIndex(['SENT', 'DELIVERED']),
+          listingId: property.id,
+          renterId: guest.id,
+          startDate,
+          endDate,
+          basePrice: property.basePrice,
+          securityDeposit: property.securityDeposit,
+          cleaningFee: property.cleaningFee,
+          serviceFee,
+          totalPrice,
+          currency: 'USD',
+          status: faker.helpers.arrayElement(bookingStatuses) as any,
+          paymentIntentId: `pi_${faker.string.alphanumeric(24)}`,
         },
       });
-
-      // Create read receipt if message should be read
-      if (Math.random() > 0.3) {
-        const receiver = sender.id === user1.id ? user2 : user1;
-        await prisma.messageReadReceipt.create({
-          data: {
-            messageId: message.id,
-            userId: receiver.id,
-            readAt: new Date(),
-          },
-        });
-      }
-
-      messageCount++;
+      bookings.push(booking);
+    } catch (error) {
+      // Skip if booking conflicts with existing dates
+      continue;
     }
   }
 
-  console.log(`   ✓ Created ${messageCount} messages in ${conversations.length} conversations`);
+  console.log(`📅 Created ${bookings.length} bookings`);
 
-  console.log('\n✅ Database seed completed successfully!');
-  console.log('\n📊 Database Statistics:');
-  console.log(
-    `   - Users: ${users.length} (${owners.length} owners, ${customers.length} customers, 2 admin/support)`,
-  );
-  console.log(`   - Categories: ${categories.length}`);
-  console.log(`   - Listings: ${listings.length}`);
-  console.log(`   - Bookings: ${bookings.length}`);
-  console.log(`   - Reviews: ${reviews.length}`);
-  console.log(`   - Sessions: ${sessionCount}`);
-  console.log(`   - Messages: ${messageCount}`);
-  console.log(`   - Conversations: ${conversations.length}`);
-  console.log('\n📝 Test User Accounts:');
-  console.log('   Email: admin@rental.local (Admin, Password: password123)');
-  console.log('   Email: support@rental.local (Support, Password: password123)');
-  console.log(
-    '   + 150 additional randomly generated user accounts (all with password: password123)',
-  );
+  // Create reviews for completed bookings
+  const reviews = [];
+  const completedBookings = bookings.filter(b => b.status === 'COMPLETED');
+  const reviewTypes = ['LISTING_REVIEW', 'RENTER_REVIEW', 'OWNER_REVIEW'];
+
+  for (const booking of completedBookings) {
+    const property = properties.find(p => p.id === booking.propertyId);
+    const guest = users.find(u => u.id === booking.guestId);
+    const owner = users.find(u => u.id === property?.ownerId);
+    
+    if (!property || !guest || !owner) continue;
+
+    // Create listing review
+    const listingReview = await prisma.review.create({
+      data: {
+        bookingId: booking.id,
+        propertyId: property.id,
+        reviewerId: guest.id,
+        revieweeId: owner.id,
+        type: 'LISTING_REVIEW',
+        rating: faker.number.int({ min: 1, max: 5 }),
+        overallRating: faker.number.int({ min: 1, max: 5 }),
+        cleanliness: faker.number.int({ min: 1, max: 5 }),
+        communication: faker.number.int({ min: 1, max: 5 }),
+        checkIn: faker.number.int({ min: 1, max: 5 }),
+        accuracy: faker.number.int({ min: 1, max: 5 }),
+        location: faker.number.int({ min: 1, max: 5 }),
+        value: faker.number.int({ min: 1, max: 5 }),
+        comment: faker.lorem.sentences(faker.number.int({ min: 1, max: 3 })),
+        status: 'PUBLISHED',
+      },
+    });
+    reviews.push(listingReview);
+
+    // Create renter review
+    const renterReview = await prisma.review.create({
+      data: {
+        bookingId: booking.id,
+        reviewerId: owner.id,
+        revieweeId: guest.id,
+        type: 'RENTER_REVIEW',
+        rating: faker.number.int({ min: 1, max: 5 }),
+        comment: faker.lorem.sentences(faker.number.int({ min: 1, max: 2 })),
+        status: 'PUBLISHED',
+      },
+    });
+    reviews.push(renterReview);
+  }
+
+  console.log(`⭐ Created ${reviews.length} reviews`);
+
+  // Create user preferences for some users
+  for (let i = 0; i < 10; i++) {
+    await prisma.userPreferences.create({
+      data: {
+        userId: users[i].id,
+        language: 'en',
+        currency: 'USD',
+        timezone: 'UTC',
+        emailNotifications: true,
+        pushNotifications: true,
+        smsNotifications: false,
+        marketingEmails: false,
+        autoAcceptBookings: false,
+        instantBook: false,
+        minBookingDuration: 1,
+        maxBookingDuration: 30,
+        advanceBookingNotice: 24,
+      },
+    });
+  }
+
+  console.log('✅ Database seeding completed successfully!');
+  console.log('\n📊 Summary:');
+  console.log(`   Users: ${users.length}`);
+  console.log(`   Organizations: ${organizations.length}`);
+  console.log(`   Categories: ${categories.length}`);
+  console.log(`   Properties: ${properties.length}`);
+  console.log(`   Bookings: ${bookings.length}`);
+  console.log(`   Reviews: ${reviews.length}`);
+  console.log('\n🔑 Login credentials:');
+  console.log('   Admin: admin@rental-portal.com / password123');
+  console.log('   Users: Any email from seed / password123');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Error seeding database:', e);
+    console.error('❌ Error during seeding:', e);
     process.exit(1);
   })
   .finally(async () => {

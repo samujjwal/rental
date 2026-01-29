@@ -15,6 +15,7 @@ import { SearchService, SearchQuery } from '../services/search.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
+import { UserRole } from '@rental-portal/database';
 
 @ApiTags('Search')
 @Controller('search')
@@ -125,7 +126,7 @@ export class SearchController {
   // Admin endpoints
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get search statistics (admin only)' })
   @ApiResponse({ status: 200, description: 'Search statistics retrieved' })

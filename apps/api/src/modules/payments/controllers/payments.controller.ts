@@ -13,8 +13,9 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 import { StripeService } from '../services/stripe.service';
-import { LedgerService } from '../services/ledger.service';
 import { PayoutsService } from '../services/payouts.service';
+import { LedgerService } from '../services/ledger.service';
+import { toNumber } from '@rental-portal/database';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 
@@ -92,7 +93,7 @@ export class PaymentsController {
 
     const result = await this.stripe.createPaymentIntent(
       bookingId,
-      booking.totalAmount,
+      toNumber(booking.totalPrice),
       booking.currency,
       booking.renter.stripeCustomerId,
     );
@@ -114,20 +115,20 @@ export class PaymentsController {
       throw new Error('Booking not found');
     }
 
-    if (booking.depositAmount <= 0) {
+    if (toNumber(booking.securityDeposit) <= 0) {
       throw new Error('No deposit required');
     }
 
     const paymentIntentId = await this.stripe.holdDeposit(
       bookingId,
-      booking.depositAmount,
+      toNumber(booking.securityDeposit),
       booking.currency,
     );
 
     await this.ledger.recordDepositHold(
       bookingId,
       booking.renterId,
-      booking.depositAmount,
+      toNumber(booking.securityDeposit),
       booking.currency,
     );
 
@@ -158,7 +159,7 @@ export class PaymentsController {
     await this.ledger.recordDepositRelease(
       deposit.bookingId,
       booking.renterId,
-      deposit.amount,
+      toNumber(deposit.amount),
       deposit.currency,
     );
 

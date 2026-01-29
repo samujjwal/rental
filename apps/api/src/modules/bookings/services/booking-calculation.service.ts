@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { PricingMode, DepositType } from '@rental-portal/database';
+import { PricingMode, DepositType, toNumber } from '@rental-portal/database';
 
 export interface PriceCalculation {
   subtotal: number;
@@ -158,7 +158,7 @@ export class BookingCalculationService {
       return 0;
     }
 
-    if (listing.depositType === DepositType.FIXED_AMOUNT) {
+    if (listing.depositType === DepositType.FIXED) {
       return listing.depositAmount || 0;
     }
 
@@ -222,11 +222,11 @@ export class BookingCalculationService {
       reason = 'Per cancellation policy';
     }
 
-    const subtotalRefund = booking.basePrice * refundPercentage;
-    const platformFeeRefund = booking.platformFee * refundPercentage;
-    const serviceFeeRefund = booking.serviceFee * refundPercentage;
-    const depositRefund = booking.depositAmount;
-    const penalty = booking.basePrice - subtotalRefund;
+    const subtotalRefund = toNumber(booking.basePrice) * refundPercentage;
+    const platformFeeRefund = toNumber(booking.platformFee) * refundPercentage;
+    const serviceFeeRefund = toNumber(booking.serviceFee) * refundPercentage;
+    const depositRefund = toNumber(booking.securityDeposit || 0);
+    const penalty = toNumber(booking.basePrice) - subtotalRefund;
 
     return {
       refundAmount: subtotalRefund + serviceFeeRefund + depositRefund,

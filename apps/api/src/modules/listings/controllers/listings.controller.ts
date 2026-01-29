@@ -12,8 +12,9 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { UserRole } from '@rental-portal/database';
 import {
-  ListingsService,
+  PropertysService,
   CreateListingDto,
   UpdateListingDto,
   ListingFilters,
@@ -32,13 +33,13 @@ import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 @Controller('listings')
 export class ListingsController {
   constructor(
-    private readonly listingsService: ListingsService,
+    private readonly listingsService: PropertysService,
     private readonly availabilityService: AvailabilityService,
   ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('CUSTOMER', 'OWNER', 'ADMIN')
+  @Roles(UserRole.USER, UserRole.HOST, UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new listing' })
   @ApiResponse({ status: 201, description: 'Listing created successfully' })
@@ -73,7 +74,7 @@ export class ListingsController {
   @ApiOperation({ summary: 'Get current user listings' })
   @ApiResponse({ status: 200, description: 'Listings retrieved successfully' })
   async getMyListings(@CurrentUser('id') userId: string, @Query('all') all?: boolean) {
-    return this.listingsService.getOwnerListings(userId, all === true);
+    return this.listingsService.getOwnerPropertys(userId, all === true);
   }
 
   @Get(':id')
@@ -160,7 +161,7 @@ export class ListingsController {
   @ApiOperation({ summary: 'Get listing statistics' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
   async getStats(@Param('id') id: string) {
-    return this.listingsService.getListingStats(id);
+    return this.listingsService.getPropertyStats(id);
   }
 
   @Post(':id/view')
@@ -179,9 +180,9 @@ export class ListingsController {
   @ApiResponse({ status: 201, description: 'Availability rule created' })
   async createAvailability(
     @Param('id') listingId: string,
-    @Body() dto: Omit<CreateAvailabilityDto, 'listingId'>,
+    @Body() dto: Omit<CreateAvailabilityDto, 'propertyId'>,
   ) {
-    return this.availabilityService.createAvailability({ ...dto, listingId });
+    return this.availabilityService.createAvailability({ ...dto, propertyId: listingId });
   }
 
   @Get(':id/availability')
@@ -207,9 +208,9 @@ export class ListingsController {
   @ApiResponse({ status: 200, description: 'Availability check completed' })
   async checkAvailability(
     @Param('id') listingId: string,
-    @Body() dto: Omit<AvailabilityCheckDto, 'listingId'>,
+    @Body() dto: Omit<AvailabilityCheckDto, 'propertyId'>,
   ) {
-    return this.availabilityService.checkAvailability({ ...dto, listingId });
+    return this.availabilityService.checkAvailability({ ...dto, propertyId: listingId });
   }
 
   @Get(':id/available-dates')

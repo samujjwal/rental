@@ -1,4 +1,4 @@
 export { Button } from "./button";
 export { Input } from "./input";
-export { Card } from "./card";
+export { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./card";
 export { Label } from "./label";

@@ -318,9 +318,9 @@ export class DisputesService {
     const disputeResponse = await this.prisma.disputeResponse.create({
       data: {
         disputeId,
-        userId,
+        userId, // Use the authenticated user's ID
         content: response.message,
-        attachments: response.evidence || [],
+        type: 'statement', // Default type
       },
       include: {
         user: {

@@ -132,7 +132,7 @@ export class UsersService {
         action: 'USER_SUSPENDED',
         entityType: 'User',
         entityId: userId,
-        newValues: { status: UserStatus.SUSPENDED, reason },
+        newValues: JSON.stringify({ status: UserStatus.SUSPENDED, reason }),
       },
     });
 
@@ -153,7 +153,7 @@ export class UsersService {
         action: 'USER_ACTIVATED',
         entityType: 'User',
         entityId: userId,
-        newValues: { status: UserStatus.ACTIVE },
+        newValues: JSON.stringify({ status: UserStatus.ACTIVE }),
       },
     });
 

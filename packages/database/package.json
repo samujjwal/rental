@@ -2,9 +2,10 @@
   "name": "@rental-portal/database",
   "version": "1.0.0",
   "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
+    "build": "tsc",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "migrate:dev": "prisma migrate dev",
@@ -22,7 +23,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.2.0",
-    "@types/node": "^25.0.10",
+    "@types/node": "^25.1.0",
     "prisma": "^5.22.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

@@ -11,6 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { UserRole } from '@rental-portal/database';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
@@ -59,7 +60,7 @@ export class InsuranceController {
   }
 
   @Put('policies/:policyId/verify')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @UseGuards(RolesGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify insurance policy (admin only)' })
@@ -83,7 +84,7 @@ export class InsuranceController {
   }
 
   @Get('policies/expiring')
-  @Roles('ADMIN')
+  @Roles(UserRole.ADMIN)
   @UseGuards(RolesGuard)
   @ApiOperation({ summary: 'Get expiring policies (admin only)' })
   @ApiResponse({ status: 200, description: 'Expiring policies retrieved' })

@@ -119,7 +119,7 @@ export class ModerationQueueService {
         entityType: queueItem.entityType,
         entityId: queueItem.entityId,
         userId: adminId,
-        metadata: { notes },
+        newValues: JSON.stringify({ notes }),
       },
     });
   }

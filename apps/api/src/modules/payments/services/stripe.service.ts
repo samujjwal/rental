@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { DepositStatus, BookingStatus } from '@rental-portal/database';
+import { DepositStatus, BookingStatus, toNumber } from '@rental-portal/database';
 import Stripe from 'stripe';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class StripeService {
     private readonly prisma: PrismaService,
   ) {
     this.stripe = new Stripe(config.get<string>('STRIPE_SECRET_KEY') || '', {
-      apiVersion: '2025-12-15.clover',
+      apiVersion: '2026-01-28.clover',
     });
   }
 
@@ -98,7 +98,7 @@ export class StripeService {
     }
 
     // Create payment intent with application fee
-    const platformFeeAmount = Math.round(booking.platformFee * 100);
+    const platformFeeAmount = Math.round(toNumber(booking.platformFee) * 100);
 
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents

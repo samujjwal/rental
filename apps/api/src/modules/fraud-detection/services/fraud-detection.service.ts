@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { PropertyStatus, toNumber } from '@rental-portal/database';
 
 export enum RiskLevel {
   LOW = 'LOW',
@@ -447,7 +448,7 @@ export class FraudDetectionService {
     const result = await this.prisma.listing.aggregate({
       where: {
         category: { slug: category },
-        status: 'ACTIVE',
+        status: PropertyStatus.AVAILABLE,
       },
       _avg: {
         basePrice: true,
@@ -455,8 +456,9 @@ export class FraudDetectionService {
     });
 
     if (result._avg.basePrice) {
-      await this.cache.set(cacheKey, result._avg.basePrice, 24 * 60 * 60); // 24 hours
-      return result._avg.basePrice;
+      const price = toNumber(result._avg.basePrice);
+      await this.cache.set(cacheKey, price, 24 * 60 * 60); // 24 hours
+      return price;
     }
 
     return null;
@@ -485,11 +487,11 @@ export class FraudDetectionService {
           action: 'FRAUD_CHECK',
           entityType,
           entityId,
-          metadata: {
+          newValues: JSON.stringify({
             riskLevel: result.riskLevel,
             riskScore: result.riskScore,
-            flags: result.flags as any,
-          } as any,
+            flags: result.flags,
+          }),
         },
       });
     }

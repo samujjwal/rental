@@ -25,7 +25,7 @@ export class ModerationController {
   constructor(private readonly moderationService: ContentModerationService) {}
 
   @Get('queue')
-  @Roles('ADMIN')
+  @Roles('ADMIN' as any)
   @ApiOperation({ summary: 'Get moderation queue (admin only)' })
   @ApiResponse({ status: 200, description: 'Queue retrieved' })
   async getQueue(
@@ -41,7 +41,7 @@ export class ModerationController {
   }
 
   @Post('queue/:entityId/approve')
-  @Roles('ADMIN')
+  @Roles('ADMIN' as any)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Approve flagged content (admin only)' })
   @ApiResponse({ status: 200, description: 'Content approved' })
@@ -56,7 +56,7 @@ export class ModerationController {
   }
 
   @Post('queue/:entityId/reject')
-  @Roles('ADMIN')
+  @Roles('ADMIN' as any)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reject flagged content (admin only)' })
   @ApiResponse({ status: 200, description: 'Content rejected' })
@@ -71,7 +71,7 @@ export class ModerationController {
   }
 
   @Get('history/:userId')
-  @Roles('ADMIN')
+  @Roles('ADMIN' as any)
   @ApiOperation({ summary: 'Get user moderation history (admin only)' })
   @ApiResponse({ status: 200, description: 'History retrieved' })
   async getUserHistory(@Param('userId') userId: string) {
@@ -79,7 +79,7 @@ export class ModerationController {
   }
 
   @Post('test/text')
-  @Roles('ADMIN')
+  @Roles('ADMIN' as any)
   @ApiOperation({ summary: 'Test text moderation (admin only)' })
   @ApiResponse({ status: 200, description: 'Moderation result' })
   async testTextModeration(@Body('text') text: string) {

@@ -504,10 +504,10 @@ export class InAppNotificationService {
       where: { userId },
       create: {
         userId,
-        preferences: prefs,
+        preferences: JSON.stringify(prefs),
       },
       update: {
-        preferences: prefs,
+        preferences: JSON.stringify(prefs),
       },
     });
   }

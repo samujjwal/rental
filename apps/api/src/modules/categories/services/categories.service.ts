@@ -56,9 +56,15 @@ export class CategoriesService {
 
     const category = await this.prisma.category.create({
       data: {
-        ...dto,
+        name: dto.name,
+        slug: dto.slug,
+        description: dto.description,
+        icon: dto.iconUrl,
+        templateSchema: JSON.stringify(dto.templateSchema || {}),
+        pricingMode: dto.defaultPricingMode,
         searchableFields: dto.searchableFields || [],
         requiredFields: dto.requiredFields || [],
+        order: dto.order ?? 0,
       },
     });
 
@@ -166,13 +172,13 @@ export class CategoriesService {
       this.prisma.listing.count({
         where: {
           categoryId: id,
-          status: 'ACTIVE',
+          status: 'AVAILABLE',
         },
       }),
       this.prisma.listing.aggregate({
         where: {
           categoryId: id,
-          status: 'ACTIVE',
+          status: 'AVAILABLE',
         },
         _avg: {
           basePrice: true,

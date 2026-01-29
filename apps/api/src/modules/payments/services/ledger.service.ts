@@ -1,26 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { LedgerSide, LedgerEntryStatus } from '@rental-portal/database';
-
-export enum TransactionType {
-  PAYMENT = 'booking_payment',
-  REFUND = 'refund',
-  PAYOUT = 'payout',
-  PLATFORM_FEE = 'platform_fee',
-  SERVICE_FEE = 'service_fee',
-  OWNER_EARNING = 'owner_earning',
-  DEPOSIT_HOLD = 'deposit_hold',
-  DEPOSIT_RELEASE = 'deposit_release',
-  DISPUTE = 'dispute',
-}
-
-export enum AccountType {
-  CASH = 'cash',
-  LIABILITY = 'liability',
-  REVENUE = 'revenue',
-  RECEIVABLE = 'receivable',
-  PAYABLE = 'payable',
-}
+import { LedgerSide, TransactionType, AccountType, LedgerEntryStatus, toNumber } from '@rental-portal/database';
 
 export interface LedgerEntryDto {
   bookingId: string;
@@ -341,7 +321,7 @@ export class LedgerService {
     // Owner Balance = OWNER_EARNING + PAYOUT (Negative)
 
     const ownerBookings = await this.prisma.booking.findMany({
-      where: { ownerId: userId },
+      where: { owner: { id: userId } },
       select: { id: true },
     });
     const ownerBookingIds = ownerBookings.map((b) => b.id);
@@ -360,8 +340,8 @@ export class LedgerService {
 
     return entries.reduce((balance, entry) => {
       // Credit increases Receivable (Earning), Debit decreases it (Payout)
-      if (entry.side === LedgerSide.CREDIT) return balance + entry.amount;
-      if (entry.side === LedgerSide.DEBIT) return balance - entry.amount;
+      if (entry.side === LedgerSide.CREDIT) return balance + toNumber(entry.amount);
+      if (entry.side === LedgerSide.DEBIT) return balance - toNumber(entry.amount);
       return balance;
     }, 0);
   }
@@ -399,14 +379,14 @@ export class LedgerService {
       .reduce((sum, e) => {
         // Revenue: Credit is positive
         const sign = e.side === LedgerSide.CREDIT ? 1 : -1;
-        return sum + e.amount * sign;
+        return sum + toNumber(e.amount) * sign;
       }, 0);
 
     const serviceFees = entries
       .filter((e) => e.transactionType === TransactionType.SERVICE_FEE)
       .reduce((sum, e) => {
         const sign = e.side === LedgerSide.CREDIT ? 1 : -1;
-        return sum + e.amount * sign;
+        return sum + toNumber(e.amount) * sign;
       }, 0);
 
     return {

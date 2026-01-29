@@ -240,7 +240,7 @@ export class BookingStateMachineService {
         status: authorizedTransition.to,
         stateHistory: {
           create: {
-            toState: authorizedTransition.to,
+            toStatus: authorizedTransition.to,
             changedBy: actorId,
             metadata: metadata as any,
           },
