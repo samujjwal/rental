@@ -9,8 +9,11 @@ import {
     Paperclip,
     Smile,
     ArrowLeft,
+    MessageCircle,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import { cn } from '~/lib/utils';
+import { Button, Badge } from '~/components/ui';
 
 export const meta: MetaFunction = () => {
     return [{ title: 'Messages | GharBatai Rentals' }];
@@ -193,30 +196,32 @@ export default function Messages() {
     });
 
     return (
-        <div className="h-screen flex flex-col bg-white">
+        <div className="h-screen flex flex-col bg-background">
             {/* Header */}
-            <header className="bg-white border-b px-4 py-4">
+            <header className="bg-card border-b px-4 py-4">
                 <div className="max-w-7xl mx-auto">
-                    <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
+                    <h1 className="text-2xl font-bold text-foreground">Messages</h1>
                 </div>
             </header>
 
             <div className="flex-1 flex overflow-hidden max-w-7xl mx-auto w-full">
                 {/* Conversations List */}
                 <div
-                    className={`${showMobileChat ? 'hidden' : 'flex'
-                        } lg:flex flex-col w-full lg:w-96 border-r bg-white`}
+                    className={cn(
+                        showMobileChat ? 'hidden' : 'flex',
+                        'lg:flex flex-col w-full lg:w-96 border-r bg-card'
+                    )}
                 >
                     {/* Search */}
                     <div className="p-4 border-b">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search conversations..."
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                             />
                         </div>
                     </div>
@@ -224,18 +229,20 @@ export default function Messages() {
                     {/* Conversations */}
                     <div className="flex-1 overflow-y-auto">
                         {filteredConversations.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                                 <MessageCircle className="w-16 h-16 mb-4" />
                                 <p className="text-center">No conversations yet</p>
                             </div>
                         ) : (
-                            <div className="divide-y">
+                            <div className="divide-y divide-border">
                                 {filteredConversations.map((conversation) => (
                                     <button
                                         key={conversation.id}
                                         onClick={() => handleSelectConversation(conversation.id)}
-                                        className={`w-full p-4 text-left hover:bg-gray-50 transition-colors ${selectedConversation === conversation.id ? 'bg-primary-50' : ''
-                                            }`}
+                                        className={cn(
+                                            'w-full p-4 text-left hover:bg-muted transition-colors',
+                                            selectedConversation === conversation.id && 'bg-primary/5'
+                                        )}
                                     >
                                         <div className="flex gap-3">
                                             <div className="relative flex-shrink-0">
@@ -245,16 +252,16 @@ export default function Messages() {
                                                     className="w-12 h-12 rounded-full object-cover"
                                                 />
                                                 {conversation.otherUser.online && (
-                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-success border-2 border-background rounded-full" />
                                                 )}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-1">
-                                                    <h3 className="font-semibold text-gray-900 truncate">
+                                                    <h3 className="font-semibold text-foreground truncate">
                                                         {conversation.otherUser.firstName} {conversation.otherUser.lastName}
                                                     </h3>
                                                     {conversation.lastMessage && (
-                                                        <span className="text-xs text-gray-500">
+                                                        <span className="text-xs text-muted-foreground">
                                                             {formatDistanceToNow(new Date(conversation.lastMessage.createdAt), {
                                                                 addSuffix: true,
                                                             })}
@@ -262,24 +269,26 @@ export default function Messages() {
                                                     )}
                                                 </div>
                                                 {conversation.listing && (
-                                                    <p className="text-xs text-gray-500 mb-1 truncate">
+                                                    <p className="text-xs text-muted-foreground mb-1 truncate">
                                                         {conversation.listing.title}
                                                     </p>
                                                 )}
                                                 {conversation.lastMessage && (
                                                     <div className="flex items-center justify-between">
                                                         <p
-                                                            className={`text-sm truncate ${conversation.lastMessage.read
-                                                                    ? 'text-gray-500'
-                                                                    : 'text-gray-900 font-medium'
-                                                                }`}
+                                                            className={cn(
+                                                                'text-sm truncate',
+                                                                conversation.lastMessage.read
+                                                                    ? 'text-muted-foreground'
+                                                                    : 'text-foreground font-medium'
+                                                            )}
                                                         >
                                                             {conversation.lastMessage.content}
                                                         </p>
                                                         {conversation.unreadCount > 0 && (
-                                                            <span className="ml-2 bg-primary-600 text-white text-xs px-2 py-0.5 rounded-full">
+                                                            <Badge variant="default" className="ml-2">
                                                                 {conversation.unreadCount}
-                                                            </span>
+                                                            </Badge>
                                                         )}
                                                     </div>
                                                 )}
@@ -294,17 +303,19 @@ export default function Messages() {
 
                 {/* Chat Area */}
                 <div
-                    className={`${showMobileChat ? 'flex' : 'hidden'
-                        } lg:flex flex-col flex-1 bg-gray-50`}
+                    className={cn(
+                        showMobileChat ? 'flex' : 'hidden',
+                        'lg:flex flex-col flex-1 bg-muted/30'
+                    )}
                 >
                     {selectedConversation && currentConversation ? (
                         <>
                             {/* Chat Header */}
-                            <div className="bg-white border-b px-4 py-3 flex items-center justify-between">
+                            <div className="bg-card border-b px-4 py-3 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => setShowMobileChat(false)}
-                                        className="lg:hidden text-gray-600 hover:text-gray-900"
+                                        className="lg:hidden text-muted-foreground hover:text-foreground transition-colors"
                                     >
                                         <ArrowLeft className="w-5 h-5" />
                                     </button>
@@ -315,41 +326,41 @@ export default function Messages() {
                                             className="w-10 h-10 rounded-full object-cover"
                                         />
                                         {currentConversation.otherUser.online && (
-                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-success border-2 border-background rounded-full" />
                                         )}
                                     </div>
                                     <div>
-                                        <h2 className="font-semibold text-gray-900">
+                                        <h2 className="font-semibold text-foreground">
                                             {currentConversation.otherUser.firstName}{' '}
                                             {currentConversation.otherUser.lastName}
                                         </h2>
-                                        <p className="text-xs text-gray-500">
+                                        <p className="text-xs text-muted-foreground">
                                             {currentConversation.otherUser.online ? 'Online' : 'Offline'}
                                         </p>
                                     </div>
                                 </div>
-                                <button className="text-gray-600 hover:text-gray-900">
+                                <button className="text-muted-foreground hover:text-foreground transition-colors">
                                     <MoreVertical className="w-5 h-5" />
                                 </button>
                             </div>
 
                             {/* Listing Context (if available) */}
                             {currentConversation.listing && (
-                                <div className="bg-blue-50 border-b px-4 py-3 flex items-center gap-3">
+                                <div className="bg-primary/5 border-b px-4 py-3 flex items-center gap-3">
                                     <img
                                         src={currentConversation.listing.image}
                                         alt={currentConversation.listing.title}
                                         className="w-12 h-12 rounded object-cover"
                                     />
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-gray-600">Discussing:</p>
-                                        <p className="font-medium text-gray-900 truncate">
+                                        <p className="text-sm text-muted-foreground">Discussing:</p>
+                                        <p className="font-medium text-foreground truncate">
                                             {currentConversation.listing.title}
                                         </p>
                                     </div>
                                     <a
                                         href={`/listings/${currentConversation.listing.id}`}
-                                        className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                                        className="text-sm text-primary hover:text-primary/90 font-medium transition-colors"
                                     >
                                         View
                                     </a>
@@ -359,7 +370,7 @@ export default function Messages() {
                             {/* Messages */}
                             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                                 {messages.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                                         <p>No messages yet. Start the conversation!</p>
                                     </div>
                                 ) : (
@@ -368,17 +379,22 @@ export default function Messages() {
                                         return (
                                             <div
                                                 key={message.id}
-                                                className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                                                className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}
                                             >
                                                 <div
-                                                    className={`max-w-md px-4 py-2 rounded-lg ${isOwn
-                                                            ? 'bg-primary-600 text-white'
-                                                            : 'bg-white text-gray-900 border'
-                                                        }`}
+                                                    className={cn(
+                                                        'max-w-md px-4 py-2 rounded-lg',
+                                                        isOwn
+                                                            ? 'bg-primary text-primary-foreground'
+                                                            : 'bg-card text-foreground border'
+                                                    )}
                                                 >
                                                     <p className="text-sm">{message.content}</p>
                                                     <p
-                                                        className={`text-xs mt-1 ${isOwn ? 'text-primary-100' : 'text-gray-500'}`}
+                                                        className={cn(
+                                                            'text-xs mt-1',
+                                                            isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                                                        )}
                                                     >
                                                         {format(new Date(message.createdAt), 'h:mm a')}
                                                     </p>
@@ -391,26 +407,26 @@ export default function Messages() {
                             </div>
 
                             {/* Message Input */}
-                            <div className="bg-white border-t p-4">
+                            <div className="bg-card border-t p-4">
                                 <form onSubmit={handleSendMessage} className="flex items-end gap-2">
                                     <div className="flex gap-2">
                                         <button
                                             type="button"
-                                            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+                                            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
                                             title="Attach image"
                                         >
                                             <ImageIcon className="w-5 h-5" />
                                         </button>
                                         <button
                                             type="button"
-                                            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+                                            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
                                             title="Attach file"
                                         >
                                             <Paperclip className="w-5 h-5" />
                                         </button>
                                         <button
                                             type="button"
-                                            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+                                            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
                                             title="Emoji"
                                         >
                                             <Smile className="w-5 h-5" />
@@ -427,20 +443,20 @@ export default function Messages() {
                                         }}
                                         placeholder="Type a message..."
                                         rows={1}
-                                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                                        className="flex-1 px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors resize-none"
                                     />
-                                    <button
+                                    <Button
                                         type="submit"
                                         disabled={!newMessage.trim()}
-                                        className="p-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                        className="p-2"
                                     >
                                         <Send className="w-5 h-5" />
-                                    </button>
+                                    </Button>
                                 </form>
                             </div>
                         </>
                     ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                             <MessageCircle className="w-16 h-16 mb-4" />
                             <p className="text-center">Select a conversation to start messaging</p>
                         </div>
@@ -450,6 +466,3 @@ export default function Messages() {
         </div>
     );
 }
-
-// Import MessageCircle icon that was missing
-import { MessageCircle } from 'lucide-react';

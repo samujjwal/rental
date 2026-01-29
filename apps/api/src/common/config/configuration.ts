@@ -20,13 +20,14 @@ export default () => ({
     url: process.env.REDIS_URL,
   },
 
-  // AWS
+  // AWS / MinIO S3
   aws: {
     region: process.env.AWS_REGION,
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     s3: {
       bucket: process.env.AWS_S3_BUCKET,
+      endpoint: process.env.AWS_S3_ENDPOINT, // For MinIO: http://localhost:9000
     },
     cdnUrl: process.env.CDN_URL,
   },
@@ -45,13 +46,18 @@ export default () => ({
     password: process.env.ELASTICSEARCH_PASSWORD,
   },
 
-  // Email
+  // Email (supports both SMTP and Resend)
   email: {
+    provider: process.env.EMAIL_PROVIDER || 'smtp', // 'smtp' or 'resend'
+    // SMTP configuration (legacy)
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587', 10),
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
-    from: process.env.SMTP_FROM,
+    // Resend configuration (recommended)
+    resendApiKey: process.env.RESEND_API_KEY,
+    // Common
+    from: process.env.EMAIL_FROM || process.env.SMTP_FROM,
   },
 
   // SMS (Twilio)

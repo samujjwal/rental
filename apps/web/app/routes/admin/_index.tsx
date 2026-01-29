@@ -2,7 +2,26 @@ import { type LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link } from "react-router";
 import { requireAdmin } from "~/utils/auth.server";
 import { getAdminAnalytics } from "~/utils/adminAnalytics.server";
-import { ArrowRight, Users, Home, Calendar, DollarSign, ShieldCheck, TrendingUp, AlertCircle, CheckCircle, AlertTriangle } from "lucide-react";
+import {
+    Box,
+    Typography,
+    Paper,
+    Card,
+    CardContent,
+    Button,
+    Alert,
+    AlertTitle,
+} from '@mui/material';
+import {
+    ArrowForward as ArrowRightIcon,
+    Group as UsersIcon,
+    House as HomeIcon,
+    Event as CalendarIcon,
+    AttachMoney as MoneyIcon,
+    Security as ShieldIcon,
+    TrendingUp as TrendingUpIcon,
+    CheckCircle as CheckCircleIcon,
+} from '@mui/icons-material';
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const user = await requireAdmin(request);
@@ -27,236 +46,189 @@ export default function AdminDashboard() {
     const { summary, alerts } = analytics;
 
     const quickLinks = [
-        { href: "/admin/users", label: "User Directory", description: "Review accounts & roles" },
-        { href: "/admin/listings", label: "Listings", description: "Moderate submissions" },
-        { href: "/admin/bookings", label: "Bookings", description: "Resolve issues fast" },
-        { href: "/admin/payments", label: "Payments", description: "Audit payouts & refunds" },
+        { href: "/admin/users", label: "User Directory", description: "Review accounts & roles", icon: <UsersIcon /> },
+        { href: "/admin/listings", label: "Listings", description: "Moderate submissions", icon: <HomeIcon /> },
+        { href: "/admin/bookings", label: "Bookings", description: "Resolve issues fast", icon: <CalendarIcon /> },
+        { href: "/admin/payments", label: "Payments", description: "Audit payouts & refunds", icon: <MoneyIcon /> },
+        { href: "/admin/organizations", label: "Organizations", description: "Manage business accounts", icon: <ShieldIcon /> },
+        { href: "/admin/categories", label: "Categories", description: "Configure property types", icon: <ShieldIcon /> },
+        { href: "/admin/system/power-operations", label: "Power Operations", description: "System maintenance", icon: <ShieldIcon /> },
     ];
 
     const criticalAlerts = alerts.filter(a => a.severity === "critical");
     const warningAlerts = alerts.filter(a => a.severity === "warning");
 
     return (
-        <div className="space-y-8">
+        <Box sx={{ p: 3 }}>
             {/* Welcome Section */}
-            <section className="rounded-2xl border bg-gradient-to-r from-blue-50 to-indigo-50 p-8">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Admin Control Center</p>
-                        <h1 className="mt-2 text-3xl font-bold text-gray-900">Welcome back, {user.firstName ?? user.email}</h1>
-                        <p className="mt-2 text-gray-600">
+            <Paper
+                sx={{
+                    p: 4,
+                    mb: 4,
+                    background: 'linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(25, 118, 210, 0.1) 100%)',
+                    border: '1px solid rgba(25, 118, 210, 0.2)'
+                }}
+            >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                    <Box>
+                        <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 600, letterSpacing: 1 }}>
+                            ADMIN CONTROL CENTER
+                        </Typography>
+                        <Typography variant="h4" gutterBottom>
+                            Welcome back, {user.firstName ?? user.email}
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
                             Keep the marketplace healthy by monitoring activity, triaging issues, and guiding partners.
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                        <Link
-                            to="/admin/system"
-                            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                        </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                        <Button
+                            variant="outlined"
+                            component={Link}
+                            to="/admin/system/power-operations"
+                            sx={{ borderRadius: 2 }}
                         >
-                            System health
-                        </Link>
-                        <Link
+                            System Operations
+                        </Button>
+                        <Button
+                            variant="contained"
+                            component={Link}
                             to="/admin/analytics"
-                            className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                            endIcon={<ArrowRightIcon />}
+                            sx={{ borderRadius: 2 }}
                         >
                             Full Analytics
-                            <ArrowRight className="h-4 w-4" />
-                        </Link>
-                    </div>
-                </div>
-            </section>
+                        </Button>
+                    </Box>
+                </Box>
+            </Paper>
 
             {/* Critical Alerts */}
             {(criticalAlerts.length > 0 || warningAlerts.length > 0) && (
-                <section className="space-y-3">
-                    <h2 className="text-lg font-semibold text-gray-900">Active Alerts</h2>
-                    <div className="grid gap-3">
+                <Box sx={{ mb: 4 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Active Alerts
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {criticalAlerts.map((alert) => (
-                            <div key={alert.id} className="rounded-lg border border-red-200 bg-red-50 p-4">
-                                <div className="flex gap-3">
-                                    <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-600 mt-0.5" />
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-red-900">{alert.title}</h3>
-                                        <p className="text-sm text-red-800 mt-1">{alert.description}</p>
-                                        {alert.action && (
-                                            <Link
-                                                to={alert.action.to}
-                                                className="inline-block mt-2 text-sm font-medium text-red-600 hover:text-red-700"
-                                            >
-                                                {alert.action.label} →
-                                            </Link>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            <Alert
+                                key={alert.id}
+                                severity="error"
+                                action={alert.action && (
+                                    <Button
+                                        component={Link}
+                                        to={alert.action.to}
+                                        size="small"
+                                        color="inherit"
+                                    >
+                                        {alert.action.label}
+                                    </Button>
+                                )}
+                            >
+                                <AlertTitle>{alert.title}</AlertTitle>
+                                {alert.description}
+                            </Alert>
                         ))}
                         {warningAlerts.map((alert) => (
-                            <div key={alert.id} className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                                <div className="flex gap-3">
-                                    <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600 mt-0.5" />
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-amber-900">{alert.title}</h3>
-                                        <p className="text-sm text-amber-800 mt-1">{alert.description}</p>
-                                        {alert.action && (
-                                            <Link
-                                                to={alert.action.to}
-                                                className="inline-block mt-2 text-sm font-medium text-amber-600 hover:text-amber-700"
-                                            >
-                                                {alert.action.label} →
-                                            </Link>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            <Alert
+                                key={alert.id}
+                                severity="warning"
+                                action={alert.action && (
+                                    <Button
+                                        component={Link}
+                                        to={alert.action.to}
+                                        size="small"
+                                        color="inherit"
+                                    >
+                                        {alert.action.label}
+                                    </Button>
+                                )}
+                            >
+                                <AlertTitle>{alert.title}</AlertTitle>
+                                {alert.description}
+                            </Alert>
                         ))}
-                    </div>
-                </section>
+                    </Box>
+                </Box>
             )}
 
             {/* Live KPI Cards */}
-            <section>
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Key Metrics (Last 30 Days)</h2>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                    Key Metrics (Last 30 Days)
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {summary.kpis.map((kpi) => {
-                        const Icon = kpi.trend === "up" ? TrendingUp : kpi.trend === "down" ? TrendingUp : CheckCircle;
+                        const trendColor = kpi.trend === "up" ? "success" : kpi.trend === "down" ? "error" : "default";
+                        const Icon = kpi.trend === "up" ? TrendingUpIcon : kpi.trend === "down" ? TrendingUpIcon : CheckCircleIcon;
+                        const formattedValue = kpi.unit === "currency" ? formatCurrency(kpi.value) : formatNumber(kpi.value);
+
                         return (
-                            <div key={kpi.id} className="rounded-lg border bg-white p-6">
-                                <div className="flex items-start justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-600">{kpi.label}</p>
-                                        <p className="mt-2 text-2xl font-bold text-gray-900">
-                                            {kpi.unit === "currency" ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
-                                        </p>
-                                    </div>
-                                    <div className={`flex-shrink-0 ${kpi.trend === "up" ? "text-green-600" : "text-red-600"}`}>
-                                        <Icon className={`h-5 w-5 ${kpi.trend === "down" ? "rotate-180" : ""}`} />
-                                    </div>
-                                </div>
-                                <div className="mt-4 flex items-center gap-2">
-                                    <span className={`text-sm font-medium ${kpi.trend === "up" ? "text-green-600" : "text-red-600"}`}>
-                                        {kpi.change > 0 ? "+" : ""}{kpi.change.toFixed(1)}%
-                                    </span>
-                                    <span className="text-xs text-gray-600">vs previous period</span>
-                                </div>
-                            </div>
+                            <Card key={kpi.id} sx={{ flex: '1 1 250px', minWidth: 200 }}>
+                                <CardContent>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                        <Icon sx={{ color: `${trendColor}.main`, mr: 1 }} />
+                                        <Typography variant="overline" sx={{ color: `${trendColor}.main` }}>
+                                            {kpi.trend === "up" ? "↑" : kpi.trend === "down" ? "↓" : "→"}
+                                        </Typography>
+                                    </Box>
+                                    <Typography variant="h4" gutterBottom>
+                                        {formattedValue}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {kpi.label}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
                         );
                     })}
-                </div>
-            </section>
+                </Box>
+            </Box>
 
-            {/* Business Summary */}
-            <section className="grid gap-6 lg:grid-cols-3">
-                <div className="rounded-lg border bg-white p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <Users className="h-5 w-5 text-blue-600" />
-                        Bookings
-                    </h3>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Total</span>
-                            <span className="font-semibold text-gray-900">{formatNumber(summary.bookings.total)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Confirmed</span>
-                            <span className="font-semibold text-green-600">{formatNumber(summary.bookings.confirmed)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Disputes</span>
-                            <span className="font-semibold text-amber-600">{formatNumber(summary.bookings.disputes)}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="rounded-lg border bg-white p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-green-600" />
-                        Revenue
-                    </h3>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Gross</span>
-                            <span className="font-semibold text-gray-900">{formatCurrency(summary.revenue.gross)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Net</span>
-                            <span className="font-semibold text-green-600">{formatCurrency(summary.revenue.net)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Take Rate</span>
-                            <span className="font-semibold text-gray-900">{summary.revenue.takeRate.toFixed(1)}%</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="rounded-lg border bg-white p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <ShieldCheck className="h-5 w-5 text-indigo-600" />
-                        Operations
-                    </h3>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Open Disputes</span>
-                            <span className="font-semibold text-amber-600">{summary.operations.openDisputes}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Moderation Queue</span>
-                            <span className="font-semibold text-gray-900">{summary.operations.moderationBacklog}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-700">Fraud Signals</span>
-                            <span className="font-semibold text-red-600">{summary.operations.fraudSignals}</span>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* Quick Navigation */}
-            <section className="rounded-lg border bg-white p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Navigation</h2>
-                <p className="text-sm text-gray-600 mb-6">Jump into high-signal workflows.</p>
-                <div className="grid gap-3 md:grid-cols-2">
+            {/* Quick Actions */}
+            <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                    Quick Actions
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {quickLinks.map((link) => (
-                        <Link
+                        <Card
                             key={link.href}
+                            sx={{
+                                flex: '1 1 280px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: 3
+                                }
+                            }}
+                            component={Link}
                             to={link.href}
-                            className="flex items-center justify-between rounded-lg border p-4 transition hover:border-blue-300 hover:bg-blue-50"
                         >
-                            <div>
-                                <p className="font-medium text-gray-900">{link.label}</p>
-                                <p className="text-sm text-gray-600">{link.description}</p>
-                            </div>
-                            <ArrowRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                        </Link>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                    <Box sx={{
+                                        p: 1,
+                                        borderRadius: 1,
+                                        bgcolor: 'primary.100',
+                                        color: 'primary.main',
+                                        mr: 2
+                                    }}>
+                                        {link.icon}
+                                    </Box>
+                                    <Typography variant="h6">
+                                        {link.label}
+                                    </Typography>
+                                </Box>
+                                <Typography variant="body2" color="text.secondary">
+                                    {link.description}
+                                </Typography>
+                            </CardContent>
+                        </Card>
                     ))}
-                </div>
-            </section>
-
-            {/* Daily Checklist */}
-            <section className="rounded-lg border bg-white p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <ShieldCheck className="h-5 w-5 text-indigo-600" />
-                    Daily Operational Checklist
-                </h2>
-                <p className="text-sm text-gray-600 mb-6">Daily touchpoints to keep the marketplace trustworthy.</p>
-                <ul className="space-y-3">
-                    <li className="flex items-start gap-3">
-                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700">Review new listings awaiting moderation ({summary.operations.moderationBacklog} pending)</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700">Check disputes & escalations for quick resolutions ({summary.operations.openDisputes} open)</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700">Monitor payouts and refund queues ({formatCurrency(summary.revenue.payoutVolume)} pending)</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700">Review fraud signals and suspicious activity ({summary.operations.fraudSignals} detected)</span>
-                    </li>
-                </ul>
-            </section>
-        </div>
+                </Box>
+            </Box>
+        </Box>
     );
 }

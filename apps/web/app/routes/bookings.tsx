@@ -15,6 +15,9 @@ import {
 import { bookingsApi } from "~/lib/api/bookings";
 import type { Booking } from "~/types/booking";
 import { format } from "date-fns";
+import { cn } from "~/lib/utils";
+import { Button, Badge } from "~/components/ui";
+import { Card, CardContent } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
     return [
@@ -40,13 +43,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 }
 
-const STATUS_COLORS = {
-    pending: "bg-yellow-100 text-yellow-800",
-    confirmed: "bg-blue-100 text-blue-800",
-    active: "bg-green-100 text-green-800",
-    completed: "bg-gray-100 text-gray-800",
-    cancelled: "bg-red-100 text-red-800",
-    disputed: "bg-orange-100 text-orange-800",
+const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive" | "success" | "warning"> = {
+    pending: "warning",
+    confirmed: "default",
+    active: "success",
+    completed: "secondary",
+    cancelled: "destructive",
+    disputed: "destructive",
 };
 
 const STATUS_ICONS = {
@@ -118,17 +121,17 @@ export default function BookingsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-background">
             {/* Header */}
-            <header className="bg-white shadow-sm border-b">
+            <header className="bg-card border-b">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex items-center justify-between">
-                        <Link to="/" className="text-xl font-bold text-primary-600">
+                        <Link to="/" className="text-xl font-bold text-primary">
                             Rental Portal
                         </Link>
                         <Link
                             to="/dashboard"
-                            className="text-sm text-gray-700 hover:text-gray-900"
+                            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                         >
                             Dashboard
                         </Link>
@@ -139,22 +142,26 @@ export default function BookingsPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* View Toggle */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 bg-white rounded-lg border p-1">
+                    <div className="flex items-center gap-2 bg-card rounded-lg border p-1">
                         <button
                             onClick={() => handleViewChange("renter")}
-                            className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${view === "renter"
-                                ? "bg-primary-600 text-white"
-                                : "text-gray-600 hover:bg-gray-100"
-                                }`}
+                            className={cn(
+                                "flex-1 px-4 py-2 rounded-md font-medium transition-colors",
+                                view === "renter"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-muted-foreground hover:bg-muted"
+                            )}
                         >
                             My Rentals
                         </button>
                         <button
                             onClick={() => handleViewChange("owner")}
-                            className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${view === "owner"
-                                ? "bg-primary-600 text-white"
-                                : "text-gray-600 hover:bg-gray-100"
-                                }`}
+                            className={cn(
+                                "flex-1 px-4 py-2 rounded-md font-medium transition-colors",
+                                view === "owner"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-muted-foreground hover:bg-muted"
+                            )}
                         >
                             My Listings
                         </button>
@@ -166,10 +173,12 @@ export default function BookingsPage() {
                     <div className="flex items-center gap-2 overflow-x-auto pb-2">
                         <button
                             onClick={() => handleStatusFilter("")}
-                            className={`px-4 py-2 rounded-lg whitespace-nowrap ${!status
-                                ? "bg-primary-600 text-white"
-                                : "bg-white text-gray-700 border hover:bg-gray-50"
-                                }`}
+                            className={cn(
+                                "px-4 py-2 rounded-lg whitespace-nowrap transition-colors",
+                                !status
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-card text-foreground border hover:bg-muted"
+                            )}
                         >
                             All
                         </button>
@@ -178,10 +187,12 @@ export default function BookingsPage() {
                                 <button
                                     key={s}
                                     onClick={() => handleStatusFilter(s)}
-                                    className={`px-4 py-2 rounded-lg capitalize whitespace-nowrap ${status === s
-                                        ? "bg-primary-600 text-white"
-                                        : "bg-white text-gray-700 border hover:bg-gray-50"
-                                        }`}
+                                    className={cn(
+                                        "px-4 py-2 rounded-lg capitalize whitespace-nowrap transition-colors",
+                                        status === s
+                                            ? "bg-primary text-primary-foreground"
+                                            : "bg-card text-foreground border hover:bg-muted"
+                                    )}
                                 >
                                     {s}
                                 </button>
@@ -192,23 +203,24 @@ export default function BookingsPage() {
 
                 {/* Bookings List */}
                 {bookings.length === 0 ? (
-                    <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
-                        <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    <Card className="p-12 text-center">
+                        <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-foreground mb-2">
                             No bookings found
                         </h3>
-                        <p className="text-gray-600 mb-4">
+                        <p className="text-muted-foreground mb-4">
                             {view === "renter"
                                 ? "Start browsing and book your first rental"
                                 : "Your listings don't have any bookings yet"}
                         </p>
                         <Link
                             to={view === "renter" ? "/search" : "/listings/new"}
-                            className="inline-block px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
                         >
-                            {view === "renter" ? "Browse Rentals" : "Create Listing"}
+                            <Button>
+                                {view === "renter" ? "Browse Rentals" : "Create Listing"}
+                            </Button>
                         </Link>
-                    </div>
+                    </Card>
                 ) : (
                     <div className="space-y-4">
                         {bookings.map((booking) => {
@@ -217,26 +229,20 @@ export default function BookingsPage() {
                             const otherUser = isRenter ? booking.owner : booking.renter;
 
                             return (
-                                <div
-                                    key={booking.id}
-                                    className="bg-white rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-shadow"
-                                >
-                                    <div className="p-6">
+                                <Card key={booking.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                                    <CardContent className="p-6">
                                         <div className="flex items-start justify-between mb-4">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-3 mb-2">
-                                                    <h3 className="text-lg font-semibold text-gray-900">
+                                                    <h3 className="text-lg font-semibold text-foreground">
                                                         {booking.listing.title}
                                                     </h3>
-                                                    <span
-                                                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[booking.status]
-                                                            }`}
-                                                    >
-                                                        <StatusIcon className="w-4 h-4" />
+                                                    <Badge variant={STATUS_VARIANTS[booking.status]} className="inline-flex items-center gap-1">
+                                                        <StatusIcon className="w-3 h-3" />
                                                         {booking.status}
-                                                    </span>
+                                                    </Badge>
                                                 </div>
-                                                <div className="flex items-center gap-4 text-sm text-gray-600">
+                                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
                                                     <span className="flex items-center gap-1">
                                                         <Calendar className="w-4 h-4" />
                                                         {formatDate(booking.startDate)} -{" "}
@@ -256,7 +262,7 @@ export default function BookingsPage() {
                                             {/* Listing Image */}
                                             <Link
                                                 to={`/listings/${booking.listingId}`}
-                                                className="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden shrink-0"
+                                                className="w-24 h-24 bg-muted rounded-lg overflow-hidden shrink-0"
                                             >
                                                 {booking.listing.images[0] ? (
                                                     <img
@@ -266,15 +272,15 @@ export default function BookingsPage() {
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">
-                                                        <Package className="w-8 h-8 text-gray-400" />
+                                                        <Package className="w-8 h-8 text-muted-foreground" />
                                                     </div>
                                                 )}
                                             </Link>
                                         </div>
 
                                         {/* Other User Info */}
-                                        <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
-                                            <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                                        <div className="flex items-center gap-3 mb-4 p-3 bg-muted rounded-lg">
+                                            <div className="w-10 h-10 bg-muted-foreground/20 rounded-full flex items-center justify-center">
                                                 {otherUser.avatar ? (
                                                     <img
                                                         src={otherUser.avatar}
@@ -282,18 +288,18 @@ export default function BookingsPage() {
                                                         className="w-full h-full rounded-full object-cover"
                                                     />
                                                 ) : (
-                                                    <span className="text-lg font-bold text-gray-600">
+                                                    <span className="text-lg font-bold text-muted-foreground">
                                                         {otherUser.firstName[0]}
                                                     </span>
                                                 )}
                                             </div>
                                             <div>
-                                                <div className="text-sm font-medium text-gray-900">
+                                                <div className="text-sm font-medium text-foreground">
                                                     {isRenter ? "Owner" : "Renter"}:{" "}
                                                     {otherUser.firstName} {otherUser.lastName}
                                                 </div>
                                                 {otherUser.rating && (
-                                                    <div className="text-sm text-gray-600">
+                                                    <div className="text-sm text-muted-foreground">
                                                         ⭐ {otherUser.rating.toFixed(1)}
                                                     </div>
                                                 )}
@@ -303,18 +309,20 @@ export default function BookingsPage() {
                                         {/* Delivery Info */}
                                         <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
                                             <div>
-                                                <span className="text-gray-600">Delivery Method:</span>
-                                                <span className="ml-2 font-medium capitalize">
+                                                <span className="text-muted-foreground">Delivery Method:</span>
+                                                <span className="ml-2 font-medium capitalize text-foreground">
                                                     {booking.deliveryMethod}
                                                 </span>
                                             </div>
                                             <div>
-                                                <span className="text-gray-600">Payment Status:</span>
+                                                <span className="text-muted-foreground">Payment Status:</span>
                                                 <span
-                                                    className={`ml-2 font-medium capitalize ${booking.paymentStatus === "paid"
-                                                        ? "text-green-600"
-                                                        : "text-yellow-600"
-                                                        }`}
+                                                    className={cn(
+                                                        "ml-2 font-medium capitalize",
+                                                        booking.paymentStatus === "paid"
+                                                            ? "text-success"
+                                                            : "text-warning"
+                                                    )}
                                                 >
                                                     {booking.paymentStatus}
                                                 </span>
@@ -322,69 +330,70 @@ export default function BookingsPage() {
                                         </div>
 
                                         {/* Action Buttons */}
-                                        <div className="flex items-center gap-3 pt-4 border-t">
-                                            <Link
-                                                to={`/messages?booking=${booking.id}`}
-                                                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                                            >
-                                                <MessageSquare className="w-4 h-4" />
-                                                Message
+                                        <div className="flex items-center gap-3 pt-4 border-t border-border">
+                                            <Link to={`/messages?booking=${booking.id}`}>
+                                                <Button variant="outline" className="flex items-center gap-2">
+                                                    <MessageSquare className="w-4 h-4" />
+                                                    Message
+                                                </Button>
                                             </Link>
 
                                             {isRenter && booking.status === "pending" && (
-                                                <button
+                                                <Button
+                                                    variant="destructive"
                                                     onClick={() => {
                                                         setSelectedBooking(booking);
                                                         setShowCancelModal(true);
                                                     }}
-                                                    className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
+                                                    className="flex items-center gap-2"
                                                 >
                                                     <X className="w-4 h-4" />
                                                     Cancel
-                                                </button>
+                                                </Button>
                                             )}
 
                                             {!isRenter && booking.status === "pending" && (
                                                 <>
-                                                    <button
+                                                    <Button
                                                         onClick={() => handleConfirmBooking(booking.id)}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                                        className="flex items-center gap-2 bg-success hover:bg-success/90 text-success-foreground"
                                                     >
                                                         <CheckCircle className="w-4 h-4" />
                                                         Confirm
-                                                    </button>
-                                                    <button
+                                                    </Button>
+                                                    <Button
+                                                        variant="destructive"
                                                         onClick={() => {
                                                             setSelectedBooking(booking);
                                                             setShowCancelModal(true);
                                                         }}
-                                                        className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
+                                                        className="flex items-center gap-2"
                                                     >
                                                         <X className="w-4 h-4" />
                                                         Decline
-                                                    </button>
+                                                    </Button>
                                                 </>
                                             )}
 
                                             {booking.status === "active" && (
-                                                <button
+                                                <Button
                                                     onClick={() => handleCompleteBooking(booking.id)}
-                                                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                                                    className="flex items-center gap-2"
                                                 >
                                                     <CheckCircle className="w-4 h-4" />
                                                     Mark as Completed
-                                                </button>
+                                                </Button>
                                             )}
 
                                             <Link
                                                 to={`/bookings/${booking.id}`}
-                                                className="ml-auto text-primary-600 hover:text-primary-700 font-medium"
+                                                className="ml-auto text-primary hover:text-primary/90 font-medium transition-colors"
                                             >
                                                 View Details
                                             </Link>
                                         </div>
-                                    </div>
-                                </div>
+                                    </CardContent>
+                                </Card>
                             );
                         })}
                     </div>
@@ -394,45 +403,49 @@ export default function BookingsPage() {
             {/* Cancel Modal */}
             {showCancelModal && selectedBooking && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-md w-full p-6">
-                        <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                            Cancel Booking
-                        </h3>
-                        <p className="text-gray-600 mb-4">
-                            Are you sure you want to cancel this booking? This action cannot
-                            be undone.
-                        </p>
-                        <div className="mb-6">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Reason for cancellation
-                            </label>
-                            <textarea
-                                value={cancelReason}
-                                onChange={(e) => setCancelReason(e.target.value)}
-                                rows={4}
-                                placeholder="Please provide a reason..."
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                            />
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => {
-                                    setShowCancelModal(false);
-                                    setCancelReason("");
-                                }}
-                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                            >
-                                Keep Booking
-                            </button>
-                            <button
-                                onClick={handleCancelBooking}
-                                disabled={!cancelReason}
-                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
+                    <Card className="max-w-md w-full">
+                        <CardContent className="p-6">
+                            <h3 className="text-xl font-semibold text-foreground mb-4">
                                 Cancel Booking
-                            </button>
-                        </div>
-                    </div>
+                            </h3>
+                            <p className="text-muted-foreground mb-4">
+                                Are you sure you want to cancel this booking? This action cannot
+                                be undone.
+                            </p>
+                            <div className="mb-6">
+                                <label className="block text-sm font-medium text-foreground mb-2">
+                                    Reason for cancellation
+                                </label>
+                                <textarea
+                                    value={cancelReason}
+                                    onChange={(e) => setCancelReason(e.target.value)}
+                                    rows={4}
+                                    placeholder="Please provide a reason..."
+                                    className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                                />
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowCancelModal(false);
+                                        setCancelReason("");
+                                    }}
+                                    className="flex-1"
+                                >
+                                    Keep Booking
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    onClick={handleCancelBooking}
+                                    disabled={!cancelReason}
+                                    className="flex-1"
+                                >
+                                    Cancel Booking
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
         </div>

@@ -32,16 +32,26 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
 
-  --animate-fade-in: fadeIn 0.5s ease-in-out;
-  --animate-slide-up: slideUp 0.5s ease-out;
+  --animate-fade-in: fade-in 0.5s ease-in-out;
+  --animate-slide-up: slide-up 0.5s ease-out;
 
-  @keyframes fadeIn {
-    0% { opacity: 0; }
-    100% { opacity: 1; }
+  @keyframes fade-in {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
   }
-  @keyframes slideUp {
-    0% { transform: translateY(10px); opacity: 0; }
-    100% { transform: translateY(0); opacity: 1; }
+  @keyframes slide-up {
+    0% {
+      transform: translateY(10px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 }
 
@@ -57,79 +67,113 @@
 }
 
 /*
-  Refined "Modern, Elegant, Calm" Color Palette
-  Based on Slate/Zinc with a sophisticated Blue/Indigo Primary
+  Unified Design System Color Palette
+  Based on Slate with a consistent Blue Primary
+  Ensures WCAG AA compliance for contrast ratios
 */
 @layer base {
   :root {
-    --background: 0 0% 98%; /* Slightly off-white for warmth/calm */
-    --foreground: 222 47% 11%; /* Deep slate for text, softer than black */
-    
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    
-    --primary: 221 83% 53%; /* Calm but vibrant Blue */
-    --primary-foreground: 210 40% 98%;
-    
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46%;
-    
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    
-    --radius: 0.75rem; /* More rounded for modern feel */
+    /* Background and foreground */
+    --background: 210 40% 98%; /* slate-50 */
+    --foreground: 222 47% 11%; /* slate-900 - ensures 4.5:1+ contrast */
+
+    /* Card and popover surfaces */
+    --card: 0 0% 100%; /* white */
+    --card-foreground: 222 47% 11%; /* slate-900 */
+
+    --popover: 0 0% 100%; /* white */
+    --popover-foreground: 222 47% 11%; /* slate-900 */
+
+    /* Primary action color - Blue 500 */
+    --primary: 217 91% 60%; /* blue-500 */
+    --primary-foreground: 0 0% 100%; /* white - ensures contrast on primary */
+
+    /* Secondary surfaces */
+    --secondary: 210 40% 96%; /* slate-100 */
+    --secondary-foreground: 222 47% 11%; /* slate-900 */
+
+    /* Muted elements */
+    --muted: 210 40% 96%; /* slate-100 */
+    --muted-foreground: 215 16% 47%; /* slate-500 - minimum for WCAG AA on white */
+
+    /* Accent color (same as secondary by default) */
+    --accent: 210 40% 96%; /* slate-100 */
+    --accent-foreground: 222 47% 11%; /* slate-900 */
+
+    /* Destructive/error states */
+    --destructive: 0 84% 60%; /* red-500 */
+    --destructive-foreground: 0 0% 100%; /* white */
+
+    /* Borders and inputs */
+    --border: 214 32% 91%; /* slate-200 */
+    --input: 214 32% 91%; /* slate-200 */
+    --ring: 217 91% 60%; /* blue-500 - focus rings */
+
+    /* Border radius - slightly reduced for cleaner look */
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    /* Dark mode backgrounds */
+    --background: 222 47% 11%; /* slate-900 */
+    --foreground: 210 40% 98%; /* slate-50 */
+
+    --card: 222 47% 11%; /* slate-900 */
+    --card-foreground: 210 40% 98%; /* slate-50 */
+
+    --popover: 222 47% 11%; /* slate-900 */
+    --popover-foreground: 210 40% 98%; /* slate-50 */
+
+    /* Primary stays consistent */
+    --primary: 217 91% 60%; /* blue-500 */
+    --primary-foreground: 222 47% 11%; /* slate-900 */
+
+    /* Dark mode secondary */
+    --secondary: 217 33% 17%; /* slate-800 */
+    --secondary-foreground: 210 40% 98%; /* slate-50 */
+
+    --muted: 217 33% 17%; /* slate-800 */
+    --muted-foreground: 215 20% 65%; /* slate-400 */
+
+    --accent: 217 33% 17%; /* slate-800 */
+    --accent-foreground: 210 40% 98%; /* slate-50 */
+
+    --destructive: 0 62% 30%; /* red-900 */
+    --destructive-foreground: 210 40% 98%; /* slate-50 */
+
+    --border: 217 33% 17%; /* slate-800 */
+    --input: 217 33% 17%; /* slate-800 */
+    --ring: 224 76% 48%; /* blue-600 */
   }
 }
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Ensure proper focus visibility for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

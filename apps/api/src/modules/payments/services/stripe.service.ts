@@ -289,11 +289,16 @@ export class StripeService {
 
   async handleWebhook(signature: string, payload: Buffer): Promise<any> {
     const webhookSecret = this.config.get<string>('STRIPE_WEBHOOK_SECRET');
-    if (!webhookSecret) return null; // Handle missing secret gracefully or throw
+    if (!webhookSecret) {
+      throw new BadRequestException('Stripe webhook secret is not configured');
+    }
 
-    const event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
-
-    return event;
+    try {
+      const event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+      return event;
+    } catch (err) {
+      throw new BadRequestException(`Webhook signature verification failed: ${err.message}`);
+    }
   }
 
   async processWebhookEvent(event: Stripe.Event): Promise<void> {

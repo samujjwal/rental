@@ -507,4 +507,31 @@ export class AdminController {
   ) {
     return this.adminService.updateRefundStatus(adminId, id, status);
   }
+  // ==================== SCHEMA ENDPOINTS FOR DYNAMIC ADMIN UI ====================
+
+  @Get('schema/:entity')
+  @ApiOperation({ summary: 'Get entity schema for dynamic admin UI' })
+  async getEntitySchema(@CurrentUser('id') adminId: string, @Param('entity') entity: string) {
+    return this.adminService.getEntitySchema(adminId, entity);
+  }
+
+  @Get(':entity')
+  @ApiOperation({ summary: 'Get entity data with pagination, filtering, and sorting' })
+  async getEntityData(
+    @CurrentUser('id') adminId: string,
+    @Param('entity') entity: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+  ) {
+    return this.adminService.getEntityData(adminId, entity, {
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+      search,
+      sortBy,
+      sortOrder,
+    });
+  }
 }

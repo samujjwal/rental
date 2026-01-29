@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
-import { ElasticsearchModule } from '@nestjs/elasticsearch';
 
 // Common modules
 import { PrismaModule } from './common/prisma/prisma.module';
@@ -26,6 +25,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { DevModule } from './modules/admin/dev.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { InsuranceModule } from './modules/insurance/insurance.module';
 
@@ -62,18 +62,7 @@ import configuration from './config/configuration';
       }),
     }),
 
-    // Elasticsearch - temporarily disabled
-    // ElasticsearchModule.registerAsync({
-    //   useFactory: () => ({
-    //     node: process.env.ELASTICSEARCH_NODE || 'http://localhost:3492',
-    //     auth: process.env.ELASTICSEARCH_USERNAME
-    //       ? {
-    //           username: process.env.ELASTICSEARCH_USERNAME,
-    //           password: process.env.ELASTICSEARCH_PASSWORD || '',
-    //         }
-    //       : undefined,
-    //   }),
-    // }),
+    // Elasticsearch removed - now using PostgreSQL search
 
     // Common modules
     PrismaModule,
@@ -90,12 +79,13 @@ import configuration from './config/configuration';
     ListingsModule,
     BookingsModule,
     PaymentsModule,
-    // SearchModule, // TODO: Re-enable when Elasticsearch is properly configured
+    SearchModule, // Re-enabled with PostgreSQL search
     MessagingModule,
     ReviewsModule,
     DisputesModule,
     NotificationsModule,
     AdminModule,
+    DevModule,
     ModerationModule,
     InsuranceModule,
   ],

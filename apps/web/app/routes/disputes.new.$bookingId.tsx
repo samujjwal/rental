@@ -2,6 +2,7 @@ import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react
 import { Form, useLoaderData, useActionData, useNavigate, Link } from "react-router";
 import { useState } from "react";
 import { ArrowLeft, AlertCircle, Upload, X, FileText, Image as ImageIcon } from "lucide-react";
+import { cn } from '~/lib/utils';
 import { disputesApi } from "~/lib/api/disputes";
 import { bookingsApi } from "~/lib/api/bookings";
 import { redirect } from "react-router";
@@ -78,44 +79,44 @@ export default function DisputeNewRoute() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 py-8">
+        <div className="min-h-screen bg-background py-8">
             <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Header */}
                 <div className="mb-6">
                     <button
                         onClick={() => navigate(-1)}
-                        className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+                        className="flex items-center text-muted-foreground hover:text-foreground mb-4"
                     >
                         <ArrowLeft className="w-5 h-5 mr-2" />
                         Back to Booking
                     </button>
-                    <h1 className="text-3xl font-bold text-gray-900">File a Dispute</h1>
-                    <p className="mt-2 text-gray-600">
+                    <h1 className="text-3xl font-bold text-foreground">File a Dispute</h1>
+                    <p className="mt-2 text-muted-foreground">
                         Describe the issue with your booking. We'll review your dispute and work to resolve it fairly.
                     </p>
                 </div>
 
                 {/* Booking Summary */}
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Booking Details</h2>
+                <div className="bg-card rounded-lg shadow-sm p-6 mb-6">
+                    <h2 className="text-lg font-semibold text-foreground mb-4">Booking Details</h2>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <p className="text-sm text-gray-500">Listing</p>
-                            <p className="text-sm font-medium text-gray-900">{booking.listing?.title || 'N/A'}</p>
+                            <p className="text-sm text-muted-foreground">Listing</p>
+                            <p className="text-sm font-medium text-foreground">{booking.listing?.title || 'N/A'}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Booking ID</p>
-                            <p className="text-sm font-medium text-gray-900">{booking.id}</p>
+                            <p className="text-sm text-muted-foreground">Booking ID</p>
+                            <p className="text-sm font-medium text-foreground">{booking.id}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Total Amount</p>
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-sm text-muted-foreground">Total Amount</p>
+                            <p className="text-sm font-medium text-foreground">
                                 ${booking.totalPrice?.toFixed(2) || '0.00'}
                             </p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Status</p>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <p className="text-sm text-muted-foreground">Status</p>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
                                 {booking.status}
                             </span>
                         </div>
@@ -124,33 +125,34 @@ export default function DisputeNewRoute() {
 
                 {/* Error Alert */}
                 {actionData?.error && (
-                    <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
+                    <div className="mb-6 bg-destructive/10 border-l-4 border-destructive p-4">
                         <div className="flex">
-                            <AlertCircle className="h-5 w-5 text-red-400" />
+                            <AlertCircle className="h-5 w-5 text-destructive" />
                             <div className="ml-3">
-                                <p className="text-sm text-red-700">{actionData.error}</p>
+                                <p className="text-sm text-destructive">{actionData.error}</p>
                             </div>
                         </div>
                     </div>
                 )}
 
                 {/* Dispute Form */}
-                <Form method="post" className="bg-white rounded-lg shadow-sm p-6">
+                <Form method="post" className="bg-card rounded-lg shadow-sm p-6">
                     <div className="space-y-6">
                         {/* Dispute Type */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-3">
+                            <label className="block text-sm font-medium text-foreground mb-3">
                                 What is the issue? *
                             </label>
                             <div className="space-y-3">
                                 {DISPUTE_TYPES.map((type) => (
                                     <label
                                         key={type.value}
-                                        className={`flex items-start p-4 border rounded-lg cursor-pointer transition-all ${
+                                        className={cn(
+                                            "flex items-start p-4 border rounded-lg cursor-pointer transition-all",
                                             selectedType === type.value
-                                                ? "border-blue-500 bg-blue-50"
-                                                : "border-gray-200 hover:border-gray-300"
-                                        }`}
+                                                ? "border-primary bg-primary/5"
+                                                : "border-input hover:border-border"
+                                        )}
                                     >
                                         <input
                                             type="radio"
@@ -158,12 +160,12 @@ export default function DisputeNewRoute() {
                                             value={type.value}
                                             checked={selectedType === type.value}
                                             onChange={(e) => setSelectedType(e.target.value)}
-                                            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500"
+                                            className="mt-1 h-4 w-4 text-primary focus:ring-ring"
                                             required
                                         />
                                         <div className="ml-3">
-                                            <p className="text-sm font-medium text-gray-900">{type.label}</p>
-                                            <p className="text-sm text-gray-500">{type.description}</p>
+                                            <p className="text-sm font-medium text-foreground">{type.label}</p>
+                                            <p className="text-sm text-muted-foreground">{type.description}</p>
                                         </div>
                                     </label>
                                 ))}
@@ -172,7 +174,7 @@ export default function DisputeNewRoute() {
 
                         {/* Description */}
                         <div>
-                            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="description" className="block text-sm font-medium text-foreground mb-2">
                                 Describe the issue *
                             </label>
                             <textarea
@@ -182,22 +184,22 @@ export default function DisputeNewRoute() {
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Please provide as much detail as possible about what went wrong..."
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-primary"
                                 required
                             />
-                            <p className="mt-2 text-sm text-gray-500">
+                            <p className="mt-2 text-sm text-muted-foreground">
                                 Include specific details like dates, times, condition of item, communications with the other party, etc.
                             </p>
                         </div>
 
                         {/* Requested Amount */}
                         <div>
-                            <label htmlFor="requestedAmount" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="requestedAmount" className="block text-sm font-medium text-foreground mb-2">
                                 Refund Amount Requested (Optional)
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span className="text-gray-500 sm:text-sm">$</span>
+                                    <span className="text-muted-foreground sm:text-sm">$</span>
                                 </div>
                                 <input
                                     type="number"
@@ -209,20 +211,20 @@ export default function DisputeNewRoute() {
                                     value={requestedAmount}
                                     onChange={(e) => setRequestedAmount(e.target.value)}
                                     placeholder="0.00"
-                                    className="w-full pl-7 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full pl-7 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-primary"
                                 />
                             </div>
-                            <p className="mt-2 text-sm text-gray-500">
+                            <p className="mt-2 text-sm text-muted-foreground">
                                 Maximum: ${booking.totalPrice?.toFixed(2) || '0.00'}
                             </p>
                         </div>
 
                         {/* Evidence Upload */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-foreground mb-2">
                                 Supporting Evidence (Optional)
                             </label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                            <div className="border-2 border-dashed border-input rounded-lg p-6 text-center">
                                 <input
                                     type="file"
                                     id="evidence"
@@ -233,12 +235,12 @@ export default function DisputeNewRoute() {
                                 />
                                 <label
                                     htmlFor="evidence"
-                                    className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                    className="cursor-pointer inline-flex items-center px-4 py-2 border border-input rounded-md shadow-sm text-sm font-medium text-foreground bg-card hover:bg-muted"
                                 >
                                     <Upload className="w-5 h-5 mr-2" />
                                     Upload Files
                                 </label>
-                                <p className="mt-2 text-xs text-gray-500">
+                                <p className="mt-2 text-xs text-muted-foreground">
                                     Photos, documents, or screenshots (Max 10MB per file)
                                 </p>
                             </div>
@@ -249,20 +251,20 @@ export default function DisputeNewRoute() {
                                     {evidence.map((file, index) => (
                                         <div
                                             key={index}
-                                            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                                            className="flex items-center justify-between p-3 bg-muted rounded-lg"
                                         >
                                             <div className="flex items-center">
                                                 {file.type.startsWith('image/') ? (
-                                                    <ImageIcon className="w-5 h-5 text-gray-400 mr-3" />
+                                                    <ImageIcon className="w-5 h-5 text-muted-foreground mr-3" />
                                                 ) : (
-                                                    <FileText className="w-5 h-5 text-gray-400 mr-3" />
+                                                    <FileText className="w-5 h-5 text-muted-foreground mr-3" />
                                                 )}
-                                                <span className="text-sm text-gray-700">{file.name}</span>
+                                                <span className="text-sm text-foreground">{file.name}</span>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => removeFile(index)}
-                                                className="text-red-500 hover:text-red-700"
+                                                className="text-destructive hover:text-destructive/80"
                                             >
                                                 <X className="w-5 h-5" />
                                             </button>
@@ -273,11 +275,11 @@ export default function DisputeNewRoute() {
                         </div>
 
                         {/* Important Note */}
-                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                        <div className="bg-warning/10 border-l-4 border-warning p-4">
                             <div className="flex">
-                                <AlertCircle className="h-5 w-5 text-yellow-400" />
+                                <AlertCircle className="h-5 w-5 text-warning" />
                                 <div className="ml-3">
-                                    <p className="text-sm text-yellow-700">
+                                    <p className="text-sm text-warning-foreground">
                                         <strong>Important:</strong> Disputes are taken seriously. Please only file a dispute if you've attempted to resolve the issue directly with the other party and were unsuccessful.
                                     </p>
                                 </div>
@@ -289,14 +291,14 @@ export default function DisputeNewRoute() {
                             <button
                                 type="button"
                                 onClick={() => navigate(-1)}
-                                className="flex-1 px-6 py-3 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="flex-1 px-6 py-3 border border-input rounded-lg font-medium text-foreground hover:bg-muted transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={!selectedType || !description}
-                                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                                className="flex-1 px-6 py-3 bg-destructive text-destructive-foreground rounded-lg font-medium hover:bg-destructive/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors"
                             >
                                 Submit Dispute
                             </button>
@@ -305,14 +307,14 @@ export default function DisputeNewRoute() {
                 </Form>
 
                 {/* Help Section */}
-                <div className="mt-6 bg-blue-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-blue-900 mb-2">Need Help?</h3>
-                    <p className="text-sm text-blue-700 mb-4">
+                <div className="mt-6 bg-primary/5 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-primary mb-2">Need Help?</h3>
+                    <p className="text-sm text-primary/80 mb-4">
                         Before filing a dispute, try communicating with the other party through messages. Many issues can be resolved quickly through direct communication.
                     </p>
                     <Link
                         to={`/messages?booking=${booking.id}`}
-                        className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                        className="inline-flex items-center text-sm font-medium text-primary hover:text-primary/80"
                     >
                         Go to Messages →
                     </Link>

@@ -8,6 +8,8 @@ import {
     forgotPasswordSchema,
     type ForgotPasswordInput,
 } from "~/lib/validation/auth";
+import { Button } from "~/components/ui";
+import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
     return [
@@ -46,38 +48,45 @@ export default function ForgotPassword() {
         resolver: zodResolver(forgotPasswordSchema),
     });
 
+    const inputClasses = cn(
+        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+        "placeholder:text-muted-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "disabled:cursor-not-allowed disabled:opacity-50"
+    );
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-white px-4">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-background px-4">
             <div className="w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <Link to="/" className="inline-block">
-                        <h1 className="text-3xl font-bold text-primary-600">
+                        <h1 className="text-3xl font-bold text-primary">
                             Rental Portal
                         </h1>
                     </Link>
-                    <p className="text-gray-600 mt-2">
+                    <p className="text-muted-foreground mt-2">
                         Enter your email to reset your password
                     </p>
                 </div>
 
                 {/* Forgot Password Form */}
-                <div className="bg-white rounded-lg shadow-lg p-8">
+                <div className="bg-card border rounded-lg shadow-lg p-8">
                     {actionData?.success ? (
                         <div className="text-center">
-                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Mail className="w-8 h-8 text-green-600" />
+                            <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Mail className="w-8 h-8 text-success" />
                             </div>
-                            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                            <h2 className="text-xl font-semibold text-foreground mb-2">
                                 Check your email
                             </h2>
-                            <p className="text-gray-600 mb-6">
+                            <p className="text-muted-foreground mb-6">
                                 We've sent a password reset link to your email address. Please
                                 check your inbox and follow the instructions.
                             </p>
                             <Link
                                 to="/auth/login"
-                                className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 font-medium"
+                                className="inline-flex items-center gap-2 text-primary hover:text-primary/90 font-medium underline-offset-4 hover:underline"
                             >
                                 <ArrowLeft className="w-4 h-4" />
                                 Back to login
@@ -87,16 +96,16 @@ export default function ForgotPassword() {
                         <Form method="post" onSubmit={handleSubmit(() => { })}>
                             {/* Error Message */}
                             {actionData?.error && (
-                                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                                    <p className="text-sm text-red-600">{actionData.error}</p>
+                                <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                                    <p className="text-sm text-destructive">{actionData.error}</p>
                                 </div>
                             )}
 
                             {/* Email Field */}
-                            <div className="mb-6">
+                            <div className="space-y-2 mb-6">
                                 <label
                                     htmlFor="email"
-                                    className="block text-sm font-medium text-gray-700 mb-2"
+                                    className="text-sm font-medium leading-none"
                                 >
                                     Email Address
                                 </label>
@@ -105,40 +114,40 @@ export default function ForgotPassword() {
                                     type="email"
                                     id="email"
                                     name="email"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                    className={inputClasses}
                                     placeholder="you@example.com"
                                 />
                                 {errors.email && (
-                                    <p className="mt-1 text-sm text-red-600">
+                                    <p className="text-sm text-destructive">
                                         {errors.email.message}
                                     </p>
                                 )}
                             </div>
 
                             {/* Submit Button */}
-                            <button
+                            <Button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+                                className="w-full"
                             >
                                 {isSubmitting ? (
                                     <>
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
                                         Sending...
                                     </>
                                 ) : (
                                     <>
-                                        <Mail className="w-5 h-5" />
+                                        <Mail className="w-4 h-4 mr-2" />
                                         Send Reset Link
                                     </>
                                 )}
-                            </button>
+                            </Button>
 
                             {/* Back to Login */}
                             <div className="mt-6 text-center">
                                 <Link
                                     to="/auth/login"
-                                    className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+                                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
                                 >
                                     <ArrowLeft className="w-4 h-4" />
                                     Back to login

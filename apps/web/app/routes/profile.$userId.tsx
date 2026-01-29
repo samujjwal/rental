@@ -15,6 +15,7 @@ import {
   Award,
   TrendingUp,
 } from 'lucide-react';
+import { cn } from '~/lib/utils';
 import { usersApi } from '~/lib/api/users';
 import { listingsApi } from '~/lib/api/listings';
 import { reviewsApi } from '~/lib/api/reviews';
@@ -48,8 +49,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       : 0;
     const totalReviews = reviews.length;
 
-    return { 
-      user, 
+    return {
+      user,
       listings,
       reviews,
       stats: {
@@ -65,26 +66,35 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 }
 
-function StatCard({ 
-  icon: Icon, 
-  label, 
-  value, 
-  color = 'indigo' 
-}: { 
-  icon: any; 
-  label: string; 
-  value: string | number; 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color = 'primary'
+}: {
+  icon: any;
+  label: string;
+  value: string | number;
   color?: string;
 }) {
+  const colorClasses: Record<string, { bg: string; text: string }> = {
+    primary: { bg: 'bg-primary/10', text: 'text-primary' },
+    yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600' },
+    green: { bg: 'bg-success/10', text: 'text-success' },
+    blue: { bg: 'bg-blue-100', text: 'text-blue-600' },
+  };
+
+  const colors = colorClasses[color] || colorClasses.primary;
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-card rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-600 mb-1">{label}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-sm text-muted-foreground mb-1">{label}</p>
+          <p className="text-2xl font-bold text-foreground">{value}</p>
         </div>
-        <div className={`p-3 rounded-full bg-${color}-100`}>
-          <Icon className={`w-6 h-6 text-${color}-600`} />
+        <div className={cn("p-3 rounded-full", colors.bg)}>
+          <Icon className={cn("w-6 h-6", colors.text)} />
         </div>
       </div>
     </div>
@@ -93,29 +103,29 @@ function StatCard({
 
 function ReviewCard({ review }: { review: Review }) {
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-card rounded-lg shadow-md p-6">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center">
-          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-            <User className="w-6 h-6 text-gray-600" />
+          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+            <User className="w-6 h-6 text-muted-foreground" />
           </div>
           <div className="ml-3">
-            <p className="font-medium text-gray-900">{review.reviewer?.fullName}</p>
-            <p className="text-sm text-gray-600">
+            <p className="font-medium text-foreground">{review.reviewer?.fullName}</p>
+            <p className="text-sm text-muted-foreground">
               {format(new Date(review.createdAt), 'MMM d, yyyy')}
             </p>
           </div>
         </div>
         <div className="flex items-center">
           <Star className="w-5 h-5 text-yellow-400 fill-current" />
-          <span className="ml-1 font-semibold text-gray-900">{review.rating}</span>
+          <span className="ml-1 font-semibold text-foreground">{review.rating}</span>
         </div>
       </div>
-      <p className="text-gray-700">{review.comment}</p>
+      <p className="text-foreground/80">{review.comment}</p>
       {review.listing && (
         <Link
           to={`/listings/${review.listing.id}`}
-          className="mt-3 text-sm text-indigo-600 hover:text-indigo-800 flex items-center"
+          className="mt-3 text-sm text-primary hover:text-primary/80 flex items-center"
         >
           <Package className="w-4 h-4 mr-1" />
           {review.listing.title}
@@ -129,9 +139,9 @@ function ListingCard({ listing }: { listing: Listing }) {
   return (
     <Link
       to={`/listings/${listing.id}`}
-      className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+      className="bg-card rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
     >
-      <div className="aspect-video bg-gray-200 relative">
+      <div className="aspect-video bg-muted relative">
         {listing.images?.[0] ? (
           <img
             src={listing.images[0].url}
@@ -140,26 +150,26 @@ function ListingCard({ listing }: { listing: Listing }) {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Package className="w-12 h-12 text-gray-400" />
+            <Package className="w-12 h-12 text-muted-foreground" />
           </div>
         )}
         {listing.status === 'ACTIVE' && (
-          <span className="absolute top-2 right-2 px-2 py-1 bg-green-500 text-white text-xs font-semibold rounded">
+          <span className="absolute top-2 right-2 px-2 py-1 bg-success text-success-foreground text-xs font-semibold rounded">
             Available
           </span>
         )}
       </div>
       <div className="p-4">
-        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-1">{listing.title}</h3>
-        <p className="text-sm text-gray-600 mb-2 line-clamp-2">{listing.description}</p>
+        <h3 className="font-semibold text-foreground mb-2 line-clamp-1">{listing.title}</h3>
+        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{listing.description}</p>
         <div className="flex items-center justify-between">
-          <span className="text-lg font-bold text-indigo-600">
+          <span className="text-lg font-bold text-primary">
             ${listing.dailyRate}/day
           </span>
           {listing.averageRating > 0 && (
             <div className="flex items-center">
               <Star className="w-4 h-4 text-yellow-400 fill-current" />
-              <span className="ml-1 text-sm text-gray-700">{listing.averageRating.toFixed(1)}</span>
+              <span className="ml-1 text-sm text-muted-foreground">{listing.averageRating.toFixed(1)}</span>
             </div>
           )}
         </div>
@@ -177,13 +187,13 @@ export default function ProfileRoute() {
   const responseTime = user.responseTime || 'N/A';
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Profile Header */}
-        <div className="bg-white rounded-lg shadow-md p-8 mb-6">
+        <div className="bg-card rounded-lg shadow-md p-8 mb-6">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             {/* Avatar */}
-            <div className="w-24 h-24 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-3xl font-bold flex-shrink-0">
+            <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center text-primary text-3xl font-bold flex-shrink-0">
               {user.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
@@ -199,8 +209,8 @@ export default function ProfileRoute() {
             <div className="flex-1">
               <div className="flex items-start justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{user.fullName}</h1>
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                  <h1 className="text-3xl font-bold text-foreground mb-2">{user.fullName}</h1>
+                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center">
                       <Mail className="w-4 h-4 mr-1" />
                       {user.email}
@@ -226,7 +236,7 @@ export default function ProfileRoute() {
 
                 {/* Verification Badge */}
                 {user.emailVerified && (
-                  <div className="flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                  <div className="flex items-center px-3 py-1 bg-success/10 text-success rounded-full text-sm">
                     <Shield className="w-4 h-4 mr-1" />
                     Verified
                   </div>
@@ -234,14 +244,14 @@ export default function ProfileRoute() {
               </div>
 
               {user.bio && (
-                <p className="mt-4 text-gray-700">{user.bio}</p>
+                <p className="mt-4 text-foreground/80">{user.bio}</p>
               )}
             </div>
 
             {/* Contact Button */}
             <Link
               to={`/messages?user=${user.id}`}
-              className="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors flex items-center whitespace-nowrap"
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center whitespace-nowrap"
             >
               <MessageCircle className="w-5 h-5 mr-2" />
               Contact
@@ -255,7 +265,7 @@ export default function ProfileRoute() {
             icon={Package}
             label="Active Listings"
             value={stats.activeListings}
-            color="indigo"
+            color="primary"
           />
           <StatCard
             icon={Star}
@@ -278,26 +288,28 @@ export default function ProfileRoute() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-md">
-          <div className="border-b border-gray-200">
+        <div className="bg-card rounded-lg shadow-md">
+          <div className="border-b border-border">
             <div className="flex">
               <button
                 onClick={() => setActiveTab('listings')}
-                className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+                className={cn(
+                  "px-6 py-4 font-medium text-sm border-b-2 transition-colors",
                   activeTab === 'listings'
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
               >
                 Listings ({stats.totalListings})
               </button>
               <button
                 onClick={() => setActiveTab('reviews')}
-                className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+                className={cn(
+                  "px-6 py-4 font-medium text-sm border-b-2 transition-colors",
                   activeTab === 'reviews'
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
               >
                 Reviews ({stats.totalReviews})
               </button>
@@ -315,8 +327,8 @@ export default function ProfileRoute() {
                   </div>
                 ) : (
                   <div className="text-center py-12">
-                    <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No listings available</p>
+                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No listings available</p>
                   </div>
                 )}
               </div>
@@ -332,8 +344,8 @@ export default function ProfileRoute() {
                   </div>
                 ) : (
                   <div className="text-center py-12">
-                    <Star className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No reviews yet</p>
+                    <Star className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No reviews yet</p>
                   </div>
                 )}
               </div>

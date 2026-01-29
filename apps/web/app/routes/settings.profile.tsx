@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "~/lib/store/auth";
 import { api } from "~/lib/api-client";
+import { cn } from "~/lib/utils";
+import { Button } from "~/components/ui";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
     return [
@@ -60,10 +63,27 @@ export async function action({ request }: any) {
     }
 }
 
+interface User {
+    id: string;
+    firstName: string;
+    lastName?: string;
+    email: string;
+    phone?: string;
+    avatar?: string;
+    verified?: boolean;
+    totalBookings?: number;
+    totalListings?: number;
+    rating?: number;
+}
+
 export default function ProfileSettings() {
-    const { user: loaderUser } = useLoaderData<typeof loader>();
+    const { user: loaderUser } = useLoaderData<{ user: User }>();
     const actionData = useActionData<typeof action>();
     const { user, updateUser } = useAuthStore();
+
+    if (!loaderUser) {
+        return <div>Loading...</div>;
+    }
 
     const {
         register,
@@ -80,11 +100,11 @@ export default function ProfileSettings() {
     });
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-background">
             {/* Header */}
-            <header className="bg-white shadow-sm border-b">
+            <header className="bg-card border-b">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <h1 className="text-2xl font-bold text-gray-900">Profile Settings</h1>
+                    <h1 className="text-2xl font-bold text-foreground">Profile Settings</h1>
                 </div>
             </header>
 
@@ -92,20 +112,20 @@ export default function ProfileSettings() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     {/* Sidebar Navigation */}
                     <aside className="md:col-span-1">
-                        <nav className="bg-white rounded-lg shadow-sm border p-2 space-y-1">
-                            <button className="w-full flex items-center gap-3 px-4 py-3 bg-primary-50 text-primary-700 rounded-lg font-medium">
+                        <nav className="bg-card rounded-lg border p-2 space-y-1">
+                            <button className="w-full flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-lg font-medium">
                                 <User className="w-5 h-5" />
                                 Profile
                             </button>
-                            <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                            <button className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors">
                                 <Shield className="w-5 h-5" />
                                 Security
                             </button>
-                            <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                            <button className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors">
                                 <Bell className="w-5 h-5" />
                                 Notifications
                             </button>
-                            <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                            <button className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors">
                                 <CreditCard className="w-5 h-5" />
                                 Payments
                             </button>
@@ -116,8 +136,8 @@ export default function ProfileSettings() {
                     <div className="md:col-span-3 space-y-6">
                         {/* Success Message */}
                         {actionData?.success && (
-                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                <p className="text-sm text-green-600">
+                            <div className="p-4 bg-success/10 border border-success/20 rounded-lg">
+                                <p className="text-sm text-success">
                                     Profile updated successfully!
                                 </p>
                             </div>
@@ -125,224 +145,232 @@ export default function ProfileSettings() {
 
                         {/* Error Message */}
                         {actionData?.error && (
-                            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                                <p className="text-sm text-red-600">{actionData.error}</p>
+                            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                                <p className="text-sm text-destructive">{actionData.error}</p>
                             </div>
                         )}
 
                         {/* Profile Photo */}
-                        <div className="bg-white rounded-lg shadow-sm border p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                                Profile Photo
-                            </h2>
-                            <div className="flex items-center gap-6">
-                                <div className="relative">
-                                    <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center">
-                                        {loaderUser.avatar ? (
-                                            <img
-                                                src={loaderUser.avatar}
-                                                alt={loaderUser.firstName}
-                                                className="w-full h-full rounded-full object-cover"
-                                            />
-                                        ) : (
-                                            <span className="text-3xl font-bold text-gray-600">
-                                                {loaderUser.firstName[0]}
-                                            </span>
-                                        )}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Profile Photo</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-6">
+                                    <div className="relative">
+                                        <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center">
+                                            {loaderUser.avatar ? (
+                                                <img
+                                                    src={loaderUser.avatar}
+                                                    alt={loaderUser.firstName}
+                                                    className="w-full h-full rounded-full object-cover"
+                                                />
+                                            ) : (
+                                                <span className="text-3xl font-bold text-muted-foreground">
+                                                    {loaderUser.firstName[0]}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <button className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors">
+                                            <Camera className="w-4 h-4" />
+                                        </button>
                                     </div>
-                                    <button className="absolute bottom-0 right-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center hover:bg-primary-700">
-                                        <Camera className="w-4 h-4" />
-                                    </button>
+                                    <div>
+                                        <Button variant="outline">
+                                            Change Photo
+                                        </Button>
+                                        <p className="text-sm text-muted-foreground mt-2">
+                                            JPG, PNG or GIF. Max size 5MB
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <button className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">
-                                        Change Photo
-                                    </button>
-                                    <p className="text-sm text-gray-600 mt-2">
-                                        JPG, PNG or GIF. Max size 5MB
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
 
                         {/* Personal Information */}
-                        <Form method="post" className="bg-white rounded-lg shadow-sm border p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                                Personal Information
-                            </h2>
+                        <Form method="post">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Personal Information</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-foreground mb-2">
+                                                    First Name
+                                                </label>
+                                                <input
+                                                    {...register("firstName")}
+                                                    name="firstName"
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                                                />
+                                                {errors.firstName && (
+                                                    <p className="mt-1 text-sm text-destructive">
+                                                        {errors.firstName.message}
+                                                    </p>
+                                                )}
+                                            </div>
 
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            First Name
-                                        </label>
-                                        <input
-                                            {...register("firstName")}
-                                            name="firstName"
-                                            type="text"
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                        />
-                                        {errors.firstName && (
-                                            <p className="mt-1 text-sm text-red-600">
-                                                {errors.firstName.message}
-                                            </p>
-                                        )}
+                                            <div>
+                                                <label className="block text-sm font-medium text-foreground mb-2">
+                                                    Last Name
+                                                </label>
+                                                <input
+                                                    {...register("lastName")}
+                                                    name="lastName"
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-foreground mb-2">
+                                                Email Address
+                                            </label>
+                                            <div className="relative">
+                                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                                                <input
+                                                    {...register("email")}
+                                                    name="email"
+                                                    type="email"
+                                                    className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                                                />
+                                            </div>
+                                            {errors.email && (
+                                                <p className="mt-1 text-sm text-destructive">
+                                                    {errors.email.message}
+                                                </p>
+                                            )}
+                                            {loaderUser.verified && (
+                                                <p className="mt-1 text-sm text-success flex items-center gap-1">
+                                                    <Shield className="w-4 h-4" />
+                                                    Verified
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-foreground mb-2">
+                                                Phone Number
+                                            </label>
+                                            <div className="relative">
+                                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                                                <input
+                                                    {...register("phone")}
+                                                    name="phone"
+                                                    type="tel"
+                                                    className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                                                />
+                                            </div>
+                                            {errors.phone && (
+                                                <p className="mt-1 text-sm text-destructive">
+                                                    {errors.phone.message}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center justify-end pt-4 border-t border-border">
+                                            <Button type="submit" className="flex items-center gap-2">
+                                                <Save className="w-5 h-5" />
+                                                Save Changes
+                                            </Button>
+                                        </div>
                                     </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Last Name
-                                        </label>
-                                        <input
-                                            {...register("lastName")}
-                                            name="lastName"
-                                            type="text"
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Email Address
-                                    </label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                        <input
-                                            {...register("email")}
-                                            name="email"
-                                            type="email"
-                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                        />
-                                    </div>
-                                    {errors.email && (
-                                        <p className="mt-1 text-sm text-red-600">
-                                            {errors.email.message}
-                                        </p>
-                                    )}
-                                    {loaderUser.verified && (
-                                        <p className="mt-1 text-sm text-green-600 flex items-center gap-1">
-                                            <Shield className="w-4 h-4" />
-                                            Verified
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Phone Number
-                                    </label>
-                                    <div className="relative">
-                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                        <input
-                                            {...register("phone")}
-                                            name="phone"
-                                            type="tel"
-                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                        />
-                                    </div>
-                                    {errors.phone && (
-                                        <p className="mt-1 text-sm text-red-600">
-                                            {errors.phone.message}
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center justify-end pt-4 border-t">
-                                    <button
-                                        type="submit"
-                                        className="flex items-center gap-2 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
-                                    >
-                                        <Save className="w-5 h-5" />
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </div>
+                                </CardContent>
+                            </Card>
                         </Form>
 
                         {/* Account Stats */}
-                        <div className="bg-white rounded-lg shadow-sm border p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                                Account Statistics
-                            </h2>
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                                    <div className="text-2xl font-bold text-gray-900">
-                                        {loaderUser.totalBookings || 0}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Account Statistics</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="text-center p-4 bg-muted rounded-lg">
+                                        <div className="text-2xl font-bold text-foreground">
+                                            {loaderUser.totalBookings || 0}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground mt-1">Bookings</div>
                                     </div>
-                                    <div className="text-sm text-gray-600 mt-1">Bookings</div>
-                                </div>
-                                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                                    <div className="text-2xl font-bold text-gray-900">
-                                        {loaderUser.totalListings || 0}
+                                    <div className="text-center p-4 bg-muted rounded-lg">
+                                        <div className="text-2xl font-bold text-foreground">
+                                            {loaderUser.totalListings || 0}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground mt-1">Listings</div>
                                     </div>
-                                    <div className="text-sm text-gray-600 mt-1">Listings</div>
-                                </div>
-                                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                                    <div className="text-2xl font-bold text-gray-900">
-                                        {loaderUser.rating ? loaderUser.rating.toFixed(1) : "N/A"}
+                                    <div className="text-center p-4 bg-muted rounded-lg">
+                                        <div className="text-2xl font-bold text-foreground">
+                                            {loaderUser.rating ? loaderUser.rating.toFixed(1) : "N/A"}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground mt-1">Rating</div>
                                     </div>
-                                    <div className="text-sm text-gray-600 mt-1">Rating</div>
                                 </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
 
                         {/* Change Password */}
-                        <div className="bg-white rounded-lg shadow-sm border p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                                Change Password
-                            </h2>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Current Password
-                                    </label>
-                                    <input
-                                        type="password"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                    />
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Change Password</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-2">
+                                            Current Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-2">
+                                            New Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-2">
+                                            Confirm New Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-end pt-4 border-t border-border">
+                                        <Button variant="secondary" className="flex items-center gap-2">
+                                            <Key className="w-5 h-5" />
+                                            Update Password
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        New Password
-                                    </label>
-                                    <input
-                                        type="password"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Confirm New Password
-                                    </label>
-                                    <input
-                                        type="password"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                    />
-                                </div>
-                                <div className="flex items-center justify-end pt-4 border-t">
-                                    <button className="flex items-center gap-2 px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium">
-                                        <Key className="w-5 h-5" />
-                                        Update Password
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
 
                         {/* Danger Zone */}
-                        <div className="bg-white rounded-lg shadow-sm border border-red-200 p-6">
-                            <h2 className="text-lg font-semibold text-red-600 mb-4">
-                                Danger Zone
-                            </h2>
-                            <p className="text-sm text-gray-600 mb-4">
-                                Once you delete your account, there is no going back. Please be
-                                certain.
-                            </p>
-                            <button className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">
-                                Delete Account
-                            </button>
-                        </div>
+                        <Card className="border-destructive/50">
+                            <CardHeader>
+                                <CardTitle className="text-destructive">Danger Zone</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground mb-4">
+                                    Once you delete your account, there is no going back. Please be
+                                    certain.
+                                </p>
+                                <Button variant="destructive">
+                                    Delete Account
+                                </Button>
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             </div>

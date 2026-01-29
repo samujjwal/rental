@@ -1,5 +1,6 @@
 import { Form, useLoaderData, useActionData } from 'react-router';
 import { useState, useEffect } from 'react';
+import { cn } from '~/lib/utils';
 import type { Route } from './+types/settings.notifications';
 
 interface NotificationPreferences {
@@ -116,22 +117,22 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow rounded-lg">
+        <div className="bg-card shadow rounded-lg">
           {/* Header */}
-          <div className="px-6 py-5 border-b border-gray-200">
-            <h1 className="text-2xl font-bold text-gray-900">
+          <div className="px-6 py-5 border-b border-border">
+            <h1 className="text-2xl font-bold text-foreground">
               Notification Preferences
             </h1>
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               Choose how you want to receive notifications for different activities
             </p>
           </div>
 
           {/* Success Message */}
           {actionData?.success && (
-            <div className="mx-6 mt-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded">
+            <div className="mx-6 mt-6 bg-success/10 border border-success/20 text-success px-4 py-3 rounded">
               {actionData.message}
             </div>
           )}
@@ -139,16 +140,16 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
           {/* Preferences Table */}
           <div className="px-6 py-6">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-border">
                 <thead>
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Notification Type
                     </th>
                     {channels.map((channel) => (
                       <th
                         key={channel.key}
-                        className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
                       >
                         <div className="flex flex-col items-center">
                           <span className="text-2xl mb-1">{channel.icon}</span>
@@ -158,15 +159,15 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
                     ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-card divide-y divide-border">
                   {notificationTypes.map((type) => (
-                    <tr key={type.key} className="hover:bg-gray-50">
+                    <tr key={type.key} className="hover:bg-muted/50">
                       <td className="px-6 py-4">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-foreground">
                             {type.label}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-muted-foreground">
                             {type.description}
                           </div>
                         </div>
@@ -179,7 +180,7 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
                             onChange={(e) =>
                               updatePreference(type.key, channel.key, e.target.checked)
                             }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
                           />
                         </td>
                       ))}
@@ -191,7 +192,7 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
           </div>
 
           {/* Quick Actions */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+          <div className="px-6 py-4 bg-muted border-t border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4 text-sm">
                 <button
@@ -208,7 +209,7 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
                     });
                     setPreferences(newPrefs);
                   }}
-                  className="text-indigo-600 hover:text-indigo-500"
+                  className="text-primary hover:text-primary/80"
                 >
                   Enable All
                 </button>
@@ -226,7 +227,7 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
                     });
                     setPreferences(newPrefs);
                   }}
-                  className="text-indigo-600 hover:text-indigo-500"
+                  className="text-primary hover:text-primary/80"
                 >
                   Disable All
                 </button>
@@ -240,7 +241,7 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
                 />
                 <button
                   type="submit"
-                  className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="px-6 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
                 >
                   Save Preferences
                 </button>
@@ -249,14 +250,14 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
           </div>
 
           {/* Info Box */}
-          <div className="px-6 py-4 bg-blue-50 border-t border-blue-200">
+          <div className="px-6 py-4 bg-primary/5 border-t border-primary/10">
             <div className="flex">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="h-5 w-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
               </div>
-              <div className="ml-3 text-sm text-blue-700">
+              <div className="ml-3 text-sm text-primary/80">
                 <p><strong>Note:</strong> Some notifications (like critical security alerts) cannot be disabled for your account safety.</p>
                 <p className="mt-1">SMS notifications may incur standard message rates from your carrier.</p>
               </div>

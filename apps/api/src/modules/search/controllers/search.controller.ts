@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { SearchService, SearchQuery } from '../services/search.service';
-import { SearchIndexService } from '../services/search-index.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
@@ -20,10 +19,7 @@ import { Roles } from '@/modules/auth/decorators/roles.decorator';
 @ApiTags('Search')
 @Controller('search')
 export class SearchController {
-  constructor(
-    private readonly searchService: SearchService,
-    private readonly indexService: SearchIndexService,
-  ) {}
+  constructor(private readonly searchService: SearchService) {}
 
   @Get()
   @ApiOperation({ summary: 'Search listings' })
@@ -127,56 +123,16 @@ export class SearchController {
   }
 
   // Admin endpoints
-  @Post('index/listing/:listingId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Index a specific listing (admin only)' })
-  @ApiResponse({ status: 200, description: 'Listing indexed successfully' })
-  async indexListing(@Param('listingId') listingId: string) {
-    await this.indexService.updateListing(listingId);
-    return { success: true, message: 'Listing indexed successfully' };
-  }
-
-  @Delete('index/listing/:listingId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Remove listing from index (admin only)' })
-  @ApiResponse({ status: 200, description: 'Listing removed from index' })
-  async removeListing(@Param('listingId') listingId: string) {
-    await this.indexService.removeListing(listingId);
-    return { success: true, message: 'Listing removed from index' };
-  }
-
-  @Post('reindex')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Reindex all listings (admin only)' })
-  @ApiResponse({ status: 202, description: 'Reindex started' })
-  async reindex() {
-    // Run in background
-    this.indexService.reindexAll().catch((error) => {
-      console.error('Reindex failed:', error);
-    });
-
-    return {
-      success: true,
-      message: 'Reindex started in background',
-    };
-  }
-
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get search index statistics (admin only)' })
-  @ApiResponse({ status: 200, description: 'Index statistics retrieved' })
+  @ApiOperation({ summary: 'Get search statistics (admin only)' })
+  @ApiResponse({ status: 200, description: 'Search statistics retrieved' })
   async getStats() {
-    return this.indexService.getIndexStats();
+    return {
+      message: 'Search statistics - PostgreSQL based',
+      type: 'postgresql',
+    };
   }
 }

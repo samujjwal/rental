@@ -8,7 +8,7 @@ import {
     Search,
     X
 } from "lucide-react";
-import { Button } from "~/components/ui/Button";
+import { Button } from "~/components/ui/button";
 
 interface Column<T> {
     key: keyof T | string;

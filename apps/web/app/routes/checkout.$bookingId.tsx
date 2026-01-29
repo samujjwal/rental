@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import { cn } from '~/lib/utils';
 import { bookingsApi } from '~/lib/api/bookings';
 import { paymentsApi } from '~/lib/api/payments';
 import type { Booking } from '~/types/booking';
@@ -35,7 +36,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
-    
+
     // Check if booking is in correct state for payment
     if (booking.state !== 'PENDING_PAYMENT') {
       throw redirect(`/bookings/${bookingId}`);
@@ -44,8 +45,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
     // Create payment intent
     const { clientSecret } = await paymentsApi.createPaymentIntent(bookingId);
 
-    return { 
-      booking, 
+    return {
+      booking,
       clientSecret,
       stripePublishableKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY,
     };
@@ -120,8 +121,8 @@ function CheckoutForm({ booking }: { booking: Booking }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4 flex items-center">
+      <div className="bg-card rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold mb-4 flex items-center text-foreground">
           <CreditCard className="w-5 h-5 mr-2" />
           Payment Information
         </h2>
@@ -129,20 +130,20 @@ function CheckoutForm({ booking }: { booking: Booking }) {
         <PaymentElement />
 
         {errorMessage && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start">
-            <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-800">{errorMessage}</p>
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-start">
+            <AlertCircle className="w-5 h-5 text-destructive mr-2 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-destructive">{errorMessage}</p>
           </div>
         )}
 
         {actionData?.error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start">
-            <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-800">{actionData.error}</p>
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-start">
+            <AlertCircle className="w-5 h-5 text-destructive mr-2 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-destructive">{actionData.error}</p>
           </div>
         )}
 
-        <div className="mt-6 flex items-center text-sm text-gray-600">
+        <div className="mt-6 flex items-center text-sm text-muted-foreground">
           <Lock className="w-4 h-4 mr-2" />
           <span>Payments are secure and encrypted</span>
         </div>
@@ -152,7 +153,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
         <button
           type="button"
           onClick={() => navigate(`/bookings/${booking.id}`)}
-          className="flex-1 px-6 py-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+          className="flex-1 px-6 py-3 border border-input rounded-md text-foreground hover:bg-muted transition-colors"
           disabled={isProcessing}
         >
           Cancel
@@ -160,7 +161,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
         <button
           type="submit"
           disabled={!stripe || isProcessing}
-          className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+          className="flex-1 px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed flex items-center justify-center"
         >
           {isProcessing ? (
             <>
@@ -187,34 +188,34 @@ export default function CheckoutRoute() {
   const endDate = new Date(booking.endDate);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
           <button
             onClick={() => navigate(`/bookings/${booking.id}`)}
-            className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+            className="flex items-center text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Booking
           </button>
-          <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
-          <p className="mt-2 text-gray-600">Complete your booking payment</p>
+          <h1 className="text-3xl font-bold text-foreground">Checkout</h1>
+          <p className="mt-2 text-muted-foreground">Complete your booking payment</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-6 sticky top-6">
-              <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
+            <div className="bg-card rounded-lg shadow-md p-6 sticky top-6">
+              <h2 className="text-lg font-semibold mb-4 text-foreground">Order Summary</h2>
 
               <div className="space-y-4">
                 {/* Listing Info */}
                 <div className="flex items-start">
-                  <Package className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0 mt-0.5" />
+                  <Package className="w-5 h-5 text-muted-foreground mr-3 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{booking.listing?.title || 'Item'}</p>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="font-medium text-foreground">{booking.listing?.title || 'Item'}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
                       {booking.listing?.category?.name || 'Category'}
                     </p>
                   </div>
@@ -222,10 +223,10 @@ export default function CheckoutRoute() {
 
                 {/* Owner Info */}
                 <div className="flex items-start">
-                  <User className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0 mt-0.5" />
+                  <User className="w-5 h-5 text-muted-foreground mr-3 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm text-gray-600">Owner</p>
-                    <p className="font-medium text-gray-900">
+                    <p className="text-sm text-muted-foreground">Owner</p>
+                    <p className="font-medium text-foreground">
                       {booking.listing?.owner?.fullName || 'Owner'}
                     </p>
                   </div>
@@ -233,55 +234,55 @@ export default function CheckoutRoute() {
 
                 {/* Dates */}
                 <div className="flex items-start">
-                  <Calendar className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0 mt-0.5" />
+                  <Calendar className="w-5 h-5 text-muted-foreground mr-3 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm text-gray-600">Rental Period</p>
-                    <p className="font-medium text-gray-900">
+                    <p className="text-sm text-muted-foreground">Rental Period</p>
+                    <p className="font-medium text-foreground">
                       {format(startDate, 'MMM d, yyyy')} - {format(endDate, 'MMM d, yyyy')}
                     </p>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-muted-foreground">
                       {Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))} days
                     </p>
                   </div>
                 </div>
 
                 {/* Pricing Breakdown */}
-                <div className="border-t pt-4">
+                <div className="border-t border-border pt-4">
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span className="text-gray-900">${booking.subtotalAmount.toFixed(2)}</span>
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-foreground">${booking.subtotalAmount.toFixed(2)}</span>
                   </div>
                   {booking.taxAmount > 0 && (
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Tax</span>
-                      <span className="text-gray-900">${booking.taxAmount.toFixed(2)}</span>
+                      <span className="text-muted-foreground">Tax</span>
+                      <span className="text-foreground">${booking.taxAmount.toFixed(2)}</span>
                     </div>
                   )}
                   {booking.serviceFeeAmount > 0 && (
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Service Fee</span>
-                      <span className="text-gray-900">${booking.serviceFeeAmount.toFixed(2)}</span>
+                      <span className="text-muted-foreground">Service Fee</span>
+                      <span className="text-foreground">${booking.serviceFeeAmount.toFixed(2)}</span>
                     </div>
                   )}
                   {booking.securityDepositAmount > 0 && (
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Security Deposit</span>
-                      <span className="text-gray-900">${booking.securityDepositAmount.toFixed(2)}</span>
+                      <span className="text-muted-foreground">Security Deposit</span>
+                      <span className="text-foreground">${booking.securityDepositAmount.toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                    <span>Total</span>
-                    <span className="text-indigo-600">${booking.totalAmount.toFixed(2)}</span>
+                  <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
+                    <span className="text-foreground">Total</span>
+                    <span className="text-primary">${booking.totalAmount.toFixed(2)}</span>
                   </div>
                 </div>
 
                 {/* Security Info */}
-                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                <div className="bg-success/10 border border-success/20 rounded-md p-3">
                   <div className="flex items-start">
-                    <CheckCircle className="w-5 h-5 text-green-600 mr-2 flex-shrink-0 mt-0.5" />
+                    <CheckCircle className="w-5 h-5 text-success mr-2 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-green-900">Protected Payment</p>
-                      <p className="text-xs text-green-700 mt-1">
+                      <p className="text-sm font-medium text-success">Protected Payment</p>
+                      <p className="text-xs text-success/80 mt-1">
                         Your payment is secured by Stripe and protected by our platform guarantee.
                       </p>
                     </div>

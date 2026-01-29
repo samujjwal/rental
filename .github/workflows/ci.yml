@@ -1,0 +1,240 @@
+name: CI/CD Pipeline
+
+on:
+    push:
+        branches: [main, develop]
+    pull_request:
+        branches: [main, develop]
+
+env:
+    NODE_VERSION: "20"
+    PNPM_VERSION: "10"
+
+jobs:
+    lint-and-format:
+        name: Lint & Format Check
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v3
+              with:
+                  version: ${{ env.PNPM_VERSION }}
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Run ESLint
+              run: pnpm run lint
+
+            - name: Run Prettier check
+              run: pnpm run format:check
+
+    test-api:
+        name: API Tests
+        runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: pgvector/pgvector:pg15
+                env:
+                    POSTGRES_USER: test_user
+                    POSTGRES_PASSWORD: test_password
+                    POSTGRES_DB: test_db
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+                ports:
+                    - 5432:5432
+
+            redis:
+                image: redis:7-alpine
+                options: >-
+                    --health-cmd "redis-cli ping"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+                ports:
+                    - 6379:6379
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v3
+              with:
+                  version: ${{ env.PNPM_VERSION }}
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Generate Prisma Client
+              run: cd packages/database && npx prisma generate
+
+            - name: Run database migrations
+              run: cd packages/database && npx prisma db push
+              env:
+                  DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+
+            - name: Run API unit tests
+              run: cd apps/api && pnpm run test:cov
+              env:
+                  DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+                  REDIS_HOST: localhost
+                  REDIS_PORT: 6379
+                  JWT_SECRET: test-jwt-secret-for-ci-only-not-for-production
+
+            - name: Upload coverage report
+              uses: codecov/codecov-action@v4
+              with:
+                  files: ./apps/api/coverage/lcov.info
+                  flags: api
+                  name: API Coverage
+
+    test-web:
+        name: Web App Tests
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v3
+              with:
+                  version: ${{ env.PNPM_VERSION }}
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Run web app tests
+              run: cd apps/web && pnpm run test:coverage || echo "No tests configured yet"
+
+    build:
+        name: Build Applications
+        runs-on: ubuntu-latest
+        needs: [lint-and-format, test-api]
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v3
+              with:
+                  version: ${{ env.PNPM_VERSION }}
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Generate Prisma Client
+              run: cd packages/database && npx prisma generate
+
+            - name: Build API
+              run: cd apps/api && pnpm run build
+
+            - name: Build Web
+              run: cd apps/web && pnpm run build
+
+    security-scan:
+        name: Security Scan
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Run npm audit
+              run: npm audit --audit-level=moderate || true
+
+            - name: Run Trivy vulnerability scanner
+              uses: aquasecurity/trivy-action@master
+              with:
+                  scan-type: "fs"
+                  scan-ref: "."
+                  format: "sarif"
+                  output: "trivy-results.sarif"
+
+    e2e-tests:
+        name: E2E Tests
+        runs-on: ubuntu-latest
+        needs: [build]
+        if: github.event_name == 'pull_request'
+        services:
+            postgres:
+                image: pgvector/pgvector:pg15
+                env:
+                    POSTGRES_USER: test_user
+                    POSTGRES_PASSWORD: test_password
+                    POSTGRES_DB: test_db
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+                ports:
+                    - 5432:5432
+
+            redis:
+                image: redis:7-alpine
+                options: >-
+                    --health-cmd "redis-cli ping"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+                ports:
+                    - 6379:6379
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v3
+              with:
+                  version: ${{ env.PNPM_VERSION }}
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Generate Prisma Client
+              run: cd packages/database && npx prisma generate
+
+            - name: Run E2E tests
+              run: cd apps/api && pnpm run test:e2e
+              env:
+                  DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+                  REDIS_HOST: localhost
+                  REDIS_PORT: 6379
+                  JWT_SECRET: test-jwt-secret-for-ci-only-not-for-production

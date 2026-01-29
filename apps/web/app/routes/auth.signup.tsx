@@ -3,11 +3,22 @@ import { Form, Link, useActionData, useNavigation } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, UserPlus } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { authApi } from "~/lib/api/auth";
 import { createUserSession } from "~/utils/auth.server";
 import { signupSchema, type SignupInput } from "~/lib/validation/auth";
-import { useAuthStore } from "~/lib/store/auth";
+import {
+    Box,
+    Button,
+    TextField,
+    FormControl,
+    InputLabel,
+    InputAdornment,
+    Typography,
+    Paper,
+    Alert,
+} from '@mui/material';
+import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
     return [
@@ -71,7 +82,7 @@ export default function Signup() {
 
     // Password strength indicator
     const getPasswordStrength = (pwd: string) => {
-        if (!pwd) return { strength: 0, label: "None", color: "gray" };
+        if (!pwd) return { strength: 0, label: "None", color: "bg-muted" as const };
         let strength = 0;
         if (pwd.length >= 8) strength++;
         if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) strength++;
@@ -79,46 +90,53 @@ export default function Signup() {
         if (/[@$!%*?&]/.test(pwd)) strength++;
 
         if (strength <= 1)
-            return { strength, label: "Weak", color: "red" };
+            return { strength, label: "Weak", color: "bg-destructive" as const };
         if (strength === 2)
-            return { strength, label: "Fair", color: "yellow" };
+            return { strength, label: "Fair", color: "bg-warning" as const };
         if (strength === 3)
-            return { strength, label: "Good", color: "blue" };
-        return { strength, label: "Strong", color: "green" };
+            return { strength, label: "Good", color: "bg-primary" as const };
+        return { strength, label: "Strong", color: "bg-success" as const };
     };
 
     const passwordStrength = getPasswordStrength(password);
 
+    const inputClasses = cn(
+        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+        "placeholder:text-muted-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "disabled:cursor-not-allowed disabled:opacity-50"
+    );
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-white px-4 py-8">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-background px-4 py-8">
             <div className="w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <Link to="/" className="inline-block">
-                        <h1 className="text-3xl font-bold text-blue-600">
+                        <h1 className="text-3xl font-bold text-primary">
                             Rental Portal
                         </h1>
                     </Link>
-                    <p className="text-gray-600 mt-2">Create your account to get started</p>
+                    <p className="text-muted-foreground mt-2">Create your account to get started</p>
                 </div>
 
                 {/* Signup Form */}
-                <div className="bg-white rounded-lg shadow-lg p-8">
+                <div className="bg-card border rounded-lg shadow-lg p-8">
                     <Form method="post" onSubmit={handleSubmit(() => { })}>
                         {/* Error Message */}
                         {actionData?.error && (
-                            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                                <p className="text-sm text-red-600">{actionData.error}</p>
+                            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                                <p className="text-sm text-destructive">{actionData.error}</p>
                             </div>
                         )}
 
                         {/* Role Selection */}
-                        <div className="mb-6">
-                            <label className="block text-sm font-medium text-gray-700 mb-3">
+                        <div className="space-y-2 mb-6">
+                            <label className="text-sm font-medium leading-none">
                                 I want to
                             </label>
                             <div className="grid grid-cols-2 gap-4">
-                                <label className="relative flex items-center justify-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                                <label className="relative flex items-center justify-center p-4 border-2 border-input rounded-lg cursor-pointer hover:border-primary has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                                     <input
                                         {...register("role")}
                                         type="radio"
@@ -127,7 +145,7 @@ export default function Signup() {
                                     />
                                     <span className="text-sm font-medium">Rent items</span>
                                 </label>
-                                <label className="relative flex items-center justify-center p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                                <label className="relative flex items-center justify-center p-4 border-2 border-input rounded-lg cursor-pointer hover:border-primary has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                                     <input
                                         {...register("role")}
                                         type="radio"
@@ -138,16 +156,16 @@ export default function Signup() {
                                 </label>
                             </div>
                             {errors.role && (
-                                <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>
+                                <p className="text-sm text-destructive">{errors.role.message}</p>
                             )}
                         </div>
 
                         {/* Name Fields */}
                         <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div>
+                            <div className="space-y-2">
                                 <label
                                     htmlFor="firstName"
-                                    className="block text-sm font-medium text-gray-700 mb-2"
+                                    className="text-sm font-medium leading-none"
                                 >
                                     First Name *
                                 </label>
@@ -156,19 +174,19 @@ export default function Signup() {
                                     type="text"
                                     id="firstName"
                                     name="firstName"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className={inputClasses}
                                     placeholder="John"
                                 />
                                 {errors.firstName && (
-                                    <p className="mt-1 text-sm text-red-600">
+                                    <p className="text-sm text-destructive">
                                         {errors.firstName.message}
                                     </p>
                                 )}
                             </div>
-                            <div>
+                            <div className="space-y-2">
                                 <label
                                     htmlFor="lastName"
-                                    className="block text-sm font-medium text-gray-700 mb-2"
+                                    className="text-sm font-medium leading-none"
                                 >
                                     Last Name
                                 </label>
@@ -177,11 +195,11 @@ export default function Signup() {
                                     type="text"
                                     id="lastName"
                                     name="lastName"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className={inputClasses}
                                     placeholder="Doe"
                                 />
                                 {errors.lastName && (
-                                    <p className="mt-1 text-sm text-red-600">
+                                    <p className="text-sm text-destructive">
                                         {errors.lastName.message}
                                     </p>
                                 )}
@@ -189,10 +207,10 @@ export default function Signup() {
                         </div>
 
                         {/* Email Field */}
-                        <div className="mb-6">
+                        <div className="space-y-2 mb-6">
                             <label
                                 htmlFor="email"
-                                className="block text-sm font-medium text-gray-700 mb-2"
+                                className="text-sm font-medium leading-none"
                             >
                                 Email Address *
                             </label>
@@ -201,19 +219,19 @@ export default function Signup() {
                                 type="email"
                                 id="email"
                                 name="email"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className={inputClasses}
                                 placeholder="you@example.com"
                             />
                             {errors.email && (
-                                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                                <p className="text-sm text-destructive">{errors.email.message}</p>
                             )}
                         </div>
 
                         {/* Phone Field */}
-                        <div className="mb-6">
+                        <div className="space-y-2 mb-6">
                             <label
                                 htmlFor="phone"
-                                className="block text-sm font-medium text-gray-700 mb-2"
+                                className="text-sm font-medium leading-none"
                             >
                                 Phone Number
                             </label>
@@ -222,19 +240,19 @@ export default function Signup() {
                                 type="tel"
                                 id="phone"
                                 name="phone"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className={inputClasses}
                                 placeholder="+1234567890"
                             />
                             {errors.phone && (
-                                <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
+                                <p className="text-sm text-destructive">{errors.phone.message}</p>
                             )}
                         </div>
 
                         {/* Password Field */}
-                        <div className="mb-6">
+                        <div className="space-y-2 mb-6">
                             <label
                                 htmlFor="password"
-                                className="block text-sm font-medium text-gray-700 mb-2"
+                                className="text-sm font-medium leading-none"
                             >
                                 Password *
                             </label>
@@ -244,18 +262,18 @@ export default function Signup() {
                                     type={showPassword ? "text" : "password"}
                                     id="password"
                                     name="password"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent pr-12"
+                                    className={cn(inputClasses, "pr-10")}
                                     placeholder="••••••••"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                 >
                                     {showPassword ? (
-                                        <EyeOff className="w-5 h-5" />
+                                        <EyeOff className="w-4 h-4" />
                                     ) : (
-                                        <Eye className="w-5 h-5" />
+                                        <Eye className="w-4 h-4" />
                                     )}
                                 </button>
                             </div>
@@ -264,18 +282,24 @@ export default function Signup() {
                             {password && (
                                 <div className="mt-2">
                                     <div className="flex items-center justify-between mb-1">
-                                        <span className="text-xs text-gray-600">
+                                        <span className="text-xs text-muted-foreground">
                                             Password strength:
                                         </span>
                                         <span
-                                            className={`text-xs font-medium text-${passwordStrength.color}-600`}
+                                            className={cn(
+                                                "text-xs font-medium",
+                                                passwordStrength.color === "bg-destructive" && "text-destructive",
+                                                passwordStrength.color === "bg-warning" && "text-warning",
+                                                passwordStrength.color === "bg-primary" && "text-primary",
+                                                passwordStrength.color === "bg-success" && "text-success"
+                                            )}
                                         >
                                             {passwordStrength.label}
                                         </span>
                                     </div>
-                                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                                         <div
-                                            className={`h-full bg-${passwordStrength.color}-500 transition-all duration-300`}
+                                            className={cn("h-full transition-all duration-300", passwordStrength.color)}
                                             style={{ width: `${(passwordStrength.strength / 4) * 100}%` }}
                                         />
                                     </div>
@@ -283,17 +307,17 @@ export default function Signup() {
                             )}
 
                             {errors.password && (
-                                <p className="mt-1 text-sm text-red-600">
+                                <p className="text-sm text-destructive">
                                     {errors.password.message}
                                 </p>
                             )}
                         </div>
 
                         {/* Confirm Password Field */}
-                        <div className="mb-6">
+                        <div className="space-y-2 mb-6">
                             <label
                                 htmlFor="confirmPassword"
-                                className="block text-sm font-medium text-gray-700 mb-2"
+                                className="text-sm font-medium leading-none"
                             >
                                 Confirm Password *
                             </label>
@@ -303,55 +327,55 @@ export default function Signup() {
                                     type={showConfirmPassword ? "text" : "password"}
                                     id="confirmPassword"
                                     name="confirmPassword"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent pr-12"
+                                    className={cn(inputClasses, "pr-10")}
                                     placeholder="••••••••"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                 >
                                     {showConfirmPassword ? (
-                                        <EyeOff className="w-5 h-5" />
+                                        <EyeOff className="w-4 h-4" />
                                     ) : (
-                                        <Eye className="w-5 h-5" />
+                                        <Eye className="w-4 h-4" />
                                     )}
                                 </button>
                             </div>
                             {errors.confirmPassword && (
-                                <p className="mt-1 text-sm text-red-600">
+                                <p className="text-sm text-destructive">
                                     {errors.confirmPassword.message}
                                 </p>
                             )}
                         </div>
 
                         {/* Submit Button */}
-                        <button
+                        <Button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+                            className="w-full"
                         >
                             {isSubmitting ? (
                                 <>
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
                                     Creating account...
                                 </>
                             ) : (
                                 <>
-                                    <UserPlus className="w-5 h-5" />
+                                    <UserPlus className="w-4 h-4 mr-2" />
                                     Create Account
                                 </>
                             )}
-                        </button>
+                        </Button>
                     </Form>
 
                     {/* Sign In Link */}
                     <div className="mt-6 text-center">
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-muted-foreground">
                             Already have an account?{" "}
                             <Link
                                 to="/auth/login"
-                                className="text-blue-600 hover:text-blue-700 font-medium"
+                                className="text-primary hover:text-primary/90 font-medium underline-offset-4 hover:underline"
                             >
                                 Sign in
                             </Link>

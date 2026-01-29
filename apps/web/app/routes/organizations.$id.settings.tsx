@@ -1,5 +1,6 @@
 import { Form, useLoaderData, useActionData, useParams } from 'react-router';
 import { useState } from 'react';
+import { cn } from '~/lib/utils';
 import type { Route } from './+types/organizations.$id.settings';
 
 interface Organization {
@@ -94,27 +95,27 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-4 mb-4">
-            <a href={`/organizations/${organization.id}`} className="text-indigo-600 hover:text-indigo-500">
+            <a href={`/organizations/${organization.id}`} className="text-primary hover:text-primary/80">
               ← Back to Organization
             </a>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Organization Settings</h1>
-          <p className="mt-2 text-sm text-gray-600">{organization.name}</p>
+          <h1 className="text-3xl font-bold text-foreground">Organization Settings</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{organization.name}</p>
         </div>
 
         {/* Success/Error Messages */}
         {actionData?.success && (
-          <div className="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded">
+          <div className="mb-6 bg-success/10 border border-success/20 text-success px-4 py-3 rounded">
             {actionData.message}
           </div>
         )}
         {actionData?.error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded">
+          <div className="mb-6 bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded">
             {actionData.error}
           </div>
         )}
@@ -123,12 +124,12 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
           <input type="hidden" name="_action" value="update" />
 
           {/* Basic Information */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h2>
-            
+          <div className="bg-card shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-foreground mb-4">Basic Information</h2>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Organization Name *
                 </label>
                 <input
@@ -136,39 +137,39 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   name="name"
                   defaultValue={organization.name}
                   required
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Slug (URL identifier)
                 </label>
                 <input
                   type="text"
                   value={organization.slug}
                   disabled
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-500"
+                  className="w-full border border-input rounded-md px-3 py-2 bg-muted text-muted-foreground"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Slug cannot be changed after creation
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Type
                 </label>
                 <input
                   type="text"
                   value={organization.type}
                   disabled
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-500"
+                  className="w-full border border-input rounded-md px-3 py-2 bg-muted text-muted-foreground"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Description
                 </label>
                 <textarea
@@ -176,19 +177,19 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   rows={4}
                   defaultValue={organization.description}
                   placeholder="Tell us about your organization..."
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
               </div>
             </div>
           </div>
 
           {/* Contact Information */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h2>
-            
+          <div className="bg-card shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-foreground mb-4">Contact Information</h2>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Website
                 </label>
                 <input
@@ -196,12 +197,12 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   name="website"
                   defaultValue={organization.website}
                   placeholder="https://example.com"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Email Address
                 </label>
                 <input
@@ -209,12 +210,12 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   name="emailAddress"
                   defaultValue={organization.emailAddress}
                   placeholder="contact@example.com"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Phone Number
                 </label>
                 <input
@@ -222,12 +223,12 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   name="phoneNumber"
                   defaultValue={organization.phoneNumber}
                   placeholder="+1 (555) 123-4567"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Address
                 </label>
                 <textarea
@@ -235,16 +236,16 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   rows={3}
                   defaultValue={organization.address}
                   placeholder="123 Main St, City, State ZIP"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
               </div>
             </div>
           </div>
 
           {/* Organization Settings */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Organization Settings</h2>
-            
+          <div className="bg-card shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-foreground mb-4">Organization Settings</h2>
+
             <div className="space-y-4">
               <div className="flex items-start">
                 <div className="flex items-center h-5">
@@ -253,14 +254,14 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                     name="autoApproveMembers"
                     type="checkbox"
                     defaultChecked={organization.settings?.autoApproveMembers}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
                   />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="autoApproveMembers" className="font-medium text-gray-700">
+                  <label htmlFor="autoApproveMembers" className="font-medium text-foreground">
                     Auto-approve new members
                   </label>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     Automatically approve member join requests without manual review
                   </p>
                 </div>
@@ -273,14 +274,14 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                     name="requireInsurance"
                     type="checkbox"
                     defaultChecked={organization.settings?.requireInsurance}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
                   />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="requireInsurance" className="font-medium text-gray-700">
+                  <label htmlFor="requireInsurance" className="font-medium text-foreground">
                     Require insurance for all listings
                   </label>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     All listings from this organization must have valid insurance
                   </p>
                 </div>
@@ -293,14 +294,14 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                     name="allowPublicProfile"
                     type="checkbox"
                     defaultChecked={organization.settings?.allowPublicProfile}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
                   />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="allowPublicProfile" className="font-medium text-gray-700">
+                  <label htmlFor="allowPublicProfile" className="font-medium text-foreground">
                     Public profile
                   </label>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     Allow your organization profile to be visible to all users
                   </p>
                 </div>
@@ -309,35 +310,36 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
           </div>
 
           {/* Verification Status */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Verification Status</h2>
-            
+          <div className="bg-card shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-foreground mb-4">Verification Status</h2>
+
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Current Status</p>
+                <p className="text-sm text-muted-foreground">Current Status</p>
                 <p className="mt-1 text-lg font-medium">
                   <span
-                    className={`px-3 py-1 rounded-full ${
+                    className={cn(
+                      "px-3 py-1 rounded-full",
                       organization.verificationStatus === 'VERIFIED'
-                        ? 'bg-green-100 text-green-800'
+                        ? "bg-success/10 text-success"
                         : organization.verificationStatus === 'PENDING'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}
+                          ? "bg-warning/10 text-warning"
+                          : "bg-destructive/10 text-destructive"
+                    )}
                   >
                     {organization.verificationStatus}
                   </span>
                 </p>
               </div>
               {organization.verificationStatus === 'PENDING' && (
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   Your verification request is being reviewed
                 </p>
               )}
               {organization.verificationStatus === 'REJECTED' && (
                 <button
                   type="button"
-                  className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
+                  className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90"
                 >
                   Request Verification
                 </button>
@@ -349,7 +351,7 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
           <div className="flex justify-end">
             <button
               type="submit"
-              className="px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-6 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
             >
               Save Changes
             </button>
@@ -357,20 +359,20 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
         </Form>
 
         {/* Danger Zone */}
-        <div className="mt-8 bg-white shadow rounded-lg p-6 border-2 border-red-200">
-          <h2 className="text-lg font-medium text-red-900 mb-4">Danger Zone</h2>
-          
+        <div className="mt-8 bg-card shadow rounded-lg p-6 border-2 border-destructive/20">
+          <h2 className="text-lg font-medium text-destructive mb-4">Danger Zone</h2>
+
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-900">Deactivate Organization</p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm font-medium text-foreground">Deactivate Organization</p>
+              <p className="text-sm text-muted-foreground">
                 Deactivating will hide all listings and prevent new bookings
               </p>
             </div>
             <button
               type="button"
               onClick={() => setShowDeactivateModal(true)}
-              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700"
+              className="px-4 py-2 bg-destructive text-destructive-foreground text-sm font-medium rounded-md hover:bg-destructive/90"
             >
               Deactivate
             </button>
@@ -380,12 +382,12 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
 
       {/* Deactivate Confirmation Modal */}
       {showDeactivateModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-card rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-foreground mb-4">
               Deactivate Organization?
             </h3>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-muted-foreground mb-6">
               Are you sure you want to deactivate this organization? All listings will be hidden
               and you won't be able to create new bookings. You can reactivate it later.
             </p>
@@ -394,13 +396,13 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
               <button
                 type="button"
                 onClick={() => setShowDeactivateModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                className="px-4 py-2 text-sm font-medium text-destructive-foreground bg-destructive rounded-md hover:bg-destructive/90"
               >
                 Deactivate
               </button>

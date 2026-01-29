@@ -42,9 +42,16 @@ export async function getUser(request: Request) {
   const token = session.get("accessToken");
   const refreshToken = session.get("refreshToken");
 
-  if (!token) return null;
+  console.log("getUser: token exists:", !!token);
+  console.log("getUser: refreshToken exists:", !!refreshToken);
+
+  if (!token) {
+    console.log("getUser: no token found, returning null");
+    return null;
+  }
 
   try {
+    console.log("getUser: fetching from API:", `${API_URL}/auth/me`);
     const response = await fetch(`${API_URL}/auth/me`, {
       headers: {
         "Content-Type": "application/json",
@@ -52,8 +59,12 @@ export async function getUser(request: Request) {
       },
     });
 
+    console.log("getUser: API response status:", response.status);
+
     if (response.ok) {
-      return await response.json();
+      const user = await response.json();
+      console.log("getUser: user role:", user.role);
+      return user;
     }
 
     // If unauthorized, try to refresh
@@ -158,18 +169,34 @@ export async function createUserSession({
   remember: boolean;
   redirectTo: string;
 }) {
-  const session = await sessionStorage.getSession();
-  session.set("userId", userId);
-  session.set("accessToken", accessToken);
-  session.set("refreshToken", refreshToken);
+  console.log("=== CREATE USER SESSION START ===");
+  console.log("createUserSession: creating session for userId:", userId);
+  console.log("createUserSession: redirectTo:", redirectTo);
+  console.log("createUserSession: remember:", remember);
 
-  return redirect(redirectTo, {
-    headers: {
-      "Set-Cookie": await sessionStorage.commitSession(session, {
-        maxAge: remember ? 60 * 60 * 24 * 30 : undefined, // 30 days
-      }),
-    },
-  });
+  try {
+    const session = await sessionStorage.getSession();
+    session.set("userId", userId);
+    session.set("accessToken", accessToken);
+    session.set("refreshToken", refreshToken);
+
+    console.log("createUserSession: session data set, creating redirect");
+    const response = redirect(redirectTo, {
+      headers: {
+        "Set-Cookie": await sessionStorage.commitSession(session, {
+          maxAge: remember ? 60 * 60 * 24 * 30 : undefined, // 30 days
+        }),
+      },
+    });
+
+    console.log("createUserSession: redirect created successfully");
+    console.log("=== CREATE USER SESSION END ===");
+    return response;
+  } catch (error) {
+    console.error("createUserSession: ERROR:", error);
+    console.log("=== CREATE USER SESSION END WITH ERROR ===");
+    throw error;
+  }
 }
 
 export async function logout(request: Request) {

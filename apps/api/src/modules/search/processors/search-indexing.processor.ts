@@ -1,7 +1,6 @@
 import { Processor, Process, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
-import { SearchIndexService } from '../services/search-index.service';
 
 interface IndexListingJob {
   listingId: string;
@@ -19,8 +18,6 @@ interface ReindexAllJob {
 @Processor('search-indexing')
 export class SearchIndexingProcessor {
   private readonly logger = new Logger(SearchIndexingProcessor.name);
-
-  constructor(private searchIndexService: SearchIndexService) {}
 
   @OnQueueActive()
   onActive(job: Job) {
@@ -42,19 +39,11 @@ export class SearchIndexingProcessor {
     const { listingId, operation } = job.data;
 
     try {
-      switch (operation) {
-        case 'index':
-        case 'update':
-          await this.searchIndexService.indexListing(listingId);
-          this.logger.log(`Indexed listing ${listingId}`);
-          break;
-        case 'delete':
-          await this.searchIndexService.removeListing(listingId);
-          this.logger.log(`Removed listing ${listingId} from index`);
-          break;
-      }
+      // Since we're using PostgreSQL, no indexing needed
+      this.logger.log(`Skipping indexing for listing ${listingId} - using PostgreSQL search`);
+      return { skipped: true, reason: 'PostgreSQL search' };
     } catch (error) {
-      this.logger.error(`Error indexing listing ${listingId}: ${error.message}`);
+      this.logger.error(`Error processing listing ${listingId}: ${error.message}`);
       throw error;
     }
   }
@@ -64,8 +53,11 @@ export class SearchIndexingProcessor {
     const { listingIds } = job.data;
 
     try {
-      await this.searchIndexService.bulkIndex(listingIds);
-      this.logger.log(`Bulk indexed ${listingIds.length} listings`);
+      // Since we're using PostgreSQL, no bulk indexing needed
+      this.logger.log(
+        `Skipping bulk indexing for ${listingIds.length} listings - using PostgreSQL search`,
+      );
+      return { skipped: true, reason: 'PostgreSQL search' };
     } catch (error) {
       this.logger.error(`Error bulk indexing: ${error.message}`);
       throw error;
@@ -77,9 +69,9 @@ export class SearchIndexingProcessor {
     const { batchSize = 500 } = job.data;
 
     try {
-      const result = await this.searchIndexService.reindexAll();
-      this.logger.log(`Reindexed all listings: completed`);
-      return result;
+      // Since we're using PostgreSQL, no reindexing needed
+      this.logger.log(`Skipping reindex all - using PostgreSQL search`);
+      return { skipped: true, reason: 'PostgreSQL search' };
     } catch (error) {
       this.logger.error(`Error reindexing all listings: ${error.message}`);
       throw error;
@@ -89,9 +81,9 @@ export class SearchIndexingProcessor {
   @Process('optimize-index')
   async handleOptimizeIndex(job: Job) {
     try {
-      // Perform index optimization (force merge, etc.)
-      this.logger.log('Optimizing search index');
-      // Implementation would go here
+      // Since we're using PostgreSQL, no index optimization needed
+      this.logger.log('Skipping index optimization - using PostgreSQL search');
+      return { skipped: true, reason: 'PostgreSQL search' };
     } catch (error) {
       this.logger.error(`Error optimizing index: ${error.message}`);
       throw error;
