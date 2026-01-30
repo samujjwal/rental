@@ -12,6 +12,7 @@ import { getUser, getUserToken, getSession } from "~/utils/auth.server";
 import { useEffect } from "react";
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import type { Route } from "./+types/root";
 import stylesheet from "./tailwind.css?url";
@@ -24,6 +25,16 @@ const theme = createTheme({
         },
         secondary: {
             main: '#dc004e',
+        },
+    },
+});
+
+// Create React Query client
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            refetchOnWindowFocus: false,
         },
     },
 });
@@ -107,10 +118,12 @@ function RootContent() {
     }
 
     return (
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <Outlet />
-        </ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+            <ThemeProvider theme={theme}>
+                <CssBaseline />
+                <Outlet />
+            </ThemeProvider>
+        </QueryClientProvider>
     );
 }
 

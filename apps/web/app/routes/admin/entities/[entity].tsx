@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, type LoaderFunctionArgs, useLoaderData } from 'react-router';
 import { Box, Typography, Breadcrumbs, Link, Alert, CircularProgress, Chip } from '@mui/material';
+import { TanStackTable } from '~/components/admin/TanStackTable';
 import { DataTableWrapper } from '~/components/admin/DataTableWrapper';
 import { EntityForm } from '~/components/admin/EntityForm';
 import { requireAdmin, getSession } from '~/utils/auth.server';
@@ -77,19 +78,7 @@ export default function DynamicEntityPage() {
     const loaderData = useLoaderData<typeof loader>();
     const { setAuth } = useAuthStore();
 
-    // Force component to remount when entity changes
-    const entityKey = `entity-${entity}`;
-
-    // Reset all state when entity changes by using a key-based approach
-    const [currentEntity, setCurrentEntity] = useState<string | null>(null);
-
-    // Sync server-side auth to client-side store
-    useEffect(() => {
-        if (loaderData?.user && loaderData?.accessToken && loaderData?.refreshToken) {
-            setAuth(loaderData.user, loaderData.accessToken, loaderData.refreshToken);
-        }
-    }, [loaderData, setAuth]);
-
+    // State
     const [view, setView] = useState<ViewMode>('table');
     const [selectedRecord, setSelectedRecord] = useState<any>(null);
     const [data, setData] = useState<any[]>([]);
@@ -97,6 +86,11 @@ export default function DynamicEntityPage() {
     const [configLoading, setConfigLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [entityConfig, setEntityConfig] = useState<EntityConfig | null>(null);
+    const [currentEntity, setCurrentEntity] = useState<string | null>(null);
+    const [isAuthReady, setIsAuthReady] = useState(false);
+
+    // Force component to remount when entity changes
+    const entityKey = `entity-${entity}`;
 
     const [tableState, setTableState] = useState<TableState>({
         pagination: {
@@ -111,131 +105,28 @@ export default function DynamicEntityPage() {
         selectedIds: [],
     });
 
-    // Fetch entity configuration from API
-    const fetchEntityConfig = useCallback(async () => {
-        console.log('fetchEntityConfig called for entity:', entity);
-        if (!entity) {
-            console.log('No entity provided, returning');
-            return;
-        }
+    // Separate state for API response pagination to prevent loops
+    const [apiPagination, setApiPagination] = useState({
+        total: 0,
+        totalPages: 1,
+    });
 
-        setConfigLoading(true);
-        setError(null);
-
-        try {
-            // Fetch entity schema from API
-            console.log('Making API call to:', `${API_URL}/api/admin/schema/${entity}`);
-            const response = await authFetch(`${API_URL}/api/admin/schema/${entity}`);
-
-            if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error(`Entity "${entity}" not found`);
-                }
-                throw new Error('Failed to load entity configuration');
-            }
-
-            const schema = await response.json();
-            console.log('Schema received for entity:', entity, schema);
-
-            // Transform API schema to EntityConfig
-            const config = transformSchemaToConfig(schema);
-            console.log('Transformed config for entity:', entity, config);
-
-            setEntityConfig(config);
-            console.log('EntityConfig set for entity:', entity);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load configuration');
-        } finally {
-            setConfigLoading(false);
-        }
-    }, [entity]);
-
-    // Fetch data
-    const fetchData = useCallback(async () => {
-        console.log('fetchData called for entity:', entity, 'with entityConfig:', !!entityConfig);
-        if (!entityConfig || !entity) {
-            console.log('No entityConfig or entity, returning');
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-
-        try {
-            // Build query params
-            const params = new URLSearchParams({
-                page: tableState.pagination.page.toString(),
-                limit: tableState.pagination.limit.toString(),
-                ...(tableState.search && { search: tableState.search }),
-                ...(tableState.sorting.length > 0 && {
-                    sortBy: tableState.sorting[0].field,
-                    sortOrder: tableState.sorting[0].direction,
-                }),
-            });
-
-            // Add filters
-            Object.entries(tableState.filters).forEach(([key, value]) => {
-                if (value !== undefined && value !== null && value !== '') {
-                    params.append(`filter[${key}]`, String(value));
-                }
-            });
-
-            const response = await authFetch(
-                `${entityConfig.api.baseEndpoint}?${params.toString()}`
-            );
-
-            console.log('Data API response status:', response.status);
-            if (!response.ok) {
-                throw new Error('Failed to load data');
-            }
-
-            const result = await response.json();
-            console.log('Data received for entity:', entity, result);
-
-            const possibleKeys = [
-                'data',
-                entityConfig.slug,
-                entityConfig.pluralName?.toLowerCase(),
-                `${entityConfig.slug}s`,
-            ].filter(Boolean) as string[];
-
-            const resolvedData = possibleKeys.reduce<any[]>((acc, key) => {
-                if (acc.length) return acc;
-                const value = (result as Record<string, any>)[key];
-                return Array.isArray(value) ? value : acc;
-            }, []);
-
-            setData(resolvedData);
-
-            setTableState(prev => {
-                const totalCount = result.total ?? result.pagination?.total ?? resolvedData.length;
-                const totalPagesFromResponse = result.totalPages ?? result.pagination?.totalPages;
-                const computedTotalPages = Math.ceil((totalCount || 1) / prev.pagination.limit);
-
-                return {
-                    ...prev,
-                    pagination: {
-                        ...prev.pagination,
-                        total: totalCount,
-                        totalPages: totalPagesFromResponse ?? computedTotalPages,
-                    },
-                };
-            });
-            console.log('Data state updated for entity:', entity);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'An error occurred');
-        } finally {
-            setLoading(false);
-        }
-    }, [entity, entityConfig, tableState.pagination.page, tableState.pagination.limit, tableState.search, tableState.sorting, tableState.filters]);
-
-    // Reset state and fetch config when entity changes
+    // Sync server-side auth to client-side store
     useEffect(() => {
-        console.log('Entity changed to:', entity);
-        if (entity && entity !== currentEntity) {
-            console.log('Entity actually changed from', currentEntity, 'to', entity);
+        if (loaderData?.user && loaderData?.accessToken && loaderData?.refreshToken) {
+            setAuth(loaderData.user, loaderData.accessToken, loaderData.refreshToken);
+            setIsAuthReady(true);
+        } else {
+            setIsAuthReady(true);
+        }
+    }, [loaderData, setAuth]);
 
-            // Reset all state immediately
+    // Handle entity changes - separate from data fetching
+    useEffect(() => {
+        console.log('[Entity Change] entity:', entity, 'currentEntity:', currentEntity, 'isAuthReady:', isAuthReady);
+        if (entity && entity !== currentEntity && isAuthReady) {
+            console.log('[Entity Change] Resetting state for new entity:', entity);
+            // Reset state for new entity
             setView('table');
             setSelectedRecord(null);
             setData([]);
@@ -244,35 +135,136 @@ export default function DynamicEntityPage() {
             setError(null);
             setEntityConfig(null);
             setTableState({
-                pagination: {
-                    page: 1,
-                    limit: 20,
-                    total: 0,
-                    totalPages: 1,
-                },
+                pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
                 sorting: [],
                 filters: {},
                 search: '',
                 selectedIds: [],
             });
-
-            // Update current entity
+            setApiPagination({ total: 0, totalPages: 1 });
             setCurrentEntity(entity);
-
-            // Fetch new entity configuration
-            console.log('Fetching config for entity:', entity);
-            fetchEntityConfig();
+            // Don't trigger refresh here - let the config fetching useEffect handle it
         }
-    }, [entity, currentEntity, fetchEntityConfig]);
+    }, [entity, currentEntity, isAuthReady]);
 
-    // Fetch data when config is loaded or dependencies change
+    // Fetch entity config when entity changes
     useEffect(() => {
-        console.log('useEffect for fetchData triggered, entityConfig:', !!entityConfig);
-        if (entityConfig) {
-            console.log('Calling fetchData because entityConfig is available');
+        console.log('[Config Fetch] entity:', entity, 'currentEntity:', currentEntity, 'isAuthReady:', isAuthReady, 'entityConfig.slug:', entityConfig?.slug);
+        if (entity && currentEntity === entity && isAuthReady) {
+            // Always fetch config if we don't have one or if it doesn't match the current entity
+            if (!entityConfig || entityConfig.slug !== entity) {
+                console.log('[Config Fetch] Fetching config for entity:', entity);
+                const fetchConfig = async () => {
+                    setConfigLoading(true);
+                    setError(null);
+
+                    try {
+                        const response = await authFetch(`${API_URL}/api/admin/schema/${entity}`);
+
+                        if (!response.ok) {
+                            if (response.status === 404) {
+                                throw new Error(`Entity "${entity}" not found`);
+                            }
+                            throw new Error('Failed to load entity configuration');
+                        }
+
+                        const schema = await response.json();
+                        const config = transformSchemaToConfig(schema);
+                        setEntityConfig(config);
+                    } catch (err) {
+                        if (err instanceof Error && err.name !== 'AbortError') {
+                            setError(err instanceof Error ? err.message : 'Failed to load configuration');
+                        }
+                    } finally {
+                        setConfigLoading(false);
+                    }
+                };
+
+                fetchConfig();
+            }
+        }
+    }, [entity, currentEntity, isAuthReady, entityConfig]);
+
+    // Fetch data when entity config is available and table state changes
+    useEffect(() => {
+        const shouldFetch = entityConfig && entity && isAuthReady && !configLoading && entityConfig.slug === entity;
+        console.log('[Data Fetch] Check - entity:', entity, 'shouldFetch:', shouldFetch, 'entityConfig.slug:', entityConfig?.slug, 'configLoading:', configLoading);
+        if (shouldFetch) {
+            console.log('[Data Fetch] Starting fetch for entity:', entity);
+            const fetchData = async () => {
+                setLoading(true);
+                setError(null);
+
+                try {
+                    const params = new URLSearchParams({
+                        page: tableState.pagination.page.toString(),
+                        limit: tableState.pagination.limit.toString(),
+                        ...(tableState.search && { search: tableState.search }),
+                        ...(tableState.sorting.length > 0 && {
+                            sortBy: tableState.sorting[0].field,
+                            sortOrder: tableState.sorting[0].direction,
+                        }),
+                    });
+
+                    Object.entries(tableState.filters).forEach(([key, value]) => {
+                        if (value !== undefined && value !== null && value !== '') {
+                            params.append(`filter[${key}]`, String(value));
+                        }
+                    });
+
+                    const response = await authFetch(
+                        `${entityConfig.api.baseEndpoint}?${params.toString()}`
+                    );
+
+                    if (!response.ok) {
+                        throw new Error('Failed to load data');
+                    }
+
+                    const result = await response.json();
+
+                    const possibleKeys = [
+                        'data',
+                        entityConfig.slug,
+                        entityConfig.pluralName?.toLowerCase(),
+                        `${entityConfig.slug}s`,
+                    ].filter(Boolean) as string[];
+
+                    const resolvedData = possibleKeys.reduce<any[]>((acc, key) => {
+                        if (acc.length) return acc;
+                        const value = (result as Record<string, any>)[key];
+                        return Array.isArray(value) ? value : acc;
+                    }, []);
+
+                    setData(resolvedData);
+
+                    const totalCount = result.total ?? result.pagination?.total ?? resolvedData.length;
+                    console.log('[Data Fetch] Completed - entity:', entity, 'rows:', resolvedData.length, 'total:', totalCount);
+                    const totalPagesFromResponse = result.totalPages ?? result.pagination?.totalPages;
+                    const computedTotalPages = Math.ceil((totalCount || 1) / tableState.pagination.limit);
+
+                    // Only update API pagination, not tableState pagination
+                    setApiPagination({
+                        total: totalCount,
+                        totalPages: totalPagesFromResponse ?? computedTotalPages,
+                    });
+                } catch (err) {
+                    if (err instanceof Error && err.name !== 'AbortError') {
+                        setError(err instanceof Error ? err.message : 'An error occurred');
+                    }
+                } finally {
+                    setLoading(false);
+                }
+            };
+
             fetchData();
         }
-    }, [fetchData, entityConfig]);
+    }, [entityConfig, entity, isAuthReady, configLoading, tableState.pagination.page, tableState.pagination.limit, tableState.search, JSON.stringify(tableState.sorting), JSON.stringify(tableState.filters)]);
+
+    // Simple refresh function
+    const refresh = () => {
+        // Reset entityConfig to trigger re-fetch
+        setEntityConfig(null);
+    };
 
     // Transform API schema to EntityConfig
     function transformSchemaToConfig(schema: any): EntityConfig {
@@ -566,7 +558,7 @@ export default function DynamicEntityPage() {
                 throw new Error(`Failed to delete ${entityConfig.name}`);
             }
 
-            await fetchData();
+            refresh();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to delete record');
         } finally {
@@ -616,7 +608,7 @@ export default function DynamicEntityPage() {
                 throw new Error(errorData.message || `Failed to ${isCreate ? 'create' : 'update'} ${entityConfig.name}`);
             }
 
-            await fetchData();
+            refresh();
             setView('table');
             setSelectedRecord(null);
         } catch (err) {
@@ -635,9 +627,9 @@ export default function DynamicEntityPage() {
     };
 
     // Handle table state change
-    const handleTableStateChange = (newState: Partial<TableState>) => {
+    const handleTableStateChange = useCallback((newState: Partial<TableState>) => {
         setTableState(prev => ({ ...prev, ...newState }));
-    };
+    }, []);
 
     // Loading state
     if (configLoading) {
@@ -659,37 +651,27 @@ export default function DynamicEntityPage() {
         );
     }
 
-    // Entity not found
-    if (!entityConfig) {
-        return (
-            <Box sx={{ p: 3 }}>
-                <Alert severity="error">
-                    Entity configuration not available. Please check the URL or contact an administrator.
-                </Alert>
-            </Box>
-        );
-    }
-
+    
     return (
-        <Box sx={{ p: 3 }}>
+        <Box key={entityKey} sx={{ p: 3 }}>
             {/* Breadcrumbs */}
             <Breadcrumbs sx={{ mb: 2 }}>
                 <Link color="inherit" href="/admin" underline="hover">
                     Admin
                 </Link>
                 <Typography color="text.primary">
-                    {entityConfig.pluralName}
+                    {entityConfig?.pluralName || 'Entity'}
                 </Typography>
             </Breadcrumbs>
 
             {/* Header */}
             <Box sx={{ mb: 3 }}>
                 <Typography variant="h4" gutterBottom>
-                    {view === 'table' ? entityConfig.pluralName :
-                        view === 'form' ? (selectedRecord ? `Edit ${entityConfig.name}` : `Create ${entityConfig.name}`) :
-                            `${entityConfig.name} Details`}
+                    {view === 'table' ? entityConfig?.pluralName :
+                        view === 'form' ? (selectedRecord ? `Edit ${entityConfig?.name}` : `Create ${entityConfig?.name}`) :
+                            `${entityConfig?.name} Details`}
                 </Typography>
-                {entityConfig.description && view === 'table' && (
+                {entityConfig?.description && view === 'table' && (
                     <Typography variant="body2" color="text.secondary">
                         {entityConfig.description}
                     </Typography>
@@ -705,25 +687,41 @@ export default function DynamicEntityPage() {
 
             {/* Content */}
             {view === 'table' && (
-                <DataTableWrapper
-                    key={entityConfig.slug}
-                    entityConfig={entityConfig}
-                    data={data}
-                    loading={loading}
-                    error={error}
-                    state={tableState}
-                    onStateChange={handleTableStateChange}
-                    onCreate={handleCreate}
-                    onEdit={handleEdit}
-                    onView={handleView}
-                    onDelete={handleDelete}
-                    onRefresh={fetchData}
-                />
+                <Box sx={{ p: 2 }}>
+                    <Typography variant="h4" gutterBottom>
+                        {entityConfig?.pluralName || entity}
+                    </Typography>
+                    
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        Debug: loading={loading ? 'true' : 'false'}, error={error || 'null'}, data.length={data.length}, entityConfig.columns.length={entityConfig?.columns?.length || 0}
+                    </Typography>
+                    
+                    {loading && <Typography>Loading...</Typography>}
+                    
+                    {error && <Typography color="error">{error}</Typography>}
+                    
+                    {!loading && !error && data.length > 0 && (
+                        <>
+                            <Typography variant="body2" sx={{ mb: 2 }}>
+                                Debug: Data length: {data.length}, Columns: {entityConfig?.columns?.length || 0}
+                            </Typography>
+                            <TanStackTable
+                                data={data}
+                                columns={entityConfig?.columns || []}
+                                totalCount={apiPagination.total}
+                            />
+                        </>
+                    )}
+                    
+                    {!loading && !error && data.length === 0 && (
+                        <Typography>No data available</Typography>
+                    )}
+                </Box>
             )}
 
             {(view === 'form' || view === 'detail') && (
                 <EntityForm
-                    entityConfig={entityConfig}
+                    entityConfig={entityConfig!}
                     mode={view === 'detail' ? 'view' : selectedRecord ? 'edit' : 'create'}
                     data={selectedRecord}
                     loading={loading}

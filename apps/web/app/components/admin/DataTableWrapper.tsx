@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { MaterialReactTable, type MRT_ColumnDef } from 'material-react-table';
 
@@ -8,6 +8,7 @@ interface DataTableWrapperProps<T = any> {
     loading?: boolean;
     error?: string | null;
     state: any;
+    apiPagination?: { total: number; totalPages: number };
     onStateChange: (updates: any) => void;
     onCreate?: () => void;
     onEdit?: (record: T) => void;
@@ -23,6 +24,7 @@ export function DataTableWrapper<T = any>({
     loading = false,
     error,
     state,
+    apiPagination,
     onStateChange,
     onCreate,
     onEdit,
@@ -31,9 +33,9 @@ export function DataTableWrapper<T = any>({
     onRefresh,
     onExport,
 }: DataTableWrapperProps<T>) {
-    useEffect(() => {
-        console.log('[DataTableWrapper] rendering for slug:', entityConfig?.slug, 'rows:', data?.length ?? 0);
-    }, [entityConfig?.slug, data]);
+    if (!entityConfig) {
+        return <div>No entity configuration available</div>;
+    }
 
     return (
         <Box sx={{ width: '100%' }}>
@@ -64,7 +66,7 @@ export function DataTableWrapper<T = any>({
 
             {/* Error */}
             {error && (
-                <Box sx={{ mb: 2 }}>
+                <Box sx={{ mb: 2 }} role="alert" aria-live="assertive">
                     <Typography color="error">{error}</Typography>
                 </Box>
             )}
@@ -73,6 +75,10 @@ export function DataTableWrapper<T = any>({
             <MaterialReactTable
                 columns={entityConfig.columns}
                 data={data as any[]}
+                rowCount={apiPagination?.total ?? data.length}
+                muiTableProps={{
+                    'aria-label': `${entityConfig.pluralName || 'Entity'} data table`,
+                }}
                 state={{
                     isLoading: loading,
                     pagination: {

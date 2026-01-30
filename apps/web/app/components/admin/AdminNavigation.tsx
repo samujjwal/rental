@@ -1,5 +1,4 @@
 import { Link, useLocation } from "react-router";
-import { useEffect } from "react";
 import {
     LayoutDashboard,
     Users,
@@ -108,16 +107,12 @@ const menuItems: MenuCategory[] = [
 export function AdminNavigation() {
     const location = useLocation();
 
-    useEffect(() => {
-        console.log('[AdminNavigation] location pathname:', location.pathname);
-    }, [location.pathname]);
-
     return (
-        <aside className="w-64 bg-white shadow-sm border-r h-screen overflow-y-auto flex flex-col">
+        <aside role="complementary" aria-label="Admin navigation" className="w-64 bg-white shadow-sm border-r h-screen overflow-y-auto flex flex-col">
             <div className="p-4 border-b">
                 <h2 className="text-lg font-semibold text-gray-900">Admin Panel</h2>
             </div>
-            <nav className="p-4 space-y-6 flex-1">
+            <nav className="p-4 space-y-6 flex-1" aria-label="Main admin menu">
                 {menuItems.map((category) => (
                     <div key={category.category}>
                         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">

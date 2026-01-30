@@ -45,7 +45,7 @@ export async function createDevSession(email: string, request: Request) {
 }
 
 export const DEV_USERS = {
-  admin: 'admin@rental.local',
+  admin: 'admin@rental-portal.com',
   support: 'support@rental.local',
   owner1: 'john.owner@rental.local',
   owner2: 'emily.tools@rental.local',

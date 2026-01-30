@@ -13,9 +13,7 @@ interface DevUser {
 }
 
 const DEV_USERS: DevUser[] = [
-  { email: 'admin1@rental.local', label: 'Admin', role: 'Administrator', color: 'bg-red-600 hover:bg-red-700' },
-  { email: 'admin2@rental.local', label: 'Admin 2', role: 'Administrator', color: 'bg-red-600 hover:bg-red-700' },
-  { email: 'admin3@rental.local', label: 'Admin 3', role: 'Administrator', color: 'bg-red-600 hover:bg-red-700' },
+  { email: 'admin@rental-portal.com', label: 'Admin', role: 'Administrator', color: 'bg-red-600 hover:bg-red-700' },
   { email: 'support@rental.local', label: 'Support', role: 'Support Agent', color: 'bg-purple-600 hover:bg-purple-700' },
   { email: 'john.owner@rental.local', label: 'John (Owner)', role: 'Camera Equipment Owner', color: 'bg-blue-600 hover:bg-blue-700' },
   { email: 'emily.tools@rental.local', label: 'Emily (Owner)', role: 'Tools Owner', color: 'bg-blue-600 hover:bg-blue-700' },
@@ -63,7 +61,7 @@ export function DevUserSwitcher() {
           Customer Portal
         </a>
         <Form action="/auth/login" method="post" className="flex-1">
-          <input type="hidden" name="email" value="admin1@rental.local" />
+          <input type="hidden" name="email" value="admin@rental-portal.com" />
           <input type="hidden" name="password" value="password123" />
           <input type="hidden" name="redirectTo" value="/admin" />
           <button
