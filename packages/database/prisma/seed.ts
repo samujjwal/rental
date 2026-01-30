@@ -1,6 +1,10 @@
+import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { faker } from '@faker-js/faker';
+
+// Load environment variables from root .env file
+config({ path: '../../.env' });
 
 const prisma = new PrismaClient();
 
@@ -225,26 +229,73 @@ async function main() {
 
   // Create properties
   const properties = [];
-  const propertyTypes = ['APARTMENT', 'HOUSE', 'VILLA', 'STUDIO', 'CONDO', 'TOWNHOUSE', 'COTTAGE', 'CABIN', 'LOFT'];
+  const propertyTypes = [
+    'APARTMENT',
+    'HOUSE',
+    'VILLA',
+    'STUDIO',
+    'CONDO',
+    'TOWNHOUSE',
+    'COTTAGE',
+    'CABIN',
+    'LOFT',
+  ];
   const amenities = [
-    'WiFi', 'Kitchen', 'Parking', 'Air Conditioning', 'Heating', 'Washer', 'Dryer',
-    'TV', 'Essentials', 'Hot Water', 'Shampoo', 'Workspace', 'Pool', 'Gym', 'Elevator',
-    'Fire Extinguisher', 'Smoke Detector', 'First Aid Kit', 'Lock on bedroom door'
+    'WiFi',
+    'Kitchen',
+    'Parking',
+    'Air Conditioning',
+    'Heating',
+    'Washer',
+    'Dryer',
+    'TV',
+    'Essentials',
+    'Hot Water',
+    'Shampoo',
+    'Workspace',
+    'Pool',
+    'Gym',
+    'Elevator',
+    'Fire Extinguisher',
+    'Smoke Detector',
+    'First Aid Kit',
+    'Lock on bedroom door',
   ];
 
   for (let i = 0; i < 25; i++) {
     const owner = users[faker.number.int({ min: 1, max: users.length - 1 })];
     const selectedAmenities = faker.helpers.arrayElements(amenities, { min: 5, max: 15 });
-    const selectedFeatures = faker.helpers.arrayElements([
-      'Ocean View', 'Mountain View', 'Pet Friendly', 'Smoking Allowed', 'Wheelchair Accessible', 
-      'Elevator', 'Balcony', 'Garden', 'BBQ Grill', 'Fire Pit', 'Hot Tub', 'Sauna', 
-      'Gym Access', 'Pool Access', 'Parking Included', 'Air Conditioning', 'Heating', 
-      'Smart Home', 'High-Speed Internet', 'Workspace'
-    ], { min: 3, max: 8 });
+    const selectedFeatures = faker.helpers.arrayElements(
+      [
+        'Ocean View',
+        'Mountain View',
+        'Pet Friendly',
+        'Smoking Allowed',
+        'Wheelchair Accessible',
+        'Elevator',
+        'Balcony',
+        'Garden',
+        'BBQ Grill',
+        'Fire Pit',
+        'Hot Tub',
+        'Sauna',
+        'Gym Access',
+        'Pool Access',
+        'Parking Included',
+        'Air Conditioning',
+        'Heating',
+        'Smart Home',
+        'High-Speed Internet',
+        'Workspace',
+      ],
+      { min: 3, max: 8 },
+    );
     const category = categories[faker.number.int({ min: 0, max: categories.length - 1 })];
     const policy = policies[faker.number.int({ min: 0, max: policies.length - 1 })];
-    const organization = faker.datatype.boolean() ? organizations[faker.number.int({ min: 0, max: organizations.length - 1 })] : null;
-    
+    const organization = faker.datatype.boolean()
+      ? organizations[faker.number.int({ min: 0, max: organizations.length - 1 })]
+      : null;
+
     const property = await prisma.property.create({
       data: {
         title: faker.helpers.arrayElement([
@@ -257,7 +308,7 @@ async function main() {
           'Mountain View Cabin',
           'Urban Loft with Terrace',
           'Historic Townhouse',
-          'Contemporary Condo'
+          'Contemporary Condo',
         ]),
         slug: faker.lorem.slug(),
         description: faker.lorem.paragraphs(3),
@@ -281,18 +332,20 @@ async function main() {
         cleaningFee: parseFloat(faker.commerce.price({ min: 25, max: 150 })),
         amenities: selectedAmenities,
         features: selectedFeatures,
-        images: Array.from({ length: faker.number.int({ min: 3, max: 8 }) }, () => 
-          `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`
+        images: Array.from(
+          { length: faker.number.int({ min: 3, max: 8 }) },
+          () => `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`,
         ),
-        photos: Array.from({ length: faker.number.int({ min: 3, max: 8 }) }, () => 
-          `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`
+        photos: Array.from(
+          { length: faker.number.int({ min: 3, max: 8 }) },
+          () => `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`,
         ),
         rules: [
           'No smoking',
           'No parties',
           'Quiet hours after 10 PM',
           'Remove shoes indoors',
-          'Respect neighbors'
+          'Respect neighbors',
         ],
         ownerId: owner.id,
         categoryId: category.id,
@@ -312,7 +365,7 @@ async function main() {
   for (let i = 0; i < 40; i++) {
     const property = properties[faker.number.int({ min: 0, max: properties.length - 1 })];
     const guest = users[faker.number.int({ min: 1, max: users.length - 1 })];
-    
+
     // Ensure guest is not the property owner
     if (guest.id === property.ownerId) continue;
 
@@ -353,14 +406,14 @@ async function main() {
 
   // Create reviews for completed bookings
   const reviews = [];
-  const completedBookings = bookings.filter(b => b.status === 'COMPLETED');
+  const completedBookings = bookings.filter((b) => b.status === 'COMPLETED');
   const reviewTypes = ['LISTING_REVIEW', 'RENTER_REVIEW', 'OWNER_REVIEW'];
 
   for (const booking of completedBookings) {
-    const property = properties.find(p => p.id === booking.propertyId);
-    const guest = users.find(u => u.id === booking.guestId);
-    const owner = users.find(u => u.id === property?.ownerId);
-    
+    const property = properties.find((p) => p.id === booking.propertyId);
+    const guest = users.find((u) => u.id === booking.guestId);
+    const owner = users.find((u) => u.id === property?.ownerId);
+
     if (!property || !guest || !owner) continue;
 
     // Create listing review
