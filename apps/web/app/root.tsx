@@ -10,24 +10,13 @@ import { useAuthInit } from './hooks/useAuthInit';
 import { useAuthStore } from './lib/store/auth';
 import { getUser, getUserToken, getSession } from "~/utils/auth.server";
 import { useEffect } from "react";
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import theme from '~/theme/muiTheme';
 
 import type { Route } from "./+types/root";
 import stylesheet from "./tailwind.css?url";
-
-// Create a Material-UI theme
-const theme = createTheme({
-    palette: {
-        primary: {
-            main: '#1976d2',
-        },
-        secondary: {
-            main: '#dc004e',
-        },
-    },
-});
 
 // Create React Query client
 const queryClient = new QueryClient({

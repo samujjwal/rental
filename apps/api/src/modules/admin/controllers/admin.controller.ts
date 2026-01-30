@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from '../services/admin.service';
@@ -525,13 +526,25 @@ export class AdminController {
     @Query('search') search?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('filters') filters?: string,
   ) {
+    // Parse filters from JSON string if provided
+    let parsedFilters: any[] | undefined;
+    if (filters) {
+      try {
+        parsedFilters = JSON.parse(filters);
+      } catch (error) {
+        throw new BadRequestException('Invalid filters format');
+      }
+    }
+
     return this.adminService.getEntityData(adminId, entity, {
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
       search,
       sortBy,
       sortOrder,
+      filters: parsedFilters,
     });
   }
 }

@@ -1,21 +1,31 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '../../../common/prisma/prisma.service';
-import { 
-  UserRole, 
-  UserStatus, 
-  PropertyStatus, 
-  ListingStatus,
-  BookingStatus, 
-  DisputeStatus,
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '@/common/prisma/prisma.service';
+import {
+  UserRole,
+  User,
+  PropertyStatus,
+  BookingStatus,
   PayoutStatus,
+  UserStatus,
+  ListingStatus,
+  DisputeStatus,
   OrganizationStatus,
   NotificationType,
-  toNumber
+  toNumber,
 } from '@rental-portal/database';
+import { FilterBuilderService, FilterCondition } from './filter-builder.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly filterBuilder: FilterBuilderService,
+  ) {}
 
   /**
    * Verify user is admin
@@ -462,7 +472,8 @@ export class AdminService {
     const revenueByCategory: Record<string, number> = {};
     for (const payment of payments) {
       const categoryId = payment.booking.listing.categoryId;
-      revenueByCategory[categoryId] = (revenueByCategory[categoryId] || 0) + toNumber(payment.amount);
+      revenueByCategory[categoryId] =
+        (revenueByCategory[categoryId] || 0) + toNumber(payment.amount);
     }
 
     return {
@@ -1777,6 +1788,84 @@ export class AdminService {
           { accessorKey: 'status', header: 'Status', width: '100px' },
           { accessorKey: 'createdAt', header: 'Created', width: '150px' },
         ],
+        filters: [
+          { key: 'email', label: 'Email', type: 'text', operator: 'contains' },
+          { key: 'firstName', label: 'First Name', type: 'text', operator: 'contains' },
+          { key: 'lastName', label: 'Last Name', type: 'text', operator: 'contains' },
+          {
+            key: 'role',
+            label: 'Role',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'ADMIN', label: 'Admin' },
+              { value: 'USER', label: 'User' },
+              { value: 'HOST', label: 'Host' },
+              { value: 'RENTER', label: 'Renter' },
+            ],
+          },
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'SUSPENDED', label: 'Suspended' },
+              { value: 'PENDING', label: 'Pending' },
+            ],
+          },
+          { key: 'createdAt', label: 'Created After', type: 'date', operator: 'gte' },
+          { key: 'createdAt', label: 'Created Before', type: 'date', operator: 'lte' },
+          { key: 'updatedAt', label: 'Updated After', type: 'date', operator: 'gte' },
+          { key: 'updatedAt', label: 'Updated Before', type: 'date', operator: 'lte' },
+          {
+            key: 'isActive',
+            label: 'Is Active',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'true', label: 'Active' },
+              { value: 'false', label: 'Inactive' },
+            ],
+          },
+          {
+            key: 'emailVerified',
+            label: 'Email Verified',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'true', label: 'Verified' },
+              { value: 'false', label: 'Not Verified' },
+            ],
+          },
+          {
+            key: 'phoneVerified',
+            label: 'Phone Verified',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'true', label: 'Verified' },
+              { value: 'false', label: 'Not Verified' },
+            ],
+          },
+          {
+            key: 'stripeCustomerId',
+            label: 'Has Stripe Customer',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'not_null', label: 'Has Customer ID' },
+              { value: 'is_null', label: 'No Customer ID' },
+            ],
+          },
+          { key: 'lastLoginAt', label: 'Last Login After', type: 'date', operator: 'gte' },
+          { key: 'lastLoginAt', label: 'Last Login Before', type: 'date', operator: 'lte' },
+          { key: 'averageRating', label: 'Min Rating', type: 'number', operator: 'gte' },
+          { key: 'averageRating', label: 'Max Rating', type: 'number', operator: 'lte' },
+          { key: 'totalReviews', label: 'Min Reviews', type: 'number', operator: 'gte' },
+          { key: 'totalReviews', label: 'Max Reviews', type: 'number', operator: 'lte' },
+        ],
         actions: ['view', 'edit', 'suspend', 'activate'],
       },
       organizations: {
@@ -1801,6 +1890,23 @@ export class AdminService {
           { accessorKey: 'name', header: 'Name', width: '200px' },
           { accessorKey: 'status', header: 'Status', width: '100px' },
           { accessorKey: 'createdAt', header: 'Created', width: '150px' },
+        ],
+        filters: [
+          { key: 'name', label: 'Name', type: 'text', operator: 'contains' },
+          { key: 'description', label: 'Description', type: 'text', operator: 'contains' },
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'INACTIVE', label: 'Inactive' },
+              { value: 'SUSPENDED', label: 'Suspended' },
+            ],
+          },
+          { key: 'createdAt', label: 'Created After', type: 'date', operator: 'gte' },
+          { key: 'createdAt', label: 'Created Before', type: 'date', operator: 'lte' },
         ],
         actions: ['view', 'edit', 'updateStatus'],
       },
@@ -1830,6 +1936,28 @@ export class AdminService {
           { accessorKey: 'price', header: 'Price', width: '100px' },
           { accessorKey: 'status', header: 'Status', width: '100px' },
           { accessorKey: 'createdAt', header: 'Created', width: '150px' },
+        ],
+        filters: [
+          { key: 'title', label: 'Title', type: 'text', operator: 'contains' },
+          { key: 'description', label: 'Description', type: 'text', operator: 'contains' },
+          { key: 'price', label: 'Min Price', type: 'number', operator: 'gte' },
+          { key: 'price', label: 'Max Price', type: 'number', operator: 'lte' },
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'DRAFT', label: 'Draft' },
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'INACTIVE', label: 'Inactive' },
+              { value: 'SUSPENDED', label: 'Suspended' },
+            ],
+          },
+          { key: 'categoryId', label: 'Category ID', type: 'text', operator: 'equals' },
+          { key: 'ownerId', label: 'Owner ID', type: 'text', operator: 'equals' },
+          { key: 'createdAt', label: 'Created After', type: 'date', operator: 'gte' },
+          { key: 'createdAt', label: 'Created Before', type: 'date', operator: 'lte' },
         ],
         actions: ['view', 'edit', 'updateStatus'],
       },
@@ -1862,6 +1990,30 @@ export class AdminService {
           { accessorKey: 'totalAmount', header: 'Amount', width: '100px' },
           { accessorKey: 'status', header: 'Status', width: '100px' },
         ],
+        filters: [
+          { key: 'listingId', label: 'Listing ID', type: 'text', operator: 'equals' },
+          { key: 'renterId', label: 'Renter ID', type: 'text', operator: 'equals' },
+          { key: 'startDate', label: 'Start Date From', type: 'date', operator: 'gte' },
+          { key: 'startDate', label: 'Start Date To', type: 'date', operator: 'lte' },
+          { key: 'endDate', label: 'End Date From', type: 'date', operator: 'gte' },
+          { key: 'endDate', label: 'End Date To', type: 'date', operator: 'lte' },
+          { key: 'totalAmount', label: 'Min Amount', type: 'number', operator: 'gte' },
+          { key: 'totalAmount', label: 'Max Amount', type: 'number', operator: 'lte' },
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'PENDING', label: 'Pending' },
+              { value: 'CONFIRMED', label: 'Confirmed' },
+              { value: 'CANCELLED', label: 'Cancelled' },
+              { value: 'COMPLETED', label: 'Completed' },
+            ],
+          },
+          { key: 'createdAt', label: 'Created After', type: 'date', operator: 'gte' },
+          { key: 'createdAt', label: 'Created Before', type: 'date', operator: 'lte' },
+        ],
         actions: ['view', 'edit'],
       },
       payments: {
@@ -1888,6 +2040,26 @@ export class AdminService {
           { accessorKey: 'amount', header: 'Amount', width: '100px' },
           { accessorKey: 'status', header: 'Status', width: '100px' },
           { accessorKey: 'createdAt', header: 'Created', width: '150px' },
+        ],
+        filters: [
+          { key: 'bookingId', label: 'Booking ID', type: 'text', operator: 'equals' },
+          { key: 'amount', label: 'Min Amount', type: 'number', operator: 'gte' },
+          { key: 'amount', label: 'Max Amount', type: 'number', operator: 'lte' },
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'PENDING', label: 'Pending' },
+              { value: 'COMPLETED', label: 'Completed' },
+              { value: 'FAILED', label: 'Failed' },
+              { value: 'REFUNDED', label: 'Refunded' },
+            ],
+          },
+          { key: 'paymentMethod', label: 'Payment Method', type: 'text', operator: 'contains' },
+          { key: 'createdAt', label: 'Created After', type: 'date', operator: 'gte' },
+          { key: 'createdAt', label: 'Created Before', type: 'date', operator: 'lte' },
         ],
         actions: ['view'],
       },
@@ -2179,7 +2351,7 @@ export class AdminService {
       search?: string;
       sortBy?: string;
       sortOrder?: 'asc' | 'desc';
-      filters?: Record<string, any>;
+      filters?: any[]; // Changed to array for proper filter processing
     } = {},
   ): Promise<any> {
     await this.verifyAdmin(adminId);
@@ -2246,9 +2418,31 @@ export class AdminService {
       }));
     }
 
-    // Add custom filters
-    if (filters) {
-      Object.assign(where, filters);
+    // Add custom filters using FilterBuilderService
+    if (filters && Array.isArray(filters) && filters.length > 0) {
+      try {
+        // Parse frontend filters to backend format
+        const backendFilters = this.filterBuilder.parseFrontendFilters(filters);
+
+        // Build where clause from filters
+        const filterWhere = this.filterBuilder.buildWhereClause(backendFilters);
+
+        // Merge with existing where clause
+        if (Object.keys(filterWhere).length > 0) {
+          if (Object.keys(where).length > 0) {
+            // If we already have conditions (like search), combine with AND
+            if (where.AND) {
+              where.AND.push(filterWhere);
+            } else {
+              Object.assign(where, filterWhere);
+            }
+          } else {
+            Object.assign(where, filterWhere);
+          }
+        }
+      } catch (error) {
+        throw new BadRequestException(`Invalid filter format: ${error.message}`);
+      }
     }
 
     // Determine orderBy
