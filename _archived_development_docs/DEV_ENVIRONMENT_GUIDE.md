@@ -7,6 +7,7 @@
 ```
 
 This single command will:
+
 1. ✅ Start all infrastructure (PostgreSQL, Redis, Elasticsearch)
 2. ✅ Wait for database to be ready
 3. ✅ Run database migrations
@@ -16,26 +17,32 @@ This single command will:
 ## Access Points
 
 ### Customer Portal
+
 **URL**: http://localhost:3401
+
 - Browse listings
 - Make bookings
 - View dashboard
 - Manage profile
 
 ### Admin Portal
+
 **URL**: http://localhost:3401/admin
+
 - User management
 - Listing moderation
 - Dispute resolution
 - Analytics dashboard
 
 ### API Backend
+
 **URL**: http://localhost:3400
 **Documentation**: http://localhost:3400/api/docs
 
 ## Test Users (Password: password123)
 
 ### 👨‍💼 Admin User
+
 ```
 Email: admin@rental.local
 Role: ADMIN
@@ -43,12 +50,14 @@ Features: Auto-login enabled in dev mode
 ```
 
 ### 👩‍💼 Support User
+
 ```
 Email: support@rental.local
 Role: SUPPORT
 ```
 
 ### 👔 Owners
+
 ```
 John (Camera Equipment):
   Email: john.owner@rental.local
@@ -62,6 +71,7 @@ Emily (Tools & Camping):
 ```
 
 ### 👤 Customers
+
 ```
 Mike:
   Email: mike.customer@rental.local
@@ -77,15 +87,19 @@ Lisa:
 ## Development Features
 
 ### 🎯 Quick Login Switcher
+
 In development mode, the homepage shows a yellow "DEV" panel at the bottom-left corner with:
+
 - One-click login for all test users
 - Quick links to Customer and Admin portals
 - Visual role indicators (Admin, Support, Owner, Customer)
 
 ### 🔐 Auto-Login for Admin
+
 The admin user is automatically logged in when you start the development server. Just navigate to `/admin` and you're in!
 
 ### 📊 Seeded Data
+
 - **6 Users** (1 admin, 1 support, 2 owners, 2 customers)
 - **5 Categories** (Tools, Camera, Outdoor, Party, Electronics)
 - **5 Listings** (Mix of cameras, tools, and camping gear)
@@ -95,20 +109,25 @@ The admin user is automatically logged in when you start the development server.
 ## Database Management
 
 ### View Data
+
 ```bash
 cd packages/database
 npm run studio
 ```
+
 Opens Prisma Studio at http://localhost:5555
 
 ### Reset & Reseed
+
 ```bash
 cd packages/database
 npx prisma migrate reset
 ```
+
 This will drop, recreate, migrate, and reseed automatically.
 
 ### Manual Seed
+
 ```bash
 cd packages/database
 npm run seed
@@ -117,16 +136,19 @@ npm run seed
 ## Infrastructure Services
 
 ### PostgreSQL
+
 - **Port**: 3432
 - **Database**: rental_portal
 - **User**: rental_user
 - **Password**: rental_password
 
 ### Redis
+
 - **Port**: 3479
 - **No password** (development)
 
 ### Elasticsearch
+
 - **Port**: 9200
 - **No security** (development)
 
@@ -146,22 +168,26 @@ rental/
 ## Common Tasks
 
 ### Start Everything
+
 ```bash
 ./run-dev.sh
 ```
 
 ### Stop Everything
+
 Press `Ctrl+C` in the terminal running run-dev.sh, or:
+
 ```bash
 docker compose -f docker-compose.dev.yml down
 ```
 
 ### View Logs
+
 ```bash
 # API logs
 cd apps/api && npm run dev
 
-# Web logs  
+# Web logs
 cd apps/web && npm run dev
 
 # Docker logs
@@ -169,6 +195,7 @@ docker compose -f docker-compose.dev.yml logs -f
 ```
 
 ### Clean Start
+
 ```bash
 # Stop and remove containers
 docker compose -f docker-compose.dev.yml down -v
@@ -180,16 +207,19 @@ docker compose -f docker-compose.dev.yml down -v
 ## Testing Different User Roles
 
 ### As Admin
+
 1. Click "Admin" in the dev switcher panel
 2. Navigate to http://localhost:3401/admin
 3. Access all administrative features
 
 ### As Owner
+
 1. Click "John (Owner)" or "Emily (Owner)" in dev switcher
 2. Navigate to dashboard to see your listings
 3. Manage bookings and respond to requests
 
 ### As Customer
+
 1. Click "Mike (Customer)" or "Lisa (Customer)"
 2. Browse listings at http://localhost:3401/search
 3. Make bookings and leave reviews
@@ -197,9 +227,11 @@ docker compose -f docker-compose.dev.yml down -v
 ## API Testing
 
 ### Swagger UI
+
 Visit http://localhost:3400/api/docs for interactive API documentation
 
 ### Authentication
+
 ```bash
 # Login
 curl -X POST http://localhost:3400/api/auth/login \
@@ -214,6 +246,7 @@ curl -X GET http://localhost:3400/api/listings \
 ## Troubleshooting
 
 ### Port Already in Use
+
 ```bash
 # Find and kill process on port 3400 (API)
 lsof -ti:3400 | xargs kill -9
@@ -223,6 +256,7 @@ lsof -ti:3401 | xargs kill -9
 ```
 
 ### Database Connection Issues
+
 ```bash
 # Check if PostgreSQL is running
 docker ps | grep rental-postgres
@@ -235,6 +269,7 @@ docker logs rental-postgres
 ```
 
 ### Seed Fails
+
 ```bash
 # Ensure migrations are up to date
 cd packages/database
@@ -245,6 +280,7 @@ npm run seed
 ```
 
 ### Clear Node Modules
+
 ```bash
 # Remove all node_modules
 rm -rf node_modules apps/*/node_modules packages/*/node_modules
@@ -256,6 +292,7 @@ pnpm install
 ## Environment Variables
 
 All environment variables are in the root `.env` file:
+
 - Database connection
 - JWT secrets
 - Stripe keys (test mode)
@@ -272,6 +309,7 @@ See `.env.example` for all available options.
 - ✅ Quick login is enabled
 
 Now you can:
+
 1. Test the customer flow (search, book, review)
 2. Test the owner flow (create listings, manage bookings)
 3. Test the admin flow (moderate content, manage users)

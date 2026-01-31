@@ -30,10 +30,7 @@ export class OrganizationsController {
   @Post()
   @ApiOperation({ summary: 'Create organization (for rental businesses)' })
   @ApiResponse({ status: 201, description: 'Organization created' })
-  async createOrganization(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateOrganizationDto,
-  ) {
+  async createOrganization(@CurrentUser('id') userId: string, @Body() dto: CreateOrganizationDto) {
     return this.organizationsService.createOrganization(userId, dto);
   }
 

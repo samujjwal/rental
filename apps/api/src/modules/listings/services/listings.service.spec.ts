@@ -7,11 +7,11 @@ import { ListingValidationService } from './listing-validation.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('ListingsService', () => {
-  let service: ListingsService;
+  let service: InstanceType<typeof ListingsService>;
   let prismaService: any;
   let cacheService: any;
   let templateService: any;
-  let validationService: any;
+  let validationService: InstanceType<typeof ListingValidationService> | any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -55,7 +55,7 @@ describe('ListingsService', () => {
       ],
     }).compile();
 
-    service = module.get<ListingsService>(ListingsService);
+    service = module.get<InstanceType<typeof ListingsService>>(ListingsService);
     prismaService = module.get(PrismaService);
     cacheService = module.get(CacheService);
     templateService = module.get(CategoryTemplateService);

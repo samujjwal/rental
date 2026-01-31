@@ -77,8 +77,7 @@ export class TextModerationService {
     }
 
     // Phone number detection (various formats)
-    const phoneRegex =
-      /(\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10}\b/g;
+    const phoneRegex = /(\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10}\b/g;
     const phones = text.match(phoneRegex);
     if (phones) {
       flags.push({

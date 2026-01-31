@@ -21,9 +21,7 @@ export class PushNotificationService {
    * Send push notification
    * In production: Use Firebase Cloud Messaging (FCM) or Apple Push Notification Service (APNS)
    */
-  async sendPushNotification(
-    options: PushNotificationOptions,
-  ): Promise<{ success: boolean }> {
+  async sendPushNotification(options: PushNotificationOptions): Promise<{ success: boolean }> {
     try {
       // Get user's device tokens from database
       const deviceTokens = await this.getUserDeviceTokens(options.userId);
@@ -88,10 +86,7 @@ export class PushNotificationService {
   /**
    * Send notification via Firebase Cloud Messaging
    */
-  private async sendToFCM(
-    tokens: string[],
-    options: PushNotificationOptions,
-  ): Promise<boolean> {
+  private async sendToFCM(tokens: string[], options: PushNotificationOptions): Promise<boolean> {
     try {
       const admin = require('firebase-admin');
 
@@ -129,9 +124,7 @@ export class PushNotificationService {
 
       const response = await admin.messaging().sendEachForMulticast(message);
 
-      this.logger.log(
-        `Push notifications sent: ${response.successCount}/${tokens.length}`,
-      );
+      this.logger.log(`Push notifications sent: ${response.successCount}/${tokens.length}`);
 
       // Handle failed tokens (clean up invalid tokens)
       if (response.failureCount > 0) {
@@ -148,10 +141,7 @@ export class PushNotificationService {
   /**
    * Handle failed tokens (remove invalid tokens from database)
    */
-  private async handleFailedTokens(
-    tokens: string[],
-    responses: any[],
-  ): Promise<void> {
+  private async handleFailedTokens(tokens: string[], responses: any[]): Promise<void> {
     const invalidTokens: string[] = [];
 
     responses.forEach((response, index) => {

@@ -1,5 +1,5 @@
-import type { MetaFunction, LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, Link } from 'react-router';
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
+import { useLoaderData, Link } from "react-router";
 import {
   Package,
   Calendar,
@@ -13,18 +13,24 @@ import {
   Search,
   TrendingUp,
   DollarSign,
-} from 'lucide-react';
-import { requireUserId, getUserToken } from '~/utils/auth.server';
-import { apiClient } from '~/lib/api-client';
-import type { Booking } from '~/types/booking';
-import type { Listing } from '~/types/listing';
-import { format } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle, Badge } from '~/components/ui';
-import { PageContainer, PageHeader } from '~/components/layout';
-import { cn } from '~/lib/utils';
+} from "lucide-react";
+import { requireUserId, getUserToken } from "~/utils/auth.server";
+import { apiClient } from "~/lib/api-client";
+import type { Booking } from "~/types/booking";
+import type { Listing } from "~/types/listing";
+import { format } from "date-fns";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Badge,
+} from "~/components/ui";
+import { PageContainer, PageHeader } from "~/components/layout";
+import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
-  return [{ title: 'Renter Dashboard | GharBatai Rentals' }];
+  return [{ title: "Renter Dashboard | GharBatai Rentals" }];
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -35,22 +41,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const [bookings, favorites, recommendations] = await Promise.all([
       apiClient.get<Booking[]>(`/bookings/renter/${userId}`, { headers }),
-      apiClient.get<Listing[]>(`/listings/favorites?userId=${userId}`, { headers }),
-      apiClient.get<Listing[]>(`/listings/recommendations?userId=${userId}`, { headers }),
+      apiClient.get<Listing[]>(`/listings/favorites?userId=${userId}`, {
+        headers,
+      }),
+      apiClient.get<Listing[]>(`/listings/recommendations?userId=${userId}`, {
+        headers,
+      }),
     ]);
 
     // Calculate statistics
-    const upcomingBookings = bookings.filter(b =>
-      b.status === 'confirmed' && new Date(b.startDate) > new Date()
+    const upcomingBookings = bookings.filter(
+      (b) => b.status === "confirmed" && new Date(b.startDate) > new Date()
     ).length;
-    const activeBookings = bookings.filter(b =>
-      b.status === 'active'
-    ).length;
-    const completedBookings = bookings.filter(b =>
-      b.status === 'completed'
+    const activeBookings = bookings.filter((b) => b.status === "active").length;
+    const completedBookings = bookings.filter(
+      (b) => b.status === "completed"
     ).length;
     const totalSpent = bookings
-      .filter(b => b.status === 'completed')
+      .filter((b) => b.status === "completed")
       .reduce((sum, b) => sum + b.totalAmount, 0);
 
     const stats = {
@@ -63,7 +71,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Get recent bookings
     const recentBookings = bookings
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
       .slice(0, 5);
 
     return {
@@ -73,7 +84,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       recommendations: recommendations.slice(0, 4),
     };
   } catch (error) {
-    console.error('Failed to load renter dashboard:', error);
+    console.error("Failed to load renter dashboard:", error);
     throw error;
   }
 }
@@ -82,18 +93,18 @@ function StatCard({
   icon: Icon,
   label,
   value,
-  variant = 'default'
+  variant = "default",
 }: {
   icon: any;
   label: string;
   value: string | number;
-  variant?: 'default' | 'success' | 'warning' | 'info';
+  variant?: "default" | "success" | "warning" | "info";
 }) {
   const variantClasses = {
-    default: 'bg-primary/10 text-primary',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
-    info: 'bg-info/10 text-info',
+    default: "bg-primary/10 text-primary",
+    success: "bg-success/10 text-success",
+    warning: "bg-warning/10 text-warning",
+    info: "bg-info/10 text-info",
   };
 
   return (
@@ -113,24 +124,40 @@ function StatCard({
 
 function BookingCard({ booking }: { booking: Booking }) {
   const statusConfig = {
-    pending: { variant: 'warning' as const, icon: Clock, label: 'Pending' },
-    confirmed: { variant: 'success' as const, icon: CheckCircle, label: 'Confirmed' },
-    active: { variant: 'default' as const, icon: Package, label: 'Active' },
-    completed: { variant: 'success' as const, icon: CheckCircle, label: 'Completed' },
-    cancelled: { variant: 'destructive' as const, icon: XCircle, label: 'Cancelled' },
-    disputed: { variant: 'destructive' as const, icon: XCircle, label: 'Disputed' },
+    pending: { variant: "warning" as const, icon: Clock, label: "Pending" },
+    confirmed: {
+      variant: "success" as const,
+      icon: CheckCircle,
+      label: "Confirmed",
+    },
+    active: { variant: "default" as const, icon: Package, label: "Active" },
+    completed: {
+      variant: "success" as const,
+      icon: CheckCircle,
+      label: "Completed",
+    },
+    cancelled: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Cancelled",
+    },
+    disputed: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Disputed",
+    },
   };
 
   const config = statusConfig[booking.status] || statusConfig.pending;
   const StateIcon = config.icon;
   const isUpcoming = new Date(booking.startDate) > new Date();
-  const isActive = booking.status === 'active';
+  const isActive = booking.status === "active";
 
   const locationStr = booking.listing?.location
-    ? typeof booking.listing.location === 'string'
+    ? typeof booking.listing.location === "string"
       ? booking.listing.location
       : booking.listing.location.city
-    : 'Location';
+    : "Location";
 
   return (
     <Link
@@ -157,7 +184,7 @@ function BookingCard({ booking }: { booking: Booking }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between mb-2">
             <h3 className="font-semibold text-foreground line-clamp-1">
-              {booking.listing?.title || 'Listing'}
+              {booking.listing?.title || "Listing"}
             </h3>
             <Badge variant={config.variant} className="whitespace-nowrap ml-2">
               <StateIcon className="w-3 h-3 mr-1" />
@@ -168,7 +195,8 @@ function BookingCard({ booking }: { booking: Booking }) {
           <div className="space-y-1">
             <div className="flex items-center text-sm text-muted-foreground">
               <Calendar className="w-4 h-4 mr-2" />
-              {format(new Date(booking.startDate), 'MMM d')} - {format(new Date(booking.endDate), 'MMM d, yyyy')}
+              {format(new Date(booking.startDate), "MMM d")} -{" "}
+              {format(new Date(booking.endDate), "MMM d, yyyy")}
             </div>
             <div className="flex items-center text-sm text-muted-foreground">
               <MapPin className="w-4 h-4 mr-2" />
@@ -181,9 +209,11 @@ function BookingCard({ booking }: { booking: Booking }) {
               ${booking.totalAmount.toFixed(2)}
             </span>
             {isActive && (
-              <span className="text-xs text-primary font-medium">Active Now</span>
+              <span className="text-xs text-primary font-medium">
+                Active Now
+              </span>
             )}
-            {isUpcoming && booking.status === 'confirmed' && (
+            {isUpcoming && booking.status === "confirmed" && (
               <span className="text-xs text-success font-medium">Upcoming</span>
             )}
           </div>
@@ -193,10 +223,17 @@ function BookingCard({ booking }: { booking: Booking }) {
   );
 }
 
-function ListingCard({ listing, showFavorite = false }: { listing: Listing; showFavorite?: boolean }) {
-  const locationStr = typeof listing.location === 'string'
-    ? listing.location
-    : listing.location.city;
+function ListingCard({
+  listing,
+  showFavorite = false,
+}: {
+  listing: Listing;
+  showFavorite?: boolean;
+}) {
+  const locationStr =
+    typeof listing.location === "string"
+      ? listing.location
+      : listing.location.city;
 
   return (
     <Link
@@ -222,7 +259,9 @@ function ListingCard({ listing, showFavorite = false }: { listing: Listing; show
         )}
       </div>
       <div className="p-4">
-        <h3 className="font-semibold text-foreground mb-1 line-clamp-1">{listing.title}</h3>
+        <h3 className="font-semibold text-foreground mb-1 line-clamp-1">
+          {listing.title}
+        </h3>
         <p className="text-sm text-muted-foreground mb-2 flex items-center">
           <MapPin className="w-4 h-4 mr-1" />
           {locationStr}
@@ -234,7 +273,9 @@ function ListingCard({ listing, showFavorite = false }: { listing: Listing; show
           {listing.rating && listing.rating > 0 && (
             <div className="flex items-center">
               <Star className="w-4 h-4 text-warning fill-current" />
-              <span className="ml-1 text-sm text-muted-foreground">{listing.rating.toFixed(1)}</span>
+              <span className="ml-1 text-sm text-muted-foreground">
+                {listing.rating.toFixed(1)}
+              </span>
             </div>
           )}
         </div>
@@ -244,7 +285,8 @@ function ListingCard({ listing, showFavorite = false }: { listing: Listing; show
 }
 
 export default function RenterDashboardRoute() {
-  const { stats, recentBookings, favorites, recommendations } = useLoaderData<typeof loader>();
+  const { stats, recentBookings, favorites, recommendations } =
+    useLoaderData<typeof loader>();
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -306,7 +348,9 @@ export default function RenterDashboardRoute() {
                   ) : (
                     <div className="text-center py-12">
                       <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground mb-4">No bookings yet</p>
+                      <p className="text-muted-foreground mb-4">
+                        No bookings yet
+                      </p>
                       <Link
                         to="/search"
                         className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
@@ -343,7 +387,9 @@ export default function RenterDashboardRoute() {
                   ) : (
                     <div className="col-span-2 text-center py-8">
                       <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No recommendations available</p>
+                      <p className="text-muted-foreground">
+                        No recommendations available
+                      </p>
                     </div>
                   )}
                 </div>
@@ -367,13 +413,17 @@ export default function RenterDashboardRoute() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center pb-3 border-b">
-                    <span className="text-muted-foreground">Completed Rentals</span>
+                    <span className="text-muted-foreground">
+                      Completed Rentals
+                    </span>
                     <span className="font-semibold text-foreground">
                       {stats.completedBookings}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Active Bookings</span>
+                    <span className="text-muted-foreground">
+                      Active Bookings
+                    </span>
                     <span className="font-semibold text-foreground">
                       {stats.activeBookings}
                     </span>
@@ -419,14 +469,18 @@ export default function RenterDashboardRoute() {
                           <h4 className="font-medium text-foreground line-clamp-1 text-sm">
                             {listing.title}
                           </h4>
-                          <p className="text-sm text-muted-foreground">${listing.pricePerDay}/day</p>
+                          <p className="text-sm text-muted-foreground">
+                            ${listing.pricePerDay}/day
+                          </p>
                         </div>
                       </Link>
                     ))
                   ) : (
                     <div className="text-center py-6">
                       <Heart className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">No favorites yet</p>
+                      <p className="text-sm text-muted-foreground">
+                        No favorites yet
+                      </p>
                     </div>
                   )}
                 </div>

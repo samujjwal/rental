@@ -14,7 +14,7 @@ describe('Authentication (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    
+
     // Apply same pipes as main app
     app.useGlobalPipes(
       new ValidationPipe({
@@ -25,7 +25,7 @@ describe('Authentication (e2e)', () => {
     );
 
     prisma = app.get<PrismaService>(PrismaService);
-    
+
     await app.init();
   });
 
@@ -62,15 +62,13 @@ describe('Authentication (e2e)', () => {
 
     it('should reject duplicate email', async () => {
       // Create user first
-      await request(app.getHttpServer())
-        .post('/api/auth/register')
-        .send({
-          email: 'duplicate@test.com',
-          password: 'SecurePass123!',
-          firstName: 'Test',
-          lastName: 'User',
-          phone: '+1234567890',
-        });
+      await request(app.getHttpServer()).post('/api/auth/register').send({
+        email: 'duplicate@test.com',
+        password: 'SecurePass123!',
+        firstName: 'Test',
+        lastName: 'User',
+        phone: '+1234567890',
+      });
 
       // Try to register again
       return request(app.getHttpServer())
@@ -115,15 +113,13 @@ describe('Authentication (e2e)', () => {
   describe('/api/auth/login (POST)', () => {
     beforeEach(async () => {
       // Create test user
-      await request(app.getHttpServer())
-        .post('/api/auth/register')
-        .send({
-          email: 'logintest@test.com',
-          password: 'SecurePass123!',
-          firstName: 'Login',
-          lastName: 'Test',
-          phone: '+1234567890',
-        });
+      await request(app.getHttpServer()).post('/api/auth/register').send({
+        email: 'logintest@test.com',
+        password: 'SecurePass123!',
+        firstName: 'Login',
+        lastName: 'Test',
+        phone: '+1234567890',
+      });
     });
 
     it('should login with correct credentials', () => {
@@ -168,15 +164,13 @@ describe('Authentication (e2e)', () => {
 
     beforeEach(async () => {
       // Register and login to get tokens
-      const response = await request(app.getHttpServer())
-        .post('/api/auth/register')
-        .send({
-          email: 'refreshtest@test.com',
-          password: 'SecurePass123!',
-          firstName: 'Refresh',
-          lastName: 'Test',
-          phone: '+1234567890',
-        });
+      const response = await request(app.getHttpServer()).post('/api/auth/register').send({
+        email: 'refreshtest@test.com',
+        password: 'SecurePass123!',
+        firstName: 'Refresh',
+        lastName: 'Test',
+        phone: '+1234567890',
+      });
 
       refreshToken = response.body.tokens.refreshToken;
     });
@@ -204,15 +198,13 @@ describe('Authentication (e2e)', () => {
     let accessToken: string;
 
     beforeEach(async () => {
-      const response = await request(app.getHttpServer())
-        .post('/api/auth/register')
-        .send({
-          email: 'protected@test.com',
-          password: 'SecurePass123!',
-          firstName: 'Protected',
-          lastName: 'Test',
-          phone: '+1234567890',
-        });
+      const response = await request(app.getHttpServer()).post('/api/auth/register').send({
+        email: 'protected@test.com',
+        password: 'SecurePass123!',
+        firstName: 'Protected',
+        lastName: 'Test',
+        phone: '+1234567890',
+      });
 
       accessToken = response.body.tokens.accessToken;
     });
@@ -225,9 +217,7 @@ describe('Authentication (e2e)', () => {
     });
 
     it('should reject protected route without token', () => {
-      return request(app.getHttpServer())
-        .get('/api/users/me')
-        .expect(401);
+      return request(app.getHttpServer()).get('/api/users/me').expect(401);
     });
 
     it('should reject protected route with invalid token', () => {

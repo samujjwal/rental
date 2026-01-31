@@ -1,6 +1,7 @@
 # Database Seed Documentation
 
 ## Overview
+
 This seed script populates the database with comprehensive test data for development and testing purposes.
 
 ## Test Users
@@ -8,12 +9,14 @@ This seed script populates the database with comprehensive test data for develop
 All test users have the password: **password123**
 
 ### Admin User (Auto-login enabled)
+
 - **Email**: admin@rental.local
 - **Role**: ADMIN
 - **Access**: Full platform administration
 - **Auto-login**: Yes (in development mode)
 
 ### Support User
+
 - **Email**: support@rental.local
 - **Role**: SUPPORT
 - **Access**: Customer support tools
@@ -21,6 +24,7 @@ All test users have the password: **password123**
 ### Owner Users
 
 #### John Smith (Camera Equipment Owner)
+
 - **Email**: john.owner@rental.local
 - **Role**: OWNER
 - **Location**: Los Angeles, CA
@@ -29,6 +33,7 @@ All test users have the password: **password123**
 - **Stripe**: Connected and verified
 
 #### Emily Johnson (Tools & Equipment Owner)
+
 - **Email**: emily.tools@rental.local
 - **Role**: OWNER
 - **Location**: Seattle, WA
@@ -39,6 +44,7 @@ All test users have the password: **password123**
 ### Customer Users
 
 #### Mike Davis
+
 - **Email**: mike.customer@rental.local
 - **Role**: CUSTOMER
 - **Location**: Portland, OR
@@ -47,6 +53,7 @@ All test users have the password: **password123**
 - **Stripe**: Has saved payment methods
 
 #### Lisa Anderson
+
 - **Email**: lisa.renter@rental.local
 - **Role**: CUSTOMER
 - **Location**: Austin, TX
@@ -57,6 +64,7 @@ All test users have the password: **password123**
 ## Seeded Data
 
 ### Categories (5)
+
 1. Tools & Equipment
 2. Camera & Photography
 3. Outdoor & Camping
@@ -64,6 +72,7 @@ All test users have the password: **password123**
 5. Electronics
 
 ### Listings (5)
+
 1. **Canon EOS R5** - $150/day (Owner: John Smith)
 2. **Sony A7 IV + Lens Kit** - $180/day (Owner: John Smith)
 3. **DeWalt Drill Kit** - $35/day (Owner: Emily Johnson)
@@ -71,11 +80,13 @@ All test users have the password: **password123**
 5. **4-Person Camping Tent** - $25/day (Owner: Emily Johnson)
 
 ### Bookings (3)
+
 1. **Completed**: Mike rented Canon EOS R5 (Jan 10-15, 2024)
 2. **Active**: Lisa rented DeWalt Drill Kit (Tomorrow - Next Week)
 3. **Pending**: Mike requested Milwaukee Table Saw (2 weeks from now)
 
 ### Reviews (2)
+
 - Mike → John: 5 stars for Canon EOS R5 rental
 - John → Mike: 5 stars for being a great renter
 
@@ -105,13 +116,17 @@ After seeding, you can access:
 ## Development Features
 
 ### Auto-Login (Development Only)
+
 The admin user has an auto-login session created for quick testing. Simply navigate to the admin portal and you'll be logged in automatically.
 
 ### Quick Login Switcher
+
 On the homepage in development mode, you'll see a yellow "DEV" panel in the bottom-left corner. Click any user to instantly log in as that user for testing different roles and permissions.
 
 ### Portal Links
+
 The dev panel also includes quick links to:
+
 - Customer Portal (main app)
 - Admin Portal
 
@@ -125,6 +140,7 @@ npx prisma migrate reset
 ```
 
 This will:
+
 1. Drop the database
 2. Recreate it
 3. Run all migrations

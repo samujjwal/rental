@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { LedgerSide, TransactionType, AccountType, LedgerEntryStatus, toNumber } from '@rental-portal/database';
+import {
+  LedgerSide,
+  TransactionType,
+  AccountType,
+  LedgerEntryStatus,
+  toNumber,
+} from '@rental-portal/database';
+
+// Export for test imports
+export { TransactionType, AccountType };
 
 export interface LedgerEntryDto {
   bookingId: string;

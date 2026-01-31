@@ -1,6 +1,6 @@
-import type { MetaFunction, LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, Link, redirect } from 'react-router';
-import { useState } from 'react';
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
+import { useLoaderData, Link, redirect } from "react-router";
+import { useState } from "react";
 import {
   User,
   MapPin,
@@ -14,24 +14,26 @@ import {
   Clock,
   Award,
   TrendingUp,
-} from 'lucide-react';
-import { cn } from '~/lib/utils';
-import { usersApi } from '~/lib/api/users';
-import { listingsApi } from '~/lib/api/listings';
-import { reviewsApi } from '~/lib/api/reviews';
-import type { User as UserType } from '~/types/user';
-import type { Listing } from '~/types/listing';
-import type { Review } from '~/types/review';
-import { format } from 'date-fns';
+} from "lucide-react";
+import { cn } from "~/lib/utils";
+import { usersApi } from "~/lib/api/users";
+import { listingsApi } from "~/lib/api/listings";
+import { reviewsApi } from "~/lib/api/reviews";
+import type { User as UserType } from "~/types/user";
+import type { Listing } from "~/types/listing";
+import type { Review } from "~/types/review";
+import { format } from "date-fns";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
-  return [{ title: `${data?.user?.fullName || 'User'} Profile | GharBatai Rentals` }];
+  return [
+    { title: `${data?.user?.fullName || "User"} Profile | GharBatai Rentals` },
+  ];
 };
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const userId = params.userId;
   if (!userId) {
-    throw redirect('/');
+    throw redirect("/");
   }
 
   try {
@@ -43,10 +45,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // Calculate statistics
     const totalListings = listings.length;
-    const activeListings = listings.filter(l => l.status === 'ACTIVE').length;
-    const averageRating = reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-      : 0;
+    const activeListings = listings.filter((l) => l.status === "ACTIVE").length;
+    const averageRating =
+      reviews.length > 0
+        ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+        : 0;
     const totalReviews = reviews.length;
 
     return {
@@ -58,11 +61,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
         activeListings,
         averageRating,
         totalReviews,
-      }
+      },
     };
   } catch (error) {
-    console.error('Failed to load user profile:', error);
-    throw redirect('/');
+    console.error("Failed to load user profile:", error);
+    throw redirect("/");
   }
 }
 
@@ -70,7 +73,7 @@ function StatCard({
   icon: Icon,
   label,
   value,
-  color = 'primary'
+  color = "primary",
 }: {
   icon: any;
   label: string;
@@ -78,10 +81,10 @@ function StatCard({
   color?: string;
 }) {
   const colorClasses: Record<string, { bg: string; text: string }> = {
-    primary: { bg: 'bg-primary/10', text: 'text-primary' },
-    yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600' },
-    green: { bg: 'bg-success/10', text: 'text-success' },
-    blue: { bg: 'bg-blue-100', text: 'text-blue-600' },
+    primary: { bg: "bg-primary/10", text: "text-primary" },
+    yellow: { bg: "bg-yellow-100", text: "text-yellow-600" },
+    green: { bg: "bg-success/10", text: "text-success" },
+    blue: { bg: "bg-blue-100", text: "text-blue-600" },
   };
 
   const colors = colorClasses[color] || colorClasses.primary;
@@ -110,15 +113,19 @@ function ReviewCard({ review }: { review: Review }) {
             <User className="w-6 h-6 text-muted-foreground" />
           </div>
           <div className="ml-3">
-            <p className="font-medium text-foreground">{review.reviewer?.fullName}</p>
+            <p className="font-medium text-foreground">
+              {review.reviewer?.fullName}
+            </p>
             <p className="text-sm text-muted-foreground">
-              {format(new Date(review.createdAt), 'MMM d, yyyy')}
+              {format(new Date(review.createdAt), "MMM d, yyyy")}
             </p>
           </div>
         </div>
         <div className="flex items-center">
           <Star className="w-5 h-5 text-yellow-400 fill-current" />
-          <span className="ml-1 font-semibold text-foreground">{review.rating}</span>
+          <span className="ml-1 font-semibold text-foreground">
+            {review.rating}
+          </span>
         </div>
       </div>
       <p className="text-foreground/80">{review.comment}</p>
@@ -153,15 +160,19 @@ function ListingCard({ listing }: { listing: Listing }) {
             <Package className="w-12 h-12 text-muted-foreground" />
           </div>
         )}
-        {listing.status === 'ACTIVE' && (
+        {listing.status === "ACTIVE" && (
           <span className="absolute top-2 right-2 px-2 py-1 bg-success text-success-foreground text-xs font-semibold rounded">
             Available
           </span>
         )}
       </div>
       <div className="p-4">
-        <h3 className="font-semibold text-foreground mb-2 line-clamp-1">{listing.title}</h3>
-        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{listing.description}</p>
+        <h3 className="font-semibold text-foreground mb-2 line-clamp-1">
+          {listing.title}
+        </h3>
+        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+          {listing.description}
+        </p>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
             ${listing.dailyRate}/day
@@ -169,7 +180,9 @@ function ListingCard({ listing }: { listing: Listing }) {
           {listing.averageRating > 0 && (
             <div className="flex items-center">
               <Star className="w-4 h-4 text-yellow-400 fill-current" />
-              <span className="ml-1 text-sm text-muted-foreground">{listing.averageRating.toFixed(1)}</span>
+              <span className="ml-1 text-sm text-muted-foreground">
+                {listing.averageRating.toFixed(1)}
+              </span>
             </div>
           )}
         </div>
@@ -180,11 +193,13 @@ function ListingCard({ listing }: { listing: Listing }) {
 
 export default function ProfileRoute() {
   const { user, listings, reviews, stats } = useLoaderData<typeof loader>();
-  const [activeTab, setActiveTab] = useState<'listings' | 'reviews'>('listings');
+  const [activeTab, setActiveTab] = useState<"listings" | "reviews">(
+    "listings"
+  );
 
-  const memberSince = format(new Date(user.createdAt), 'MMMM yyyy');
+  const memberSince = format(new Date(user.createdAt), "MMMM yyyy");
   const responseRate = user.responseRate || 0;
-  const responseTime = user.responseTime || 'N/A';
+  const responseTime = user.responseTime || "N/A";
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -209,7 +224,9 @@ export default function ProfileRoute() {
             <div className="flex-1">
               <div className="flex items-start justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold text-foreground mb-2">{user.fullName}</h1>
+                  <h1 className="text-3xl font-bold text-foreground mb-2">
+                    {user.fullName}
+                  </h1>
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center">
                       <Mail className="w-4 h-4 mr-1" />
@@ -270,7 +287,9 @@ export default function ProfileRoute() {
           <StatCard
             icon={Star}
             label="Average Rating"
-            value={stats.averageRating > 0 ? stats.averageRating.toFixed(1) : 'N/A'}
+            value={
+              stats.averageRating > 0 ? stats.averageRating.toFixed(1) : "N/A"
+            }
             color="yellow"
           />
           <StatCard
@@ -292,10 +311,10 @@ export default function ProfileRoute() {
           <div className="border-b border-border">
             <div className="flex">
               <button
-                onClick={() => setActiveTab('listings')}
+                onClick={() => setActiveTab("listings")}
                 className={cn(
                   "px-6 py-4 font-medium text-sm border-b-2 transition-colors",
-                  activeTab === 'listings'
+                  activeTab === "listings"
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
@@ -303,10 +322,10 @@ export default function ProfileRoute() {
                 Listings ({stats.totalListings})
               </button>
               <button
-                onClick={() => setActiveTab('reviews')}
+                onClick={() => setActiveTab("reviews")}
                 className={cn(
                   "px-6 py-4 font-medium text-sm border-b-2 transition-colors",
-                  activeTab === 'reviews'
+                  activeTab === "reviews"
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
@@ -317,7 +336,7 @@ export default function ProfileRoute() {
           </div>
 
           <div className="p-6">
-            {activeTab === 'listings' && (
+            {activeTab === "listings" && (
               <div>
                 {listings.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -328,13 +347,15 @@ export default function ProfileRoute() {
                 ) : (
                   <div className="text-center py-12">
                     <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No listings available</p>
+                    <p className="text-muted-foreground">
+                      No listings available
+                    </p>
                   </div>
                 )}
               </div>
             )}
 
-            {activeTab === 'reviews' && (
+            {activeTab === "reviews" && (
               <div>
                 {reviews.length > 0 ? (
                   <div className="space-y-4">

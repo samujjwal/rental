@@ -1,11 +1,11 @@
-import { useLoaderData, Form } from 'react-router';
-import { useState } from 'react';
-import { cn } from '~/lib/utils';
-import type { Route } from './+types/organizations.$id.members';
+import { useLoaderData, Form } from "react-router";
+import { useState } from "react";
+import { cn } from "~/lib/utils";
+import type { Route } from "./+types/organizations.$id.members";
 
 interface Member {
   id: string;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+  role: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER";
   joinedAt: string;
   user: {
     id: string;
@@ -24,39 +24,46 @@ interface Organization {
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const response = await fetch(`/api/organizations/${params.id}/members`, {
     headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch members');
+    throw new Error("Failed to fetch members");
   }
 
   const data = await response.json();
   return { organization: data };
 }
 
-export default function OrganizationMembers({ loaderData }: Route.ComponentProps) {
+export default function OrganizationMembers({
+  loaderData,
+}: Route.ComponentProps) {
   const { organization } = loaderData;
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER" | "VIEWER">(
+    "MEMBER"
+  );
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
 
   const handleInvite = async () => {
-    const response = await fetch(`/api/organizations/${organization.id}/members/invite`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-    });
+    const response = await fetch(
+      `/api/organizations/${organization.id}/members/invite`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+      }
+    );
 
     if (response.ok) {
       setShowInviteModal(false);
-      setInviteEmail('');
+      setInviteEmail("");
       window.location.reload();
     }
   };
@@ -65,10 +72,10 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
     const response = await fetch(
       `/api/organizations/${organization.id}/members/${memberId}/role`,
       {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify({ role: newRole }),
       }
@@ -81,14 +88,14 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Are you sure you want to remove this member?')) return;
+    if (!confirm("Are you sure you want to remove this member?")) return;
 
     const response = await fetch(
       `/api/organizations/${organization.id}/members/${memberId}`,
       {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       }
     );
@@ -100,31 +107,31 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case 'OWNER':
-        return 'bg-purple-100 text-purple-800';
-      case 'ADMIN':
-        return 'bg-primary/10 text-primary';
-      case 'MEMBER':
-        return 'bg-success/10 text-success';
-      case 'VIEWER':
-        return 'bg-muted text-muted-foreground';
+      case "OWNER":
+        return "bg-purple-100 text-purple-800";
+      case "ADMIN":
+        return "bg-primary/10 text-primary";
+      case "MEMBER":
+        return "bg-success/10 text-success";
+      case "VIEWER":
+        return "bg-muted text-muted-foreground";
       default:
-        return 'bg-muted text-muted-foreground';
+        return "bg-muted text-muted-foreground";
     }
   };
 
   const getRoleDescription = (role: string) => {
     switch (role) {
-      case 'OWNER':
-        return 'Full control including billing and deletion';
-      case 'ADMIN':
-        return 'Manage members, listings, and settings';
-      case 'MEMBER':
-        return 'Create and manage listings';
-      case 'VIEWER':
-        return 'View only access';
+      case "OWNER":
+        return "Full control including billing and deletion";
+      case "ADMIN":
+        return "Manage members, listings, and settings";
+      case "MEMBER":
+        return "Create and manage listings";
+      case "VIEWER":
+        return "View only access";
       default:
-        return '';
+        return "";
     }
   };
 
@@ -143,7 +150,9 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
           </div>
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Team Members</h1>
+              <h1 className="text-3xl font-bold text-foreground">
+                Team Members
+              </h1>
               <p className="mt-2 text-sm text-muted-foreground">
                 {organization.name} • {organization.members.length} members
               </p>
@@ -181,13 +190,17 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
 
                     {/* User Info */}
                     <div>
-                      <h3 className="text-lg font-medium text-foreground">{member.user.name}</h3>
-                      <p className="text-sm text-muted-foreground">{member.user.email}</p>
+                      <h3 className="text-lg font-medium text-foreground">
+                        {member.user.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {member.user.email}
+                      </p>
                       <p className="text-xs text-muted-foreground/70 mt-1">
-                        Joined{' '}
-                        {new Date(member.joinedAt).toLocaleDateString('en-US', {
-                          month: 'long',
-                          year: 'numeric',
+                        Joined{" "}
+                        {new Date(member.joinedAt).toLocaleDateString("en-US", {
+                          month: "long",
+                          year: "numeric",
                         })}
                       </p>
                     </div>
@@ -209,7 +222,7 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
                       </p>
                     </div>
 
-                    {member.role !== 'OWNER' && (
+                    {member.role !== "OWNER" && (
                       <div className="flex space-x-2">
                         <button
                           onClick={() => {
@@ -239,7 +252,11 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
         <div className="mt-8 bg-primary/5 border border-primary/10 rounded-lg p-6">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
+              <svg
+                className="h-5 w-5 text-primary"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
                 <path
                   fillRule="evenodd"
                   d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
@@ -248,13 +265,27 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-primary">Role Permissions</h3>
+              <h3 className="text-sm font-medium text-primary">
+                Role Permissions
+              </h3>
               <div className="mt-2 text-sm text-primary/80">
                 <ul className="list-disc list-inside space-y-1">
-                  <li><strong>Owner:</strong> Full control including billing, settings, and deletion</li>
-                  <li><strong>Admin:</strong> Manage members, listings, bookings, and organization settings</li>
-                  <li><strong>Member:</strong> Create and manage their own listings and bookings</li>
-                  <li><strong>Viewer:</strong> Read-only access to organization data</li>
+                  <li>
+                    <strong>Owner:</strong> Full control including billing,
+                    settings, and deletion
+                  </li>
+                  <li>
+                    <strong>Admin:</strong> Manage members, listings, bookings,
+                    and organization settings
+                  </li>
+                  <li>
+                    <strong>Member:</strong> Create and manage their own
+                    listings and bookings
+                  </li>
+                  <li>
+                    <strong>Viewer:</strong> Read-only access to organization
+                    data
+                  </li>
                 </ul>
               </div>
             </div>
@@ -266,7 +297,9 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
       {showInviteModal && (
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-foreground mb-4">Invite Team Member</h3>
+            <h3 className="text-lg font-medium text-foreground mb-4">
+              Invite Team Member
+            </h3>
 
             <div className="space-y-4">
               <div>
@@ -288,7 +321,11 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
                 </label>
                 <select
                   value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as 'ADMIN' | 'MEMBER' | 'VIEWER')}
+                  onChange={(e) =>
+                    setInviteRole(
+                      e.target.value as "ADMIN" | "MEMBER" | "VIEWER"
+                    )
+                  }
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 >
                   <option value="VIEWER">Viewer - Read only</option>
@@ -329,7 +366,7 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
             </h3>
 
             <div className="space-y-2">
-              {['ADMIN', 'MEMBER', 'VIEWER'].map((role) => (
+              {["ADMIN", "MEMBER", "VIEWER"].map((role) => (
                 <button
                   key={role}
                   onClick={() => handleChangeRole(selectedMember.id, role)}
@@ -341,7 +378,9 @@ export default function OrganizationMembers({ loaderData }: Route.ComponentProps
                   )}
                 >
                   <div className="font-medium text-foreground">{role}</div>
-                  <div className="text-sm text-muted-foreground">{getRoleDescription(role)}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {getRoleDescription(role)}
+                  </div>
                 </button>
               ))}
             </div>

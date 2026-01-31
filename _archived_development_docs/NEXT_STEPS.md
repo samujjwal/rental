@@ -9,6 +9,7 @@
 ## 🚨 CRITICAL PATH TO PRODUCTION (1-2 Weeks)
 
 ### Day 1: External Services (BLOCKING - 2-3 hours)
+
 ```bash
 # Follow: EXTERNAL_SERVICES_SETUP.md
 
@@ -49,6 +50,7 @@
 ```
 
 ### Day 1-2: Testing & Validation (4-6 hours)
+
 ```bash
 # 1. Run complete test suite
 ./test-all.sh
@@ -81,6 +83,7 @@ cd apps/web && pnpm run dev
 ```
 
 ### Days 3-5: Frontend Completion (2-3 days)
+
 ```bash
 # Missing routes (create in apps/web/app/routes/):
 ✓ checkout.$bookingId.tsx - Payment checkout flow
@@ -97,6 +100,7 @@ cd apps/web && pnpm run dev
 ```
 
 ### Week 2: Load & Security Testing (2-3 days)
+
 ```bash
 # 1. Install k6 (if not installed)
 brew install k6  # macOS
@@ -124,6 +128,7 @@ cd apps/api/test/security
 ```
 
 ### Week 2-3: Infrastructure Deployment (3-5 days)
+
 ```bash
 # 1. Create infrastructure directory
 mkdir -p infrastructure/terraform
@@ -152,6 +157,7 @@ curl https://staging-api.yourdomain.com/health
 ```
 
 ### Week 3-4: Production Launch (5-7 days)
+
 ```bash
 # 1. Final security audit
 # - Penetration testing
@@ -199,6 +205,7 @@ curl https://yourdomain.com
 ## 📋 Daily Checklist
 
 ### Every Day:
+
 - [ ] Check test-all.sh output (all tests passing?)
 - [ ] Review Sentry errors (any new issues?)
 - [ ] Monitor response times (< 500ms p95?)
@@ -207,6 +214,7 @@ curl https://yourdomain.com
 - [ ] Update progress tracking
 
 ### Every Week:
+
 - [ ] Run full test suite
 - [ ] Review security alerts
 - [ ] Update documentation
@@ -219,6 +227,7 @@ curl https://yourdomain.com
 ## 🔧 Troubleshooting Quick Reference
 
 ### Tests Failing?
+
 ```bash
 # Check service health
 docker ps  # All services running?
@@ -238,6 +247,7 @@ docker compose exec redis redis-cli FLUSHALL
 ```
 
 ### API Not Starting?
+
 ```bash
 # Check .env file exists and is complete
 ls -la apps/api/.env
@@ -257,6 +267,7 @@ pnpm run start:dev 2>&1 | tee api-debug.log
 ```
 
 ### External Service Integration Failing?
+
 ```bash
 # Test each service individually:
 
@@ -289,6 +300,7 @@ aws s3 ls s3://rental-portal-uploads/
 ## 📊 Progress Tracking
 
 Current Status:
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Universal Rental Portal - Implementation Status     │
@@ -320,6 +332,7 @@ Current Status:
 ## 🎯 Success Criteria
 
 Before marking as "Production Ready":
+
 - [ ] All unit tests passing (95%+ coverage)
 - [ ] All E2E tests passing
 - [ ] Load tests meet targets (p95 < 500ms, error rate < 1%)

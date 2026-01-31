@@ -62,7 +62,7 @@ type UpdateUserDto = Partial<CreateUserDto>;
 type UserResponse = Pick<User, 'id' | 'email' | 'firstName' | 'lastName'>;
 
 // Good: Discriminated unions for state
-type LoadingState<T> = 
+type LoadingState<T> =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'success'; data: T }
@@ -79,7 +79,7 @@ function processData(data: any) {
 
 // Good
 function processData<T extends { value: unknown }>(data: T[]): unknown[] {
-  return data.map(item => item.value);
+  return data.map((item) => item.value);
 }
 
 // Bad: Unnecessary type assertion
@@ -106,16 +106,11 @@ export const enum BookingStatus {
   PENDING_PAYMENT = 'PENDING_PAYMENT',
   CONFIRMED = 'CONFIRMED',
   CANCELLED = 'CANCELLED',
-  COMPLETED = 'COMPLETED'
+  COMPLETED = 'COMPLETED',
 }
 
 // Or use string literal unions for better JSON serialization
-export type BookingStatus = 
-  | 'DRAFT'
-  | 'PENDING_PAYMENT'
-  | 'CONFIRMED'
-  | 'CANCELLED'
-  | 'COMPLETED';
+export type BookingStatus = 'DRAFT' | 'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
 
 // Helper to get all values
 export const BOOKING_STATUSES = [
@@ -123,7 +118,7 @@ export const BOOKING_STATUSES = [
   'PENDING_PAYMENT',
   'CONFIRMED',
   'CANCELLED',
-  'COMPLETED'
+  'COMPLETED',
 ] as const;
 ```
 
@@ -157,11 +152,11 @@ import { json, redirect } from 'react-router';
 // Loader: Fetch data server-side
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const { id } = params;
-  
+
   // Parse URL params
   const url = new URL(request.url);
   const includeReviews = url.searchParams.get('reviews') === 'true';
-  
+
   try {
     const listing = await db.listing.findUnique({
       where: { id },
@@ -223,16 +218,16 @@ export default function ListingDetail() {
   const { listing } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
-  
+
   const isSubmitting = navigation.state === 'submitting';
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold">{listing.title}</h1>
-      
+
       <Form method="post" className="mt-8">
         <input type="hidden" name="intent" value="book" />
-        
+
         <div className="grid grid-cols-2 gap-4">
           <input
             type="date"
@@ -247,7 +242,7 @@ export default function ListingDetail() {
             className="rounded-md border-gray-300"
           />
         </div>
-        
+
         <button
           type="submit"
           disabled={isSubmitting}
@@ -255,7 +250,7 @@ export default function ListingDetail() {
         >
           {isSubmitting ? 'Booking...' : 'Book Now'}
         </button>
-        
+
         {actionData?.error && (
           <p className="mt-2 text-red-600">{actionData.error}</p>
         )}
@@ -297,23 +292,26 @@ export function useBooking(listingId: string) {
   const fetcher = useFetcher();
   const [dates, setDates] = useState<{ start: Date | null; end: Date | null }>({
     start: null,
-    end: null
+    end: null,
   });
 
   const checkAvailability = useCallback(async () => {
     if (!dates.start || !dates.end) return;
 
     fetcher.load(
-      `/api/listings/${listingId}/availability?start=${dates.start.toISOString()}&end=${dates.end.toISOString()}`
+      `/api/listings/${listingId}/availability?start=${dates.start.toISOString()}&end=${dates.end.toISOString()}`,
     );
   }, [listingId, dates, fetcher]);
 
-  const createBooking = useCallback((formData: FormData) => {
-    fetcher.submit(formData, {
-      method: 'post',
-      action: `/listings/${listingId}`
-    });
-  }, [listingId, fetcher]);
+  const createBooking = useCallback(
+    (formData: FormData) => {
+      fetcher.submit(formData, {
+        method: 'post',
+        action: `/listings/${listingId}`,
+      });
+    },
+    [listingId, fetcher],
+  );
 
   return {
     dates,
@@ -321,7 +319,7 @@ export function useBooking(listingId: string) {
     availability: fetcher.data,
     isChecking: fetcher.state === 'loading',
     createBooking,
-    checkAvailability
+    checkAvailability,
   };
 }
 ```
@@ -333,7 +331,7 @@ export function useBooking(listingId: string) {
 function BadListingDetail() {
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     fetch(`/api/listings/${id}`)
       .then(res => res.json())
@@ -356,7 +354,7 @@ import { useFetcher, useLoaderData } from 'react-router';
 export function ReviewsList() {
   const { reviews } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
-  
+
   // Optimistic review while submission in progress
   const optimisticReviews = fetcher.formData
     ? [
@@ -583,7 +581,7 @@ export default function ListingDetail() {
       <View className="p-4">
         <Text className="text-2xl font-bold">{listing.title}</Text>
         <Text className="text-gray-600 mt-2">{listing.description}</Text>
-        
+
         <Pressable
           onPress={handleBook}
           className="mt-6 bg-blue-600 py-3 rounded-lg active:bg-blue-700"
@@ -680,7 +678,7 @@ function MessageInput() {
       >
         {/* Your content */}
       </ScrollView>
-      
+
       <View className="border-t border-gray-200 p-4">
         <TextInput
           placeholder="Type a message..."
@@ -773,7 +771,7 @@ export default function RootLayout() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       response => {
         const data = response.notification.request.content.data;
-        
+
         // Navigate based on notification type
         if (data.type === 'new_message') {
           router.push(`/messages/${data.conversationId}`);
@@ -1139,12 +1137,8 @@ import { NotificationModule } from '../notification/notification.module';
 @Module({
   imports: [PrismaModule, PaymentModule, NotificationModule],
   controllers: [BookingController],
-  providers: [
-    BookingService,
-    BookingStateMachine,
-    AvailabilityService
-  ],
-  exports: [BookingService] // Export for use in other modules
+  providers: [BookingService, BookingStateMachine, AvailabilityService],
+  exports: [BookingService], // Export for use in other modules
 })
 export class BookingModule {}
 
@@ -1161,14 +1155,14 @@ export class BookingService {
     private readonly prisma: PrismaService,
     private readonly stateMachine: BookingStateMachine,
     private readonly paymentService: PaymentService,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
   ) {}
 
   async createBooking(createBookingDto: CreateBookingDto, userId: string) {
     // Validate listing exists
     const listing = await this.prisma.listing.findUnique({
       where: { id: createBookingDto.listingId },
-      include: { owner: true }
+      include: { owner: true },
     });
 
     if (!listing) {
@@ -1190,8 +1184,8 @@ export class BookingService {
           endDate: createBookingDto.endDate,
           guests: createBookingDto.guests,
           status: 'DRAFT',
-          totalAmount: calculateTotalAmount(listing, createBookingDto)
-        }
+          totalAmount: calculateTotalAmount(listing, createBookingDto),
+        },
       });
 
       // Transition to PENDING_PAYMENT
@@ -1201,13 +1195,13 @@ export class BookingService {
       const paymentIntent = await this.paymentService.createIntent({
         amount: booking.totalAmount,
         bookingId: booking.id,
-        ownerId: listing.ownerId
+        ownerId: listing.ownerId,
       });
 
       // Update booking with payment info
       await tx.booking.update({
         where: { id: booking.id },
-        data: { paymentIntentId: paymentIntent.id }
+        data: { paymentIntentId: paymentIntent.id },
       });
 
       return { booking, paymentIntent };
@@ -1234,7 +1228,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     // Check if route is marked as public
     const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
       context.getHandler(),
-      context.getClass()
+      context.getClass(),
     ]);
 
     if (isPublic) {
@@ -1264,7 +1258,7 @@ export class RolesGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>('roles', [
       context.getHandler(),
-      context.getClass()
+      context.getClass(),
     ]);
 
     if (!requiredRoles) {
@@ -1329,8 +1323,8 @@ export class LoggingInterceptor implements NestInterceptor {
         error: (error) => {
           const responseTime = Date.now() - now;
           console.error(`${method} ${url} - ${responseTime}ms - Error: ${error.message}`);
-        }
-      })
+        },
+      }),
     );
   }
 }
@@ -1350,11 +1344,11 @@ export interface Response<T> {
 export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> {
   intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
     return next.handle().pipe(
-      map(data => ({
+      map((data) => ({
         success: true,
         data,
-        timestamp: new Date().toISOString()
-      }))
+        timestamp: new Date().toISOString(),
+      })),
     );
   }
 }
@@ -1362,10 +1356,7 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
 // Apply globally in main.ts
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useGlobalInterceptors(
-    new LoggingInterceptor(),
-    new TransformInterceptor()
-  );
+  app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
   await app.listen(3000);
 }
 ```
@@ -1444,13 +1435,7 @@ async createBooking(
 
 ```typescript
 // filters/http-exception.filter.ts
-import {
-  ExceptionFilter,
-  Catch,
-  ArgumentsHost,
-  HttpException,
-  HttpStatus
-} from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
@@ -1468,9 +1453,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      message = typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : (exceptionResponse as any).message;
+      message =
+        typeof exceptionResponse === 'string'
+          ? exceptionResponse
+          : (exceptionResponse as any).message;
       code = (exceptionResponse as any).code || exception.name;
     } else if (exception instanceof PrismaClientKnownRequestError) {
       // Handle Prisma errors
@@ -1497,7 +1483,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
       method: request.method,
-      exception: exception instanceof Error ? exception.stack : exception
+      exception: exception instanceof Error ? exception.stack : exception,
     });
 
     response.status(status).json({
@@ -1506,7 +1492,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       code,
       message,
       timestamp: new Date().toISOString(),
-      path: request.url
+      path: request.url,
     });
   }
 }
@@ -1522,39 +1508,39 @@ app.useGlobalFilters(new AllExceptionsFilter());
 export default () => ({
   port: parseInt(process.env.PORT || '3000', 10),
   database: {
-    url: process.env.DATABASE_URL
+    url: process.env.DATABASE_URL,
   },
   jwt: {
     secret: process.env.JWT_SECRET,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     refreshSecret: process.env.JWT_REFRESH_SECRET,
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d'
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   },
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-    platformFeePercent: parseInt(process.env.PLATFORM_FEE_PERCENT || '10', 10)
+    platformFeePercent: parseInt(process.env.PLATFORM_FEE_PERCENT || '10', 10),
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD
+    password: process.env.REDIS_PASSWORD,
   },
   elasticsearch: {
     node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
     auth: {
       username: process.env.ELASTICSEARCH_USERNAME,
-      password: process.env.ELASTICSEARCH_PASSWORD
-    }
+      password: process.env.ELASTICSEARCH_PASSWORD,
+    },
   },
   aws: {
     region: process.env.AWS_REGION || 'us-east-1',
     s3: {
       bucket: process.env.AWS_S3_BUCKET,
       accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-    }
-  }
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    },
+  },
 });
 
 // app.module.ts
@@ -1571,10 +1557,10 @@ import configuration from './config/configuration';
         PORT: Joi.number().default(3000),
         DATABASE_URL: Joi.string().required(),
         JWT_SECRET: Joi.string().required(),
-        STRIPE_SECRET_KEY: Joi.string().required()
-      })
-    })
-  ]
+        STRIPE_SECRET_KEY: Joi.string().required(),
+      }),
+    }),
+  ],
 })
 export class AppModule {}
 
@@ -1584,10 +1570,9 @@ export class StripeService {
   private stripe: Stripe;
 
   constructor(private configService: ConfigService) {
-    this.stripe = new Stripe(
-      this.configService.get<string>('stripe.secretKey'),
-      { apiVersion: '2023-10-16' }
-    );
+    this.stripe = new Stripe(this.configService.get<string>('stripe.secretKey'), {
+      apiVersion: '2023-10-16',
+    });
   }
 }
 ```
@@ -1602,7 +1587,7 @@ import {
   HealthCheck,
   TypeOrmHealthIndicator,
   DiskHealthIndicator,
-  MemoryHealthIndicator
+  MemoryHealthIndicator,
 } from '@nestjs/terminus';
 import { PrismaHealthIndicator } from './prisma-health.indicator';
 import { RedisHealthIndicator } from './redis-health.indicator';
@@ -1616,7 +1601,7 @@ export class HealthController {
     private redis: RedisHealthIndicator,
     private elasticsearch: ElasticsearchHealthIndicator,
     private disk: DiskHealthIndicator,
-    private memory: MemoryHealthIndicator
+    private memory: MemoryHealthIndicator,
   ) {}
 
   @Get()
@@ -1628,7 +1613,7 @@ export class HealthController {
       () => this.elasticsearch.isHealthy('elasticsearch'),
       () => this.disk.checkStorage('storage', { path: '/', thresholdPercent: 0.9 }),
       () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
-      () => this.memory.checkRSS('memory_rss', 150 * 1024 * 1024)
+      () => this.memory.checkRSS('memory_rss', 150 * 1024 * 1024),
     ]);
   }
 }
@@ -1674,32 +1659,32 @@ async function getListingWithRelations(id: string) {
           lastName: true,
           avatar: true,
           rating: true,
-          verifiedOwner: true
-        }
+          verifiedOwner: true,
+        },
       },
       photos: {
-        orderBy: { order: 'asc' }
+        orderBy: { order: 'asc' },
       },
       reviews: {
         where: { status: 'APPROVED' },
         include: {
           renter: {
-            select: { firstName: true, avatar: true }
-          }
+            select: { firstName: true, avatar: true },
+          },
         },
         orderBy: { createdAt: 'desc' },
-        take: 10
+        take: 10,
       },
       _count: {
         select: {
           bookings: {
             where: {
-              status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] }
-            }
-          }
-        }
-      }
-    }
+              status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] },
+            },
+          },
+        },
+      },
+    },
   });
 
   return listing;
@@ -1726,8 +1711,8 @@ async function createBookingWithPayment(data: CreateBookingData) {
           startDate: data.startDate,
           endDate: data.endDate,
           status: 'PENDING_PAYMENT',
-          totalAmount: data.totalAmount
-        }
+          totalAmount: data.totalAmount,
+        },
       });
 
       // Create deposit hold
@@ -1735,8 +1720,8 @@ async function createBookingWithPayment(data: CreateBookingData) {
         data: {
           bookingId: booking.id,
           amount: data.totalAmount,
-          status: 'PENDING'
-        }
+          status: 'PENDING',
+        },
       });
 
       // Create ledger entries (double-entry accounting)
@@ -1747,16 +1732,16 @@ async function createBookingWithPayment(data: CreateBookingData) {
             type: 'DEBIT',
             amount: data.totalAmount,
             bookingId: booking.id,
-            description: `Payment for booking ${booking.id}`
+            description: `Payment for booking ${booking.id}`,
           },
           {
             userId: data.ownerId,
             type: 'CREDIT',
             amount: data.totalAmount * 0.9, // After platform fee
             bookingId: booking.id,
-            description: `Payout for booking ${booking.id}`
-          }
-        ]
+            description: `Payout for booking ${booking.id}`,
+          },
+        ],
       });
 
       return { booking, depositHold };
@@ -1764,8 +1749,8 @@ async function createBookingWithPayment(data: CreateBookingData) {
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       maxWait: 5000, // 5 seconds
-      timeout: 10000 // 10 seconds
-    }
+      timeout: 10000, // 10 seconds
+    },
   );
 }
 ```
@@ -1784,16 +1769,16 @@ const users = await prisma.user.findMany({
     firstName: true,
     lastName: true,
     avatar: true,
-    rating: true
+    rating: true,
     // Excludes: passwordHash, stripeCustomerId, etc.
-  }
+  },
 });
 
 // Bad: N+1 query problem
 const bookings = await prisma.booking.findMany();
 for (const booking of bookings) {
   const listing = await prisma.listing.findUnique({
-    where: { id: booking.listingId }
+    where: { id: booking.listingId },
   });
   // Process listing...
 }
@@ -1804,14 +1789,14 @@ const bookings = await prisma.booking.findMany({
     listing: {
       include: {
         owner: {
-          select: { firstName: true, avatar: true }
-        }
-      }
+          select: { firstName: true, avatar: true },
+        },
+      },
     },
     renter: {
-      select: { firstName: true, avatar: true }
-    }
-  }
+      select: { firstName: true, avatar: true },
+    },
+  },
 });
 ```
 
@@ -1833,21 +1818,18 @@ async function getPaginatedListings({ page, limit }: PaginationParams) {
       where: { status: 'ACTIVE' },
       include: {
         owner: {
-          select: { firstName: true, avatar: true, rating: true }
+          select: { firstName: true, avatar: true, rating: true },
         },
         photos: {
           take: 1,
-          orderBy: { order: 'asc' }
-        }
+          orderBy: { order: 'asc' },
+        },
       },
-      orderBy: [
-        { verifiedOwner: 'desc' },
-        { createdAt: 'desc' }
-      ]
+      orderBy: [{ verifiedOwner: 'desc' }, { createdAt: 'desc' }],
     }),
     prisma.listing.count({
-      where: { status: 'ACTIVE' }
-    })
+      where: { status: 'ACTIVE' },
+    }),
   ]);
 
   return {
@@ -1857,8 +1839,8 @@ async function getPaginatedListings({ page, limit }: PaginationParams) {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      hasMore: skip + listings.length < total
-    }
+      hasMore: skip + listings.length < total,
+    },
   };
 }
 
@@ -1868,10 +1850,10 @@ async function getCursorPaginatedListings(cursor?: string, limit: number = 20) {
     take: limit + 1, // Fetch one extra to check if there's more
     ...(cursor && {
       skip: 1, // Skip the cursor
-      cursor: { id: cursor }
+      cursor: { id: cursor },
     }),
     where: { status: 'ACTIVE' },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
   });
 
   const hasMore = listings.length > limit;
@@ -1881,7 +1863,7 @@ async function getCursorPaginatedListings(cursor?: string, limit: number = 20) {
   return {
     data: results,
     nextCursor,
-    hasMore
+    hasMore,
   };
 }
 ```
@@ -1897,7 +1879,7 @@ prisma.$use(async (params, next) => {
       params.action = 'update';
       params.args['data'] = { deletedAt: new Date() };
     }
-    
+
     if (params.action === 'deleteMany') {
       params.action = 'updateMany';
       if (params.args.data !== undefined) {
@@ -1932,9 +1914,9 @@ prisma.$use(async (params, next) => {
   const before = Date.now();
   const result = await next(params);
   const after = Date.now();
-  
+
   console.log(`Query ${params.model}.${params.action} took ${after - before}ms`);
-  
+
   return result;
 });
 ```
@@ -1951,8 +1933,8 @@ async function createUser(data: CreateUserData) {
         email: data.email,
         passwordHash: data.passwordHash,
         firstName: data.firstName,
-        lastName: data.lastName
-      }
+        lastName: data.lastName,
+      },
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -1961,18 +1943,18 @@ async function createUser(data: CreateUserData) {
         const field = (error.meta?.target as string[])?.[0];
         throw new ConflictException(`${field} already exists`);
       }
-      
+
       // Foreign key constraint violation
       if (error.code === 'P2003') {
         throw new BadRequestException('Referenced record does not exist');
       }
-      
+
       // Record not found
       if (error.code === 'P2025') {
         throw new NotFoundException('Record not found');
       }
     }
-    
+
     throw error;
   }
 }
@@ -2043,7 +2025,7 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
-  
+
   // Actions
   login: (user: User, token: string) => void;
   logout: () => void;
@@ -2089,7 +2071,7 @@ export const useAuthStore = create<AuthState>()(
 // Usage in component
 function ProfilePage() {
   const { user, updateUser } = useAuthStore();
-  
+
   const handleUpdateProfile = async (data: UpdateProfileData) => {
     const updated = await api.updateProfile(data);
     updateUser(updated);
@@ -2302,7 +2284,7 @@ class SocketService {
 
   connect() {
     const token = useAuthStore.getState().token;
-    
+
     if (!token) {
       console.error('No auth token available');
       return;
@@ -2314,7 +2296,7 @@ class SocketService {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      reconnectionAttempts: this.maxReconnectAttempts
+      reconnectionAttempts: this.maxReconnectAttempts,
     });
 
     this.setupListeners();
@@ -2330,7 +2312,7 @@ class SocketService {
 
     this.socket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
-      
+
       if (reason === 'io server disconnect') {
         // Server forcefully disconnected, reconnect manually
         this.socket?.connect();
@@ -2340,7 +2322,7 @@ class SocketService {
     this.socket.on('connect_error', (error) => {
       console.error('Socket connection error:', error);
       this.reconnectAttempts++;
-      
+
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
         console.error('Max reconnection attempts reached');
         this.disconnect();
@@ -2369,7 +2351,7 @@ class SocketService {
       // Optionally queue messages
       return;
     }
-    
+
     this.socket.emit(event, data);
   }
 
@@ -2378,7 +2360,7 @@ class SocketService {
       console.warn('Socket not initialized');
       return;
     }
-    
+
     this.socket.on(event, callback);
   }
 
@@ -2406,7 +2388,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   MessageBody,
-  ConnectedSocket
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
@@ -2420,9 +2402,9 @@ interface AuthenticatedSocket extends Socket {
 @WebSocketGateway({
   cors: {
     origin: process.env.FRONTEND_URL,
-    credentials: true
+    credentials: true,
   },
-  namespace: '/messages'
+  namespace: '/messages',
 })
 @UseGuards(WsJwtGuard)
 export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -2431,7 +2413,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   constructor(
     private messagingService: MessagingService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -2442,12 +2424,12 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       await this.cacheService.set(
         `user:${client.userId}:socket`,
         client.id,
-        3600 // 1 hour TTL
+        3600, // 1 hour TTL
       );
 
       // Join user's conversation rooms
       const conversations = await this.messagingService.getUserConversations(client.userId);
-      
+
       for (const conversation of conversations) {
         client.join(`conversation:${conversation.id}`);
       }
@@ -2474,13 +2456,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   async handleSendMessage(
     @MessageBody() data: { conversationId: string; text: string },
     @ConnectedSocket() client: AuthenticatedSocket,
-    @CurrentUser() user: User
+    @CurrentUser() user: User,
   ) {
     // Validate user is participant in conversation
-    const isParticipant = await this.messagingService.isParticipant(
-      data.conversationId,
-      user.id
-    );
+    const isParticipant = await this.messagingService.isParticipant(data.conversationId, user.id);
 
     if (!isParticipant) {
       client.emit('error', { message: 'Not authorized for this conversation' });
@@ -2490,11 +2469,11 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     // Check rate limit
     const rateKey = `rate:message:${user.id}`;
     const messageCount = await this.cacheService.incr(rateKey);
-    
+
     if (messageCount === 1) {
       await this.cacheService.expire(rateKey, 60); // 1 minute window
     }
-    
+
     if (messageCount > 10) {
       client.emit('error', { message: 'Rate limit exceeded' });
       return;
@@ -2504,7 +2483,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     const message = await this.messagingService.createMessage({
       conversationId: data.conversationId,
       senderId: user.id,
-      text: data.text
+      text: data.text,
     });
 
     // Broadcast to conversation room
@@ -2516,24 +2495,24 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       createdAt: message.createdAt,
       sender: {
         firstName: user.firstName,
-        avatar: user.avatar
-      }
+        avatar: user.avatar,
+      },
     });
 
     // Send push notification to offline users
     const participants = await this.messagingService.getConversationParticipants(
-      data.conversationId
+      data.conversationId,
     );
-    
+
     for (const participant of participants) {
       if (participant.id !== user.id) {
         const isOnline = await this.cacheService.exists(`user:${participant.id}:socket`);
-        
+
         if (!isOnline) {
           await this.notificationService.sendPush(participant.id, {
             title: `New message from ${user.firstName}`,
             body: data.text,
-            data: { conversationId: data.conversationId }
+            data: { conversationId: data.conversationId },
           });
         }
       }
@@ -2544,13 +2523,13 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   async handleTyping(
     @MessageBody() data: { conversationId: string; isTyping: boolean },
     @ConnectedSocket() client: AuthenticatedSocket,
-    @CurrentUser() user: User
+    @CurrentUser() user: User,
   ) {
     // Broadcast typing indicator to others in conversation
     client.to(`conversation:${data.conversationId}`).emit('typing', {
       conversationId: data.conversationId,
       userId: user.id,
-      isTyping: data.isTyping
+      isTyping: data.isTyping,
     });
   }
 
@@ -2558,22 +2537,19 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   async handleMarkRead(
     @MessageBody() data: { messageId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
-    @CurrentUser() user: User
+    @CurrentUser() user: User,
   ) {
-    const readReceipt = await this.messagingService.markMessageAsRead(
-      data.messageId,
-      user.id
-    );
+    const readReceipt = await this.messagingService.markMessageAsRead(data.messageId, user.id);
 
     // Notify sender that message was read
     const message = await this.messagingService.getMessage(data.messageId);
     const senderSocketId = await this.cacheService.get(`user:${message.senderId}:socket`);
-    
+
     if (senderSocketId) {
       this.server.to(senderSocketId).emit('messageRead', {
         messageId: data.messageId,
         readBy: user.id,
-        readAt: readReceipt.readAt
+        readAt: readReceipt.readAt,
       });
     }
   }
@@ -2602,12 +2578,12 @@ describe('BookingService', () => {
       create: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
-      update: jest.fn()
+      update: jest.fn(),
     },
     listing: {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
     },
-    $transaction: jest.fn()
+    $transaction: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -2616,9 +2592,9 @@ describe('BookingService', () => {
         BookingService,
         {
           provide: PrismaService,
-          useValue: mockPrismaService
-        }
-      ]
+          useValue: mockPrismaService,
+        },
+      ],
     }).compile();
 
     service = module.get<BookingService>(BookingService);
@@ -2635,14 +2611,14 @@ describe('BookingService', () => {
       title: 'Test Listing',
       basePrice: 100,
       ownerId: 'owner-123',
-      status: 'ACTIVE'
+      status: 'ACTIVE',
     };
 
     const createBookingDto = {
       listingId: 'listing-123',
       startDate: new Date('2026-06-01'),
       endDate: new Date('2026-06-05'),
-      guests: 2
+      guests: 2,
     };
 
     it('should create a booking successfully', async () => {
@@ -2655,7 +2631,7 @@ describe('BookingService', () => {
         ...createBookingDto,
         renterId: 'renter-123',
         status: 'PENDING_PAYMENT',
-        totalAmount: 400
+        totalAmount: 400,
       });
 
       const result = await service.createBooking(createBookingDto, 'renter-123');
@@ -2664,7 +2640,7 @@ describe('BookingService', () => {
       expect(result.id).toBe('booking-123');
       expect(mockPrismaService.listing.findUnique).toHaveBeenCalledWith({
         where: { id: 'listing-123' },
-        include: { owner: true }
+        include: { owner: true },
       });
       expect(mockPrismaService.booking.create).toHaveBeenCalled();
     });
@@ -2672,17 +2648,17 @@ describe('BookingService', () => {
     it('should throw NotFoundException if listing does not exist', async () => {
       mockPrismaService.listing.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.createBooking(createBookingDto, 'renter-123')
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.createBooking(createBookingDto, 'renter-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should throw BadRequestException if user tries to book own listing', async () => {
       mockPrismaService.listing.findUnique.mockResolvedValue(mockListing);
 
-      await expect(
-        service.createBooking(createBookingDto, 'owner-123')
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.createBooking(createBookingDto, 'owner-123')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -2692,7 +2668,7 @@ describe('BookingService', () => {
         id: 'booking-123',
         listingId: 'listing-123',
         renterId: 'renter-123',
-        status: 'CONFIRMED'
+        status: 'CONFIRMED',
       };
 
       mockPrismaService.booking.findUnique.mockResolvedValue(mockBooking);
@@ -2702,16 +2678,14 @@ describe('BookingService', () => {
       expect(result).toEqual(mockBooking);
       expect(mockPrismaService.booking.findUnique).toHaveBeenCalledWith({
         where: { id: 'booking-123' },
-        include: expect.any(Object)
+        include: expect.any(Object),
       });
     });
 
     it('should throw NotFoundException if booking does not exist', async () => {
       mockPrismaService.booking.findUnique.mockResolvedValue(null);
 
-      await expect(service.getBooking('non-existent')).rejects.toThrow(
-        NotFoundException
-      );
+      await expect(service.getBooking('non-existent')).rejects.toThrow(NotFoundException);
     });
   });
 });
@@ -2736,7 +2710,7 @@ describe('Bookings (e2e)', () => {
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule]
+      imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
@@ -2751,14 +2725,12 @@ describe('Bookings (e2e)', () => {
     await prisma.user.deleteMany();
 
     // Create test user
-    const userResponse = await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({
-        email: 'test@example.com',
-        password: 'Test123!@#',
-        firstName: 'Test',
-        lastName: 'User'
-      });
+    const userResponse = await request(app.getHttpServer()).post('/auth/register').send({
+      email: 'test@example.com',
+      password: 'Test123!@#',
+      firstName: 'Test',
+      lastName: 'User',
+    });
 
     userId = userResponse.body.user.id;
     authToken = userResponse.body.token;
@@ -2775,8 +2747,8 @@ describe('Bookings (e2e)', () => {
         location: {
           city: 'New York',
           state: 'NY',
-          zipCode: '10001'
-        }
+          zipCode: '10001',
+        },
       });
 
     listingId = listingResponse.body.id;
@@ -2796,7 +2768,7 @@ describe('Bookings (e2e)', () => {
           listingId,
           startDate: '2026-06-01',
           endDate: '2026-06-05',
-          guests: 2
+          guests: 2,
         })
         .expect(201);
 
@@ -2813,7 +2785,7 @@ describe('Bookings (e2e)', () => {
           listingId,
           startDate: '2026-06-05',
           endDate: '2026-06-01', // End before start
-          guests: 2
+          guests: 2,
         })
         .expect(400);
     });
@@ -2825,7 +2797,7 @@ describe('Bookings (e2e)', () => {
           listingId,
           startDate: '2026-06-01',
           endDate: '2026-06-05',
-          guests: 2
+          guests: 2,
         })
         .expect(401);
     });
@@ -2838,7 +2810,7 @@ describe('Bookings (e2e)', () => {
           listingId: 'non-existent-id',
           startDate: '2026-06-01',
           endDate: '2026-06-05',
-          guests: 2
+          guests: 2,
         })
         .expect(404);
     });
@@ -2991,7 +2963,7 @@ export class SanitizePipe implements PipeTransform {
 
   private sanitizeObject(obj: any): any {
     const sanitized: any = {};
-    
+
     for (const [key, value] of Object.entries(obj)) {
       if (typeof value === 'string') {
         sanitized[key] = DOMPurify.sanitize(value, {
@@ -3004,7 +2976,7 @@ export class SanitizePipe implements PipeTransform {
         sanitized[key] = value;
       }
     }
-    
+
     return sanitized;
   }
 }
@@ -3038,7 +3010,7 @@ export class CustomThrottleGuard extends ThrottlerGuard {
     const key = this.generateKey(context, request.ip);
 
     const current = await this.redis.incr(key);
-    
+
     if (current === 1) {
       await this.redis.expire(key, ttl);
     }
@@ -3054,7 +3026,7 @@ export class CustomThrottleGuard extends ThrottlerGuard {
     const request = context.switchToHttp().getRequest();
     const userId = request.user?.id || 'anonymous';
     const route = request.route?.path || request.url;
-    
+
     return `rate-limit:${userId}:${route}:${suffix}`;
   }
 }
@@ -3144,9 +3116,7 @@ async uploadPhoto(
 ```typescript
 // Bad: String concatenation (vulnerable to SQL injection)
 async function badSearch(query: string) {
-  return await prisma.$queryRawUnsafe(
-    `SELECT * FROM listings WHERE title LIKE '%${query}%'`
-  );
+  return await prisma.$queryRawUnsafe(`SELECT * FROM listings WHERE title LIKE '%${query}%'`);
 }
 
 // Good: Parameterized query
@@ -3164,10 +3134,10 @@ async function bestSearch(query: string) {
     where: {
       title: {
         contains: query,
-        mode: 'insensitive'
+        mode: 'insensitive',
       },
-      status: 'ACTIVE'
-    }
+      status: 'ACTIVE',
+    },
   });
 }
 ```
@@ -3187,39 +3157,43 @@ async function bootstrap() {
   // Enable CORS with credentials
   app.enableCors({
     origin: process.env.FRONTEND_URL,
-    credentials: true
+    credentials: true,
   });
 
   // Security headers
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Adjust for production
-        imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", process.env.API_URL],
-        fontSrc: ["'self'", 'data:'],
-        objectSrc: ["'none'"],
-        mediaSrc: ["'self'"],
-        frameSrc: ["'none'"]
-      }
-    },
-    crossOriginEmbedderPolicy: false
-  }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Adjust for production
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'", process.env.API_URL],
+          fontSrc: ["'self'", 'data:'],
+          objectSrc: ["'none'"],
+          mediaSrc: ["'self'"],
+          frameSrc: ["'none'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
 
   // Cookie parser (required for CSRF)
   app.use(cookieParser());
 
   // CSRF protection (exclude API endpoints using tokens)
-  app.use(csurf({
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    },
-    ignoreMethods: ['GET', 'HEAD', 'OPTIONS']
-  }));
+  app.use(
+    csurf({
+      cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+      },
+      ignoreMethods: ['GET', 'HEAD', 'OPTIONS'],
+    }),
+  );
 
   await app.listen(3000);
 }
@@ -3254,17 +3228,17 @@ export class CacheService {
   async get<T>(key: string, fetcher: () => Promise<T>, ttl: number = 3600): Promise<T> {
     // Try to get from cache
     const cached = await this.redis.get(key);
-    
+
     if (cached) {
       return JSON.parse(cached);
     }
 
     // Cache miss - fetch from source
     const data = await fetcher();
-    
+
     // Store in cache
     await this.redis.setex(key, ttl, JSON.stringify(data));
-    
+
     return data;
   }
 
@@ -3294,7 +3268,7 @@ export class CacheService {
 export class ListingService {
   constructor(
     private prisma: PrismaService,
-    private cache: CacheService
+    private cache: CacheService,
   ) {}
 
   async getListing(id: string) {
@@ -3305,18 +3279,18 @@ export class ListingService {
           where: { id },
           include: {
             owner: { select: { firstName: true, avatar: true, rating: true } },
-            photos: true
-          }
+            photos: true,
+          },
         });
       },
-      3600 // 1 hour
+      3600, // 1 hour
     );
   }
 
   async updateListing(id: string, data: UpdateListingDto) {
     const updated = await this.prisma.listing.update({
       where: { id },
-      data
+      data,
     });
 
     // Invalidate cache
@@ -3334,13 +3308,13 @@ export class ListingService {
 // Bad: N+1 query problem
 async function getBookingsWithListings() {
   const bookings = await prisma.booking.findMany();
-  
+
   for (const booking of bookings) {
     booking.listing = await prisma.listing.findUnique({
-      where: { id: booking.listingId }
+      where: { id: booking.listingId },
     });
   }
-  
+
   return bookings;
 }
 
@@ -3350,11 +3324,11 @@ async function getBookingsWithListings() {
     include: {
       listing: {
         include: {
-          owner: { select: { firstName: true, avatar: true } }
-        }
+          owner: { select: { firstName: true, avatar: true } },
+        },
       },
-      renter: { select: { firstName: true, avatar: true } }
-    }
+      renter: { select: { firstName: true, avatar: true } },
+    },
   });
 }
 
@@ -3374,25 +3348,25 @@ async function getBookingsWithListingsOptimized() {
           basePrice: true,
           photos: {
             select: { url: true },
-            take: 1
+            take: 1,
           },
           owner: {
             select: {
               id: true,
               firstName: true,
-              avatar: true
-            }
-          }
-        }
+              avatar: true,
+            },
+          },
+        },
       },
       renter: {
         select: {
           id: true,
           firstName: true,
-          avatar: true
-        }
-      }
-    }
+          avatar: true,
+        },
+      },
+    },
   });
 }
 ```
@@ -3530,7 +3504,7 @@ export class AppError extends Error {
     public readonly message: string,
     public readonly statusCode: number,
     public readonly code: string,
-    public readonly isOperational: boolean = true
+    public readonly isOperational: boolean = true,
   ) {
     super(message);
     Object.setPrototypeOf(this, AppError.prototype);
@@ -3543,13 +3517,16 @@ export class NotFoundError extends AppError {
     super(
       identifier ? `${resource} with id '${identifier}' not found` : `${resource} not found`,
       404,
-      'NOT_FOUND'
+      'NOT_FOUND',
     );
   }
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string, public readonly fields?: Record<string, string[]>) {
+  constructor(
+    message: string,
+    public readonly fields?: Record<string, string[]>,
+  ) {
     super(message, 400, 'VALIDATION_ERROR');
   }
 }
@@ -3575,23 +3552,23 @@ export class ConflictError extends AppError {
 // Usage
 async function getBooking(id: string) {
   const booking = await prisma.booking.findUnique({ where: { id } });
-  
+
   if (!booking) {
     throw new NotFoundError('Booking', id);
   }
-  
+
   return booking;
 }
 
 async function createUser(data: CreateUserDto) {
   const existing = await prisma.user.findUnique({
-    where: { email: data.email }
+    where: { email: data.email },
   });
-  
+
   if (existing) {
     throw new ConflictError('A user with this email already exists');
   }
-  
+
   return prisma.user.create({ data });
 }
 ```
@@ -3624,7 +3601,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Error caught by boundary:', error, errorInfo);
-    
+
     // Send to error tracking service
     if (window.Sentry) {
       window.Sentry.captureException(error, {
@@ -3697,10 +3674,7 @@ export class BookingController {
   constructor(private bookingService: BookingService) {}
 
   @Post()
-  async createBooking(
-    @Body() createBookingDto: CreateBookingDto,
-    @CurrentUser() user: User
-  ) {
+  async createBooking(@Body() createBookingDto: CreateBookingDto, @CurrentUser() user: User) {
     try {
       const booking = await this.bookingService.createBooking(createBookingDto, user.id);
       return booking;
@@ -3756,6 +3730,7 @@ export class BookingController {
 ---
 
 This reference guide should be consulted whenever:
+
 1. Implementing new features
 2. Refactoring existing code
 3. Reviewing pull requests

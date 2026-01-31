@@ -29,17 +29,17 @@
 // apps/api/src/modules/bookings/domain/booking-state-machine.ts
 
 export enum BookingStatus {
-  DRAFT = "DRAFT",
-  PENDING_OWNER_APPROVAL = "PENDING_OWNER_APPROVAL",
-  PENDING_PAYMENT = "PENDING_PAYMENT",
-  CONFIRMED = "CONFIRMED",
-  IN_PROGRESS = "IN_PROGRESS",
-  AWAITING_RETURN_INSPECTION = "AWAITING_RETURN_INSPECTION",
-  COMPLETED = "COMPLETED",
-  SETTLED = "SETTLED",
-  CANCELLED = "CANCELLED",
-  DISPUTED = "DISPUTED",
-  REFUNDED = "REFUNDED",
+  DRAFT = 'DRAFT',
+  PENDING_OWNER_APPROVAL = 'PENDING_OWNER_APPROVAL',
+  PENDING_PAYMENT = 'PENDING_PAYMENT',
+  CONFIRMED = 'CONFIRMED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  AWAITING_RETURN_INSPECTION = 'AWAITING_RETURN_INSPECTION',
+  COMPLETED = 'COMPLETED',
+  SETTLED = 'SETTLED',
+  CANCELLED = 'CANCELLED',
+  DISPUTED = 'DISPUTED',
+  REFUNDED = 'REFUNDED',
 }
 
 interface StateDefinition {
@@ -65,15 +65,15 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
     ],
     invariants: [
       {
-        name: "quote_exists",
+        name: 'quote_exists',
         check: (booking) => !!booking.quoteSnapshot,
-        errorMessage: "Quote snapshot is required",
+        errorMessage: 'Quote snapshot is required',
       },
     ],
     onEnter: async (booking) => {
       // Log draft creation
       await auditLog.create({
-        action: "booking.draft.created",
+        action: 'booking.draft.created',
         bookingId: booking.id,
         userId: booking.renterId,
       });
@@ -81,23 +81,20 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
   },
 
   [BookingStatus.PENDING_OWNER_APPROVAL]: {
-    allowedTransitions: [
-      BookingStatus.PENDING_PAYMENT,
-      BookingStatus.CANCELLED,
-    ],
+    allowedTransitions: [BookingStatus.PENDING_PAYMENT, BookingStatus.CANCELLED],
     invariants: [
       {
-        name: "listing_requires_approval",
+        name: 'listing_requires_approval',
         check: async (booking) => {
           const listing = await getListing(booking.listingId);
-          return listing.bookingMode === "request-to-book";
+          return listing.bookingMode === 'request-to-book';
         },
-        errorMessage: "Listing does not require approval",
+        errorMessage: 'Listing does not require approval',
       },
     ],
     onEnter: async (booking) => {
       // Set expiration timer (48 hours)
-      await scheduleJob("expire-booking-request", {
+      await scheduleJob('expire-booking-request', {
         bookingId: booking.id,
         expiresAt: addHours(new Date(), 48),
       });
@@ -105,7 +102,7 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       // Notify owner
       await notificationService.send({
         userId: booking.ownerId,
-        type: "booking_requested",
+        type: 'booking_requested',
         data: { bookingId: booking.id },
       });
     },
@@ -115,23 +112,23 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
     allowedTransitions: [BookingStatus.CONFIRMED, BookingStatus.CANCELLED],
     invariants: [
       {
-        name: "payment_intent_created",
+        name: 'payment_intent_created',
         check: (booking) => !!booking.paymentIntentId,
-        errorMessage: "Payment intent must be created",
+        errorMessage: 'Payment intent must be created',
       },
       {
-        name: "owner_approved_if_required",
+        name: 'owner_approved_if_required',
         check: async (booking) => {
           const listing = await getListing(booking.listingId);
-          if (listing.bookingMode === "instant-book") return true;
+          if (listing.bookingMode === 'instant-book') return true;
           return booking.ownerApprovedAt !== null;
         },
-        errorMessage: "Owner approval required",
+        errorMessage: 'Owner approval required',
       },
     ],
     onEnter: async (booking) => {
       // Set payment expiration (15 minutes)
-      await scheduleJob("expire-payment-window", {
+      await scheduleJob('expire-payment-window', {
         bookingId: booking.id,
         expiresAt: addMinutes(new Date(), 15),
       });
@@ -139,7 +136,7 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       // Notify renter
       await notificationService.send({
         userId: booking.renterId,
-        type: "payment_required",
+        type: 'payment_required',
         data: { bookingId: booking.id },
       });
     },
@@ -153,26 +150,26 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
     ],
     invariants: [
       {
-        name: "payment_succeeded",
+        name: 'payment_succeeded',
         check: async (booking) => {
           const payment = await getPaymentIntent(booking.paymentIntentId);
-          return payment.status === "succeeded";
+          return payment.status === 'succeeded';
         },
-        errorMessage: "Payment must be successful",
+        errorMessage: 'Payment must be successful',
       },
       {
-        name: "deposit_held_if_required",
+        name: 'deposit_held_if_required',
         check: async (booking) => {
           const listing = await getListing(booking.listingId);
           if (!listing.requiresDeposit) return true;
           return !!booking.depositHoldId;
         },
-        errorMessage: "Deposit hold required",
+        errorMessage: 'Deposit hold required',
       },
       {
-        name: "agreement_snapshot_exists",
+        name: 'agreement_snapshot_exists',
         check: (booking) => !!booking.agreementSnapshot,
-        errorMessage: "Agreement snapshot is required",
+        errorMessage: 'Agreement snapshot is required',
       },
     ],
     onEnter: async (booking) => {
@@ -180,7 +177,7 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       await blockAvailability(booking.listingId, booking.dateRange);
 
       // Schedule reminder emails
-      await scheduleJob("send-booking-reminder", {
+      await scheduleJob('send-booking-reminder', {
         bookingId: booking.id,
         sendAt: subHours(booking.startDate, 24), // 24 hours before
       });
@@ -189,18 +186,18 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       await Promise.all([
         notificationService.send({
           userId: booking.renterId,
-          type: "booking_confirmed",
+          type: 'booking_confirmed',
           data: { bookingId: booking.id },
         }),
         notificationService.send({
           userId: booking.ownerId,
-          type: "booking_confirmed",
+          type: 'booking_confirmed',
           data: { bookingId: booking.id },
         }),
       ]);
 
       // Emit domain event
-      await eventBus.publish("booking.confirmed", {
+      await eventBus.publish('booking.confirmed', {
         bookingId: booking.id,
         listingId: booking.listingId,
         renterId: booking.renterId,
@@ -218,39 +215,39 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
     ],
     invariants: [
       {
-        name: "start_date_reached",
+        name: 'start_date_reached',
         check: (booking) => isPast(booking.startDate),
-        errorMessage: "Start date has not been reached",
+        errorMessage: 'Start date has not been reached',
       },
       {
-        name: "checkin_report_if_required",
+        name: 'checkin_report_if_required',
         check: async (booking) => {
           const listing = await getListing(booking.listingId);
           const category = await getCategory(listing.category);
 
           if (!category.requiresCheckinReport) return true;
 
-          const report = await getConditionReport(booking.id, "check_in");
-          return report?.status === "submitted";
+          const report = await getConditionReport(booking.id, 'check_in');
+          return report?.status === 'submitted';
         },
-        errorMessage: "Check-in condition report required",
+        errorMessage: 'Check-in condition report required',
       },
     ],
     onEnter: async (booking) => {
       // Track start
       await auditLog.create({
-        action: "booking.started",
+        action: 'booking.started',
         bookingId: booking.id,
       });
 
       // Schedule late return detection
-      await scheduleJob("detect-late-return", {
+      await scheduleJob('detect-late-return', {
         bookingId: booking.id,
         checkAt: addHours(booking.endDate, 2), // 2 hours grace period
       });
 
       // Notify about check-out requirements
-      await scheduleJob("send-checkout-reminder", {
+      await scheduleJob('send-checkout-reminder', {
         bookingId: booking.id,
         sendAt: subHours(booking.endDate, 4),
       });
@@ -261,17 +258,17 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
     allowedTransitions: [BookingStatus.COMPLETED, BookingStatus.DISPUTED],
     invariants: [
       {
-        name: "end_date_reached",
+        name: 'end_date_reached',
         check: (booking) => isPast(booking.endDate),
-        errorMessage: "End date has not been reached",
+        errorMessage: 'End date has not been reached',
       },
       {
-        name: "checkout_report_submitted",
+        name: 'checkout_report_submitted',
         check: async (booking) => {
-          const report = await getConditionReport(booking.id, "check_out");
-          return report?.status === "submitted";
+          const report = await getConditionReport(booking.id, 'check_out');
+          return report?.status === 'submitted';
         },
-        errorMessage: "Check-out condition report required",
+        errorMessage: 'Check-out condition report required',
       },
     ],
     onEnter: async (booking) => {
@@ -279,7 +276,7 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       const listing = await getListing(booking.listingId);
       const category = await getCategory(listing.category);
 
-      await scheduleJob("auto-complete-inspection", {
+      await scheduleJob('auto-complete-inspection', {
         bookingId: booking.id,
         expiresAt: addHours(new Date(), category.inspectionWindowHours || 48),
       });
@@ -287,7 +284,7 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       // Notify owner to inspect
       await notificationService.send({
         userId: booking.ownerId,
-        type: "inspection_required",
+        type: 'inspection_required',
         data: { bookingId: booking.id },
       });
     },
@@ -297,17 +294,17 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
     allowedTransitions: [BookingStatus.SETTLED, BookingStatus.DISPUTED],
     invariants: [
       {
-        name: "no_open_disputes",
+        name: 'no_open_disputes',
         check: async (booking) => {
           const disputes = await getOpenDisputes(booking.id);
           return disputes.length === 0;
         },
-        errorMessage: "Cannot complete booking with open disputes",
+        errorMessage: 'Cannot complete booking with open disputes',
       },
     ],
     onEnter: async (booking) => {
       // Trigger review requests
-      await scheduleJob("send-review-request", {
+      await scheduleJob('send-review-request', {
         bookingId: booking.id,
         sendAt: addHours(new Date(), 24), // 24 hours after completion
       });
@@ -316,12 +313,12 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       await Promise.all([
         notificationService.send({
           userId: booking.renterId,
-          type: "booking_completed",
+          type: 'booking_completed',
           data: { bookingId: booking.id },
         }),
         notificationService.send({
           userId: booking.ownerId,
-          type: "booking_completed",
+          type: 'booking_completed',
           data: { bookingId: booking.id },
         }),
       ]);
@@ -332,20 +329,20 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
     allowedTransitions: [BookingStatus.DISPUTED],
     invariants: [
       {
-        name: "payout_processed_or_scheduled",
+        name: 'payout_processed_or_scheduled',
         check: async (booking) => {
           return !!booking.payoutId || !!booking.payoutScheduledAt;
         },
-        errorMessage: "Payout must be processed or scheduled",
+        errorMessage: 'Payout must be processed or scheduled',
       },
       {
-        name: "deposit_released",
+        name: 'deposit_released',
         check: async (booking) => {
           if (!booking.depositHoldId) return true;
           const deposit = await getDepositHold(booking.depositHoldId);
-          return deposit.status === "released";
+          return deposit.status === 'released';
         },
-        errorMessage: "Deposit must be released",
+        errorMessage: 'Deposit must be released',
       },
     ],
     onEnter: async (booking) => {
@@ -358,7 +355,7 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       }
 
       // Archive booking data
-      await scheduleJob("archive-booking", {
+      await scheduleJob('archive-booking', {
         bookingId: booking.id,
         archiveAt: addMonths(new Date(), 3), // Archive after 3 months
       });
@@ -385,12 +382,12 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
       await Promise.all([
         notificationService.send({
           userId: booking.renterId,
-          type: "booking_cancelled",
+          type: 'booking_cancelled',
           data: { bookingId: booking.id, refund },
         }),
         notificationService.send({
           userId: booking.ownerId,
-          type: "booking_cancelled",
+          type: 'booking_cancelled',
           data: { bookingId: booking.id },
         }),
       ]);
@@ -398,19 +395,15 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
   },
 
   [BookingStatus.DISPUTED]: {
-    allowedTransitions: [
-      BookingStatus.COMPLETED,
-      BookingStatus.REFUNDED,
-      BookingStatus.SETTLED,
-    ],
+    allowedTransitions: [BookingStatus.COMPLETED, BookingStatus.REFUNDED, BookingStatus.SETTLED],
     invariants: [
       {
-        name: "dispute_exists",
+        name: 'dispute_exists',
         check: async (booking) => {
           const dispute = await getActiveDispute(booking.id);
           return !!dispute;
         },
-        errorMessage: "Active dispute required",
+        errorMessage: 'Active dispute required',
       },
     ],
     onEnter: async (booking) => {
@@ -419,8 +412,8 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
 
       // Notify admin team
       await notificationService.send({
-        channel: "admin",
-        type: "dispute_opened",
+        channel: 'admin',
+        type: 'dispute_opened',
         data: { bookingId: booking.id },
       });
     },
@@ -430,19 +423,19 @@ const STATE_DEFINITIONS: Record<BookingStatus, StateDefinition> = {
     allowedTransitions: [],
     invariants: [
       {
-        name: "refund_processed",
+        name: 'refund_processed',
         check: async (booking) => {
           const refunds = await getRefunds(booking.id);
-          return refunds.some((r) => r.status === "succeeded");
+          return refunds.some((r) => r.status === 'succeeded');
         },
-        errorMessage: "Refund must be processed",
+        errorMessage: 'Refund must be processed',
       },
     ],
     onEnter: async (booking) => {
       // Final notification
       await notificationService.send({
         userId: booking.renterId,
-        type: "refund_processed",
+        type: 'refund_processed',
         data: { bookingId: booking.id },
       });
     },
@@ -523,7 +516,7 @@ export class BookingStateMachineService {
         }
 
         // Emit state change event
-        await this.eventBus.publish("booking.state.changed", {
+        await this.eventBus.publish('booking.state.changed', {
           bookingId: booking.id,
           fromStatus: booking.status,
           toStatus: toState,
@@ -533,8 +526,8 @@ export class BookingStateMachineService {
 
         // Audit log
         await this.auditService.log({
-          action: "booking.state.transition",
-          resource: "booking",
+          action: 'booking.state.transition',
+          resource: 'booking',
           resourceId: bookingId,
           userId: context.triggeredById,
           changes: {
@@ -546,16 +539,13 @@ export class BookingStateMachineService {
         return updatedBooking;
       },
       {
-        isolationLevel: "Serializable", // Prevent concurrent transitions
+        isolationLevel: 'Serializable', // Prevent concurrent transitions
         timeout: 10000, // 10 second timeout
       },
     );
   }
 
-  private async validateTransition(
-    booking: Booking,
-    toState: BookingStatus,
-  ): Promise<void> {
+  private async validateTransition(booking: Booking, toState: BookingStatus): Promise<void> {
     const currentStateDef = STATE_DEFINITIONS[booking.status];
 
     // Check if transition is allowed
@@ -603,7 +593,7 @@ export class BookingStateMachineService {
   async getStateHistory(bookingId: string): Promise<BookingStateHistory[]> {
     return await this.prisma.bookingStateHistory.findMany({
       where: { bookingId },
-      orderBy: { timestamp: "asc" },
+      orderBy: { timestamp: 'asc' },
       include: {
         triggeredByUser: {
           select: {
@@ -630,8 +620,8 @@ export class BookingStateMachineService {
 
     for (const booking of expiredApprovals) {
       await this.transition(booking.id, BookingStatus.CANCELLED, {
-        triggeredBy: "system",
-        reason: "Owner did not respond within 48 hours",
+        triggeredBy: 'system',
+        reason: 'Owner did not respond within 48 hours',
       });
     }
 
@@ -645,8 +635,8 @@ export class BookingStateMachineService {
 
     for (const booking of expiredPayments) {
       await this.transition(booking.id, BookingStatus.CANCELLED, {
-        triggeredBy: "system",
-        reason: "Payment window expired",
+        triggeredBy: 'system',
+        reason: 'Payment window expired',
       });
     }
   }
@@ -662,15 +652,14 @@ export class BookingStateMachineService {
     });
 
     for (const booking of bookings) {
-      const inspectionWindow =
-        booking.listing.category.inspectionWindowHours || 48;
+      const inspectionWindow = booking.listing.category.inspectionWindowHours || 48;
       const deadline = addHours(booking.inspectionStartedAt, inspectionWindow);
 
       if (isPast(deadline)) {
         // No disputes filed within inspection window
         await this.transition(booking.id, BookingStatus.COMPLETED, {
-          triggeredBy: "system",
-          reason: "Inspection window expired without disputes",
+          triggeredBy: 'system',
+          reason: 'Inspection window expired without disputes',
         });
       }
     }
@@ -701,8 +690,8 @@ export class InstantBookService {
       where: { id: dto.listingId },
     });
 
-    if (listing.bookingMode !== "instant-book") {
-      throw new BadRequestException("Listing does not support instant booking");
+    if (listing.bookingMode !== 'instant-book') {
+      throw new BadRequestException('Listing does not support instant booking');
     }
 
     // Check availability (with lock)
@@ -713,7 +702,7 @@ export class InstantBookService {
     );
 
     if (!isAvailable) {
-      throw new ConflictException("Dates are no longer available");
+      throw new ConflictException('Dates are no longer available');
     }
 
     try {
@@ -735,10 +724,7 @@ export class InstantBookService {
           dateRange: dto.dateRange,
           quantity: dto.quantity,
           quoteSnapshot: quote,
-          agreementSnapshot: await this.generateAgreementSnapshot(
-            listing,
-            quote,
-          ),
+          agreementSnapshot: await this.generateAgreementSnapshot(listing, quote),
           fulfillmentMethod: dto.fulfillmentMethod,
           guestCount: dto.guestCount,
           specialRequests: dto.specialRequests,
@@ -781,46 +767,35 @@ export class InstantBookService {
       return booking;
     } catch (error) {
       // Release reservation on failure
-      await this.availabilityService.releaseReservation(
-        dto.listingId,
-        dto.dateRange,
-        dto.quantity,
-      );
+      await this.availabilityService.releaseReservation(dto.listingId, dto.dateRange, dto.quantity);
       throw error;
     }
   }
 
-  async confirmPayment(
-    bookingId: string,
-    paymentIntentId: string,
-  ): Promise<Booking> {
+  async confirmPayment(bookingId: string, paymentIntentId: string): Promise<Booking> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
     });
 
     if (!booking) {
-      throw new NotFoundException("Booking not found");
+      throw new NotFoundException('Booking not found');
     }
 
     if (booking.status !== BookingStatus.PENDING_PAYMENT) {
-      throw new BadRequestException("Booking is not awaiting payment");
+      throw new BadRequestException('Booking is not awaiting payment');
     }
 
     // Verify payment succeeded
     const payment = await this.paymentService.getPaymentIntent(paymentIntentId);
-    if (payment.status !== "succeeded") {
-      throw new BadRequestException("Payment has not succeeded");
+    if (payment.status !== 'succeeded') {
+      throw new BadRequestException('Payment has not succeeded');
     }
 
     // Transition to CONFIRMED
-    return await this.stateMachine.transition(
-      bookingId,
-      BookingStatus.CONFIRMED,
-      {
-        triggeredBy: "system",
-        reason: "Payment confirmed",
-      },
-    );
+    return await this.stateMachine.transition(bookingId, BookingStatus.CONFIRMED, {
+      triggeredBy: 'system',
+      reason: 'Payment confirmed',
+    });
   }
 }
 ```
@@ -844,8 +819,8 @@ export class RequestToBookService {
       where: { id: dto.listingId },
     });
 
-    if (listing.bookingMode !== "request-to-book") {
-      throw new BadRequestException("Listing does not support request-to-book");
+    if (listing.bookingMode !== 'request-to-book') {
+      throw new BadRequestException('Listing does not support request-to-book');
     }
 
     // Generate quote
@@ -876,7 +851,7 @@ export class RequestToBookService {
     // Notify owner
     await this.notificationService.send({
       userId: listing.ownerId,
-      type: "booking_request_received",
+      type: 'booking_request_received',
       data: {
         bookingId: booking.id,
         renterName: dto.renterName,
@@ -887,29 +862,26 @@ export class RequestToBookService {
     return booking;
   }
 
-  async acceptBookingRequest(
-    bookingId: string,
-    ownerId: string,
-  ): Promise<Booking> {
+  async acceptBookingRequest(bookingId: string, ownerId: string): Promise<Booking> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
     });
 
     if (!booking) {
-      throw new NotFoundException("Booking not found");
+      throw new NotFoundException('Booking not found');
     }
 
     if (booking.ownerId !== ownerId) {
-      throw new ForbiddenException("Not authorized");
+      throw new ForbiddenException('Not authorized');
     }
 
     if (booking.status !== BookingStatus.PENDING_OWNER_APPROVAL) {
-      throw new BadRequestException("Booking is not awaiting approval");
+      throw new BadRequestException('Booking is not awaiting approval');
     }
 
     // Check if expired
     if (isPast(booking.expiresAt)) {
-      throw new BadRequestException("Booking request has expired");
+      throw new BadRequestException('Booking request has expired');
     }
 
     // Mark as owner approved
@@ -926,9 +898,9 @@ export class RequestToBookService {
       bookingId,
       BookingStatus.PENDING_PAYMENT,
       {
-        triggeredBy: "owner",
+        triggeredBy: 'owner',
         triggeredById: ownerId,
-        reason: "Owner accepted booking request",
+        reason: 'Owner accepted booking request',
       },
     );
 
@@ -947,7 +919,7 @@ export class RequestToBookService {
     // Notify renter
     await this.notificationService.send({
       userId: booking.renterId,
-      type: "booking_request_accepted",
+      type: 'booking_request_accepted',
       data: {
         bookingId: booking.id,
         paymentRequired: true,
@@ -967,32 +939,28 @@ export class RequestToBookService {
     });
 
     if (!booking) {
-      throw new NotFoundException("Booking not found");
+      throw new NotFoundException('Booking not found');
     }
 
     if (booking.ownerId !== ownerId) {
-      throw new ForbiddenException("Not authorized");
+      throw new ForbiddenException('Not authorized');
     }
 
     if (booking.status !== BookingStatus.PENDING_OWNER_APPROVAL) {
-      throw new BadRequestException("Booking is not awaiting approval");
+      throw new BadRequestException('Booking is not awaiting approval');
     }
 
     // Transition to CANCELLED
-    const updatedBooking = await this.stateMachine.transition(
-      bookingId,
-      BookingStatus.CANCELLED,
-      {
-        triggeredBy: "owner",
-        triggeredById: ownerId,
-        reason: `Owner declined: ${reason}`,
-      },
-    );
+    const updatedBooking = await this.stateMachine.transition(bookingId, BookingStatus.CANCELLED, {
+      triggeredBy: 'owner',
+      triggeredById: ownerId,
+      reason: `Owner declined: ${reason}`,
+    });
 
     // Notify renter
     await this.notificationService.send({
       userId: booking.renterId,
-      type: "booking_request_declined",
+      type: 'booking_request_declined',
       data: {
         bookingId: booking.id,
         reason,
@@ -1020,7 +988,7 @@ export class CancellationService {
 
   async cancelBooking(
     bookingId: string,
-    cancelledBy: "renter" | "owner" | "admin",
+    cancelledBy: 'renter' | 'owner' | 'admin',
     userId: string,
     reason: string,
   ): Promise<CancellationResult> {
@@ -1034,18 +1002,14 @@ export class CancellationService {
     });
 
     if (!booking) {
-      throw new NotFoundException("Booking not found");
+      throw new NotFoundException('Booking not found');
     }
 
     // Validate cancellation is allowed
     this.validateCancellation(booking, cancelledBy, userId);
 
     // Calculate refund
-    const refundCalculation = await this.calculateRefund(
-      booking,
-      cancelledBy,
-      new Date(),
-    );
+    const refundCalculation = await this.calculateRefund(booking, cancelledBy, new Date());
 
     // Execute cancellation
     return await this.prisma.$transaction(async (tx) => {
@@ -1063,7 +1027,7 @@ export class CancellationService {
         refund = await this.paymentService.createRefund({
           paymentIntentId: booking.paymentIntentId,
           amount: refundCalculation.refundAmount,
-          reason: "Booking cancelled",
+          reason: 'Booking cancelled',
           metadata: {
             bookingId: booking.id,
             cancelledBy,
@@ -1090,7 +1054,7 @@ export class CancellationService {
         await this.ledgerService.recordCancellationFee({
           bookingId: booking.id,
           amount: refundCalculation.cancellationFee,
-          description: "Cancellation penalty",
+          description: 'Cancellation penalty',
         });
       }
 
@@ -1104,7 +1068,7 @@ export class CancellationService {
 
   private async calculateRefund(
     booking: Booking,
-    cancelledBy: "renter" | "owner" | "admin",
+    cancelledBy: 'renter' | 'owner' | 'admin',
     cancelledAt: Date,
   ): Promise<RefundCalculation> {
     const policy = booking.listing.cancellationPolicy;
@@ -1112,65 +1076,65 @@ export class CancellationService {
     const hoursUntilStart = differenceInHours(booking.startDate, cancelledAt);
 
     let refundPercentage = 0;
-    let policyName = "";
+    let policyName = '';
 
     // Owner cancellation - full refund always
-    if (cancelledBy === "owner") {
+    if (cancelledBy === 'owner') {
       refundPercentage = 100;
-      policyName = "Owner cancellation - full refund";
+      policyName = 'Owner cancellation - full refund';
     }
     // Admin cancellation - full refund
-    else if (cancelledBy === "admin") {
+    else if (cancelledBy === 'admin') {
       refundPercentage = 100;
-      policyName = "Admin cancellation - full refund";
+      policyName = 'Admin cancellation - full refund';
     }
     // Renter cancellation - apply policy
     else {
       switch (policy.type) {
-        case "flexible":
+        case 'flexible':
           if (hoursUntilStart >= 24) {
             refundPercentage = 100;
-            policyName = "Flexible - Full refund (>24h)";
+            policyName = 'Flexible - Full refund (>24h)';
           } else if (hoursUntilStart >= 0) {
             refundPercentage = 50;
-            policyName = "Flexible - 50% refund (<24h)";
+            policyName = 'Flexible - 50% refund (<24h)';
           } else {
             refundPercentage = 0;
-            policyName = "Flexible - No refund (after start)";
+            policyName = 'Flexible - No refund (after start)';
           }
           break;
 
-        case "moderate":
+        case 'moderate':
           if (hoursUntilStart >= 5 * 24) {
             // 5 days
             refundPercentage = 100;
-            policyName = "Moderate - Full refund (>5 days)";
+            policyName = 'Moderate - Full refund (>5 days)';
           } else if (hoursUntilStart >= 24) {
             refundPercentage = 50;
-            policyName = "Moderate - 50% refund (1-5 days)";
+            policyName = 'Moderate - 50% refund (1-5 days)';
           } else {
             refundPercentage = 0;
-            policyName = "Moderate - No refund (<24h)";
+            policyName = 'Moderate - No refund (<24h)';
           }
           break;
 
-        case "strict":
+        case 'strict':
           if (hoursUntilStart >= 7 * 24) {
             // 7 days
             refundPercentage = 100;
-            policyName = "Strict - Full refund (>7 days)";
+            policyName = 'Strict - Full refund (>7 days)';
           } else if (hoursUntilStart >= 48) {
             refundPercentage = 50;
-            policyName = "Strict - 50% refund (2-7 days)";
+            policyName = 'Strict - 50% refund (2-7 days)';
           } else {
             refundPercentage = 0;
-            policyName = "Strict - No refund (<48h)";
+            policyName = 'Strict - No refund (<48h)';
           }
           break;
 
-        case "non-refundable":
+        case 'non-refundable':
           refundPercentage = 0;
-          policyName = "Non-refundable";
+          policyName = 'Non-refundable';
           break;
       }
     }
@@ -1192,23 +1156,23 @@ export class CancellationService {
       hoursUntilStart,
       breakdown: [
         {
-          type: "original_charge",
-          description: "Original booking amount",
+          type: 'original_charge',
+          description: 'Original booking amount',
           amount: totalPaid,
         },
         {
-          type: "refund",
+          type: 'refund',
           description: `Refund (${refundPercentage}%)`,
           amount: refundAmount,
         },
         {
-          type: "processing_fee",
-          description: "Processing fee (3%)",
+          type: 'processing_fee',
+          description: 'Processing fee (3%)',
           amount: -processingFee,
         },
         {
-          type: "cancellation_fee",
-          description: "Cancellation penalty",
+          type: 'cancellation_fee',
+          description: 'Cancellation penalty',
           amount: -cancellationFee,
         },
       ],
@@ -1217,15 +1181,15 @@ export class CancellationService {
 
   private validateCancellation(
     booking: Booking,
-    cancelledBy: "renter" | "owner" | "admin",
+    cancelledBy: 'renter' | 'owner' | 'admin',
     userId: string,
   ): void {
     // Check authorization
-    if (cancelledBy === "renter" && booking.renterId !== userId) {
-      throw new ForbiddenException("Not authorized to cancel this booking");
+    if (cancelledBy === 'renter' && booking.renterId !== userId) {
+      throw new ForbiddenException('Not authorized to cancel this booking');
     }
-    if (cancelledBy === "owner" && booking.ownerId !== userId) {
-      throw new ForbiddenException("Not authorized to cancel this booking");
+    if (cancelledBy === 'owner' && booking.ownerId !== userId) {
+      throw new ForbiddenException('Not authorized to cancel this booking');
     }
 
     // Check if booking can be cancelled
@@ -1237,16 +1201,12 @@ export class CancellationService {
     ];
 
     if (!cancellableStatuses.includes(booking.status)) {
-      throw new BadRequestException(
-        `Booking cannot be cancelled in ${booking.status} status`,
-      );
+      throw new BadRequestException(`Booking cannot be cancelled in ${booking.status} status`);
     }
 
     // Owner cannot cancel after start date (except admin)
-    if (cancelledBy === "owner" && isPast(booking.startDate)) {
-      throw new BadRequestException(
-        "Owner cannot cancel booking after start date",
-      );
+    if (cancelledBy === 'owner' && isPast(booking.startDate)) {
+      throw new BadRequestException('Owner cannot cancel booking after start date');
     }
   }
 }
@@ -1475,7 +1435,7 @@ export default function CreateBooking() {
 ```typescript
 // apps/api/src/modules/payments/services/stripe.service.ts
 
-import Stripe from "stripe";
+import Stripe from 'stripe';
 
 @Injectable()
 export class StripeService {
@@ -1485,16 +1445,14 @@ export class StripeService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.stripe = new Stripe(config.get("STRIPE_SECRET_KEY"), {
-      apiVersion: "2023-10-16",
+    this.stripe = new Stripe(config.get('STRIPE_SECRET_KEY'), {
+      apiVersion: '2023-10-16',
       typescript: true,
     });
   }
 
   // Marketplace payment intent
-  async createPaymentIntent(
-    params: CreatePaymentIntentParams,
-  ): Promise<Stripe.PaymentIntent> {
+  async createPaymentIntent(params: CreatePaymentIntentParams): Promise<Stripe.PaymentIntent> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: params.bookingId },
       include: { listing: { include: { owner: true } } },
@@ -1525,25 +1483,23 @@ export class StripeService {
       },
 
       // Payment method types
-      payment_method_types: ["card"],
+      payment_method_types: ['card'],
 
       // Capture method
-      capture_method: "automatic",
+      capture_method: 'automatic',
 
       // Description
       description: `Booking #${params.bookingId.slice(0, 8)}`,
 
       // Statement descriptor
-      statement_descriptor: "RENTAL PLATFORM",
+      statement_descriptor: 'RENTAL PLATFORM',
     });
 
     return paymentIntent;
   }
 
   // Deposit authorization hold
-  async createDepositHold(
-    params: CreateDepositHoldParams,
-  ): Promise<Stripe.PaymentIntent> {
+  async createDepositHold(params: CreateDepositHoldParams): Promise<Stripe.PaymentIntent> {
     const depositIntent = await this.stripe.paymentIntents.create({
       amount: params.amount,
       currency: params.currency.toLowerCase(),
@@ -1552,14 +1508,14 @@ export class StripeService {
       payment_method: params.paymentMethodId,
 
       // Manual capture for holds
-      capture_method: "manual",
+      capture_method: 'manual',
 
       // Confirm immediately if payment method provided
       confirm: !!params.paymentMethodId,
 
       metadata: {
         bookingId: params.bookingId,
-        type: "deposit_hold",
+        type: 'deposit_hold',
       },
 
       description: `Security deposit - Booking #${params.bookingId.slice(0, 8)}`,
@@ -1572,7 +1528,7 @@ export class StripeService {
         bookingId: params.bookingId,
         amount: params.amount,
         currency: params.currency,
-        status: "authorized",
+        status: 'authorized',
         expiresAt: addDays(new Date(), 7), // Holds expire after 7 days
         stripePaymentIntentId: depositIntent.id,
       },
@@ -1588,11 +1544,11 @@ export class StripeService {
     });
 
     if (!hold) {
-      throw new NotFoundException("Deposit hold not found");
+      throw new NotFoundException('Deposit hold not found');
     }
 
-    if (hold.status !== "authorized") {
-      throw new BadRequestException("Deposit hold is not authorized");
+    if (hold.status !== 'authorized') {
+      throw new BadRequestException('Deposit hold is not authorized');
     }
 
     // Cancel the payment intent to release the hold
@@ -1602,45 +1558,38 @@ export class StripeService {
     await this.prisma.depositHold.update({
       where: { id: depositHoldId },
       data: {
-        status: "released",
+        status: 'released',
         releasedAt: new Date(),
       },
     });
   }
 
   // Capture deposit (for damages)
-  async captureDeposit(
-    depositHoldId: string,
-    amount?: number,
-  ): Promise<Stripe.PaymentIntent> {
+  async captureDeposit(depositHoldId: string, amount?: number): Promise<Stripe.PaymentIntent> {
     const hold = await this.prisma.depositHold.findUnique({
       where: { id: depositHoldId },
     });
 
     if (!hold) {
-      throw new NotFoundException("Deposit hold not found");
+      throw new NotFoundException('Deposit hold not found');
     }
 
-    if (hold.status !== "authorized") {
-      throw new BadRequestException("Deposit hold is not authorized");
+    if (hold.status !== 'authorized') {
+      throw new BadRequestException('Deposit hold is not authorized');
     }
 
     // Capture full amount or partial
     const captureAmount = amount || hold.amount;
 
-    const captured = await this.stripe.paymentIntents.capture(
-      hold.stripePaymentIntentId,
-      {
-        amount_to_capture: captureAmount,
-      },
-    );
+    const captured = await this.stripe.paymentIntents.capture(hold.stripePaymentIntentId, {
+      amount_to_capture: captureAmount,
+    });
 
     // Update database
     await this.prisma.depositHold.update({
       where: { id: depositHoldId },
       data: {
-        status:
-          amount && amount < hold.amount ? "partially_captured" : "captured",
+        status: amount && amount < hold.amount ? 'partially_captured' : 'captured',
         capturedAmount: captureAmount,
         capturedAt: new Date(),
       },
@@ -1682,19 +1631,19 @@ export class StripeService {
     });
 
     if (!user) {
-      throw new NotFoundException("User not found");
+      throw new NotFoundException('User not found');
     }
 
     // Create Connect account
     const account = await this.stripe.accounts.create({
-      type: "express", // or 'standard' for more control
-      country: user.country || "US",
+      type: 'express', // or 'standard' for more control
+      country: user.country || 'US',
       email: user.email,
       capabilities: {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
-      business_type: "individual",
+      business_type: 'individual',
       metadata: {
         userId: user.id,
       },
@@ -1716,14 +1665,14 @@ export class StripeService {
     });
 
     if (!user?.stripeAccountId) {
-      throw new BadRequestException("User does not have Connect account");
+      throw new BadRequestException('User does not have Connect account');
     }
 
     const accountLink = await this.stripe.accountLinks.create({
       account: user.stripeAccountId,
-      refresh_url: `${this.config.get("APP_URL")}/host/onboarding/refresh`,
-      return_url: `${this.config.get("APP_URL")}/host/onboarding/complete`,
-      type: "account_onboarding",
+      refresh_url: `${this.config.get('APP_URL')}/host/onboarding/refresh`,
+      return_url: `${this.config.get('APP_URL')}/host/onboarding/complete`,
+      type: 'account_onboarding',
     });
 
     return accountLink;
@@ -1737,9 +1686,7 @@ export class StripeService {
     });
 
     if (!booking.owner.stripeAccountId) {
-      throw new BadRequestException(
-        "Owner has not completed Stripe onboarding",
-      );
+      throw new BadRequestException('Owner has not completed Stripe onboarding');
     }
 
     // Create transfer to Connect account
@@ -1750,7 +1697,7 @@ export class StripeService {
       transfer_group: `booking_${params.bookingId}`,
       metadata: {
         bookingId: params.bookingId,
-        type: "owner_payout",
+        type: 'owner_payout',
       },
       description: `Payout for booking #${params.bookingId.slice(0, 8)}`,
     });
@@ -1763,7 +1710,7 @@ export class StripeService {
         ownerId: booking.ownerId,
         amount: params.amount,
         currency: params.currency,
-        status: "completed",
+        status: 'completed',
         stripeTransferId: transfer.id,
         paidAt: new Date(),
       },
@@ -1774,45 +1721,35 @@ export class StripeService {
 
   // Webhook handler
   async handleWebhook(signature: string, payload: Buffer): Promise<void> {
-    const webhookSecret = this.config.get("STRIPE_WEBHOOK_SECRET");
+    const webhookSecret = this.config.get('STRIPE_WEBHOOK_SECRET');
 
     let event: Stripe.Event;
 
     try {
-      event = this.stripe.webhooks.constructEvent(
-        payload,
-        signature,
-        webhookSecret,
-      );
+      event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
     } catch (err) {
-      throw new BadRequestException(
-        `Webhook signature verification failed: ${err.message}`,
-      );
+      throw new BadRequestException(`Webhook signature verification failed: ${err.message}`);
     }
 
     // Handle different event types
     switch (event.type) {
-      case "payment_intent.succeeded":
-        await this.handlePaymentSucceeded(
-          event.data.object as Stripe.PaymentIntent,
-        );
+      case 'payment_intent.succeeded':
+        await this.handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent);
         break;
 
-      case "payment_intent.payment_failed":
-        await this.handlePaymentFailed(
-          event.data.object as Stripe.PaymentIntent,
-        );
+      case 'payment_intent.payment_failed':
+        await this.handlePaymentFailed(event.data.object as Stripe.PaymentIntent);
         break;
 
-      case "charge.refunded":
+      case 'charge.refunded':
         await this.handleChargeRefunded(event.data.object as Stripe.Charge);
         break;
 
-      case "charge.dispute.created":
+      case 'charge.dispute.created':
         await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
         break;
 
-      case "account.updated":
+      case 'account.updated':
         await this.handleAccountUpdated(event.data.object as Stripe.Account);
         break;
 
@@ -1821,30 +1758,24 @@ export class StripeService {
     }
   }
 
-  private async handlePaymentSucceeded(
-    paymentIntent: Stripe.PaymentIntent,
-  ): Promise<void> {
+  private async handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent): Promise<void> {
     const bookingId = paymentIntent.metadata.bookingId;
 
     if (!bookingId) {
-      console.error("Payment intent missing bookingId in metadata");
+      console.error('Payment intent missing bookingId in metadata');
       return;
     }
 
     // Update booking status
-    await this.bookingStateMachine.transition(
-      bookingId,
-      BookingStatus.CONFIRMED,
-      {
-        triggeredBy: "system",
-        reason: "Payment succeeded",
-        metadata: {
-          paymentIntentId: paymentIntent.id,
-          amount: paymentIntent.amount,
-          currency: paymentIntent.currency,
-        },
+    await this.bookingStateMachine.transition(bookingId, BookingStatus.CONFIRMED, {
+      triggeredBy: 'system',
+      reason: 'Payment succeeded',
+      metadata: {
+        paymentIntentId: paymentIntent.id,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
       },
-    );
+    });
 
     // Record in ledger
     await this.ledgerService.recordPayment({
@@ -1852,31 +1783,25 @@ export class StripeService {
       paymentIntentId: paymentIntent.id,
       amount: paymentIntent.amount,
       currency: paymentIntent.currency,
-      platformFee: parseInt(paymentIntent.metadata.platformFee || "0"),
-      ownerAmount: parseInt(paymentIntent.metadata.ownerAmount || "0"),
+      platformFee: parseInt(paymentIntent.metadata.platformFee || '0'),
+      ownerAmount: parseInt(paymentIntent.metadata.ownerAmount || '0'),
     });
   }
 
-  private async handlePaymentFailed(
-    paymentIntent: Stripe.PaymentIntent,
-  ): Promise<void> {
+  private async handlePaymentFailed(paymentIntent: Stripe.PaymentIntent): Promise<void> {
     const bookingId = paymentIntent.metadata.bookingId;
 
     if (!bookingId) return;
 
     // Cancel booking
-    await this.bookingStateMachine.transition(
-      bookingId,
-      BookingStatus.CANCELLED,
-      {
-        triggeredBy: "system",
-        reason: "Payment failed",
-        metadata: {
-          paymentIntentId: paymentIntent.id,
-          error: paymentIntent.last_payment_error?.message,
-        },
+    await this.bookingStateMachine.transition(bookingId, BookingStatus.CANCELLED, {
+      triggeredBy: 'system',
+      reason: 'Payment failed',
+      metadata: {
+        paymentIntentId: paymentIntent.id,
+        error: paymentIntent.last_payment_error?.message,
       },
-    );
+    });
 
     // Notify renter
     const booking = await this.prisma.booking.findUnique({
@@ -1885,7 +1810,7 @@ export class StripeService {
 
     await this.notificationService.send({
       userId: booking.renterId,
-      type: "payment_failed",
+      type: 'payment_failed',
       data: {
         bookingId,
         error: paymentIntent.last_payment_error?.message,
@@ -1906,50 +1831,43 @@ export class LedgerService {
 
   // Record booking payment
   async recordPayment(params: RecordPaymentParams): Promise<void> {
-    const {
-      bookingId,
-      paymentIntentId,
-      amount,
-      currency,
-      platformFee,
-      ownerAmount,
-    } = params;
+    const { bookingId, paymentIntentId, amount, currency, platformFee, ownerAmount } = params;
 
     await this.prisma.$transaction([
       // Debit: Cash (asset) increases
       this.createEntry({
         bookingId,
-        account: "assets.cash",
-        side: "debit",
+        account: 'assets.cash',
+        side: 'debit',
         amount,
         currency,
-        description: "Payment received from renter",
+        description: 'Payment received from renter',
         externalId: paymentIntentId,
-        externalType: "payment_intent",
+        externalType: 'payment_intent',
       }),
 
       // Credit: Liability to owner
       this.createEntry({
         bookingId,
-        account: "liabilities.owners",
-        side: "credit",
+        account: 'liabilities.owners',
+        side: 'credit',
         amount: ownerAmount,
         currency,
-        description: "Amount due to owner",
+        description: 'Amount due to owner',
         externalId: paymentIntentId,
-        externalType: "payment_intent",
+        externalType: 'payment_intent',
       }),
 
       // Credit: Platform revenue
       this.createEntry({
         bookingId,
-        account: "revenue.platform_fee",
-        side: "credit",
+        account: 'revenue.platform_fee',
+        side: 'credit',
         amount: platformFee,
         currency,
-        description: "Platform service fee (10%)",
+        description: 'Platform service fee (10%)',
         externalId: paymentIntentId,
-        externalType: "payment_intent",
+        externalType: 'payment_intent',
       }),
     ]);
   }
@@ -1962,25 +1880,25 @@ export class LedgerService {
       // Debit: Reduce revenue or liability
       this.createEntry({
         bookingId,
-        account: "expenses.refunds",
-        side: "debit",
+        account: 'expenses.refunds',
+        side: 'debit',
         amount,
         currency,
-        description: description || "Refund to renter",
+        description: description || 'Refund to renter',
         externalId: refundId,
-        externalType: "refund",
+        externalType: 'refund',
       }),
 
       // Credit: Reduce cash
       this.createEntry({
         bookingId,
-        account: "assets.cash",
-        side: "credit",
+        account: 'assets.cash',
+        side: 'credit',
         amount,
         currency,
-        description: description || "Refund to renter",
+        description: description || 'Refund to renter',
         externalId: refundId,
-        externalType: "refund",
+        externalType: 'refund',
       }),
     ]);
   }
@@ -1993,25 +1911,25 @@ export class LedgerService {
       // Debit: Reduce liability to owner
       this.createEntry({
         bookingId,
-        account: "liabilities.owners",
-        side: "debit",
+        account: 'liabilities.owners',
+        side: 'debit',
         amount,
         currency,
-        description: "Payout to owner",
+        description: 'Payout to owner',
         externalId: payoutId,
-        externalType: "payout",
+        externalType: 'payout',
       }),
 
       // Credit: Reduce cash
       this.createEntry({
         bookingId,
-        account: "assets.cash",
-        side: "credit",
+        account: 'assets.cash',
+        side: 'credit',
         amount,
         currency,
-        description: "Payout to owner",
+        description: 'Payout to owner',
         externalId: payoutId,
-        externalType: "payout",
+        externalType: 'payout',
       }),
     ]);
   }
@@ -2024,25 +1942,25 @@ export class LedgerService {
       // Debit: Deposits held (asset)
       this.createEntry({
         bookingId,
-        account: "assets.deposits.held",
-        side: "debit",
+        account: 'assets.deposits.held',
+        side: 'debit',
         amount,
         currency,
-        description: "Security deposit held",
+        description: 'Security deposit held',
         externalId: depositHoldId,
-        externalType: "deposit_hold",
+        externalType: 'deposit_hold',
       }),
 
       // Credit: Deposit liability
       this.createEntry({
         bookingId,
-        account: "liabilities.deposits",
-        side: "credit",
+        account: 'liabilities.deposits',
+        side: 'credit',
         amount,
         currency,
-        description: "Security deposit liability",
+        description: 'Security deposit liability',
         externalId: depositHoldId,
-        externalType: "deposit_hold",
+        externalType: 'deposit_hold',
       }),
     ]);
   }
@@ -2055,25 +1973,25 @@ export class LedgerService {
       // Debit: Reduce deposit liability
       this.createEntry({
         bookingId,
-        account: "liabilities.deposits",
-        side: "debit",
+        account: 'liabilities.deposits',
+        side: 'debit',
         amount,
         currency,
-        description: "Security deposit released",
+        description: 'Security deposit released',
         externalId: depositHoldId,
-        externalType: "deposit_release",
+        externalType: 'deposit_release',
       }),
 
       // Credit: Reduce deposits held
       this.createEntry({
         bookingId,
-        account: "assets.deposits.held",
-        side: "credit",
+        account: 'assets.deposits.held',
+        side: 'credit',
         amount,
         currency,
-        description: "Security deposit released",
+        description: 'Security deposit released',
         externalId: depositHoldId,
-        externalType: "deposit_release",
+        externalType: 'deposit_release',
       }),
     ]);
   }
@@ -2086,33 +2004,31 @@ export class LedgerService {
       // Debit: Reduce deposit liability
       this.createEntry({
         bookingId,
-        account: "liabilities.deposits",
-        side: "debit",
+        account: 'liabilities.deposits',
+        side: 'debit',
         amount,
         currency,
         description: `Deposit captured: ${reason}`,
         externalId: depositHoldId,
-        externalType: "deposit_capture",
+        externalType: 'deposit_capture',
       }),
 
       // Credit: Platform revenue (from captured deposit)
       this.createEntry({
         bookingId,
-        account: "revenue.damages",
-        side: "credit",
+        account: 'revenue.damages',
+        side: 'credit',
         amount,
         currency,
         description: `Deposit captured: ${reason}`,
         externalId: depositHoldId,
-        externalType: "deposit_capture",
+        externalType: 'deposit_capture',
       }),
     ]);
   }
 
   // Create ledger entry
-  private async createEntry(
-    params: CreateLedgerEntryParams,
-  ): Promise<LedgerEntry> {
+  private async createEntry(params: CreateLedgerEntryParams): Promise<LedgerEntry> {
     return await this.prisma.ledgerEntry.create({
       data: {
         id: crypto.randomUUID(),
@@ -2140,7 +2056,7 @@ export class LedgerService {
 
     let balance = 0;
     entries.forEach((entry) => {
-      if (entry.side === "debit") {
+      if (entry.side === 'debit') {
         balance += entry.amount;
       } else {
         balance -= entry.amount;
@@ -2183,7 +2099,7 @@ export class LedgerService {
       matchCount: matches.filter((m) => m.matched).length,
       discrepancyCount: discrepancies.length,
       discrepancies,
-      status: discrepancies.length === 0 ? "balanced" : "imbalanced",
+      status: discrepancies.length === 0 ? 'balanced' : 'imbalanced',
     };
   }
 
@@ -2194,9 +2110,7 @@ export class LedgerService {
     const matches: TransactionMatch[] = [];
 
     ledgerEntries.forEach((entry) => {
-      const stripeMatch = stripeTransactions.find(
-        (st) => st.id === entry.externalId,
-      );
+      const stripeMatch = stripeTransactions.find((st) => st.id === entry.externalId);
 
       if (stripeMatch) {
         const discrepancy = entry.amount - Math.abs(stripeMatch.amount);

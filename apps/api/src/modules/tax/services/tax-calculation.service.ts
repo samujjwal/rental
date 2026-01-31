@@ -293,8 +293,7 @@ export class TaxCalculationService {
     if (categorySlug) {
       rates = rates.filter((rate) => {
         return (
-          rate.applies_to.includes('ALL') ||
-          rate.applies_to.includes(categorySlug.toUpperCase())
+          rate.applies_to.includes('ALL') || rate.applies_to.includes(categorySlug.toUpperCase())
         );
       });
     }
@@ -306,7 +305,7 @@ export class TaxCalculationService {
    * Calculate tax amount from rate
    */
   private calculateTaxAmount(amount: number, ratePercent: number): number {
-    return Math.round((amount * ratePercent) / 100 * 100) / 100; // Round to 2 decimals
+    return Math.round(((amount * ratePercent) / 100) * 100) / 100; // Round to 2 decimals
   }
 
   /**
@@ -501,7 +500,10 @@ export class TaxCalculationService {
       rentalIncome: {
         gross: toNumber(rentalIncome._sum.ownerEarnings || 0),
         platformFees: toNumber(rentalExpenses._sum.platformFee || 0),
-        net: decimalSubtract(rentalIncome._sum.ownerEarnings || 0, rentalExpenses._sum.platformFee || 0),
+        net: decimalSubtract(
+          rentalIncome._sum.ownerEarnings || 0,
+          rentalExpenses._sum.platformFee || 0,
+        ),
       },
       rentalExpenses: {
         serviceFees: serviceFeesPaid._sum.serviceFee || 0,
@@ -518,10 +520,10 @@ export class TaxCalculationService {
   async validateVATNumber(vatNumber: string, country: string): Promise<boolean> {
     // In real implementation, use VIES API for EU VAT validation
     // http://ec.europa.eu/taxation_customs/vies/
-    
+
     const cacheKey = `vat:${country}:${vatNumber}`;
     const cached = await this.cache.get<boolean>(cacheKey);
-    
+
     if (cached !== null) {
       return cached;
     }

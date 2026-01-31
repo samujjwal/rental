@@ -104,7 +104,7 @@ export function ErrorBoundary() {
 interface Organization {
   id: UUID;
   name: string;
-  type: "individual" | "business" | "enterprise";
+  type: 'individual' | 'business' | 'enterprise';
   ownerId: UUID;
   members: OrganizationMember[];
   listings: Listing[];
@@ -113,7 +113,7 @@ interface Organization {
 
 interface OrganizationMember {
   userId: UUID;
-  role: "owner" | "admin" | "manager" | "viewer";
+  role: 'owner' | 'admin' | 'manager' | 'viewer';
   permissions: Permission[];
 }
 ```
@@ -133,14 +133,14 @@ interface InsurancePolicy {
   coverage: Money;
   expiresAt: DateTime;
   documents: Document[];
-  verificationStatus: "pending" | "verified" | "expired";
+  verificationStatus: 'pending' | 'verified' | 'expired';
 }
 
 // Add insurance verification requirement
 const listingValidation = {
   vehicles: {
     insuranceRequired: true,
-    minimumCoverage: { amount: 100000, currency: "USD" },
+    minimumCoverage: { amount: 100000, currency: 'USD' },
   },
 };
 ```
@@ -196,7 +196,7 @@ interface TaxBreakdown {
 }
 
 interface TaxLineItem {
-  type: "sales_tax" | "vat" | "gst" | "lodging_tax";
+  type: 'sales_tax' | 'vat' | 'gst' | 'lodging_tax';
   jurisdiction: string;
   rate: number;
   amount: Money;
@@ -247,10 +247,7 @@ interface ModerationResult {
 // Add to Sprint 2.2 - Pricing Engine
 interface DynamicPricingService {
   suggestPrice(listing: Listing, date: Date): Promise<PriceSuggestion>;
-  analyzeMarket(
-    category: string,
-    location: GeoLocation,
-  ): Promise<MarketAnalysis>;
+  analyzeMarket(category: string, location: GeoLocation): Promise<MarketAnalysis>;
   optimizeCalendar(listingId: UUID): Promise<PricingStrategy>;
 }
 
@@ -312,10 +309,7 @@ PUT /api/v1/admin/translations
 ```typescript
 // Add to Sprint 2.4 - Payment System
 interface CancellationService {
-  calculateRefund(
-    booking: Booking,
-    cancelledAt: DateTime,
-  ): Promise<RefundCalculation>;
+  calculateRefund(booking: Booking, cancelledAt: DateTime): Promise<RefundCalculation>;
   processAutomaticRefund(booking: Booking): Promise<Refund>;
   applyCancellationPolicy(booking: Booking): Promise<PolicyApplication>;
 }
@@ -350,7 +344,7 @@ interface AnalyticsService {
   getKPIs(dateRange: DateRange): Promise<KPIDashboard>;
 
   // Funnel analysis
-  getConversionFunnel(type: "booking" | "listing"): Promise<FunnelData>;
+  getConversionFunnel(type: 'booking' | 'listing'): Promise<FunnelData>;
 
   // Cohort analysis
   analyzeCohorts(metric: string): Promise<CohortAnalysis>;
@@ -396,11 +390,11 @@ interface ScheduledJobsService {
 }
 
 // Implementation with BullMQ
-import { Queue, Worker } from "bullmq";
+import { Queue, Worker } from 'bullmq';
 
 const schedules = {
-  "expire-pending-bookings": { cron: "*/5 * * * *" },
-  "reconcile-payments": { cron: "0 2 * * *" },
+  'expire-pending-bookings': { cron: '*/5 * * * *' },
+  'reconcile-payments': { cron: '0 2 * * *' },
 };
 ```
 
@@ -424,18 +418,18 @@ interface RateLimitService {
 const rateLimits = {
   // Public endpoints
   search: { points: 100, duration: 60 }, // 100 req/min
-  "listings:view": { points: 200, duration: 60 }, // 200 req/min
+  'listings:view': { points: 200, duration: 60 }, // 200 req/min
 
   // Authenticated
-  "bookings:create": { points: 10, duration: 60 }, // 10 req/min
-  "messages:send": { points: 30, duration: 60 }, // 30 req/min
+  'bookings:create': { points: 10, duration: 60 }, // 10 req/min
+  'messages:send': { points: 30, duration: 60 }, // 30 req/min
 
   // Auth endpoints (stricter)
-  "auth:login": { points: 5, duration: 300 }, // 5 req/5min
-  "auth:register": { points: 3, duration: 3600 }, // 3 req/hour
+  'auth:login': { points: 5, duration: 300 }, // 5 req/5min
+  'auth:register': { points: 3, duration: 3600 }, // 3 req/hour
 
   // Admin endpoints
-  "admin:*": { points: 1000, duration: 60 }, // 1000 req/min
+  'admin:*': { points: 1000, duration: 60 }, // 1000 req/min
 };
 
 // Implementation with Redis
@@ -453,8 +447,8 @@ const rateLimits = {
 const backupStrategy = {
   database: {
     automated: {
-      frequency: "hourly",
-      retention: "30 days",
+      frequency: 'hourly',
+      retention: '30 days',
       pointInTimeRecovery: true,
     },
     manual: {
@@ -466,31 +460,31 @@ const backupStrategy = {
   files: {
     s3Versioning: true,
     crossRegionReplication: true,
-    glacierArchive: "90 days",
+    glacierArchive: '90 days',
   },
 
   redis: {
-    rdbSnapshots: "every 6 hours",
+    rdbSnapshots: 'every 6 hours',
     aofEnabled: true,
   },
 
   elasticsearch: {
-    snapshots: "daily",
-    retention: "7 days",
+    snapshots: 'daily',
+    retention: '7 days',
   },
 };
 
 // Disaster recovery procedures
 const drProcedures = {
-  rto: "4 hours", // Recovery Time Objective
-  rpo: "1 hour", // Recovery Point Objective
+  rto: '4 hours', // Recovery Time Objective
+  rpo: '1 hour', // Recovery Point Objective
 
   failoverSteps: [
-    "Switch DNS to backup region",
-    "Promote read replica to primary",
-    "Restore latest snapshots",
-    "Verify data integrity",
-    "Resume traffic",
+    'Switch DNS to backup region',
+    'Promote read replica to primary',
+    'Restore latest snapshots',
+    'Verify data integrity',
+    'Resume traffic',
   ],
 };
 ```
@@ -596,14 +590,11 @@ gharbatai-rentals/
 export class AuthService {
   // Token generation with rotation
   async generateTokenPair(userId: string): Promise<TokenPair> {
-    const accessToken = this.jwtService.sign(
-      { sub: userId, type: "access" },
-      { expiresIn: "15m" },
-    );
+    const accessToken = this.jwtService.sign({ sub: userId, type: 'access' }, { expiresIn: '15m' });
 
     const refreshToken = this.jwtService.sign(
-      { sub: userId, type: "refresh" },
-      { expiresIn: "7d" },
+      { sub: userId, type: 'refresh' },
+      { expiresIn: '7d' },
     );
 
     // Store refresh token with expiry
@@ -617,10 +608,10 @@ export class AuthService {
     try {
       return this.jwtService.verify(token);
     } catch (error) {
-      if (error.name === "TokenExpiredError") {
-        throw new UnauthorizedException("Token expired");
+      if (error.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('Token expired');
       }
-      throw new UnauthorizedException("Invalid token");
+      throw new UnauthorizedException('Invalid token');
     }
   }
 
@@ -641,7 +632,7 @@ export class AuthService {
 
 ```typescript
 // Use Argon2 for password hashing (better than bcrypt)
-import * as argon2 from "argon2";
+import * as argon2 from 'argon2';
 
 export class PasswordService {
   async hash(password: string): Promise<string> {
@@ -701,7 +692,7 @@ export class AuthRateLimiter {
     if (attempts > 5) {
       // Lock account temporarily
       await this.lockAccount(email, 900); // 15 minutes
-      throw new TooManyRequestsException("Too many login attempts");
+      throw new TooManyRequestsException('Too many login attempts');
     }
 
     return true;
@@ -712,11 +703,7 @@ export class AuthRateLimiter {
   }
 
   // Implement sliding window for more sophisticated rate limiting
-  async checkRateLimit(
-    identifier: string,
-    limit: number,
-    windowSeconds: number,
-  ): Promise<boolean> {
+  async checkRateLimit(identifier: string, limit: number, windowSeconds: number): Promise<boolean> {
     const now = Date.now();
     const key = `rate:${identifier}`;
 
@@ -743,20 +730,20 @@ export class AuthRateLimiter {
 
 ```typescript
 // apps/web/app/lib/auth.server.ts
-import { createCookieSessionStorage, redirect } from "@remix-run/node";
+import { createCookieSessionStorage, redirect } from '@remix-run/node';
 
 const sessionSecret = process.env.SESSION_SECRET;
-if (!sessionSecret) throw new Error("SESSION_SECRET must be set");
+if (!sessionSecret) throw new Error('SESSION_SECRET must be set');
 
 const sessionStorage = createCookieSessionStorage({
   cookie: {
-    name: "__session",
+    name: '__session',
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 7, // 7 days
-    path: "/",
-    sameSite: "lax",
+    path: '/',
+    sameSite: 'lax',
     secrets: [sessionSecret],
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === 'production',
   },
 });
 
@@ -770,11 +757,11 @@ export async function createUserSession({
   redirectTo: string;
 }) {
   const session = await sessionStorage.getSession();
-  session.set("userId", userId);
+  session.set('userId', userId);
 
   return redirect(redirectTo, {
     headers: {
-      "Set-Cookie": await sessionStorage.commitSession(session, {
+      'Set-Cookie': await sessionStorage.commitSession(session, {
         maxAge: remember ? 60 * 60 * 24 * 30 : undefined, // 30 days if remember me
       }),
     },
@@ -787,7 +774,7 @@ export async function requireUserId(
 ) {
   const userId = await getUserId(request);
   if (!userId) {
-    const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
+    const searchParams = new URLSearchParams([['redirectTo', redirectTo]]);
     throw redirect(`/login?${searchParams}`);
   }
   return userId;
@@ -795,20 +782,20 @@ export async function requireUserId(
 
 export async function getUserId(request: Request): Promise<string | undefined> {
   const session = await getUserSession(request);
-  const userId = session.get("userId");
-  if (!userId || typeof userId !== "string") return undefined;
+  const userId = session.get('userId');
+  if (!userId || typeof userId !== 'string') return undefined;
   return userId;
 }
 
 async function getUserSession(request: Request) {
-  return sessionStorage.getSession(request.headers.get("Cookie"));
+  return sessionStorage.getSession(request.headers.get('Cookie'));
 }
 
 export async function logout(request: Request) {
   const session = await getUserSession(request);
-  return redirect("/login", {
+  return redirect('/login', {
     headers: {
-      "Set-Cookie": await sessionStorage.destroySession(session),
+      'Set-Cookie': await sessionStorage.destroySession(session),
     },
   });
 }
@@ -832,7 +819,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 // Backend verification service
 export class EmailVerificationService {
   async sendVerificationEmail(user: User): Promise<void> {
-    const token = crypto.randomBytes(32).toString("hex");
+    const token = crypto.randomBytes(32).toString('hex');
     const hash = await argon2.hash(token);
 
     // Store verification token
@@ -848,7 +835,7 @@ export class EmailVerificationService {
     const verificationUrl = `${process.env.APP_URL}/verify-email?token=${token}`;
     await this.emailService.send({
       to: user.email,
-      template: "email-verification",
+      template: 'email-verification',
       data: {
         name: user.name,
         verificationUrl,
@@ -885,7 +872,7 @@ export class EmailVerificationService {
       }
     }
 
-    throw new BadRequestException("Invalid or expired verification token");
+    throw new BadRequestException('Invalid or expired verification token');
   }
 }
 ```
@@ -900,8 +887,8 @@ export class EmailVerificationService {
 
 ```typescript
 // Backend: apps/api/src/core/categories/template.service.ts
-import Ajv from "ajv";
-import addFormats from "ajv-formats";
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 
 @Injectable()
 export class CategoryTemplateService {
@@ -913,7 +900,7 @@ export class CategoryTemplateService {
       allErrors: true,
       coerceTypes: true,
       useDefaults: true,
-      removeAdditional: "all",
+      removeAdditional: 'all',
       strict: false,
     });
     addFormats(this.ajv);
@@ -923,17 +910,14 @@ export class CategoryTemplateService {
     // Load from database
     const templates = await this.prisma.categoryTemplate.findMany({
       where: { enabled: true },
-      orderBy: { version: "desc" },
+      orderBy: { version: 'desc' },
     });
 
     // Group by category, keep latest version
     const latestTemplates = new Map<string, CategoryTemplate>();
     templates.forEach((template) => {
       const existing = latestTemplates.get(template.category);
-      if (
-        !existing ||
-        this.compareVersions(template.version, existing.version) > 0
-      ) {
+      if (!existing || this.compareVersions(template.version, existing.version) > 0) {
         latestTemplates.set(template.category, template);
       }
     });
@@ -951,9 +935,7 @@ export class CategoryTemplateService {
   async validateListing(listing: CreateListingDto): Promise<ValidationResult> {
     const template = this.templates.get(listing.category);
     if (!template) {
-      throw new NotFoundException(
-        `Template not found for category: ${listing.category}`,
-      );
+      throw new NotFoundException(`Template not found for category: ${listing.category}`);
     }
 
     const valid = template.validator(listing.attributes);
@@ -981,7 +963,7 @@ export class CategoryTemplateService {
     return this.schemaToUIFields(template.schema);
   }
 
-  private schemaToUIFields(schema: JSONSchema, parentPath = ""): UIField[] {
+  private schemaToUIFields(schema: JSONSchema, parentPath = ''): UIField[] {
     const fields: UIField[] = [];
     const properties = schema.properties || {};
     const required = schema.required || [];
@@ -1009,12 +991,12 @@ export class CategoryTemplateService {
       }
 
       // Handle nested objects
-      if (prop.type === "object" && prop.properties) {
+      if (prop.type === 'object' && prop.properties) {
         field.children = this.schemaToUIFields(prop, path);
       }
 
       // Handle arrays
-      if (prop.type === "array") {
+      if (prop.type === 'array') {
         field.itemType = this.mapJsonTypeToUIType(prop.items);
         if (prop.items.enum) {
           field.options = prop.items.enum.map((value) => ({
@@ -1034,35 +1016,33 @@ export class CategoryTemplateService {
     const format = prop.format;
     const type = prop.type;
 
-    if (format === "date") return "date";
-    if (format === "date-time") return "datetime";
-    if (format === "email") return "email";
-    if (format === "url") return "url";
-    if (prop.enum) return "select";
+    if (format === 'date') return 'date';
+    if (format === 'date-time') return 'datetime';
+    if (format === 'email') return 'email';
+    if (format === 'url') return 'url';
+    if (prop.enum) return 'select';
 
-    if (type === "string") {
-      if (prop.maxLength > 200) return "textarea";
-      return "text";
+    if (type === 'string') {
+      if (prop.maxLength > 200) return 'textarea';
+      return 'text';
     }
 
-    if (type === "number" || type === "integer") return "number";
-    if (type === "boolean") return "checkbox";
-    if (type === "array") return "array";
-    if (type === "object") return "object";
+    if (type === 'number' || type === 'integer') return 'number';
+    if (type === 'boolean') return 'checkbox';
+    if (type === 'array') return 'array';
+    if (type === 'object') return 'object';
 
-    return "text";
+    return 'text';
   }
 
   private extractValidation(prop: any): ValidationRule[] {
     const rules: ValidationRule[] = [];
 
-    if (prop.minLength)
-      rules.push({ type: "minLength", value: prop.minLength });
-    if (prop.maxLength)
-      rules.push({ type: "maxLength", value: prop.maxLength });
-    if (prop.minimum) rules.push({ type: "min", value: prop.minimum });
-    if (prop.maximum) rules.push({ type: "max", value: prop.maximum });
-    if (prop.pattern) rules.push({ type: "pattern", value: prop.pattern });
+    if (prop.minLength) rules.push({ type: 'minLength', value: prop.minLength });
+    if (prop.maxLength) rules.push({ type: 'maxLength', value: prop.maxLength });
+    if (prop.minimum) rules.push({ type: 'min', value: prop.minimum });
+    if (prop.maximum) rules.push({ type: 'max', value: prop.maximum });
+    if (prop.pattern) rules.push({ type: 'pattern', value: prop.pattern });
 
     return rules;
   }
@@ -1084,11 +1064,11 @@ export class CategoryTemplateService {
     });
 
     if (!migration) {
-      throw new NotFoundException("Migration not found");
+      throw new NotFoundException('Migration not found');
     }
 
     // Execute migration script
-    const migrationFn = new Function("attributes", migration.script);
+    const migrationFn = new Function('attributes', migration.script);
     const migratedAttributes = migrationFn(listing.attributes);
 
     await this.prisma.listing.update({
@@ -1124,16 +1104,7 @@ export class CategoryTemplateService {
     "vehicleType": {
       "type": "string",
       "title": "Vehicle Type",
-      "enum": [
-        "car",
-        "suv",
-        "truck",
-        "van",
-        "motorcycle",
-        "scooter",
-        "rv",
-        "boat"
-      ],
+      "enum": ["car", "suv", "truck", "van", "motorcycle", "scooter", "rv", "boat"],
       "description": "Type of vehicle"
     },
     "make": {

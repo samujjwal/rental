@@ -1,26 +1,26 @@
-import { Form, useLoaderData, useActionData } from 'react-router';
-import { useState, useEffect } from 'react';
-import { cn } from '~/lib/utils';
-import type { Route } from './+types/settings.notifications';
+import { Form, useLoaderData, useActionData } from "react-router";
+import { useState, useEffect } from "react";
+import { cn } from "~/lib/utils";
+import type { Route } from "./+types/settings.notifications";
 
 interface NotificationPreferences {
   [key: string]: {
     email: boolean;
     push: boolean;
     sms: boolean;
-    'in-app': boolean;
+    "in-app": boolean;
   };
 }
 
 export async function clientLoader() {
-  const response = await fetch('/api/notifications/preferences', {
+  const response = await fetch("/api/notifications/preferences", {
     headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch preferences');
+    throw new Error("Failed to fetch preferences");
   }
 
   const preferences = await response.json();
@@ -29,73 +29,77 @@ export async function clientLoader() {
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
-  const preferences = JSON.parse(formData.get('preferences') as string);
+  const preferences = JSON.parse(formData.get("preferences") as string);
 
-  const response = await fetch('/api/notifications/preferences', {
-    method: 'PUT',
+  const response = await fetch("/api/notifications/preferences", {
+    method: "PUT",
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
     body: JSON.stringify(preferences),
   });
 
   if (!response.ok) {
-    throw new Error('Failed to update preferences');
+    throw new Error("Failed to update preferences");
   }
 
-  return { success: true, message: 'Preferences updated successfully' };
+  return { success: true, message: "Preferences updated successfully" };
 }
 
-export default function NotificationSettings({ loaderData, actionData }: Route.ComponentProps) {
+export default function NotificationSettings({
+  loaderData,
+  actionData,
+}: Route.ComponentProps) {
   const { preferences: initialPreferences } = loaderData;
-  const [preferences, setPreferences] = useState<NotificationPreferences>(initialPreferences);
+  const [preferences, setPreferences] =
+    useState<NotificationPreferences>(initialPreferences);
 
   const notificationTypes = [
     {
-      key: 'booking.request',
-      label: 'Booking Requests',
-      description: 'When someone requests to book your item',
+      key: "booking.request",
+      label: "Booking Requests",
+      description: "When someone requests to book your item",
     },
     {
-      key: 'booking.confirmed',
-      label: 'Booking Confirmations',
-      description: 'When your booking is confirmed by the owner',
+      key: "booking.confirmed",
+      label: "Booking Confirmations",
+      description: "When your booking is confirmed by the owner",
     },
     {
-      key: 'payment.received',
-      label: 'Payment Confirmations',
-      description: 'When a payment is processed',
+      key: "payment.received",
+      label: "Payment Confirmations",
+      description: "When a payment is processed",
     },
     {
-      key: 'message.received',
-      label: 'New Messages',
-      description: 'When you receive a new message',
+      key: "message.received",
+      label: "New Messages",
+      description: "When you receive a new message",
     },
     {
-      key: 'review.received',
-      label: 'New Reviews',
-      description: 'When someone leaves you a review',
+      key: "review.received",
+      label: "New Reviews",
+      description: "When someone leaves you a review",
     },
     {
-      key: 'dispute.opened',
-      label: 'Dispute Notifications',
-      description: 'When a dispute is opened',
+      key: "dispute.opened",
+      label: "Dispute Notifications",
+      description: "When a dispute is opened",
     },
     {
-      key: 'listing.insurance_required',
-      label: 'Insurance Reminders',
-      description: 'When insurance is required for your listing',
+      key: "listing.insurance_required",
+      label: "Insurance Reminders",
+      description: "When insurance is required for your listing",
     },
     {
-      key: 'listing.published',
-      label: 'Listing Status Updates',
-      description: 'When your listing is published or needs attention',
+      key: "listing.published",
+      label: "Listing Status Updates",
+      description: "When your listing is published or needs attention",
     },
     {
-      key: 'marketing',
-      label: 'Marketing & Promotions',
-      description: 'Updates about new features and special offers',
+      key: "marketing",
+      label: "Marketing & Promotions",
+      description: "Updates about new features and special offers",
     },
   ];
 
@@ -110,10 +114,10 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
   };
 
   const channels = [
-    { key: 'email', label: 'Email', icon: '📧' },
-    { key: 'push', label: 'Push', icon: '🔔' },
-    { key: 'sms', label: 'SMS', icon: '📱' },
-    { key: 'in-app', label: 'In-App', icon: '💬' },
+    { key: "email", label: "Email", icon: "📧" },
+    { key: "push", label: "Push", icon: "🔔" },
+    { key: "sms", label: "SMS", icon: "📱" },
+    { key: "in-app", label: "In-App", icon: "💬" },
   ];
 
   return (
@@ -126,7 +130,8 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
               Notification Preferences
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Choose how you want to receive notifications for different activities
+              Choose how you want to receive notifications for different
+              activities
             </p>
           </div>
 
@@ -176,9 +181,15 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
                         <td key={channel.key} className="px-6 py-4 text-center">
                           <input
                             type="checkbox"
-                            checked={preferences[type.key]?.[channel.key] ?? false}
+                            checked={
+                              preferences[type.key]?.[channel.key] ?? false
+                            }
                             onChange={(e) =>
-                              updatePreference(type.key, channel.key, e.target.checked)
+                              updatePreference(
+                                type.key,
+                                channel.key,
+                                e.target.checked
+                              )
                             }
                             className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
                           />
@@ -204,7 +215,7 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
                         email: true,
                         push: true,
                         sms: false,
-                        'in-app': true,
+                        "in-app": true,
                       };
                     });
                     setPreferences(newPrefs);
@@ -222,7 +233,7 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
                         email: false,
                         push: false,
                         sms: false,
-                        'in-app': false,
+                        "in-app": false,
                       };
                     });
                     setPreferences(newPrefs);
@@ -253,13 +264,27 @@ export default function NotificationSettings({ loaderData, actionData }: Route.C
           <div className="px-6 py-4 bg-primary/5 border-t border-primary/10">
             <div className="flex">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                <svg
+                  className="h-5 w-5 text-primary"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
               <div className="ml-3 text-sm text-primary/80">
-                <p><strong>Note:</strong> Some notifications (like critical security alerts) cannot be disabled for your account safety.</p>
-                <p className="mt-1">SMS notifications may incur standard message rates from your carrier.</p>
+                <p>
+                  <strong>Note:</strong> Some notifications (like critical
+                  security alerts) cannot be disabled for your account safety.
+                </p>
+                <p className="mt-1">
+                  SMS notifications may incur standard message rates from your
+                  carrier.
+                </p>
               </div>
             </div>
           </div>

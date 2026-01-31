@@ -13,7 +13,7 @@ export class NotificationPreferencesService {
     // const prefs = await this.prisma.userPreferences.findUnique({
     //   where: { userId }
     // });
-    
+
     // Default preferences
     return {
       'booking.request': { email: true, push: true, sms: false, 'in-app': true },
@@ -22,7 +22,7 @@ export class NotificationPreferencesService {
       'message.received': { email: false, push: true, sms: false, 'in-app': true },
       'review.received': { email: true, push: true, sms: false, 'in-app': true },
       'dispute.opened': { email: true, push: true, sms: false, 'in-app': true },
-      'marketing': { email: false, push: false, sms: false, 'in-app': false },
+      marketing: { email: false, push: false, sms: false, 'in-app': false },
     };
   }
 

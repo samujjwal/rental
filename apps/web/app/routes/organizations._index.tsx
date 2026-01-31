@@ -1,14 +1,20 @@
-import { useLoaderData, Link } from 'react-router';
-import { cn } from '~/lib/utils';
-import { Button, Badge } from '~/components/ui';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui';
+import { useLoaderData, Link } from "react-router";
+import { cn } from "~/lib/utils";
+import { Button, Badge } from "~/components/ui";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "~/components/ui";
 
 interface Organization {
   id: string;
   name: string;
   slug: string;
-  type: 'BUSINESS' | 'NONPROFIT' | 'GOVERNMENT' | 'EDUCATIONAL';
-  verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  type: "BUSINESS" | "NONPROFIT" | "GOVERNMENT" | "EDUCATIONAL";
+  verificationStatus: "PENDING" | "VERIFIED" | "REJECTED";
   isActive: boolean;
   description?: string;
   logoUrl?: string;
@@ -22,14 +28,14 @@ interface Organization {
 }
 
 export async function clientLoader() {
-  const response = await fetch('/api/organizations', {
+  const response = await fetch("/api/organizations", {
     headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch organizations');
+    throw new Error("Failed to fetch organizations");
   }
 
   const organizations = await response.json();
@@ -41,29 +47,29 @@ export default function OrganizationsIndex() {
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'VERIFIED':
-        return 'success';
-      case 'PENDING':
-        return 'warning';
-      case 'REJECTED':
-        return 'destructive';
+      case "VERIFIED":
+        return "success";
+      case "PENDING":
+        return "warning";
+      case "REJECTED":
+        return "destructive";
       default:
-        return 'secondary';
+        return "secondary";
     }
   };
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'BUSINESS':
-        return '🏢';
-      case 'NONPROFIT':
-        return '💚';
-      case 'GOVERNMENT':
-        return '🏛️';
-      case 'EDUCATIONAL':
-        return '🎓';
+      case "BUSINESS":
+        return "🏢";
+      case "NONPROFIT":
+        return "💚";
+      case "GOVERNMENT":
+        return "🏛️";
+      case "EDUCATIONAL":
+        return "🎓";
       default:
-        return '🏢';
+        return "🏢";
     }
   };
 
@@ -73,7 +79,9 @@ export default function OrganizationsIndex() {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">My Organizations</h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              My Organizations
+            </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Manage your organization accounts and team members
             </p>
@@ -99,7 +107,9 @@ export default function OrganizationsIndex() {
                 d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
               />
             </svg>
-            <h3 className="mt-4 text-lg font-medium text-foreground">No organizations yet</h3>
+            <h3 className="mt-4 text-lg font-medium text-foreground">
+              No organizations yet
+            </h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Create an organization to start managing listings as a team
             </p>
@@ -110,7 +120,10 @@ export default function OrganizationsIndex() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {organizations.map((org: Organization) => (
-              <Card key={org.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+              <Card
+                key={org.id}
+                className="overflow-hidden hover:shadow-lg transition-shadow"
+              >
                 <CardContent className="p-6">
                   {/* Logo/Icon */}
                   <div className="flex items-center mb-4">
@@ -126,8 +139,12 @@ export default function OrganizationsIndex() {
                       </div>
                     )}
                     <div className="ml-4">
-                      <h3 className="text-lg font-semibold text-foreground">{org.name}</h3>
-                      <p className="text-sm text-muted-foreground">@{org.slug}</p>
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {org.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        @{org.slug}
+                      </p>
                     </div>
                   </div>
 
@@ -151,11 +168,15 @@ export default function OrganizationsIndex() {
                   {/* Stats */}
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="text-center p-3 bg-muted rounded">
-                      <p className="text-2xl font-bold text-foreground">{org._count.members}</p>
+                      <p className="text-2xl font-bold text-foreground">
+                        {org._count.members}
+                      </p>
                       <p className="text-xs text-muted-foreground">Members</p>
                     </div>
                     <div className="text-center p-3 bg-muted rounded">
-                      <p className="text-2xl font-bold text-foreground">{org._count.listings}</p>
+                      <p className="text-2xl font-bold text-foreground">
+                        {org._count.listings}
+                      </p>
                       <p className="text-xs text-muted-foreground">Listings</p>
                     </div>
                   </div>
@@ -165,8 +186,13 @@ export default function OrganizationsIndex() {
                     <Link to={`/organizations/${org.id}`} className="flex-1">
                       <Button className="w-full">Manage</Button>
                     </Link>
-                    <Link to={`/organizations/${org.id}/listings`} className="flex-1">
-                      <Button variant="outline" className="w-full">Listings</Button>
+                    <Link
+                      to={`/organizations/${org.id}/listings`}
+                      className="flex-1"
+                    >
+                      <Button variant="outline" className="w-full">
+                        Listings
+                      </Button>
                     </Link>
                   </div>
                 </CardContent>
@@ -193,11 +219,14 @@ export default function OrganizationsIndex() {
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-foreground">About Organizations</h3>
+              <h3 className="text-sm font-medium text-foreground">
+                About Organizations
+              </h3>
               <div className="mt-2 text-sm text-muted-foreground">
                 <p>
-                  Organizations allow you to manage listings and collaborate with team members.
-                  Each organization can have multiple members with different roles and permissions.
+                  Organizations allow you to manage listings and collaborate
+                  with team members. Each organization can have multiple members
+                  with different roles and permissions.
                 </p>
               </div>
             </div>

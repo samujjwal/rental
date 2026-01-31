@@ -6,11 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
-import {
-  Property,
-  PropertyStatus,
-  VerificationStatus,
-} from '@rental-portal/database';
+import { Property, PropertyStatus, VerificationStatus } from '@rental-portal/database';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
 import { PropertyValidationService } from './listing-validation.service';
 
@@ -129,7 +125,7 @@ export class PropertysService {
         country: dto.country,
         latitude: dto.latitude,
         longitude: dto.longitude,
-        photos: dto.photos?.map(p => typeof p === 'string' ? p : p.url) || [],
+        photos: dto.photos?.map((p) => (typeof p === 'string' ? p : p.url)) || [],
         type: 'APARTMENT' as any, // Required field
         basePrice: dto.basePrice,
         currency: dto.currency || 'USD',

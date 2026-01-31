@@ -21,7 +21,7 @@ export class ImageModerationService {
     try {
       // In production, call actual image moderation API
       // For now, basic validation
-      
+
       // Check if image URL is accessible
       const isAccessible = await this.checkImageAccessibility(imageUrl);
       if (!isAccessible) {
@@ -36,7 +36,7 @@ export class ImageModerationService {
       // Placeholder for actual moderation results
       // In production: Call AWS Rekognition, Google Vision, etc.
       const moderationResult = await this.callImageModerationAPI(imageUrl);
-      
+
       if (moderationResult) {
         // Process API results
         if (moderationResult.explicitContent) {
@@ -108,10 +108,10 @@ export class ImageModerationService {
   private async callImageModerationAPI(imageUrl: string): Promise<any> {
     // AWS Rekognition example:
     // const result = await rekognition.detectModerationLabels({ Image: { S3Object: { Bucket, Name } } });
-    
+
     // Google Vision API example:
     // const result = await vision.safeSearchDetection(imageUrl);
-    
+
     // Cloudflare Images Moderation example:
     // const result = await cfImages.moderate(imageUrl);
 
@@ -124,7 +124,7 @@ export class ImageModerationService {
    */
   async moderateWithRekognition(imageUrl: string): Promise<ModerationFlag[]> {
     const flags: ModerationFlag[] = [];
-    
+
     // Example implementation:
     /*
     const rekognition = new AWS.Rekognition();
@@ -155,7 +155,7 @@ export class ImageModerationService {
    */
   async moderateWithVision(imageUrl: string): Promise<ModerationFlag[]> {
     const flags: ModerationFlag[] = [];
-    
+
     // Example implementation:
     /*
     const vision = require('@google-cloud/vision');
@@ -192,7 +192,7 @@ export class ImageModerationService {
   async detectFaces(imageUrl: string): Promise<{ faceCount: number; confidence: number }> {
     // In production: Use face detection API
     // Example: AWS Rekognition DetectFaces or Google Vision Face Detection
-    
+
     return {
       faceCount: 0,
       confidence: 0,
@@ -205,7 +205,7 @@ export class ImageModerationService {
   async detectTextInImage(imageUrl: string): Promise<string[]> {
     // In production: Use OCR API
     // Example: AWS Rekognition DetectText or Google Vision Text Detection
-    
+
     return [];
   }
 
@@ -217,7 +217,7 @@ export class ImageModerationService {
     isLowQuality: boolean;
   }> {
     // In production: Analyze image metadata and quality
-    
+
     return {
       resolution: { width: 0, height: 0 },
       isLowQuality: false,

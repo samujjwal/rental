@@ -37,9 +37,7 @@ export class SmsService {
   /**
    * Send SMS via Twilio
    */
-  private async sendViaTwilio(
-    options: SmsOptions,
-  ): Promise<{ success: boolean; sid?: string }> {
+  private async sendViaTwilio(options: SmsOptions): Promise<{ success: boolean; sid?: string }> {
     try {
       const twilio = require('twilio');
       const client = twilio(
@@ -64,9 +62,7 @@ export class SmsService {
   /**
    * Send SMS via AWS SNS
    */
-  private async sendViaSNS(
-    options: SmsOptions,
-  ): Promise<{ success: boolean; sid?: string }> {
+  private async sendViaSNS(options: SmsOptions): Promise<{ success: boolean; sid?: string }> {
     try {
       const AWS = require('aws-sdk');
       const sns = new AWS.SNS({

@@ -60,7 +60,7 @@ describe('BookingCalculationService', () => {
         pricingMode: PricingMode.PER_DAY,
         basePrice: 100,
         requiresDeposit: true,
-        depositType: DepositType.FIXED_AMOUNT,
+        depositType: DepositType.FIXED,
         depositAmount: 50,
       };
 

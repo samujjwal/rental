@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "schedule": ["before 5am on Monday"],
+  "timezone": "UTC",
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "matchDepTypes": ["devDependencies"],
+      "automerge": true
+    },
+    {
+      "matchPackagePatterns": ["^@types/"],
+      "automerge": true
+    },
+    {
+      "matchPackagePatterns": ["^eslint", "^prettier"],
+      "groupName": "linters"
+    },
+    {
+      "matchPackagePatterns": ["^@nestjs/"],
+      "groupName": "NestJS packages"
+    },
+    {
+      "matchPackagePatterns": ["^@tanstack/"],
+      "groupName": "TanStack packages"
+    },
+    {
+      "matchPackagePatterns": ["^@mui/", "^@emotion/"],
+      "groupName": "Material-UI packages"
+    },
+    {
+      "matchPackagePatterns": ["^@prisma/", "^prisma$"],
+      "groupName": "Prisma packages"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "assignees": ["@samujjwal"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on the first day of the month"]
+  }
+}

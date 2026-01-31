@@ -43,7 +43,7 @@ export class DisputeService {
       });
 
       if (!booking) {
-        throw new NotFoundException("Booking not found");
+        throw new NotFoundException('Booking not found');
       }
 
       // Validate dispute can be created
@@ -54,16 +54,13 @@ export class DisputeService {
         data: {
           bookingId: data.bookingId,
           initiatedBy: data.initiatedBy,
-          respondent:
-            data.initiatedBy === booking.renterId
-              ? booking.ownerId
-              : booking.renterId,
+          respondent: data.initiatedBy === booking.renterId ? booking.ownerId : booking.renterId,
           type: data.type,
           category: data.category,
           description: data.description,
           claimedAmount: data.claimedAmount,
           evidence: data.evidence || [],
-          status: "open",
+          status: 'open',
           priority: this.calculatePriority(data.type, data.claimedAmount),
           slaDeadline: this.calculateSLADeadline(data.type),
           createdAt: new Date(),
@@ -71,15 +68,11 @@ export class DisputeService {
       });
 
       // Transition booking to DISPUTED state
-      await this.bookingStateMachine.transition(
-        booking.id,
-        BookingStatus.DISPUTED,
-        {
-          triggeredBy: data.initiatedBy,
-          reason: `Dispute opened: ${data.type}`,
-          metadata: { disputeId: dispute.id },
-        },
-      );
+      await this.bookingStateMachine.transition(booking.id, BookingStatus.DISPUTED, {
+        triggeredBy: data.initiatedBy,
+        reason: `Dispute opened: ${data.type}`,
+        metadata: { disputeId: dispute.id },
+      });
 
       // Pause any scheduled payouts
       await this.pauseBookingPayouts(booking.id);
@@ -87,8 +80,8 @@ export class DisputeService {
       // Notify respondent
       await this.notificationService.send({
         userId: dispute.respondent,
-        type: "dispute_opened",
-        priority: "high",
+        type: 'dispute_opened',
+        priority: 'high',
         data: {
           disputeId: dispute.id,
           bookingId: booking.id,
@@ -99,8 +92,8 @@ export class DisputeService {
 
       // Notify admin team
       await this.notificationService.send({
-        channel: "admin",
-        type: "new_dispute",
+        channel: 'admin',
+        type: 'new_dispute',
         priority: dispute.priority,
         data: {
           disputeId: dispute.id,
@@ -115,20 +108,17 @@ export class DisputeService {
   }
 
   // Add evidence to dispute
-  async addEvidence(
-    disputeId: string,
-    evidence: DisputeEvidenceDto,
-  ): Promise<DisputeEvidence> {
+  async addEvidence(disputeId: string, evidence: DisputeEvidenceDto): Promise<DisputeEvidence> {
     const dispute = await this.prisma.dispute.findUnique({
       where: { id: disputeId },
     });
 
     if (!dispute) {
-      throw new NotFoundException("Dispute not found");
+      throw new NotFoundException('Dispute not found');
     }
 
-    if (dispute.status === "resolved" || dispute.status === "closed") {
-      throw new BadRequestException("Cannot add evidence to closed dispute");
+    if (dispute.status === 'resolved' || dispute.status === 'closed') {
+      throw new BadRequestException('Cannot add evidence to closed dispute');
     }
 
     // Upload files
@@ -170,7 +160,7 @@ export class DisputeService {
 
     // Update dispute timeline
     await this.addTimelineEvent(disputeId, {
-      type: "evidence_added",
+      type: 'evidence_added',
       actor: evidence.uploadedBy,
       description: `Added ${evidence.type} evidence`,
       metadata: {
@@ -183,10 +173,7 @@ export class DisputeService {
   }
 
   // Respond to dispute
-  async respondToDispute(
-    disputeId: string,
-    response: DisputeResponseDto,
-  ): Promise<Dispute> {
+  async respondToDispute(disputeId: string, response: DisputeResponseDto): Promise<Dispute> {
     return await this.prisma.$transaction(async (tx) => {
       const dispute = await tx.dispute.findUnique({
         where: { id: disputeId },
@@ -194,11 +181,11 @@ export class DisputeService {
       });
 
       if (!dispute) {
-        throw new NotFoundException("Dispute not found");
+        throw new NotFoundException('Dispute not found');
       }
 
-      if (dispute.status !== "open" && dispute.status !== "under_review") {
-        throw new BadRequestException("Dispute is not open for responses");
+      if (dispute.status !== 'open' && dispute.status !== 'under_review') {
+        throw new BadRequestException('Dispute is not open for responses');
       }
 
       // Create response
@@ -216,22 +203,22 @@ export class DisputeService {
       const updated = await tx.dispute.update({
         where: { id: disputeId },
         data: {
-          status: "under_review",
+          status: 'under_review',
           respondedAt: new Date(),
         },
       });
 
       // Add timeline event
       await this.addTimelineEvent(disputeId, {
-        type: "response_submitted",
+        type: 'response_submitted',
         actor: response.respondedBy,
-        description: "Submitted response to dispute",
+        description: 'Submitted response to dispute',
       });
 
       // Notify initiator
       await this.notificationService.send({
         userId: dispute.initiatedBy,
-        type: "dispute_response_received",
+        type: 'dispute_response_received',
         data: {
           disputeId,
           respondedBy: response.respondedBy,
@@ -253,12 +240,12 @@ export class DisputeService {
       data: {
         assignedTo: moderatorId,
         assignedAt: new Date(),
-        status: "in_review",
+        status: 'in_review',
       },
     });
 
     await this.addTimelineEvent(disputeId, {
-      type: "assigned",
+      type: 'assigned',
       actor: assignedBy,
       description: `Assigned to moderator`,
       metadata: { moderatorId },
@@ -267,7 +254,7 @@ export class DisputeService {
     // Notify moderator
     await this.notificationService.send({
       userId: moderatorId,
-      type: "dispute_assigned",
+      type: 'dispute_assigned',
       data: {
         disputeId,
         priority: dispute.priority,
@@ -278,12 +265,9 @@ export class DisputeService {
   }
 
   // Moderator requests additional information
-  async requestInformation(
-    disputeId: string,
-    request: InformationRequestDto,
-  ): Promise<void> {
+  async requestInformation(disputeId: string, request: InformationRequestDto): Promise<void> {
     await this.addTimelineEvent(disputeId, {
-      type: "information_requested",
+      type: 'information_requested',
       actor: request.requestedBy,
       description: request.message,
       metadata: {
@@ -295,8 +279,8 @@ export class DisputeService {
     // Notify requested party
     await this.notificationService.send({
       userId: request.requestedFrom,
-      type: "dispute_info_requested",
-      priority: "high",
+      type: 'dispute_info_requested',
+      priority: 'high',
       data: {
         disputeId,
         message: request.message,
@@ -308,17 +292,14 @@ export class DisputeService {
     await this.prisma.dispute.update({
       where: { id: disputeId },
       data: {
-        status: "pending_information",
+        status: 'pending_information',
         informationRequestedAt: new Date(),
       },
     });
   }
 
   // Admin resolves dispute
-  async resolveDispute(
-    disputeId: string,
-    resolution: DisputeResolutionDto,
-  ): Promise<Dispute> {
+  async resolveDispute(disputeId: string, resolution: DisputeResolutionDto): Promise<Dispute> {
     return await this.prisma.$transaction(async (tx) => {
       const dispute = await tx.dispute.findUnique({
         where: { id: disputeId },
@@ -326,7 +307,7 @@ export class DisputeService {
       });
 
       if (!dispute) {
-        throw new NotFoundException("Dispute not found");
+        throw new NotFoundException('Dispute not found');
       }
 
       // Create resolution record
@@ -348,7 +329,7 @@ export class DisputeService {
       const updated = await tx.dispute.update({
         where: { id: disputeId },
         data: {
-          status: "resolved",
+          status: 'resolved',
           resolution: resolution.outcome,
           resolvedAt: new Date(),
           resolvedBy: resolution.resolvedBy,
@@ -365,7 +346,7 @@ export class DisputeService {
 
       // Add timeline event
       await this.addTimelineEvent(disputeId, {
-        type: "resolved",
+        type: 'resolved',
         actor: resolution.resolvedBy,
         description: `Dispute resolved: ${resolution.outcome}`,
         metadata: {
@@ -393,7 +374,7 @@ export class DisputeService {
       await this.paymentService.createRefund({
         paymentIntentId: booking.paymentIntentId,
         amount: resolution.refundAmount,
-        reason: "Dispute resolution",
+        reason: 'Dispute resolution',
         metadata: {
           disputeId: dispute.id,
           resolutionOutcome: resolution.outcome,
@@ -411,10 +392,7 @@ export class DisputeService {
     // Capture deposit if applicable
     if (resolution.penaltyAmount && resolution.penaltyAmount > 0) {
       if (booking.depositHoldId) {
-        await this.paymentService.captureDeposit(
-          booking.depositHoldId,
-          resolution.penaltyAmount,
-        );
+        await this.paymentService.captureDeposit(booking.depositHoldId, resolution.penaltyAmount);
 
         await this.ledgerService.recordDepositCapture({
           bookingId: booking.id,
@@ -426,20 +404,18 @@ export class DisputeService {
     }
 
     // Adjust payout to owner
-    if (resolution.outcome === "favor_owner") {
+    if (resolution.outcome === 'favor_owner') {
       // Ensure owner receives full payment
       await this.processOwnerPayout(booking, booking.quoteSnapshot.ownerAmount);
-    } else if (resolution.outcome === "favor_renter") {
+    } else if (resolution.outcome === 'favor_renter') {
       // Reduce or cancel owner payout
-      const adjustedAmount =
-        booking.quoteSnapshot.ownerAmount - (resolution.refundAmount || 0);
+      const adjustedAmount = booking.quoteSnapshot.ownerAmount - (resolution.refundAmount || 0);
       if (adjustedAmount > 0) {
         await this.processOwnerPayout(booking, adjustedAmount);
       }
-    } else if (resolution.outcome === "partial_refund") {
+    } else if (resolution.outcome === 'partial_refund') {
       // Split difference
-      const ownerAmount =
-        booking.quoteSnapshot.ownerAmount - (resolution.refundAmount || 0);
+      const ownerAmount = booking.quoteSnapshot.ownerAmount - (resolution.refundAmount || 0);
       await this.processOwnerPayout(booking, ownerAmount);
     }
   }
@@ -452,12 +428,12 @@ export class DisputeService {
     let newStatus: BookingStatus;
 
     switch (resolution.outcome) {
-      case "favor_owner":
-      case "favor_renter":
-      case "partial_refund":
+      case 'favor_owner':
+      case 'favor_renter':
+      case 'partial_refund':
         newStatus = BookingStatus.COMPLETED;
         break;
-      case "cancelled":
+      case 'cancelled':
         newStatus = BookingStatus.CANCELLED;
         break;
       default:
@@ -465,7 +441,7 @@ export class DisputeService {
     }
 
     await this.bookingStateMachine.transition(booking.id, newStatus, {
-      triggeredBy: "system",
+      triggeredBy: 'system',
       reason: `Dispute resolved: ${resolution.outcome}`,
     });
   }
@@ -474,18 +450,18 @@ export class DisputeService {
   private calculatePriority(
     type: string,
     claimedAmount?: number,
-  ): "critical" | "high" | "medium" | "low" {
-    if (type === "safety_concern") return "critical";
+  ): 'critical' | 'high' | 'medium' | 'low' {
+    if (type === 'safety_concern') return 'critical';
 
     if (claimedAmount) {
-      if (claimedAmount > 1000) return "high";
-      if (claimedAmount > 500) return "medium";
+      if (claimedAmount > 1000) return 'high';
+      if (claimedAmount > 500) return 'medium';
     }
 
-    if (type === "property_damage" || type === "payment_issue") return "high";
-    if (type === "cancellation_dispute") return "medium";
+    if (type === 'property_damage' || type === 'payment_issue') return 'high';
+    if (type === 'cancellation_dispute') return 'medium';
 
-    return "low";
+    return 'low';
   }
 
   // Calculate SLA deadline based on priority
@@ -506,9 +482,7 @@ export class DisputeService {
   private validateDisputeCreation(booking: Booking, initiatedBy: string): void {
     // Check user is part of booking
     if (booking.renterId !== initiatedBy && booking.ownerId !== initiatedBy) {
-      throw new ForbiddenException(
-        "Not authorized to create dispute for this booking",
-      );
+      throw new ForbiddenException('Not authorized to create dispute for this booking');
     }
 
     // Check booking is in valid state
@@ -526,21 +500,15 @@ export class DisputeService {
 
     // Check dispute window (e.g., within 30 days of completion)
     if (booking.status === BookingStatus.COMPLETED) {
-      const daysSinceCompletion = differenceInDays(
-        new Date(),
-        booking.completedAt,
-      );
+      const daysSinceCompletion = differenceInDays(new Date(), booking.completedAt);
       if (daysSinceCompletion > 30) {
-        throw new BadRequestException("Dispute window has expired (30 days)");
+        throw new BadRequestException('Dispute window has expired (30 days)');
       }
     }
   }
 
   // Add event to dispute timeline
-  private async addTimelineEvent(
-    disputeId: string,
-    event: TimelineEventDto,
-  ): Promise<void> {
+  private async addTimelineEvent(disputeId: string, event: TimelineEventDto): Promise<void> {
     await this.prisma.disputeTimelineEvent.create({
       data: {
         disputeId,
@@ -564,8 +532,8 @@ export class DisputeService {
       parties.map((userId) =>
         this.notificationService.send({
           userId,
-          type: "dispute_resolved",
-          priority: "high",
+          type: 'dispute_resolved',
+          priority: 'high',
           data: {
             disputeId: dispute.id,
             outcome: resolution.outcome,
@@ -579,10 +547,7 @@ export class DisputeService {
   }
 
   // Get dispute metrics for admin dashboard
-  async getDisputeMetrics(dateRange: {
-    start: Date;
-    end: Date;
-  }): Promise<DisputeMetrics> {
+  async getDisputeMetrics(dateRange: { start: Date; end: Date }): Promise<DisputeMetrics> {
     const disputes = await this.prisma.dispute.findMany({
       where: {
         createdAt: {
@@ -593,10 +558,8 @@ export class DisputeService {
     });
 
     const totalDisputes = disputes.length;
-    const openDisputes = disputes.filter((d) => d.status === "open").length;
-    const resolvedDisputes = disputes.filter(
-      (d) => d.status === "resolved",
-    ).length;
+    const openDisputes = disputes.filter((d) => d.status === 'open').length;
+    const resolvedDisputes = disputes.filter((d) => d.status === 'resolved').length;
 
     const avgResolutionTime =
       disputes
@@ -634,10 +597,7 @@ export class DisputeService {
       resolutionRate,
       byType,
       byOutcome,
-      totalClaimedAmount: disputes.reduce(
-        (sum, d) => sum + (d.claimedAmount || 0),
-        0,
-      ),
+      totalClaimedAmount: disputes.reduce((sum, d) => sum + (d.claimedAmount || 0), 0),
       totalResolvedAmount: disputes
         .filter((d) => d.resolvedAt)
         .reduce((sum, d) => sum + (d.resolution?.refundAmount || 0), 0),
@@ -1208,11 +1168,11 @@ export default function MainNavigator() {
 ```typescript
 // apps/mobile/src/hooks/useSocket.ts
 
-import { useEffect, useState, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
-import { useAuth } from "./useAuth";
-import { useAppDispatch } from "../store";
-import { addMessage, updateTypingStatus } from "../store/messagesSlice";
+import { useEffect, useState, useCallback } from 'react';
+import { io, Socket } from 'socket.io-client';
+import { useAuth } from './useAuth';
+import { useAppDispatch } from '../store';
+import { addMessage, updateTypingStatus } from '../store/messagesSlice';
 
 export function useSocket() {
   const { token } = useAuth();
@@ -1224,9 +1184,9 @@ export function useSocket() {
     if (!token) return;
 
     // Connect to socket server
-    const newSocket = io(process.env.EXPO_PUBLIC_API_URL + "/messaging", {
+    const newSocket = io(process.env.EXPO_PUBLIC_API_URL + '/messaging', {
       auth: { token },
-      transports: ["websocket"],
+      transports: ['websocket'],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -1234,26 +1194,26 @@ export function useSocket() {
     });
 
     // Connection events
-    newSocket.on("connect", () => {
-      console.log("Socket connected:", newSocket.id);
+    newSocket.on('connect', () => {
+      console.log('Socket connected:', newSocket.id);
       setConnected(true);
     });
 
-    newSocket.on("disconnect", () => {
-      console.log("Socket disconnected");
+    newSocket.on('disconnect', () => {
+      console.log('Socket disconnected');
       setConnected(false);
     });
 
-    newSocket.on("error", (error) => {
-      console.error("Socket error:", error);
+    newSocket.on('error', (error) => {
+      console.error('Socket error:', error);
     });
 
     // Message events
-    newSocket.on("new_message", ({ conversationId, message }) => {
+    newSocket.on('new_message', ({ conversationId, message }) => {
       dispatch(addMessage({ conversationId, message }));
     });
 
-    newSocket.on("user_typing", ({ conversationId, userId, userName }) => {
+    newSocket.on('user_typing', ({ conversationId, userId, userName }) => {
       dispatch(
         updateTypingStatus({
           conversationId,
@@ -1264,11 +1224,11 @@ export function useSocket() {
       );
     });
 
-    newSocket.on("user_stopped_typing", ({ conversationId, userId }) => {
+    newSocket.on('user_stopped_typing', ({ conversationId, userId }) => {
       dispatch(updateTypingStatus({ conversationId, userId, isTyping: false }));
     });
 
-    newSocket.on("message_read", ({ conversationId, messageId, readBy }) => {
+    newSocket.on('message_read', ({ conversationId, messageId, readBy }) => {
       // Handle read receipt
     });
 
@@ -1280,23 +1240,19 @@ export function useSocket() {
   }, [token]);
 
   const sendMessage = useCallback(
-    (conversationId: string, content: string, type = "text") => {
+    (conversationId: string, content: string, type = 'text') => {
       if (!socket || !connected) {
-        throw new Error("Socket not connected");
+        throw new Error('Socket not connected');
       }
 
       return new Promise((resolve, reject) => {
-        socket.emit(
-          "send_message",
-          { conversationId, content, type },
-          (response) => {
-            if (response.success) {
-              resolve(response);
-            } else {
-              reject(new Error(response.error));
-            }
-          },
-        );
+        socket.emit('send_message', { conversationId, content, type }, (response) => {
+          if (response.success) {
+            resolve(response);
+          } else {
+            reject(new Error(response.error));
+          }
+        });
       });
     },
     [socket, connected],
@@ -1305,7 +1261,7 @@ export function useSocket() {
   const startTyping = useCallback(
     (conversationId: string) => {
       if (!socket || !connected) return;
-      socket.emit("typing_start", { conversationId });
+      socket.emit('typing_start', { conversationId });
     },
     [socket, connected],
   );
@@ -1313,7 +1269,7 @@ export function useSocket() {
   const stopTyping = useCallback(
     (conversationId: string) => {
       if (!socket || !connected) return;
-      socket.emit("typing_stop", { conversationId });
+      socket.emit('typing_stop', { conversationId });
     },
     [socket, connected],
   );
@@ -1321,7 +1277,7 @@ export function useSocket() {
   const markAsRead = useCallback(
     (conversationId: string, messageId: string) => {
       if (!socket || !connected) return;
-      socket.emit("mark_as_read", { conversationId, messageId });
+      socket.emit('mark_as_read', { conversationId, messageId });
     },
     [socket, connected],
   );
@@ -1342,10 +1298,10 @@ export function useSocket() {
 ```typescript
 // apps/mobile/src/services/notifications/PushNotifications.ts
 
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
-import { Platform } from "react-native";
-import apiClient from "../api/client";
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
+import apiClient from '../api/client';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -1359,23 +1315,22 @@ Notifications.setNotificationHandler({
 export class PushNotificationService {
   static async registerForPushNotifications(): Promise<string | null> {
     if (!Device.isDevice) {
-      console.log("Push notifications only work on physical devices");
+      console.log('Push notifications only work on physical devices');
       return null;
     }
 
     // Check existing permissions
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     // Request permission if not granted
-    if (existingStatus !== "granted") {
+    if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
 
-    if (finalStatus !== "granted") {
-      console.log("Failed to get push token");
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token');
       return null;
     }
 
@@ -1387,12 +1342,12 @@ export class PushNotificationService {
     ).data;
 
     // Android specific configuration
-    if (Platform.OS === "android") {
-      Notifications.setNotificationChannelAsync("default", {
-        name: "default",
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#2563eb",
+        lightColor: '#2563eb',
       });
     }
 
@@ -1404,24 +1359,21 @@ export class PushNotificationService {
 
   static async setupNotificationListeners(
     onNotificationReceived?: (notification: Notifications.Notification) => void,
-    onNotificationTapped?: (
-      response: Notifications.NotificationResponse,
-    ) => void,
+    onNotificationTapped?: (response: Notifications.NotificationResponse) => void,
   ) {
     // Foreground notification listener
-    const receivedSubscription = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        console.log("Notification received:", notification);
-        onNotificationReceived?.(notification);
-      },
-    );
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      console.log('Notification received:', notification);
+      onNotificationReceived?.(notification);
+    });
 
     // Notification tapped listener
-    const responseSubscription =
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log("Notification tapped:", response);
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        console.log('Notification tapped:', response);
         onNotificationTapped?.(response);
-      });
+      },
+    );
 
     return () => {
       receivedSubscription.remove();
@@ -1465,7 +1417,7 @@ export class PushNotificationService {
 ```typescript
 // apps/mobile/src/store/index.ts
 
-import { configureStore, combineReducers } from "@reduxjs/toolkit";
+import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import {
   persistStore,
   persistReducer,
@@ -1475,20 +1427,20 @@ import {
   PERSIST,
   PURGE,
   REGISTER,
-} from "redux-persist";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+} from 'redux-persist';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import authReducer from "./authSlice";
-import bookingsReducer from "./bookingsSlice";
-import messagesReducer from "./messagesSlice";
-import listingsReducer from "./listingsSlice";
+import authReducer from './authSlice';
+import bookingsReducer from './bookingsSlice';
+import messagesReducer from './messagesSlice';
+import listingsReducer from './listingsSlice';
 
 const persistConfig = {
-  key: "root",
+  key: 'root',
   version: 1,
   storage: AsyncStorage,
-  whitelist: ["auth", "bookings"], // Only persist auth and bookings
-  blacklist: ["messages"], // Don't persist real-time messages
+  whitelist: ['auth', 'bookings'], // Only persist auth and bookings
+  blacklist: ['messages'], // Don't persist real-time messages
 };
 
 const rootReducer = combineReducers({

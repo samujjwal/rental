@@ -13,14 +13,21 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "clean": "turbo run clean && rm -rf node_modules",
     "db:migrate": "cd packages/database && npm run migrate:dev",
     "db:studio": "cd packages/database && npm run studio",
-    "db:seed": "cd packages/database && npm run seed"
+    "db:seed": "cd packages/database && npm run seed",
+    "validate": "./validate-build.sh",
+    "prepare": "husky",
+    "lint-staged": "lint-staged"
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.1",
     "prettier": "^3.8.1",
     "turbo": "^2.8.0",
     "typescript": "^5.9.3"

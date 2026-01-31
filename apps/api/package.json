@@ -7,6 +7,7 @@
     "build": "nest build --builder swc",
     "dev": "nest start --watch --builder swc",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",

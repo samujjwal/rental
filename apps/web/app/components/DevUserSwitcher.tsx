@@ -13,17 +13,47 @@ interface DevUser {
 }
 
 const DEV_USERS: DevUser[] = [
-  { email: 'admin@rental-portal.com', label: 'Admin', role: 'Administrator', color: 'bg-red-600 hover:bg-red-700' },
-  { email: 'support@rental.local', label: 'Support', role: 'Support Agent', color: 'bg-purple-600 hover:bg-purple-700' },
-  { email: 'john.owner@rental.local', label: 'John (Owner)', role: 'Camera Equipment Owner', color: 'bg-blue-600 hover:bg-blue-700' },
-  { email: 'emily.tools@rental.local', label: 'Emily (Owner)', role: 'Tools Owner', color: 'bg-blue-600 hover:bg-blue-700' },
-  { email: 'mike.customer@rental.local', label: 'Mike (Customer)', role: 'Customer', color: 'bg-green-600 hover:bg-green-700' },
-  { email: 'lisa.renter@rental.local', label: 'Lisa (Customer)', role: 'Event Planner', color: 'bg-green-600 hover:bg-green-700' },
+  {
+    email: "admin@rental-portal.com",
+    label: "Admin",
+    role: "Administrator",
+    color: "bg-red-600 hover:bg-red-700",
+  },
+  {
+    email: "support@rental.local",
+    label: "Support",
+    role: "Support Agent",
+    color: "bg-purple-600 hover:bg-purple-700",
+  },
+  {
+    email: "john.owner@rental.local",
+    label: "John (Owner)",
+    role: "Camera Equipment Owner",
+    color: "bg-blue-600 hover:bg-blue-700",
+  },
+  {
+    email: "emily.tools@rental.local",
+    label: "Emily (Owner)",
+    role: "Tools Owner",
+    color: "bg-blue-600 hover:bg-blue-700",
+  },
+  {
+    email: "mike.customer@rental.local",
+    label: "Mike (Customer)",
+    role: "Customer",
+    color: "bg-green-600 hover:bg-green-700",
+  },
+  {
+    email: "lisa.renter@rental.local",
+    label: "Lisa (Customer)",
+    role: "Event Planner",
+    color: "bg-green-600 hover:bg-green-700",
+  },
 ];
 
 export function DevUserSwitcher() {
   // Only show in development
-  if (process.env.NODE_ENV !== 'development') {
+  if (process.env.NODE_ENV !== "development") {
     return null;
   }
 

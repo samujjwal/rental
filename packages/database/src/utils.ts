@@ -23,33 +23,56 @@ export function toNumberOrNull(value: Decimal | number | string | null | undefin
 /**
  * Safely perform arithmetic with Decimal values
  */
-export function decimalAdd(a: Decimal | number | string | null | undefined, b: Decimal | number | string | null | undefined): number {
+export function decimalAdd(
+  a: Decimal | number | string | null | undefined,
+  b: Decimal | number | string | null | undefined,
+): number {
   return toNumber(a) + toNumber(b);
 }
 
-export function decimalSubtract(a: Decimal | number | string | null | undefined, b: Decimal | number | string | null | undefined): number {
+export function decimalSubtract(
+  a: Decimal | number | string | null | undefined,
+  b: Decimal | number | string | null | undefined,
+): number {
   return toNumber(a) - toNumber(b);
 }
 
-export function decimalMultiply(a: Decimal | number | string | null | undefined, b: Decimal | number | string | null | undefined): number {
+export function decimalMultiply(
+  a: Decimal | number | string | null | undefined,
+  b: Decimal | number | string | null | undefined,
+): number {
   return toNumber(a) * toNumber(b);
 }
 
-export function decimalDivide(a: Decimal | number | string | null | undefined, b: Decimal | number | string | null | undefined): number {
+export function decimalDivide(
+  a: Decimal | number | string | null | undefined,
+  b: Decimal | number | string | null | undefined,
+): number {
   return toNumber(a) / toNumber(b);
 }
 
-export function decimalCompare(a: Decimal | number | string | null | undefined, operator: '>' | '<' | '>=' | '<=' | '===' | '!==', b: Decimal | number | string | null | undefined): boolean {
+export function decimalCompare(
+  a: Decimal | number | string | null | undefined,
+  operator: '>' | '<' | '>=' | '<=' | '===' | '!==',
+  b: Decimal | number | string | null | undefined,
+): boolean {
   const numA = toNumber(a);
   const numB = toNumber(b);
-  
+
   switch (operator) {
-    case '>': return numA > numB;
-    case '<': return numA < numB;
-    case '>=': return numA >= numB;
-    case '<=': return numA <= numB;
-    case '===': return numA === numB;
-    case '!==': return numA !== numB;
-    default: return false;
+    case '>':
+      return numA > numB;
+    case '<':
+      return numA < numB;
+    case '>=':
+      return numA >= numB;
+    case '<=':
+      return numA <= numB;
+    case '===':
+      return numA === numB;
+    case '!==':
+      return numA !== numB;
+    default:
+      return false;
   }
 }

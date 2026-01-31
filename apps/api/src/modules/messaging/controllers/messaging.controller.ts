@@ -51,10 +51,7 @@ export class MessagingController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete conversation' })
-  async deleteConversation(
-    @Param('id') conversationId: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  async deleteConversation(@Param('id') conversationId: string, @CurrentUser('id') userId: string) {
     await this.conversationsService.deleteConversation(conversationId, userId);
     return { message: 'Conversation deleted successfully' };
   }

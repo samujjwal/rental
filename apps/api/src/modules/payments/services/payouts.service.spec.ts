@@ -89,8 +89,10 @@ describe('PayoutsService', () => {
       expect(stripe.createPayout).toHaveBeenCalledWith('acct_123', 100, 'USD');
       expect(prisma.payout.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          amount: 100,
-          transferId: 'tr_123',
+          data: expect.objectContaining({
+            amount: 100,
+            transferId: 'tr_123',
+          }),
         }),
       );
       expect(ledger.recordPayoutWithBooking).toHaveBeenCalledWith(

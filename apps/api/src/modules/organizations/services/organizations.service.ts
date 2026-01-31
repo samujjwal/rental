@@ -64,9 +64,9 @@ export class OrganizationsService {
 
     // Check if user already owns an organization
     const existingOrg = await this.prisma.organizationMember.findFirst({
-      where: { 
+      where: {
         userId,
-        role: 'OWNER'
+        role: 'OWNER',
       },
     });
     if (existingOrg) {

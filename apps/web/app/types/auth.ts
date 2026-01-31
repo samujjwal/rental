@@ -5,7 +5,7 @@ export interface User {
   lastName: string | null;
   phone: string | null;
   avatar: string | null;
-  role: 'renter' | 'owner' | 'admin';
+  role: "renter" | "owner" | "admin";
   verified: boolean;
   rating: number | null;
   totalReviews: number;
@@ -26,7 +26,7 @@ export interface SignupRequest {
   firstName: string;
   lastName?: string;
   phone?: string;
-  role: 'renter' | 'owner';
+  role: "renter" | "owner";
 }
 
 export interface AuthResponse {

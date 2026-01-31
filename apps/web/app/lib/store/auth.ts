@@ -1,11 +1,11 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { User } from '~/types/auth';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type { User } from "~/types/auth";
 
-const STORAGE_KEY = 'auth-storage';
-const ACCESS_TOKEN_KEY = 'accessToken';
-const REFRESH_TOKEN_KEY = 'refreshToken';
-const USER_KEY = 'user';
+const STORAGE_KEY = "auth-storage";
+const ACCESS_TOKEN_KEY = "accessToken";
+const REFRESH_TOKEN_KEY = "refreshToken";
+const USER_KEY = "user";
 
 interface AuthState {
   user: User | null;
@@ -33,7 +33,7 @@ export const useAuthStore = create<AuthState>()(
 
       setAuth: (user, accessToken, refreshToken) => {
         set({ user, accessToken, refreshToken, isInitialized: true });
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
           localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
           localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
           localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -47,7 +47,7 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           isInitialized: true,
         });
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
           localStorage.removeItem(ACCESS_TOKEN_KEY);
           localStorage.removeItem(REFRESH_TOKEN_KEY);
           localStorage.removeItem(USER_KEY);
@@ -56,8 +56,10 @@ export const useAuthStore = create<AuthState>()(
 
       updateUser: (userData) => {
         set((state) => {
-          const updatedUser = state.user ? { ...state.user, ...userData } : null;
-          if (typeof window !== 'undefined' && updatedUser) {
+          const updatedUser = state.user
+            ? { ...state.user, ...userData }
+            : null;
+          if (typeof window !== "undefined" && updatedUser) {
             localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
           }
           return { user: updatedUser };
@@ -66,14 +68,14 @@ export const useAuthStore = create<AuthState>()(
 
       setTokens: (accessToken, refreshToken) => {
         set({ accessToken, refreshToken });
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
           localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
           localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
         }
       },
 
       restoreSession: async () => {
-        if (typeof window === 'undefined') {
+        if (typeof window === "undefined") {
           set({ isInitialized: true });
           return;
         }
@@ -90,10 +92,10 @@ export const useAuthStore = create<AuthState>()(
             if (isTokenExpired(storedAccessToken)) {
               // Try to refresh the token
               try {
-                const response = await fetch('/api/v1/auth/refresh', {
-                  method: 'POST',
+                const response = await fetch("/api/v1/auth/refresh", {
+                  method: "POST",
                   headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                   },
                   body: JSON.stringify({ refreshToken: storedRefreshToken }),
                 });
@@ -118,7 +120,7 @@ export const useAuthStore = create<AuthState>()(
                   return;
                 }
               } catch (error) {
-                console.error('Token refresh failed:', error);
+                console.error("Token refresh failed:", error);
                 get().clearAuth();
                 set({ isInitialized: true, isLoading: false });
                 return;
@@ -137,7 +139,7 @@ export const useAuthStore = create<AuthState>()(
             set({ isInitialized: true });
           }
         } catch (error) {
-          console.error('Failed to restore session:', error);
+          console.error("Failed to restore session:", error);
           set({ isInitialized: true });
         } finally {
           set({ isLoading: false });
@@ -151,8 +153,8 @@ export const useAuthStore = create<AuthState>()(
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
       }),
-    },
-  ),
+    }
+  )
 );
 
 /**
@@ -162,7 +164,7 @@ export const useAuthStore = create<AuthState>()(
  */
 function isTokenExpired(token: string): boolean {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(atob(token.split(".")[1]));
     const expiresAt = payload.exp * 1000; // Convert to milliseconds
     return Date.now() >= expiresAt;
   } catch {

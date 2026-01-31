@@ -1,6 +1,6 @@
-import { type EntryContext } from 'react-router';
-import { ServerRouter } from 'react-router';
-import { renderToReadableStream } from 'react-dom/server';
+import { type EntryContext } from "react-router";
+import { ServerRouter } from "react-router";
+import { renderToReadableStream } from "react-dom/server";
 
 export default async function handleRequest(
   request: Request,
@@ -23,7 +23,7 @@ export default async function handleRequest(
     return new Response(null, { status: 503 });
   }
 
-  responseHeaders.set('Content-Type', 'text/html');
+  responseHeaders.set("Content-Type", "text/html");
   return new Response(body, {
     headers: responseHeaders,
     status: responseStatusCode,

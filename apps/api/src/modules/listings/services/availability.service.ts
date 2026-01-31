@@ -94,11 +94,7 @@ export class AvailabilityService {
     });
   }
 
-  async getListingAvailability(
-    propertyId: string,
-    startDate: Date,
-    endDate: Date,
-  ): Promise<any[]> {
+  async getListingAvailability(propertyId: string, startDate: Date, endDate: Date): Promise<any[]> {
     return this.prisma.availability.findMany({
       where: {
         propertyId,

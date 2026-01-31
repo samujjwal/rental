@@ -6,11 +6,7 @@ import { InsuranceController } from './controllers/insurance.controller';
 
 @Module({
   controllers: [InsuranceController],
-  providers: [
-    InsuranceService,
-    InsuranceVerificationService,
-    InsurancePolicyService,
-  ],
+  providers: [InsuranceService, InsuranceVerificationService, InsurancePolicyService],
   exports: [InsuranceService],
 })
 export class InsuranceModule {}

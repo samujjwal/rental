@@ -4,7 +4,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
 
 describe('ListingValidationService', () => {
-  let service: ListingValidationService;
+  let service: InstanceType<typeof ListingValidationService>;
   let prismaService: any;
   let templateService: any;
 
@@ -30,7 +30,7 @@ describe('ListingValidationService', () => {
       ],
     }).compile();
 
-    service = module.get<ListingValidationService>(ListingValidationService);
+    service = module.get<InstanceType<typeof ListingValidationService>>(ListingValidationService);
     prismaService = module.get(PrismaService);
     templateService = module.get(CategoryTemplateService);
   });

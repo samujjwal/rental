@@ -22,14 +22,10 @@ export class ResendEmailService {
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     if (!apiKey) {
-      this.logger.warn(
-        'RESEND_API_KEY not configured. Email functionality will be disabled.',
-      );
+      this.logger.warn('RESEND_API_KEY not configured. Email functionality will be disabled.');
     }
     this.resend = new Resend(apiKey);
-    this.defaultFrom =
-      this.configService.get<string>('EMAIL_FROM') ||
-      'noreply@resend.dev';
+    this.defaultFrom = this.configService.get<string>('EMAIL_FROM') || 'noreply@resend.dev';
   }
 
   async sendEmail(options: SendEmailOptions): Promise<{ id: string } | null> {
@@ -41,16 +37,8 @@ export class ResendEmailService {
         html: options.html,
         text: options.text,
         replyTo: options.replyTo,
-        cc: options.cc
-          ? Array.isArray(options.cc)
-            ? options.cc
-            : [options.cc]
-          : undefined,
-        bcc: options.bcc
-          ? Array.isArray(options.bcc)
-            ? options.bcc
-            : [options.bcc]
-          : undefined,
+        cc: options.cc ? (Array.isArray(options.cc) ? options.cc : [options.cc]) : undefined,
+        bcc: options.bcc ? (Array.isArray(options.bcc) ? options.bcc : [options.bcc]) : undefined,
       });
 
       if (error) {
@@ -66,10 +54,7 @@ export class ResendEmailService {
     }
   }
 
-  async sendVerificationEmail(
-    to: string,
-    verificationUrl: string,
-  ): Promise<boolean> {
+  async sendVerificationEmail(to: string, verificationUrl: string): Promise<boolean> {
     const html = `
       <!DOCTYPE html>
       <html>
@@ -108,10 +93,7 @@ export class ResendEmailService {
     return result !== null;
   }
 
-  async sendPasswordResetEmail(
-    to: string,
-    resetUrl: string,
-  ): Promise<boolean> {
+  async sendPasswordResetEmail(to: string, resetUrl: string): Promise<boolean> {
     const html = `
       <!DOCTYPE html>
       <html>

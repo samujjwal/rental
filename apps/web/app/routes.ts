@@ -40,7 +40,10 @@ export default [
     route("admin", "routes/admin/_layout.tsx", [
       index("routes/admin/_index.tsx"),
       route("entities/:entity", "routes/admin/entities/[entity].tsx"),
-      route("system/power-operations", "routes/admin/system/power-operations.tsx"),
+      route(
+        "system/power-operations",
+        "routes/admin/system/power-operations.tsx"
+      ),
     ]),
   ]),
 ];

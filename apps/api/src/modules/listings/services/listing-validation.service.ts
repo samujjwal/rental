@@ -115,3 +115,6 @@ export class PropertyValidationService {
     };
   }
 }
+
+// Export alias for backward compatibility with tests
+export const ListingValidationService = PropertyValidationService;

@@ -18,18 +18,16 @@ describe('Insurance E2E Tests', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-    
+
     prisma = app.get<PrismaService>(PrismaService);
     await app.init();
 
     // Create test user and get auth token
-    const authResponse = await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({
-        email: 'insurance-test@example.com',
-        password: 'Test123!',
-        name: 'Insurance Test User',
-      });
+    const authResponse = await request(app.getHttpServer()).post('/auth/register').send({
+      email: 'insurance-test@example.com',
+      password: 'Test123!',
+      name: 'Insurance Test User',
+    });
 
     authToken = authResponse.body.accessToken;
     userId = authResponse.body.user.id;
@@ -248,13 +246,11 @@ describe('Insurance E2E Tests', () => {
 
     it('should not allow access to other user policies', async () => {
       // Create another user
-      const otherUserRes = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'other-insurance-test@example.com',
-          password: 'Test123!',
-          name: 'Other Test User',
-        });
+      const otherUserRes = await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'other-insurance-test@example.com',
+        password: 'Test123!',
+        name: 'Other Test User',
+      });
 
       const otherUserToken = otherUserRes.body.accessToken;
 
@@ -271,13 +267,11 @@ describe('Insurance E2E Tests', () => {
 
     beforeAll(async () => {
       // Create admin user
-      const adminRes = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'admin-insurance@example.com',
-          password: 'Admin123!',
-          name: 'Admin User',
-        });
+      const adminRes = await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'admin-insurance@example.com',
+        password: 'Admin123!',
+        name: 'Admin User',
+      });
 
       adminToken = adminRes.body.accessToken;
 
@@ -330,12 +324,10 @@ describe('Insurance E2E Tests', () => {
 
     beforeAll(async () => {
       // Get admin token from previous test or create new admin
-      const adminRes = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          email: 'admin-insurance@example.com',
-          password: 'Admin123!',
-        });
+      const adminRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'admin-insurance@example.com',
+        password: 'Admin123!',
+      });
 
       adminToken = adminRes.body.accessToken;
 

@@ -19,31 +19,27 @@ describe('Moderation E2E Tests', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-    
+
     prisma = app.get<PrismaService>(PrismaService);
     await app.init();
 
     // Create regular user
-    const userResponse = await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({
-        email: 'moderation-test@example.com',
-        password: 'Test123!',
-        name: 'Moderation Test User',
-      });
+    const userResponse = await request(app.getHttpServer()).post('/auth/register').send({
+      email: 'moderation-test@example.com',
+      password: 'Test123!',
+      name: 'Moderation Test User',
+    });
 
     authToken = userResponse.body.accessToken;
     userId = userResponse.body.user.id;
 
     // Create admin user
-    const adminResponse = await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({
-        email: 'moderation-admin@example.com',
-        password: 'Admin123!',
-        name: 'Moderation Admin',
-        role: 'ADMIN',
-      });
+    const adminResponse = await request(app.getHttpServer()).post('/auth/register').send({
+      email: 'moderation-admin@example.com',
+      password: 'Admin123!',
+      name: 'Moderation Admin',
+      role: 'ADMIN',
+    });
 
     adminToken = adminResponse.body.accessToken;
     adminId = adminResponse.body.user.id;

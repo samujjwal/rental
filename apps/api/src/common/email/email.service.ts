@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
+import { getErrorMessage } from '../../common/utils/error.utils';
+
 @Injectable()
 export class EmailService {
   private transporter: nodemailer.Transporter;

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { useAuthStore } from '~/lib/store/auth';
+import { useEffect, useRef } from "react";
+import { useAuthStore } from "~/lib/store/auth";
 
 /**
  * Hook to initialize and restore user session on app startup

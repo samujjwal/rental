@@ -9,13 +9,16 @@ The current admin users page has **unnecessary content consuming valuable screen
 ## 🚨 Critical Issues
 
 ### 1. **Duplicate Page Headers (HIGH PRIORITY)**
+
 **Problem:** There are TWO page headers:
+
 - Header 1: "User Management" at the top
 - Header 2: "Users Management" inside AdminPageLayout with breadcrumbs
 
 **Impact:** Wastes ~120px of vertical space, creates visual confusion
 
 **Solution:**
+
 ```tsx
 // REMOVE THIS:
 <div>
@@ -27,6 +30,7 @@ The current admin users page has **unnecessary content consuming valuable screen
 ```
 
 ### 2. **Redundant Breadcrumb Navigation**
+
 **Problem:** Breadcrumb shows "Admin > Users" when sidebar already highlights "Users" under "User Management"
 
 **Impact:** Adds visual noise, wastes 40px vertical space
@@ -34,11 +38,13 @@ The current admin users page has **unnecessary content consuming valuable screen
 **Solution:** Remove breadcrumb entirely since sidebar provides context
 
 ### 3. **Stats Cards Push Data Below Fold**
+
 **Problem:** 4 stat cards (~200px height) force users to scroll before seeing actual data
 
 **User Impact:** On 1080p screen, users can't see ANY table data without scrolling
 
 **Solution:** Make stats collapsible and default to collapsed:
+
 ```tsx
 <details className="bg-white rounded-lg border shadow-sm">
   <summary className="px-4 py-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between">
@@ -52,7 +58,9 @@ The current admin users page has **unnecessary content consuming valuable screen
 ```
 
 ### 4. **Bulky Filter UI (CRITICAL)**
+
 **Problem:** Filter section is:
+
 - In a separate container above the table (disconnected UX)
 - Takes up space even when collapsed
 - Doesn't show active filter count clearly
@@ -61,46 +69,51 @@ The current admin users page has **unnecessary content consuming valuable screen
 **Impact:** Filters feel like an afterthought, not integrated with data
 
 **Solution:** Integrate filters INTO the table container:
+
 ```tsx
 <div className="bg-white rounded-lg border shadow-sm">
   {/* Filters inside table card */}
   <div className="p-4 border-b bg-gray-50">
-    <AdvancedFilters 
+    <AdvancedFilters
       groups={filterGroups}
-      compact={true} 
+      compact={true}
       inline={true}
     />
   </div>
-  
+
   {/* Table immediately below */}
   <EnhancedDataTable ... />
 </div>
 ```
 
 ### 5. **All Rows Selected by Default**
+
 **Problem:** Line 671 in code: `new Set(users.data.map(u => u.id))`
+
 - All 20 rows are pre-selected
 - Shows "20 selected" bulk actions bar by default
 - Confusing - users didn't select anything!
 
 **Solution:**
+
 ```tsx
 // Change from:
-const [selectedRows, setSelectedRows] = useState<Set<string>>(
-  new Set(users.data.map(u => u.id))
-);
+const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set(users.data.map((u) => u.id)));
 
 // To:
 const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
 ```
 
 ### 6. **Duplicate Export Buttons**
+
 **Problem:** Export functionality appears in 3 places:
+
 1. Top right "Export All" button
 2. Bulk actions "Export Selected"
 3. Table toolbar export icon
 
 **Solution:** Keep only:
+
 - "Export All" in table toolbar dropdown (gear icon menu)
 - "Export Selected" in bulk actions (only visible when rows selected)
 
@@ -109,6 +122,7 @@ const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
 ## 📐 Layout Recommendations
 
 ### Current Space Usage (1080p screen):
+
 ```
 Header:           80px  (necessary)
 Sidebar:         256px  (could be collapsible)
@@ -125,10 +139,11 @@ Available for data: ~184px (only 3-4 rows visible!)
 ```
 
 ### Improved Space Usage:
+
 ```
-Header:           80px  
+Header:           80px
 Sidebar:         256px  (collapsible on click)
-Action Buttons:   56px  
+Action Buttons:   56px
 Stats:            36px  (collapsed by default)
 Table (integrated): 652px (10+ rows visible!)
 ----------------------------
@@ -140,6 +155,7 @@ More than 3x data visibility!
 ## 🎨 Filter UI Redesign
 
 ### Current Problems:
+
 - Separate container feels disconnected
 - "Filters" button with "Show" button is confusing
 - No clear indication of active filters
@@ -153,19 +169,19 @@ More than 3x data visibility!
   <div className="p-3 border-b flex items-center gap-3 flex-wrap">
     {/* Search */}
     <div className="flex-1 min-w-[240px]">
-      <Input 
-        placeholder="Search users..." 
+      <Input
+        placeholder="Search users..."
         icon={<Search />}
       />
     </div>
-    
+
     {/* Quick Filters - Inline */}
     <Select placeholder="Role" options={roleOptions} />
     <Select placeholder="Status" options={statusOptions} />
     <Button variant="ghost" size="sm">
       More Filters <ChevronDown />
     </Button>
-    
+
     {/* Active Filter Badges */}
     {activeFilters.length > 0 && (
       <>
@@ -182,13 +198,14 @@ More than 3x data visibility!
       </>
     )}
   </div>
-  
+
   {/* Table */}
   <EnhancedDataTable ... />
 </div>
 ```
 
 **Benefits:**
+
 - 60% less vertical space
 - Filters contextually connected to data
 - Active filters always visible
@@ -202,6 +219,7 @@ More than 3x data visibility!
 ### File: `/apps/web/app/routes/admin/users/_index.tsx`
 
 #### Change 1: Remove Duplicate Title
+
 ```diff
 - <div>
 -   <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
@@ -213,6 +231,7 @@ More than 3x data visibility!
 ```
 
 #### Change 2: Remove Breadcrumb
+
 ```diff
   <AdminPageLayout
     title="Users Management"
@@ -226,6 +245,7 @@ More than 3x data visibility!
 ```
 
 #### Change 3: Make Stats Collapsible
+
 ```diff
 - <StatCardsGrid stats={statCards} columns={4} />
 
@@ -245,6 +265,7 @@ More than 3x data visibility!
 ```
 
 #### Change 4: Integrate Filters with Table
+
 ```diff
 - <AdvancedFilters
 -   groups={filterGroups}
@@ -262,11 +283,12 @@ More than 3x data visibility!
 +       compact={true}
 +     />
 +   </div>
-+   
++
 +   <EnhancedDataTable
 ```
 
 #### Change 5: Fix Default Selection
+
 ```diff
   const [selectedRows, setSelectedRows] = useState<Set<string>>(
 -   new Set(users.data.map(u => u.id))
@@ -275,6 +297,7 @@ More than 3x data visibility!
 ```
 
 #### Change 6: Remove Duplicate Export
+
 ```diff
   const pageActions = [
     {
@@ -303,6 +326,7 @@ More than 3x data visibility!
 ## 🎯 Impact Summary
 
 ### Before Changes:
+
 - **Wasted vertical space:** ~336px
 - **Scrolling required:** YES (immediately)
 - **Visible table rows:** 3-4 rows
@@ -310,6 +334,7 @@ More than 3x data visibility!
 - **Cognitive load:** HIGH (duplicate elements, pre-selected rows)
 
 ### After Changes:
+
 - **Wasted vertical space:** ~92px (saving 244px!)
 - **Scrolling required:** NO (for first 10 rows)
 - **Visible table rows:** 10-12 rows
@@ -317,6 +342,7 @@ More than 3x data visibility!
 - **Cognitive load:** LOW (clean, focused)
 
 ### User Benefits:
+
 1. **See 3x more data** without scrolling
 2. **Faster filtering** - inline with table
 3. **Less confusion** - no duplicates or pre-selected rows
@@ -328,19 +354,24 @@ More than 3x data visibility!
 ## 🔍 Additional Observations
 
 ### Sidebar Navigation
+
 The sidebar has **50+ links** across **12 categories**. Consider:
+
 - Making sidebar collapsible (toggle button)
 - Using accordion for categories (collapse unused sections)
 - Adding favorites/recently used section at top
 - Reducing to 6-8 main categories
 
 ### Mobile Responsiveness
+
 Current design will be problematic on tablets/mobile:
+
 - Stat cards stack (800px+ height)
 - Filter UI becomes unusable
 - Table requires horizontal scroll
 
 **Recommendation:** Create mobile-specific layout with:
+
 - Bottom sheet for filters
 - Simplified card view for table
 - Collapsed stats by default
@@ -350,21 +381,25 @@ Current design will be problematic on tablets/mobile:
 ## ✅ Implementation Priority
 
 ### Phase 1 (Quick Wins - 2 hours):
+
 1. Remove duplicate title
 2. Fix default row selection
 3. Remove breadcrumb
 4. Remove duplicate export button
 
 ### Phase 2 (Medium Effort - 4 hours):
+
 5. Make stats collapsible
 6. Integrate filters with table container
 
 ### Phase 3 (Redesign - 8 hours):
+
 7. Redesign filter UI with inline controls
 8. Add active filter badges
 9. Implement progressive disclosure
 
 ### Phase 4 (Enhancement - future):
+
 10. Collapsible sidebar
 11. Mobile responsive layout
 12. Filter presets/saved searches
@@ -374,6 +409,7 @@ Current design will be problematic on tablets/mobile:
 ## 📸 Visual Comparison
 
 ### Current Layout Flow:
+
 ```
 ┌─────────────────────────────┐
 │ Header                      │ 80px
@@ -402,6 +438,7 @@ Current design will be problematic on tablets/mobile:
 ```
 
 ### Improved Layout Flow:
+
 ```
 ┌─────────────────────────────┐
 │ Header                      │ 80px

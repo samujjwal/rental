@@ -1,14 +1,14 @@
-import { Form, useLoaderData, useActionData, useParams } from 'react-router';
-import { useState } from 'react';
-import { cn } from '~/lib/utils';
-import type { Route } from './+types/organizations.$id.settings';
+import { Form, useLoaderData, useActionData, useParams } from "react-router";
+import { useState } from "react";
+import { cn } from "~/lib/utils";
+import type { Route } from "./+types/organizations.$id.settings";
 
 interface Organization {
   id: string;
   name: string;
   slug: string;
-  type: 'BUSINESS' | 'NONPROFIT' | 'GOVERNMENT' | 'EDUCATIONAL';
-  verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  type: "BUSINESS" | "NONPROFIT" | "GOVERNMENT" | "EDUCATIONAL";
+  verificationStatus: "PENDING" | "VERIFIED" | "REJECTED";
   isActive: boolean;
   description?: string;
   logoUrl?: string;
@@ -27,70 +27,80 @@ interface Organization {
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const response = await fetch(`/api/organizations/${params.id}`, {
     headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch organization');
+    throw new Error("Failed to fetch organization");
   }
 
   const organization = await response.json();
   return { organization };
 }
 
-export async function clientAction({ request, params }: Route.ClientActionArgs) {
+export async function clientAction({
+  request,
+  params,
+}: Route.ClientActionArgs) {
   const formData = await request.formData();
-  const action = formData.get('_action');
+  const action = formData.get("_action");
 
-  if (action === 'update') {
+  if (action === "update") {
     const response = await fetch(`/api/organizations/${params.id}`, {
-      method: 'PATCH',
+      method: "PATCH",
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
       },
       body: JSON.stringify({
-        name: formData.get('name'),
-        description: formData.get('description'),
-        website: formData.get('website'),
-        address: formData.get('address'),
-        phoneNumber: formData.get('phoneNumber'),
-        emailAddress: formData.get('emailAddress'),
+        name: formData.get("name"),
+        description: formData.get("description"),
+        website: formData.get("website"),
+        address: formData.get("address"),
+        phoneNumber: formData.get("phoneNumber"),
+        emailAddress: formData.get("emailAddress"),
         settings: {
-          autoApproveMembers: formData.get('autoApproveMembers') === 'on',
-          requireInsurance: formData.get('requireInsurance') === 'on',
-          allowPublicProfile: formData.get('allowPublicProfile') === 'on',
+          autoApproveMembers: formData.get("autoApproveMembers") === "on",
+          requireInsurance: formData.get("requireInsurance") === "on",
+          allowPublicProfile: formData.get("allowPublicProfile") === "on",
         },
       }),
     });
 
     if (!response.ok) {
-      return { success: false, error: 'Failed to update organization' };
+      return { success: false, error: "Failed to update organization" };
     }
 
-    return { success: true, message: 'Organization updated successfully' };
+    return { success: true, message: "Organization updated successfully" };
   }
 
-  if (action === 'deactivate') {
+  if (action === "deactivate") {
     const response = await fetch(`/api/organizations/${params.id}/deactivate`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
       },
     });
 
     if (!response.ok) {
-      return { success: false, error: 'Failed to deactivate organization' };
+      return { success: false, error: "Failed to deactivate organization" };
     }
 
-    return { success: true, message: 'Organization deactivated', redirect: '/organizations' };
+    return {
+      success: true,
+      message: "Organization deactivated",
+      redirect: "/organizations",
+    };
   }
 
   return null;
 }
 
-export default function OrganizationSettings({ loaderData, actionData }: Route.ComponentProps) {
+export default function OrganizationSettings({
+  loaderData,
+  actionData,
+}: Route.ComponentProps) {
   const { organization } = loaderData;
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
 
@@ -100,12 +110,19 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-4 mb-4">
-            <a href={`/organizations/${organization.id}`} className="text-primary hover:text-primary/80">
+            <a
+              href={`/organizations/${organization.id}`}
+              className="text-primary hover:text-primary/80"
+            >
               ← Back to Organization
             </a>
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Organization Settings</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{organization.name}</p>
+          <h1 className="text-3xl font-bold text-foreground">
+            Organization Settings
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {organization.name}
+          </p>
         </div>
 
         {/* Success/Error Messages */}
@@ -125,7 +142,9 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
 
           {/* Basic Information */}
           <div className="bg-card shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-foreground mb-4">Basic Information</h2>
+            <h2 className="text-lg font-medium text-foreground mb-4">
+              Basic Information
+            </h2>
 
             <div className="space-y-4">
               <div>
@@ -185,7 +204,9 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
 
           {/* Contact Information */}
           <div className="bg-card shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-foreground mb-4">Contact Information</h2>
+            <h2 className="text-lg font-medium text-foreground mb-4">
+              Contact Information
+            </h2>
 
             <div className="space-y-4">
               <div>
@@ -244,7 +265,9 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
 
           {/* Organization Settings */}
           <div className="bg-card shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-foreground mb-4">Organization Settings</h2>
+            <h2 className="text-lg font-medium text-foreground mb-4">
+              Organization Settings
+            </h2>
 
             <div className="space-y-4">
               <div className="flex items-start">
@@ -258,11 +281,15 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="autoApproveMembers" className="font-medium text-foreground">
+                  <label
+                    htmlFor="autoApproveMembers"
+                    className="font-medium text-foreground"
+                  >
                     Auto-approve new members
                   </label>
                   <p className="text-sm text-muted-foreground">
-                    Automatically approve member join requests without manual review
+                    Automatically approve member join requests without manual
+                    review
                   </p>
                 </div>
               </div>
@@ -278,11 +305,15 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="requireInsurance" className="font-medium text-foreground">
+                  <label
+                    htmlFor="requireInsurance"
+                    className="font-medium text-foreground"
+                  >
                     Require insurance for all listings
                   </label>
                   <p className="text-sm text-muted-foreground">
-                    All listings from this organization must have valid insurance
+                    All listings from this organization must have valid
+                    insurance
                   </p>
                 </div>
               </div>
@@ -298,7 +329,10 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   />
                 </div>
                 <div className="ml-3">
-                  <label htmlFor="allowPublicProfile" className="font-medium text-foreground">
+                  <label
+                    htmlFor="allowPublicProfile"
+                    className="font-medium text-foreground"
+                  >
                     Public profile
                   </label>
                   <p className="text-sm text-muted-foreground">
@@ -311,7 +345,9 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
 
           {/* Verification Status */}
           <div className="bg-card shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-foreground mb-4">Verification Status</h2>
+            <h2 className="text-lg font-medium text-foreground mb-4">
+              Verification Status
+            </h2>
 
             <div className="flex items-center justify-between">
               <div>
@@ -320,9 +356,9 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   <span
                     className={cn(
                       "px-3 py-1 rounded-full",
-                      organization.verificationStatus === 'VERIFIED'
+                      organization.verificationStatus === "VERIFIED"
                         ? "bg-success/10 text-success"
-                        : organization.verificationStatus === 'PENDING'
+                        : organization.verificationStatus === "PENDING"
                           ? "bg-warning/10 text-warning"
                           : "bg-destructive/10 text-destructive"
                     )}
@@ -331,12 +367,12 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
                   </span>
                 </p>
               </div>
-              {organization.verificationStatus === 'PENDING' && (
+              {organization.verificationStatus === "PENDING" && (
                 <p className="text-sm text-muted-foreground">
                   Your verification request is being reviewed
                 </p>
               )}
-              {organization.verificationStatus === 'REJECTED' && (
+              {organization.verificationStatus === "REJECTED" && (
                 <button
                   type="button"
                   className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90"
@@ -360,11 +396,15 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
 
         {/* Danger Zone */}
         <div className="mt-8 bg-card shadow rounded-lg p-6 border-2 border-destructive/20">
-          <h2 className="text-lg font-medium text-destructive mb-4">Danger Zone</h2>
+          <h2 className="text-lg font-medium text-destructive mb-4">
+            Danger Zone
+          </h2>
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-foreground">Deactivate Organization</p>
+              <p className="text-sm font-medium text-foreground">
+                Deactivate Organization
+              </p>
               <p className="text-sm text-muted-foreground">
                 Deactivating will hide all listings and prevent new bookings
               </p>
@@ -388,8 +428,9 @@ export default function OrganizationSettings({ loaderData, actionData }: Route.C
               Deactivate Organization?
             </h3>
             <p className="text-sm text-muted-foreground mb-6">
-              Are you sure you want to deactivate this organization? All listings will be hidden
-              and you won't be able to create new bookings. You can reactivate it later.
+              Are you sure you want to deactivate this organization? All
+              listings will be hidden and you won't be able to create new
+              bookings. You can reactivate it later.
             </p>
             <Form method="post" className="flex justify-end space-x-3">
               <input type="hidden" name="_action" value="deactivate" />

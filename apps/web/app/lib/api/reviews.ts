@@ -1,5 +1,5 @@
-import { api } from '~/lib/api-client';
-import type { Review } from '~/types/review';
+import { api } from "~/lib/api-client";
+import type { Review } from "~/types/review";
 
 export interface CreateReviewRequest {
   bookingId: string;
@@ -21,10 +21,13 @@ export const reviewsApi = {
   },
 
   async createReview(data: CreateReviewRequest): Promise<Review> {
-    return api.post<Review>('/reviews', data);
+    return api.post<Review>("/reviews", data);
   },
 
-  async updateReview(reviewId: string, data: Partial<CreateReviewRequest>): Promise<Review> {
+  async updateReview(
+    reviewId: string,
+    data: Partial<CreateReviewRequest>
+  ): Promise<Review> {
     return api.put<Review>(`/reviews/${reviewId}`, data);
   },
 

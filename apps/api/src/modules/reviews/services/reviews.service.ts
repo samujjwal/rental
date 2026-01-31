@@ -31,14 +31,14 @@ export interface UpdateReviewDto extends Partial<
 export interface ReviewResponse extends Review {
   reviewer?: {
     id: string;
-    firstName: string;
-    lastName: string;
+    firstName: string | null;
+    lastName: string | null;
     profilePhotoUrl?: string | null;
   };
   reviewee?: {
     id: string;
-    firstName: string;
-    lastName: string;
+    firstName: string | null;
+    lastName: string | null;
     profilePhotoUrl?: string | null;
   };
   listing?: {
@@ -338,7 +338,7 @@ export class ReviewsService {
     };
 
     stats.forEach((stat) => {
-      const rating = Math.round(stat.overallRating);
+      const rating = Math.round(stat.overallRating ?? 0);
       if (rating >= 1 && rating <= 5) {
         ratingDistribution[rating] = stat._count;
       }

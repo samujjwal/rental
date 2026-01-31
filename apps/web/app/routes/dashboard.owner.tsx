@@ -1,5 +1,5 @@
-import type { MetaFunction, LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, Link } from 'react-router';
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
+import { useLoaderData, Link } from "react-router";
 import {
   Package,
   Calendar,
@@ -14,18 +14,24 @@ import {
   XCircle,
   Plus,
   ArrowUpRight,
-} from 'lucide-react';
-import { requireUserId, getUserToken } from '~/utils/auth.server';
-import { apiClient } from '~/lib/api-client';
-import type { Listing } from '~/types/listing';
-import type { Booking } from '~/types/booking';
-import { format } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle, Badge } from '~/components/ui';
-import { PageContainer, PageHeader } from '~/components/layout';
-import { cn } from '~/lib/utils';
+} from "lucide-react";
+import { requireUserId, getUserToken } from "~/utils/auth.server";
+import { apiClient } from "~/lib/api-client";
+import type { Listing } from "~/types/listing";
+import type { Booking } from "~/types/booking";
+import { format } from "date-fns";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Badge,
+} from "~/components/ui";
+import { PageContainer, PageHeader } from "~/components/layout";
+import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
-  return [{ title: 'Owner Dashboard | GharBatai Rentals' }];
+  return [{ title: "Owner Dashboard | GharBatai Rentals" }];
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -41,16 +47,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ]);
 
     // Calculate statistics
-    const activeListings = listings.filter(l => l.availability === 'available').length;
+    const activeListings = listings.filter(
+      (l) => l.availability === "available"
+    ).length;
     const totalListings = listings.length;
-    const pendingBookings = bookings.filter(b =>
-      b.status === 'pending'
+    const pendingBookings = bookings.filter(
+      (b) => b.status === "pending"
     ).length;
-    const activeBookings = bookings.filter(b =>
-      b.status === 'confirmed' || b.status === 'active'
+    const activeBookings = bookings.filter(
+      (b) => b.status === "confirmed" || b.status === "active"
     ).length;
-    const completedBookings = bookings.filter(b =>
-      b.status === 'completed'
+    const completedBookings = bookings.filter(
+      (b) => b.status === "completed"
     ).length;
 
     const stats = {
@@ -65,7 +73,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Get recent bookings
     const recentBookings = bookings
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
       .slice(0, 5);
 
     return {
@@ -74,7 +85,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       recentBookings,
     };
   } catch (error) {
-    console.error('Failed to load owner dashboard:', error);
+    console.error("Failed to load owner dashboard:", error);
     throw error;
   }
 }
@@ -84,19 +95,19 @@ function StatCard({
   label,
   value,
   trend,
-  variant = 'default'
+  variant = "default",
 }: {
   icon: any;
   label: string;
   value: string | number;
   trend?: string;
-  variant?: 'default' | 'success' | 'warning' | 'info';
+  variant?: "default" | "success" | "warning" | "info";
 }) {
   const variantClasses = {
-    default: 'bg-primary/10 text-primary',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
-    info: 'bg-info/10 text-info',
+    default: "bg-primary/10 text-primary",
+    success: "bg-success/10 text-success",
+    warning: "bg-warning/10 text-warning",
+    info: "bg-info/10 text-info",
   };
 
   return (
@@ -122,12 +133,28 @@ function StatCard({
 
 function BookingCard({ booking }: { booking: Booking }) {
   const statusConfig = {
-    pending: { variant: 'warning' as const, icon: Clock, label: 'Pending' },
-    confirmed: { variant: 'success' as const, icon: CheckCircle, label: 'Confirmed' },
-    active: { variant: 'default' as const, icon: Package, label: 'Active' },
-    completed: { variant: 'success' as const, icon: CheckCircle, label: 'Completed' },
-    cancelled: { variant: 'destructive' as const, icon: XCircle, label: 'Cancelled' },
-    disputed: { variant: 'destructive' as const, icon: XCircle, label: 'Disputed' },
+    pending: { variant: "warning" as const, icon: Clock, label: "Pending" },
+    confirmed: {
+      variant: "success" as const,
+      icon: CheckCircle,
+      label: "Confirmed",
+    },
+    active: { variant: "default" as const, icon: Package, label: "Active" },
+    completed: {
+      variant: "success" as const,
+      icon: CheckCircle,
+      label: "Completed",
+    },
+    cancelled: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Cancelled",
+    },
+    disputed: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Disputed",
+    },
   };
 
   const config = statusConfig[booking.status] || statusConfig.pending;
@@ -141,7 +168,7 @@ function BookingCard({ booking }: { booking: Booking }) {
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <h3 className="font-semibold text-foreground mb-1">
-            {booking.listing?.title || 'Listing'}
+            {booking.listing?.title || "Listing"}
           </h3>
           <p className="text-sm text-muted-foreground">
             {booking.renter?.firstName} {booking.renter?.lastName}
@@ -155,7 +182,8 @@ function BookingCard({ booking }: { booking: Booking }) {
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center text-muted-foreground">
           <Calendar className="w-4 h-4 mr-1" />
-          {format(new Date(booking.startDate), 'MMM d')} - {format(new Date(booking.endDate), 'MMM d')}
+          {format(new Date(booking.startDate), "MMM d")} -{" "}
+          {format(new Date(booking.endDate), "MMM d")}
         </div>
         <span className="font-semibold text-primary">
           ${booking.totalAmount.toFixed(2)}
@@ -166,9 +194,10 @@ function BookingCard({ booking }: { booking: Booking }) {
 }
 
 function ListingCard({ listing }: { listing: Listing }) {
-  const locationStr = typeof listing.location === 'string'
-    ? listing.location
-    : listing.location.city;
+  const locationStr =
+    typeof listing.location === "string"
+      ? listing.location
+      : listing.location.city;
 
   return (
     <Link
@@ -187,15 +216,21 @@ function ListingCard({ listing }: { listing: Listing }) {
             <Package className="w-12 h-12 text-muted-foreground" />
           </div>
         )}
-        <span className={cn(
-          "absolute top-2 right-2 px-2 py-1 text-white text-xs font-semibold rounded",
-          listing.availability === 'available' ? 'bg-success' : 'bg-muted-foreground'
-        )}>
+        <span
+          className={cn(
+            "absolute top-2 right-2 px-2 py-1 text-white text-xs font-semibold rounded",
+            listing.availability === "available"
+              ? "bg-success"
+              : "bg-muted-foreground"
+          )}
+        >
           {listing.availability}
         </span>
       </div>
       <div className="p-4">
-        <h3 className="font-semibold text-foreground mb-2 line-clamp-1">{listing.title}</h3>
+        <h3 className="font-semibold text-foreground mb-2 line-clamp-1">
+          {listing.title}
+        </h3>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
             ${listing.pricePerDay}/day
@@ -203,8 +238,12 @@ function ListingCard({ listing }: { listing: Listing }) {
           {listing.rating && listing.rating > 0 && (
             <div className="flex items-center">
               <Star className="w-4 h-4 text-warning fill-current" />
-              <span className="ml-1 text-sm text-muted-foreground">{listing.rating.toFixed(1)}</span>
-              <span className="ml-1 text-sm text-muted-foreground">({listing.totalReviews})</span>
+              <span className="ml-1 text-sm text-muted-foreground">
+                {listing.rating.toFixed(1)}
+              </span>
+              <span className="ml-1 text-sm text-muted-foreground">
+                ({listing.totalReviews})
+              </span>
             </div>
           )}
         </div>
@@ -259,9 +298,13 @@ export default function OwnerDashboardRoute() {
           <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 mb-8 flex items-start">
             <AlertCircle className="w-5 h-5 text-warning mr-3 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-semibold text-foreground mb-1">Action Required</h3>
+              <h3 className="font-semibold text-foreground mb-1">
+                Action Required
+              </h3>
               <p className="text-sm text-muted-foreground">
-                You have {stats.pendingBookings} booking{stats.pendingBookings !== 1 ? 's' : ''} waiting for your approval.
+                You have {stats.pendingBookings} booking
+                {stats.pendingBookings !== 1 ? "s" : ""} waiting for your
+                approval.
               </p>
             </div>
             <Link
@@ -334,7 +377,9 @@ export default function OwnerDashboardRoute() {
                   ) : (
                     <div className="col-span-2 text-center py-8">
                       <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground mb-4">No listings yet</p>
+                      <p className="text-muted-foreground mb-4">
+                        No listings yet
+                      </p>
                       <Link
                         to="/listings/new"
                         className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
@@ -371,7 +416,9 @@ export default function OwnerDashboardRoute() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Completed Rentals</span>
+                    <span className="text-muted-foreground">
+                      Completed Rentals
+                    </span>
                     <span className="font-semibold text-foreground">
                       {stats.completedBookings}
                     </span>

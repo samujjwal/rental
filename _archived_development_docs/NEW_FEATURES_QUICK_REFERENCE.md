@@ -3,6 +3,7 @@
 ## Organizations/Multi-tenancy API
 
 ### Create Organization
+
 ```bash
 POST /api/organizations
 Authorization: Bearer {token}
@@ -23,6 +24,7 @@ Authorization: Bearer {token}
 ```
 
 ### Invite Team Member
+
 ```bash
 POST /api/organizations/{orgId}/members
 
@@ -33,6 +35,7 @@ POST /api/organizations/{orgId}/members
 ```
 
 ### Get Organization Stats
+
 ```bash
 GET /api/organizations/{orgId}/stats
 
@@ -50,6 +53,7 @@ Response:
 ## Fraud Detection Integration
 
 ### Check User Risk Before Booking
+
 ```typescript
 import { FraudDetectionService } from '@/modules/fraud-detection/services/fraud-detection.service';
 
@@ -67,13 +71,14 @@ if (fraudCheck.requiresManualReview) {
 ```
 
 ### Check Booking Risk
+
 ```typescript
 const bookingRisk = await this.fraudDetectionService.checkBookingRisk({
   userId,
   listingId,
   totalPrice: 500,
   startDate: new Date('2026-02-01'),
-  endDate: new Date('2026-02-05')
+  endDate: new Date('2026-02-05'),
 });
 
 console.log('Risk Level:', bookingRisk.riskLevel); // LOW, MEDIUM, HIGH, CRITICAL
@@ -82,6 +87,7 @@ console.log('Flags:', bookingRisk.flags); // Array of fraud indicators
 ```
 
 ### Fraud Flags Reference
+
 - `NEW_ACCOUNT` - Account <7 days old
 - `EMAIL_NOT_VERIFIED` - Email not confirmed
 - `ID_NOT_VERIFIED` - Government ID not verified
@@ -102,6 +108,7 @@ console.log('Flags:', bookingRisk.flags); // Array of fraud indicators
 ## Tax Calculation Integration
 
 ### Calculate Tax for Booking
+
 ```typescript
 import { TaxCalculationService } from '@/modules/tax/services/tax-calculation.service';
 
@@ -112,7 +119,7 @@ const taxBreakdown = await this.taxService.calculateTax({
   country: 'US',
   state: 'CA',
   city: 'San Francisco',
-  categoryId: 'spaces'
+  categoryId: 'spaces',
 });
 
 console.log(taxBreakdown);
@@ -130,6 +137,7 @@ console.log(taxBreakdown);
 ```
 
 ### Generate Tax Receipt
+
 ```typescript
 const receipt = await this.taxService.generateTaxReceipt(bookingId);
 
@@ -142,6 +150,7 @@ const receipt = await this.taxService.generateTaxReceipt(bookingId);
 ```
 
 ### Generate 1099 for Owner (US)
+
 ```typescript
 const form1099 = await this.taxService.generate1099Data(ownerId, 2026);
 
@@ -152,6 +161,7 @@ if (form1099) {
 ```
 
 ### Get User Tax Summary
+
 ```typescript
 const summary = await this.taxService.getUserTaxSummary(userId, 2026);
 
@@ -173,6 +183,7 @@ console.log(summary);
 ```
 
 ### Supported Tax Jurisdictions
+
 ```
 US:
   - California (Sales Tax: 7.25%, TOT: 14%)
@@ -197,6 +208,7 @@ Australia:
 ## Admin Portal Routes
 
 ### Access Admin Dashboard
+
 ```
 URL: /admin
 Protected: Requires admin role
@@ -209,6 +221,7 @@ Features:
 ```
 
 ### Manage Dispute
+
 ```
 URL: /admin/disputes/{disputeId}
 
@@ -221,6 +234,7 @@ Actions:
 ```
 
 ### Admin API Endpoints (Backend)
+
 ```bash
 # Get platform statistics
 GET /api/admin/stats
@@ -258,6 +272,7 @@ PUT /api/admin/disputes/{disputeId}
 ## Integration Checklist
 
 ### For Bookings Module
+
 ```typescript
 // Add to booking creation flow
 
@@ -267,7 +282,7 @@ const fraudCheck = await this.fraudDetectionService.checkBookingRisk({
   listingId,
   totalPrice,
   startDate,
-  endDate
+  endDate,
 });
 
 if (!fraudCheck.allowBooking) {
@@ -281,7 +296,7 @@ const taxBreakdown = await this.taxService.calculateTax({
   listingId,
   country,
   state,
-  city
+  city,
 });
 
 // 3. Create booking with tax
@@ -293,19 +308,16 @@ const booking = await this.prisma.booking.create({
     totalPrice: taxBreakdown.total,
     taxBreakdown: taxBreakdown.taxLines, // Store for receipt
     riskScore: fraudCheck.riskScore,
-    riskFlags: fraudCheck.flags
-  }
+    riskFlags: fraudCheck.flags,
+  },
 });
 
 // 4. Log fraud check
-await this.fraudDetectionService.logFraudCheck(
-  'BOOKING',
-  booking.id,
-  fraudCheck
-);
+await this.fraudDetectionService.logFraudCheck('BOOKING', booking.id, fraudCheck);
 ```
 
 ### For Listings Module
+
 ```typescript
 // Add to listing creation
 
@@ -315,7 +327,7 @@ const fraudCheck = await this.fraudDetectionService.checkListingRisk({
   title,
   description,
   basePrice,
-  photos
+  photos,
 });
 
 if (fraudCheck.requiresManualReview) {
@@ -326,6 +338,7 @@ if (fraudCheck.requiresManualReview) {
 ```
 
 ### For Payments Module
+
 ```typescript
 // Add to payment processing
 
@@ -333,7 +346,7 @@ if (fraudCheck.requiresManualReview) {
 const paymentRisk = await this.fraudDetectionService.checkPaymentRisk({
   userId,
   paymentMethodId,
-  amount
+  amount,
 });
 
 if (paymentRisk.requiresManualReview) {
@@ -391,6 +404,7 @@ npx prisma migrate dev --name add_tax_fields_to_bookings
 ## Testing
 
 ### Test Fraud Detection
+
 ```typescript
 // tests/fraud-detection.spec.ts
 
@@ -401,18 +415,17 @@ describe('Fraud Detection', () => {
       listingId,
       totalPrice: 1000,
       startDate: tomorrow,
-      endDate: dayAfterTomorrow
+      endDate: dayAfterTomorrow,
     });
 
     expect(result.riskLevel).toBe('HIGH');
-    expect(result.flags).toContainEqual(
-      expect.objectContaining({ type: 'HIGH_VALUE_NEW_USER' })
-    );
+    expect(result.flags).toContainEqual(expect.objectContaining({ type: 'HIGH_VALUE_NEW_USER' }));
   });
 });
 ```
 
 ### Test Tax Calculation
+
 ```typescript
 // tests/tax-calculation.spec.ts
 
@@ -423,7 +436,7 @@ describe('Tax Calculation', () => {
       currency: 'USD',
       listingId,
       country: 'US',
-      state: 'CA'
+      state: 'CA',
     });
 
     expect(result.totalTax).toBeGreaterThan(70); // 7.25% minimum
@@ -433,6 +446,7 @@ describe('Tax Calculation', () => {
 ```
 
 ### Test Organizations
+
 ```typescript
 // tests/organizations.spec.ts
 
@@ -441,7 +455,7 @@ describe('Organizations', () => {
     const org = await orgService.createOrganization(userId, {
       name: 'Test Org',
       businessType: 'LLC',
-      email: 'test@org.com'
+      email: 'test@org.com',
     });
 
     expect(org.ownerId).toBe(userId);
@@ -456,17 +470,19 @@ describe('Organizations', () => {
 ## Monitoring & Alerts
 
 ### Fraud Detection Metrics
+
 ```typescript
 // Monitor these metrics in Grafana
 
-- fraud_checks_total (counter)
-- fraud_risk_score (histogram)
-- fraud_flags_by_type (counter)
-- bookings_blocked_by_fraud (counter)
-- manual_reviews_queued (gauge)
+-fraud_checks_total(counter) -
+  fraud_risk_score(histogram) -
+  fraud_flags_by_type(counter) -
+  bookings_blocked_by_fraud(counter) -
+  manual_reviews_queued(gauge);
 ```
 
 ### Tax Calculation Metrics
+
 ```typescript
 - tax_calculations_total (counter)
 - tax_calculation_errors (counter)
@@ -475,13 +491,15 @@ describe('Organizations', () => {
 ```
 
 ### Organization Metrics
+
 ```typescript
-- organizations_created (counter)
-- organization_members_total (gauge)
-- organization_listings_total (gauge)
+-organizations_created(counter) -
+  organization_members_total(gauge) -
+  organization_listings_total(gauge);
 ```
 
 ### Alert Rules
+
 ```yaml
 # Alert if fraud detection error rate >5%
 - alert: HighFraudDetectionErrorRate
@@ -504,6 +522,7 @@ describe('Organizations', () => {
 ## Production Deployment Steps
 
 1. **Deploy Backend Services**
+
 ```bash
 # Deploy fraud detection
 kubectl apply -f k8s/fraud-detection-service.yaml
@@ -516,11 +535,13 @@ kubectl apply -f k8s/organizations-service.yaml
 ```
 
 2. **Run Database Migrations**
+
 ```bash
 npm run prisma:migrate:deploy
 ```
 
 3. **Update Environment Variables**
+
 ```bash
 # In AWS Parameter Store / Secrets Manager
 - FRAUD_DETECTION_ENABLED=true
@@ -529,6 +550,7 @@ npm run prisma:migrate:deploy
 ```
 
 4. **Deploy Frontend**
+
 ```bash
 # Deploy admin portal routes
 npm run build
@@ -536,6 +558,7 @@ npm run deploy:production
 ```
 
 5. **Smoke Tests**
+
 ```bash
 # Test fraud detection
 curl -X POST https://api.rentalportal.com/test/fraud-check
@@ -554,16 +577,19 @@ curl https://rentalportal.com/admin
 ### Common Issues
 
 **Fraud Detection false positives:**
+
 - Review risk thresholds in environment variables
 - Check `fraud_flags_by_type` metric
 - Adjust scoring weights if needed
 
 **Tax calculation errors:**
+
 - Verify jurisdiction codes match database
 - Check if listing has proper location data
 - Ensure tax rates are up to date
 
 **Organization permissions:**
+
 - Verify user has correct role
 - Check organization membership table
 - Review audit logs for permission changes
@@ -571,6 +597,7 @@ curl https://rentalportal.com/admin
 ### Debug Mode
 
 Enable debug logging:
+
 ```bash
 LOG_LEVEL=debug
 DEBUG_FRAUD_DETECTION=true
@@ -579,4 +606,4 @@ DEBUG_TAX_CALCULATION=true
 
 ---
 
-*Quick Reference Guide v1.0 - January 23, 2026*
+_Quick Reference Guide v1.0 - January 23, 2026_

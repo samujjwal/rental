@@ -13,22 +13,26 @@ export class ContentModerationService {
   private readonly profanityFilter: any;
   private readonly suspiciousPatterns: RegExp[];
   private readonly spamKeywords: string[];
-  
+
   constructor() {
     // Create a simple profanity filter as fallback
     this.profanityFilter = {
       isProfane: (text: string) => {
         // Simple profanity detection - basic bad words list
-        const badWords = /\b(bad|damn|hell|shit|fuck|ass|bitch|bastard|crap|piss|dick|pussy|cock|cunt|whore|slut)\b/gi;
+        const badWords =
+          /\b(bad|damn|hell|shit|fuck|ass|bitch|bastard|crap|piss|dick|pussy|cock|cunt|whore|slut)\b/gi;
         return badWords.test(text);
       },
       clean: (text: string) => {
-        return text.replace(/\b(bad|damn|hell|shit|fuck|ass|bitch|bastard|crap|piss|dick|pussy|cock|cunt|whore|slut)\b/gi, (match) => {
-          return '*'.repeat(match.length);
-        });
-      }
+        return text.replace(
+          /\b(bad|damn|hell|shit|fuck|ass|bitch|bastard|crap|piss|dick|pussy|cock|cunt|whore|slut)\b/gi,
+          (match) => {
+            return '*'.repeat(match.length);
+          },
+        );
+      },
     };
-    
+
     // Patterns for detecting contact information
     this.suspiciousPatterns = [
       /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, // Phone numbers
@@ -37,7 +41,7 @@ export class ContentModerationService {
       /\b(?:whatsapp|telegram|signal|wechat|line)\b/gi, // Messaging apps
       /\b(?:cashapp|venmo|paypal|zelle)\b/gi, // Payment apps
     ];
-    
+
     // Common spam keywords
     this.spamKeywords = [
       'click here',
@@ -127,13 +131,13 @@ export class ContentModerationService {
    */
   moderateListingTitle(title: string): ModerationResult {
     const result = this.moderateText(title);
-    
+
     // Additional checks for listing titles
     if (title.length < 5) {
       result.approved = false;
       result.reasons.push('Title too short (minimum 5 characters)');
     }
-    
+
     if (title.length > 100) {
       result.approved = false;
       result.reasons.push('Title too long (maximum 100 characters)');
@@ -147,13 +151,13 @@ export class ContentModerationService {
    */
   moderateListingDescription(description: string): ModerationResult {
     const result = this.moderateText(description);
-    
+
     // Additional checks for descriptions
     if (description.length < 20) {
       result.approved = false;
       result.reasons.push('Description too short (minimum 20 characters)');
     }
-    
+
     if (description.length > 5000) {
       result.approved = false;
       result.reasons.push('Description too long (maximum 5000 characters)');
@@ -167,17 +171,20 @@ export class ContentModerationService {
    */
   moderateReview(reviewText: string, rating: number): ModerationResult {
     const result = this.moderateText(reviewText);
-    
+
     // Check for rating/text mismatch (potential spam/fake review)
     const lowerText = reviewText.toLowerCase();
-    const hasPositiveWords = /\b(great|excellent|amazing|wonderful|fantastic|perfect|love)\b/gi.test(lowerText);
-    const hasNegativeWords = /\b(terrible|awful|horrible|worst|hate|never|disaster)\b/gi.test(lowerText);
-    
+    const hasPositiveWords =
+      /\b(great|excellent|amazing|wonderful|fantastic|perfect|love)\b/gi.test(lowerText);
+    const hasNegativeWords = /\b(terrible|awful|horrible|worst|hate|never|disaster)\b/gi.test(
+      lowerText,
+    );
+
     if (rating >= 4 && hasNegativeWords && !hasPositiveWords) {
       result.approved = false;
       result.reasons.push('Rating does not match review content');
     }
-    
+
     if (rating <= 2 && hasPositiveWords && !hasNegativeWords) {
       result.approved = false;
       result.reasons.push('Rating does not match review content');
@@ -208,7 +215,7 @@ export class ContentModerationService {
         spamCount++;
       }
     }
-    
+
     if (spamCount >= 3) {
       reasons.push('Contains multiple spam indicators');
       approved = false;
@@ -225,6 +232,6 @@ export class ContentModerationService {
    * Batch moderate multiple texts
    */
   async moderateBatch(texts: string[]): Promise<ModerationResult[]> {
-    return texts.map(text => this.moderateText(text));
+    return texts.map((text) => this.moderateText(text));
   }
 }

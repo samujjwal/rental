@@ -26,23 +26,23 @@ export const ListingIndexMapping = {
     analysis: {
       analyzer: {
         autocomplete: {
-          tokenizer: "autocomplete",
-          filter: ["lowercase"],
+          tokenizer: 'autocomplete',
+          filter: ['lowercase'],
         },
         autocomplete_search: {
-          tokenizer: "lowercase",
+          tokenizer: 'lowercase',
         },
         location_analyzer: {
-          tokenizer: "standard",
-          filter: ["lowercase", "stop"],
+          tokenizer: 'standard',
+          filter: ['lowercase', 'stop'],
         },
       },
       tokenizer: {
         autocomplete: {
-          type: "edge_ngram",
+          type: 'edge_ngram',
           min_gram: 2,
           max_gram: 10,
-          token_chars: ["letter", "digit"],
+          token_chars: ['letter', 'digit'],
         },
       },
     },
@@ -52,118 +52,118 @@ export const ListingIndexMapping = {
   mappings: {
     properties: {
       // Basic fields
-      id: { type: "keyword" },
+      id: { type: 'keyword' },
       title: {
-        type: "text",
-        analyzer: "autocomplete",
-        search_analyzer: "autocomplete_search",
+        type: 'text',
+        analyzer: 'autocomplete',
+        search_analyzer: 'autocomplete_search',
         fields: {
-          raw: { type: "keyword" },
-          english: { type: "text", analyzer: "english" },
+          raw: { type: 'keyword' },
+          english: { type: 'text', analyzer: 'english' },
         },
       },
       description: {
-        type: "text",
-        analyzer: "english",
+        type: 'text',
+        analyzer: 'english',
         fields: {
-          raw: { type: "keyword" },
+          raw: { type: 'keyword' },
         },
       },
 
       // Category & classification
-      category: { type: "keyword" },
-      subcategory: { type: "keyword" },
-      tags: { type: "keyword" },
+      category: { type: 'keyword' },
+      subcategory: { type: 'keyword' },
+      tags: { type: 'keyword' },
 
       // Owner information
-      ownerId: { type: "keyword" },
-      ownerName: { type: "text" },
-      ownerRating: { type: "float" },
-      ownerVerified: { type: "boolean" },
+      ownerId: { type: 'keyword' },
+      ownerName: { type: 'text' },
+      ownerRating: { type: 'float' },
+      ownerVerified: { type: 'boolean' },
 
       // Location (geo-point for radius searches)
       location: {
-        type: "geo_point",
+        type: 'geo_point',
       },
       locationName: {
-        type: "text",
-        analyzer: "location_analyzer",
+        type: 'text',
+        analyzer: 'location_analyzer',
         fields: {
-          keyword: { type: "keyword" },
+          keyword: { type: 'keyword' },
         },
       },
-      city: { type: "keyword" },
-      state: { type: "keyword" },
-      country: { type: "keyword" },
-      postalCode: { type: "keyword" },
+      city: { type: 'keyword' },
+      state: { type: 'keyword' },
+      country: { type: 'keyword' },
+      postalCode: { type: 'keyword' },
 
       // Pricing
-      basePriceAmount: { type: "integer" },
-      basePriceCurrency: { type: "keyword" },
-      pricePerDay: { type: "integer" },
-      pricePerWeek: { type: "integer" },
-      pricePerMonth: { type: "integer" },
+      basePriceAmount: { type: 'integer' },
+      basePriceCurrency: { type: 'keyword' },
+      pricePerDay: { type: 'integer' },
+      pricePerWeek: { type: 'integer' },
+      pricePerMonth: { type: 'integer' },
 
       // Availability
-      instantBook: { type: "boolean" },
-      minimumBookingDuration: { type: "integer" },
-      maximumBookingDuration: { type: "integer" },
-      advanceNoticeHours: { type: "integer" },
+      instantBook: { type: 'boolean' },
+      minimumBookingDuration: { type: 'integer' },
+      maximumBookingDuration: { type: 'integer' },
+      advanceNoticeHours: { type: 'integer' },
 
       // Ratings & reviews
-      averageRating: { type: "float" },
-      reviewCount: { type: "integer" },
+      averageRating: { type: 'float' },
+      reviewCount: { type: 'integer' },
 
       // Status & verification
-      status: { type: "keyword" },
-      verified: { type: "boolean" },
-      featured: { type: "boolean" },
+      status: { type: 'keyword' },
+      verified: { type: 'boolean' },
+      featured: { type: 'boolean' },
 
       // Amenities & features (category-specific)
-      amenities: { type: "keyword" },
+      amenities: { type: 'keyword' },
       features: {
-        type: "nested",
+        type: 'nested',
         properties: {
-          key: { type: "keyword" },
-          value: { type: "keyword" },
-          displayValue: { type: "text" },
+          key: { type: 'keyword' },
+          value: { type: 'keyword' },
+          displayValue: { type: 'text' },
         },
       },
 
       // Vehicle-specific
-      vehicleType: { type: "keyword" },
-      vehicleMake: { type: "keyword" },
-      vehicleModel: { type: "keyword" },
-      vehicleYear: { type: "integer" },
-      vehicleSeats: { type: "integer" },
-      vehicleTransmission: { type: "keyword" },
-      vehicleFuelType: { type: "keyword" },
+      vehicleType: { type: 'keyword' },
+      vehicleMake: { type: 'keyword' },
+      vehicleModel: { type: 'keyword' },
+      vehicleYear: { type: 'integer' },
+      vehicleSeats: { type: 'integer' },
+      vehicleTransmission: { type: 'keyword' },
+      vehicleFuelType: { type: 'keyword' },
 
       // Space-specific
-      spaceType: { type: "keyword" },
-      spaceCapacity: { type: "integer" },
-      spaceSize: { type: "integer" },
-      spaceSizeUnit: { type: "keyword" },
+      spaceType: { type: 'keyword' },
+      spaceCapacity: { type: 'integer' },
+      spaceSize: { type: 'integer' },
+      spaceSizeUnit: { type: 'keyword' },
 
       // Instrument-specific
-      instrumentType: { type: "keyword" },
-      instrumentBrand: { type: "keyword" },
-      instrumentCondition: { type: "keyword" },
+      instrumentType: { type: 'keyword' },
+      instrumentBrand: { type: 'keyword' },
+      instrumentCondition: { type: 'keyword' },
 
       // Event venue-specific
-      venueType: { type: "keyword" },
-      venueCapacity: { type: "integer" },
-      venueCateringAvailable: { type: "boolean" },
+      venueType: { type: 'keyword' },
+      venueCapacity: { type: 'integer' },
+      venueCateringAvailable: { type: 'boolean' },
 
       // Metadata
-      createdAt: { type: "date" },
-      updatedAt: { type: "date" },
-      lastBookedAt: { type: "date" },
-      totalBookings: { type: "integer" },
+      createdAt: { type: 'date' },
+      updatedAt: { type: 'date' },
+      lastBookedAt: { type: 'date' },
+      totalBookings: { type: 'integer' },
 
       // Boost factors (for ranking)
-      boostScore: { type: "float" },
-      popularityScore: { type: "float" },
+      boostScore: { type: 'float' },
+      popularityScore: { type: 'float' },
     },
   },
 };
@@ -174,13 +174,13 @@ export const ListingIndexMapping = {
 ```typescript
 // apps/api/src/modules/search/services/search.service.ts
 
-import { Injectable } from "@nestjs/common";
-import { ElasticsearchService } from "@nestjs/elasticsearch";
-import { SearchRequest } from "@elastic/elasticsearch/lib/api/types";
+import { Injectable } from '@nestjs/common';
+import { ElasticsearchService } from '@nestjs/elasticsearch';
+import { SearchRequest } from '@elastic/elasticsearch/lib/api/types';
 
 @Injectable()
 export class SearchService {
-  private readonly INDEX_NAME = "listings";
+  private readonly INDEX_NAME = 'listings';
 
   constructor(
     private readonly elasticsearch: ElasticsearchService,
@@ -214,9 +214,7 @@ export class SearchService {
         ...hit._source,
       })),
       total:
-        typeof response.hits.total === "number"
-          ? response.hits.total
-          : response.hits.total.value,
+        typeof response.hits.total === 'number' ? response.hits.total : response.hits.total.value,
       facets: this.parseFacets(response.aggregations),
       page: params.page || 1,
       pageSize: params.pageSize || 20,
@@ -229,9 +227,7 @@ export class SearchService {
     return results;
   }
 
-  private buildSearchQuery(
-    params: SearchListingsParams,
-  ): SearchRequest["body"] {
+  private buildSearchQuery(params: SearchListingsParams): SearchRequest['body'] {
     const {
       query,
       category,
@@ -256,16 +252,16 @@ export class SearchService {
         multi_match: {
           query,
           fields: [
-            "title^3", // Title most important
-            "description^2", // Description second
-            "locationName",
-            "tags",
-            "amenities",
+            'title^3', // Title most important
+            'description^2', // Description second
+            'locationName',
+            'tags',
+            'amenities',
           ],
-          type: "best_fields",
-          fuzziness: "AUTO",
-          operator: "or",
-          minimum_should_match: "75%",
+          type: 'best_fields',
+          fuzziness: 'AUTO',
+          operator: 'or',
+          minimum_should_match: '75%',
         },
       });
     }
@@ -317,11 +313,7 @@ export class SearchService {
           filter.push({
             terms: { [key]: value },
           });
-        } else if (
-          typeof value === "object" &&
-          "min" in value &&
-          "max" in value
-        ) {
+        } else if (typeof value === 'object' && 'min' in value && 'max' in value) {
           filter.push({
             range: {
               [key]: {
@@ -350,7 +342,7 @@ export class SearchService {
       {
         range: {
           lastBookedAt: {
-            gte: "now-30d",
+            gte: 'now-30d',
             boost: 1.2,
           },
         },
@@ -359,7 +351,7 @@ export class SearchService {
 
     // Always filter out inactive listings
     filter.push({
-      term: { status: "active" },
+      term: { status: 'active' },
     });
 
     // Build query
@@ -376,11 +368,11 @@ export class SearchService {
       // Aggregations for facets
       aggs: {
         categories: {
-          terms: { field: "category", size: 20 },
+          terms: { field: 'category', size: 20 },
         },
         priceRanges: {
           range: {
-            field: "pricePerDay",
+            field: 'pricePerDay',
             ranges: [
               { to: 50 },
               { from: 50, to: 100 },
@@ -391,10 +383,10 @@ export class SearchService {
           },
         },
         avgRating: {
-          terms: { field: "averageRating", size: 5 },
+          terms: { field: 'averageRating', size: 5 },
         },
         instantBook: {
-          terms: { field: "instantBook" },
+          terms: { field: 'instantBook' },
         },
       },
 
@@ -411,8 +403,8 @@ export class SearchService {
           title: {},
           description: {},
         },
-        pre_tags: ["<mark>"],
-        post_tags: ["</mark>"],
+        pre_tags: ['<mark>'],
+        post_tags: ['</mark>'],
       },
     };
 
@@ -426,22 +418,22 @@ export class SearchService {
     const sortClauses: any[] = [];
 
     switch (sort) {
-      case "price_asc":
-        sortClauses.push({ pricePerDay: "asc" });
+      case 'price_asc':
+        sortClauses.push({ pricePerDay: 'asc' });
         break;
-      case "price_desc":
-        sortClauses.push({ pricePerDay: "desc" });
+      case 'price_desc':
+        sortClauses.push({ pricePerDay: 'desc' });
         break;
-      case "rating":
-        sortClauses.push({ averageRating: "desc" });
+      case 'rating':
+        sortClauses.push({ averageRating: 'desc' });
         break;
-      case "popular":
-        sortClauses.push({ popularityScore: "desc" });
+      case 'popular':
+        sortClauses.push({ popularityScore: 'desc' });
         break;
-      case "newest":
-        sortClauses.push({ createdAt: "desc" });
+      case 'newest':
+        sortClauses.push({ createdAt: 'desc' });
         break;
-      case "distance":
+      case 'distance':
         if (location) {
           sortClauses.push({
             _geo_distance: {
@@ -449,19 +441,19 @@ export class SearchService {
                 lat: location.lat,
                 lon: location.lon,
               },
-              order: "asc",
-              unit: "km",
+              order: 'asc',
+              unit: 'km',
             },
           });
         }
         break;
       default:
         // Relevance score (default)
-        sortClauses.push("_score");
+        sortClauses.push('_score');
     }
 
     // Always add tiebreaker
-    sortClauses.push({ id: "asc" });
+    sortClauses.push({ id: 'asc' });
 
     return sortClauses;
   }
@@ -479,7 +471,7 @@ export class SearchService {
     });
 
     if (!listing) {
-      throw new NotFoundException("Listing not found");
+      throw new NotFoundException('Listing not found');
     }
 
     const document = this.transformListingToDocument(listing);
@@ -538,8 +530,8 @@ export class SearchService {
                 match: {
                   title: {
                     query,
-                    operator: "and",
-                    fuzziness: "AUTO",
+                    operator: 'and',
+                    fuzziness: 'AUTO',
                   },
                 },
               },
@@ -547,7 +539,7 @@ export class SearchService {
             filter: category ? [{ term: { category } }] : [],
           },
         },
-        _source: ["title"],
+        _source: ['title'],
         size: 10,
       },
     });
@@ -556,16 +548,13 @@ export class SearchService {
   }
 
   // Similar listings (More Like This)
-  async getSimilarListings(
-    listingId: string,
-    limit: number = 5,
-  ): Promise<Listing[]> {
+  async getSimilarListings(listingId: string, limit: number = 5): Promise<Listing[]> {
     const response = await this.elasticsearch.search({
       index: this.INDEX_NAME,
       body: {
         query: {
           more_like_this: {
-            fields: ["title", "description", "category", "tags"],
+            fields: ['title', 'description', 'category', 'tags'],
             like: [
               {
                 _index: this.INDEX_NAME,
@@ -622,7 +611,7 @@ export class SearchService {
       pricePerWeek: listing.pricing.perWeek,
       pricePerMonth: listing.pricing.perMonth,
 
-      instantBook: listing.bookingMode === "instant-book",
+      instantBook: listing.bookingMode === 'instant-book',
       minimumBookingDuration: listing.minimumBookingDuration,
       maximumBookingDuration: listing.maximumBookingDuration,
       advanceNoticeHours: listing.advanceNoticeHours,
@@ -672,8 +661,7 @@ export class SearchService {
 
   private calculatePopularityScore(listing: any): number {
     const daysSinceCreated = differenceInDays(new Date(), listing.createdAt);
-    const bookingsPerDay =
-      listing.totalBookings / Math.max(daysSinceCreated, 1);
+    const bookingsPerDay = listing.totalBookings / Math.max(daysSinceCreated, 1);
 
     return bookingsPerDay * listing.averageRating;
   }
@@ -977,22 +965,20 @@ import {
   OnGatewayDisconnect,
   ConnectedSocket,
   MessageBody,
-} from "@nestjs/websockets";
-import { Server, Socket } from "socket.io";
-import { UseGuards } from "@nestjs/common";
-import { createAdapter } from "@socket.io/redis-adapter";
-import { createClient } from "redis";
+} from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
+import { UseGuards } from '@nestjs/common';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
 
 @WebSocketGateway({
   cors: {
     origin: process.env.FRONTEND_URL,
     credentials: true,
   },
-  namespace: "/messaging",
+  namespace: '/messaging',
 })
-export class MessagingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -1011,10 +997,7 @@ export class MessagingGateway
     this.redisPubClient = createClient({ url: process.env.REDIS_URL });
     this.redisSubClient = this.redisPubClient.duplicate();
 
-    await Promise.all([
-      this.redisPubClient.connect(),
-      this.redisSubClient.connect(),
-    ]);
+    await Promise.all([this.redisPubClient.connect(), this.redisSubClient.connect()]);
 
     server.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
   }
@@ -1023,8 +1006,7 @@ export class MessagingGateway
     try {
       // Authenticate socket connection
       const token =
-        client.handshake.auth.token ||
-        client.handshake.headers.authorization?.split(" ")[1];
+        client.handshake.auth.token || client.handshake.headers.authorization?.split(' ')[1];
 
       if (!token) {
         client.disconnect();
@@ -1044,9 +1026,7 @@ export class MessagingGateway
       await this.presenceService.markOnline(payload.sub, client.id);
 
       // Get user's conversations
-      const conversations = await this.messagingService.getUserConversations(
-        payload.sub,
-      );
+      const conversations = await this.messagingService.getUserConversations(payload.sub);
 
       // Join conversation rooms
       conversations.forEach((conv) => {
@@ -1054,14 +1034,14 @@ export class MessagingGateway
       });
 
       // Emit connection success
-      client.emit("connected", {
+      client.emit('connected', {
         userId: payload.sub,
         conversations: conversations.map((c) => c.id),
       });
 
       console.log(`User ${payload.sub} connected with socket ${client.id}`);
     } catch (error) {
-      console.error("Socket authentication error:", error);
+      console.error('Socket authentication error:', error);
       client.disconnect();
     }
   }
@@ -1075,21 +1055,16 @@ export class MessagingGateway
     }
   }
 
-  @SubscribeMessage("send_message")
-  async handleSendMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: SendMessageDto,
-  ) {
+  @SubscribeMessage('send_message')
+  async handleSendMessage(@ConnectedSocket() client: Socket, @MessageBody() data: SendMessageDto) {
     const userId = client.data.userId;
 
     try {
       // Validate conversation membership
-      const conversation = await this.messagingService.getConversation(
-        data.conversationId,
-      );
+      const conversation = await this.messagingService.getConversation(data.conversationId);
 
       if (!conversation.participants.some((p) => p.userId === userId)) {
-        throw new Error("Not a participant");
+        throw new Error('Not a participant');
       }
 
       // Create message
@@ -1097,17 +1072,15 @@ export class MessagingGateway
         conversationId: data.conversationId,
         senderId: userId,
         content: data.content,
-        type: data.type || "text",
+        type: data.type || 'text',
         attachments: data.attachments,
       });
 
       // Broadcast to all participants
-      this.server
-        .to(`conversation:${data.conversationId}`)
-        .emit("new_message", {
-          conversationId: data.conversationId,
-          message: this.serializeMessage(message),
-        });
+      this.server.to(`conversation:${data.conversationId}`).emit('new_message', {
+        conversationId: data.conversationId,
+        message: this.serializeMessage(message),
+      });
 
       // Send push notification to offline participants
       const offlineParticipants = conversation.participants.filter(
@@ -1120,7 +1093,7 @@ export class MessagingGateway
           title: `New message from ${client.data.user.name}`,
           body: message.content.substring(0, 100),
           data: {
-            type: "new_message",
+            type: 'new_message',
             conversationId: data.conversationId,
             messageId: message.id,
           },
@@ -1129,12 +1102,12 @@ export class MessagingGateway
 
       return { success: true, messageId: message.id };
     } catch (error) {
-      client.emit("error", { message: error.message });
+      client.emit('error', { message: error.message });
       return { success: false, error: error.message };
     }
   }
 
-  @SubscribeMessage("typing_start")
+  @SubscribeMessage('typing_start')
   async handleTypingStart(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
@@ -1142,50 +1115,44 @@ export class MessagingGateway
     const userId = client.data.userId;
 
     // Broadcast typing indicator to others in conversation
-    client.to(`conversation:${data.conversationId}`).emit("user_typing", {
+    client.to(`conversation:${data.conversationId}`).emit('user_typing', {
       conversationId: data.conversationId,
       userId,
       userName: client.data.user.name,
     });
   }
 
-  @SubscribeMessage("typing_stop")
+  @SubscribeMessage('typing_stop')
   async handleTypingStop(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
   ) {
     const userId = client.data.userId;
 
-    client
-      .to(`conversation:${data.conversationId}`)
-      .emit("user_stopped_typing", {
-        conversationId: data.conversationId,
-        userId,
-      });
+    client.to(`conversation:${data.conversationId}`).emit('user_stopped_typing', {
+      conversationId: data.conversationId,
+      userId,
+    });
   }
 
-  @SubscribeMessage("mark_as_read")
+  @SubscribeMessage('mark_as_read')
   async handleMarkAsRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string; messageId: string },
   ) {
     const userId = client.data.userId;
 
-    await this.messagingService.markAsRead(
-      data.conversationId,
-      userId,
-      data.messageId,
-    );
+    await this.messagingService.markAsRead(data.conversationId, userId, data.messageId);
 
     // Notify sender that message was read
-    this.server.to(`conversation:${data.conversationId}`).emit("message_read", {
+    this.server.to(`conversation:${data.conversationId}`).emit('message_read', {
       conversationId: data.conversationId,
       messageId: data.messageId,
       readBy: userId,
     });
   }
 
-  @SubscribeMessage("join_conversation")
+  @SubscribeMessage('join_conversation')
   async handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
@@ -1194,7 +1161,7 @@ export class MessagingGateway
     return { success: true };
   }
 
-  @SubscribeMessage("leave_conversation")
+  @SubscribeMessage('leave_conversation')
   async handleLeaveConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
@@ -1270,11 +1237,11 @@ export class MessagingService {
     return await this.prisma.conversation.create({
       data: {
         bookingId,
-        type: "booking",
+        type: 'booking',
         participants: {
           create: participantIds.map((userId) => ({
             userId,
-            role: "member",
+            role: 'member',
           })),
         },
       },
@@ -1335,11 +1302,7 @@ export class MessagingService {
   }
 
   // Mark messages as read
-  async markAsRead(
-    conversationId: string,
-    userId: string,
-    upToMessageId?: string,
-  ): Promise<void> {
+  async markAsRead(conversationId: string, userId: string, upToMessageId?: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       // Get messages to mark as read
       const where: any = {
@@ -1416,7 +1379,7 @@ export class MessagingService {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: limit + 1,
       cursor: pagination.cursor ? { id: pagination.cursor } : undefined,
     });
@@ -1468,15 +1431,12 @@ export class MessagingService {
           select: { messages: true },
         },
       },
-      orderBy: { lastMessageAt: "desc" },
+      orderBy: { lastMessageAt: 'desc' },
     });
   }
 
   // Upload message attachment
-  async uploadAttachment(
-    file: Express.Multer.File,
-    userId: string,
-  ): Promise<Attachment> {
+  async uploadAttachment(file: Express.Multer.File, userId: string): Promise<Attachment> {
     const path = `messages/${userId}/${Date.now()}-${file.originalname}`;
 
     const uploaded = await this.storageService.upload({
@@ -1500,11 +1460,11 @@ export class MessagingService {
   }
 
   private detectAttachmentType(mimeType: string): string {
-    if (mimeType.startsWith("image/")) return "image";
-    if (mimeType.startsWith("video/")) return "video";
-    if (mimeType.startsWith("audio/")) return "audio";
-    if (mimeType === "application/pdf") return "pdf";
-    return "file";
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    if (mimeType === 'application/pdf') return 'pdf';
+    return 'file';
   }
 }
 ```
@@ -1526,8 +1486,8 @@ export class ContactPrivacyService {
     // Email patterns
     const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
     if (emailPattern.test(masked)) {
-      violations.push("email");
-      masked = masked.replace(emailPattern, "[email hidden]");
+      violations.push('email');
+      masked = masked.replace(emailPattern, '[email hidden]');
     }
 
     // Phone patterns (various formats)
@@ -1539,23 +1499,23 @@ export class ContactPrivacyService {
 
     phonePatterns.forEach((pattern) => {
       if (pattern.test(masked)) {
-        violations.push("phone");
-        masked = masked.replace(pattern, "[phone hidden]");
+        violations.push('phone');
+        masked = masked.replace(pattern, '[phone hidden]');
       }
     });
 
     // Social media handles
     const socialPattern = /@[a-zA-Z0-9._]{3,}/g;
     if (socialPattern.test(masked)) {
-      violations.push("social_media");
-      masked = masked.replace(socialPattern, "[social hidden]");
+      violations.push('social_media');
+      masked = masked.replace(socialPattern, '[social hidden]');
     }
 
     // URLs
     const urlPattern = /https?:\/\/[^\s]+/g;
     if (urlPattern.test(masked)) {
-      violations.push("url");
-      masked = masked.replace(urlPattern, "[link hidden]");
+      violations.push('url');
+      masked = masked.replace(urlPattern, '[link hidden]');
     }
 
     return { masked, violations };
@@ -1568,7 +1528,7 @@ export class ContactPrivacyService {
     });
 
     // Allow contact sharing only after booking is confirmed
-    return booking.status === "CONFIRMED" || booking.status === "IN_PROGRESS";
+    return booking.status === 'CONFIRMED' || booking.status === 'IN_PROGRESS';
   }
 
   // Generate temporary proxy email for communication
@@ -1616,7 +1576,7 @@ export class ConditionReportService {
     });
 
     if (!booking) {
-      throw new NotFoundException("Booking not found");
+      throw new NotFoundException('Booking not found');
     }
 
     // Get category-specific checklist
@@ -1631,7 +1591,7 @@ export class ConditionReportService {
         reportType: data.reportType,
         reportedBy: data.reportedBy,
         checklist,
-        status: "in_progress",
+        status: 'in_progress',
         dueDate: this.calculateDueDate(booking, data.reportType),
       },
     });
@@ -1654,11 +1614,11 @@ export class ConditionReportService {
       });
 
       if (!report) {
-        throw new NotFoundException("Report not found");
+        throw new NotFoundException('Report not found');
       }
 
-      if (report.status !== "in_progress") {
-        throw new BadRequestException("Report is not in progress");
+      if (report.status !== 'in_progress') {
+        throw new BadRequestException('Report is not in progress');
       }
 
       // Update checklist items
@@ -1679,13 +1639,13 @@ export class ConditionReportService {
       // Check if all required items are complete
       const allComplete = updatedChecklist
         .filter((item) => item.required)
-        .every((item) => item.status !== "pending");
+        .every((item) => item.status !== 'pending');
 
       return await tx.conditionReport.update({
         where: { id: reportId },
         data: {
           checklist: updatedChecklist,
-          status: allComplete ? "submitted" : "in_progress",
+          status: allComplete ? 'submitted' : 'in_progress',
           submittedAt: allComplete ? new Date() : null,
         },
       });
@@ -1703,7 +1663,7 @@ export class ConditionReportService {
     });
 
     if (!report) {
-      throw new NotFoundException("Report not found");
+      throw new NotFoundException('Report not found');
     }
 
     // Upload to storage
@@ -1755,18 +1715,18 @@ export class ConditionReportService {
       });
 
       if (!report) {
-        throw new NotFoundException("Report not found");
+        throw new NotFoundException('Report not found');
       }
 
-      if (report.status !== "submitted") {
-        throw new BadRequestException("Report must be submitted first");
+      if (report.status !== 'submitted') {
+        throw new BadRequestException('Report must be submitted first');
       }
 
       // Update report
       const updated = await tx.conditionReport.update({
         where: { id: reportId },
         data: {
-          status: "confirmed",
+          status: 'confirmed',
           confirmedBy,
           confirmedAt: new Date(),
           confirmationNotes: notes,
@@ -1794,14 +1754,14 @@ export class ConditionReportService {
       });
 
       if (!report) {
-        throw new NotFoundException("Report not found");
+        throw new NotFoundException('Report not found');
       }
 
       // Update report status
       const updated = await tx.conditionReport.update({
         where: { id: reportId },
         data: {
-          status: "disputed",
+          status: 'disputed',
           disputedBy,
           disputedAt: new Date(),
           disputeReason: reason,
@@ -1814,20 +1774,20 @@ export class ConditionReportService {
         data: {
           bookingId: report.bookingId,
           initiatedBy: disputedBy,
-          type: "condition_dispute",
+          type: 'condition_dispute',
           reason,
           evidence: {
             conditionReportId: reportId,
             additionalEvidence: evidence,
           },
-          status: "open",
+          status: 'open',
         },
       });
 
       // Notify admin team
       await this.notificationService.send({
-        channel: "admin",
-        type: "condition_report_disputed",
+        channel: 'admin',
+        type: 'condition_report_disputed',
         data: {
           reportId,
           bookingId: report.bookingId,
@@ -1842,97 +1802,97 @@ export class ConditionReportService {
   // Get category-specific checklist
   private async getChecklistForCategory(
     categorySlug: string,
-    reportType: "check_in" | "check_out",
+    reportType: 'check_in' | 'check_out',
   ): Promise<ChecklistItem[]> {
     const checklists = {
       vehicles: {
         check_in: [
           {
-            id: "exterior",
-            label: "Exterior condition",
-            description: "Check for scratches, dents, damage",
+            id: 'exterior',
+            label: 'Exterior condition',
+            description: 'Check for scratches, dents, damage',
             required: true,
-            type: "photo_required",
-            areas: ["front", "back", "left_side", "right_side", "top"],
+            type: 'photo_required',
+            areas: ['front', 'back', 'left_side', 'right_side', 'top'],
           },
           {
-            id: "interior",
-            label: "Interior condition",
-            description: "Check seats, dashboard, cleanliness",
+            id: 'interior',
+            label: 'Interior condition',
+            description: 'Check seats, dashboard, cleanliness',
             required: true,
-            type: "photo_required",
-            areas: ["front_seats", "back_seats", "dashboard", "trunk"],
+            type: 'photo_required',
+            areas: ['front_seats', 'back_seats', 'dashboard', 'trunk'],
           },
           {
-            id: "fuel_level",
-            label: "Fuel level",
-            description: "Document current fuel level",
+            id: 'fuel_level',
+            label: 'Fuel level',
+            description: 'Document current fuel level',
             required: true,
-            type: "photo_required",
+            type: 'photo_required',
           },
           {
-            id: "mileage",
-            label: "Odometer reading",
-            description: "Document current mileage",
+            id: 'mileage',
+            label: 'Odometer reading',
+            description: 'Document current mileage',
             required: true,
-            type: "photo_required",
+            type: 'photo_required',
           },
           {
-            id: "accessories",
-            label: "Accessories present",
-            description: "Check all included items are present",
+            id: 'accessories',
+            label: 'Accessories present',
+            description: 'Check all included items are present',
             required: true,
-            type: "checklist",
-            items: ["spare_tire", "jack", "manual", "keys", "registration"],
+            type: 'checklist',
+            items: ['spare_tire', 'jack', 'manual', 'keys', 'registration'],
           },
         ],
         check_out: [
           // Similar items plus:
           {
-            id: "return_fuel",
-            label: "Fuel level at return",
-            description: "Verify fuel policy compliance",
+            id: 'return_fuel',
+            label: 'Fuel level at return',
+            description: 'Verify fuel policy compliance',
             required: true,
-            type: "photo_required",
+            type: 'photo_required',
           },
           {
-            id: "return_mileage",
-            label: "Odometer at return",
-            description: "Verify mileage limit compliance",
+            id: 'return_mileage',
+            label: 'Odometer at return',
+            description: 'Verify mileage limit compliance',
             required: true,
-            type: "photo_required",
+            type: 'photo_required',
           },
           {
-            id: "cleanliness",
-            label: "Vehicle cleanliness",
-            description: "Interior and exterior cleaning check",
+            id: 'cleanliness',
+            label: 'Vehicle cleanliness',
+            description: 'Interior and exterior cleaning check',
             required: true,
-            type: "rating",
+            type: 'rating',
           },
         ],
       },
       instruments: {
         check_in: [
           {
-            id: "physical_condition",
-            label: "Physical condition",
-            description: "Check for scratches, dents, cracks",
+            id: 'physical_condition',
+            label: 'Physical condition',
+            description: 'Check for scratches, dents, cracks',
             required: true,
-            type: "photo_required",
+            type: 'photo_required',
           },
           {
-            id: "functionality",
-            label: "Functionality test",
-            description: "Test all keys, strings, valves, etc.",
+            id: 'functionality',
+            label: 'Functionality test',
+            description: 'Test all keys, strings, valves, etc.',
             required: true,
-            type: "checklist",
+            type: 'checklist',
           },
           {
-            id: "accessories",
-            label: "Included accessories",
-            description: "Verify all accessories present",
+            id: 'accessories',
+            label: 'Included accessories',
+            description: 'Verify all accessories present',
             required: true,
-            type: "checklist",
+            type: 'checklist',
           },
         ],
         check_out: [], // Similar structure
@@ -1940,25 +1900,25 @@ export class ConditionReportService {
       spaces: {
         check_in: [
           {
-            id: "overall_condition",
-            label: "Overall space condition",
-            description: "General cleanliness and order",
+            id: 'overall_condition',
+            label: 'Overall space condition',
+            description: 'General cleanliness and order',
             required: true,
-            type: "photo_required",
+            type: 'photo_required',
           },
           {
-            id: "furniture",
-            label: "Furniture condition",
-            description: "Check all furniture items",
+            id: 'furniture',
+            label: 'Furniture condition',
+            description: 'Check all furniture items',
             required: true,
-            type: "checklist",
+            type: 'checklist',
           },
           {
-            id: "appliances",
-            label: "Appliances working",
-            description: "Test all provided appliances",
+            id: 'appliances',
+            label: 'Appliances working',
+            description: 'Test all provided appliances',
             required: true,
-            type: "checklist",
+            type: 'checklist',
           },
         ],
         check_out: [],
@@ -1969,11 +1929,8 @@ export class ConditionReportService {
     return checklists[categorySlug]?.[reportType] || [];
   }
 
-  private calculateDueDate(
-    booking: Booking,
-    reportType: "check_in" | "check_out",
-  ): Date {
-    if (reportType === "check_in") {
+  private calculateDueDate(booking: Booking, reportType: 'check_in' | 'check_out'): Date {
+    if (reportType === 'check_in') {
       // Due at start date
       return booking.startDate;
     } else {
@@ -1982,32 +1939,21 @@ export class ConditionReportService {
     }
   }
 
-  private async checkBookingTransition(
-    booking: Booking,
-    report: ConditionReport,
-  ): Promise<void> {
+  private async checkBookingTransition(booking: Booking, report: ConditionReport): Promise<void> {
     // If check-in report confirmed, transition to IN_PROGRESS
-    if (report.reportType === "check_in" && report.status === "confirmed") {
-      await this.bookingStateMachine.transition(
-        booking.id,
-        BookingStatus.IN_PROGRESS,
-        {
-          triggeredBy: "system",
-          reason: "Check-in report confirmed",
-        },
-      );
+    if (report.reportType === 'check_in' && report.status === 'confirmed') {
+      await this.bookingStateMachine.transition(booking.id, BookingStatus.IN_PROGRESS, {
+        triggeredBy: 'system',
+        reason: 'Check-in report confirmed',
+      });
     }
 
     // If check-out report confirmed, transition to COMPLETED
-    if (report.reportType === "check_out" && report.status === "confirmed") {
-      await this.bookingStateMachine.transition(
-        booking.id,
-        BookingStatus.COMPLETED,
-        {
-          triggeredBy: "system",
-          reason: "Check-out report confirmed",
-        },
-      );
+    if (report.reportType === 'check_out' && report.status === 'confirmed') {
+      await this.bookingStateMachine.transition(booking.id, BookingStatus.COMPLETED, {
+        triggeredBy: 'system',
+        reason: 'Check-out report confirmed',
+      });
     }
   }
 }

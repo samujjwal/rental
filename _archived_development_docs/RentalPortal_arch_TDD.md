@@ -208,18 +208,18 @@ WHERE status IN ('requires_confirmation', 'processing');
 ```typescript
 interface CacheLayers {
   // L1: In-memory (Node.js) - 5 minute TTL
-  "listings:detail:{id}": ListingDetail;
-  "users:profile:{id}": UserProfile;
+  'listings:detail:{id}': ListingDetail;
+  'users:profile:{id}': UserProfile;
 
   // L2: Redis Cluster - 1 hour TTL
-  "search:results:{hash}": SearchResults;
-  "availability:{listingId}:{month}": AvailabilityCalendar;
-  "quotes:{hash}": CachedQuote;
+  'search:results:{hash}': SearchResults;
+  'availability:{listingId}:{month}': AvailabilityCalendar;
+  'quotes:{hash}': CachedQuote;
 
   // L3: Redis Persistent - 24 hour TTL
-  "categories:templates": CategoryTemplate[];
-  "policies:cancellation": CancellationPolicy[];
-  "geo:regions": GeoRegionCache;
+  'categories:templates': CategoryTemplate[];
+  'policies:cancellation': CancellationPolicy[];
+  'geo:regions': GeoRegionCache;
 }
 ```
 
@@ -236,7 +236,7 @@ async function updateListing(listingId: string, data: Partial<Listing>) {
   await redis.del(`search:index:${listingId}`);
 
   // 3. Publish event for other services
-  await eventBus.publish("listing.updated", { listingId });
+  await eventBus.publish('listing.updated', { listingId });
 }
 
 // Cache-aside for reads
@@ -261,43 +261,43 @@ async function getListing(id: string): Promise<Listing> {
 // Domain Events
 interface DomainEvents {
   // Identity Events
-  "user.registered": { userId: string; email: string };
-  "user.verified": { userId: string; tier: string };
+  'user.registered': { userId: string; email: string };
+  'user.verified': { userId: string; tier: string };
 
   // Catalog Events
-  "listing.published": { listingId: string; category: string };
-  "listing.updated": { listingId: string; changes: string[] };
+  'listing.published': { listingId: string; category: string };
+  'listing.updated': { listingId: string; changes: string[] };
 
   // Booking Events
-  "booking.created": BookingCreatedEvent;
-  "booking.confirmed": BookingConfirmedEvent;
-  "booking.cancelled": BookingCancelledEvent;
-  "booking.completed": BookingCompletedEvent;
+  'booking.created': BookingCreatedEvent;
+  'booking.confirmed': BookingConfirmedEvent;
+  'booking.cancelled': BookingCancelledEvent;
+  'booking.completed': BookingCompletedEvent;
 
   // Payment Events
-  "payment.succeeded": PaymentSucceededEvent;
-  "payment.failed": PaymentFailedEvent;
-  "deposit.held": DepositHeldEvent;
-  "deposit.released": DepositReleasedEvent;
+  'payment.succeeded': PaymentSucceededEvent;
+  'payment.failed': PaymentFailedEvent;
+  'deposit.held': DepositHeldEvent;
+  'deposit.released': DepositReleasedEvent;
 
   // Fulfillment Events
-  "checkin.completed": CheckinCompletedEvent;
-  "checkout.completed": CheckoutCompletedEvent;
+  'checkin.completed': CheckinCompletedEvent;
+  'checkout.completed': CheckoutCompletedEvent;
 
   // Review Events
-  "review.submitted": ReviewSubmittedEvent;
+  'review.submitted': ReviewSubmittedEvent;
 
   // Dispute Events
-  "dispute.opened": DisputeOpenedEvent;
-  "dispute.resolved": DisputeResolvedEvent;
+  'dispute.opened': DisputeOpenedEvent;
+  'dispute.resolved': DisputeResolvedEvent;
 }
 
 // Integration Events
 interface IntegrationEvents {
-  "email.notification.sent": { template: string; recipient: string };
-  "sms.notification.sent": { phone: string; message: string };
-  "search.index.updated": { entity: string; id: string };
-  "audit.log.created": AuditLogEvent;
+  'email.notification.sent': { template: string; recipient: string };
+  'sms.notification.sent': { phone: string; message: string };
+  'search.index.updated': { entity: string; id: string };
+  'audit.log.created': AuditLogEvent;
 }
 ```
 
@@ -322,15 +322,15 @@ paths:
   /listings:
     get:
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Sort"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
       responses:
-        "200":
+        '200':
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PaginatedListing"
+                $ref: '#/components/schemas/PaginatedListing'
 
   /bookings:
     post:
@@ -339,13 +339,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateBookingRequest"
+              $ref: '#/components/schemas/CreateBookingRequest'
       headers:
         Idempotency-Key:
           schema:
             type: string
       responses:
-        "202":
+        '202':
           description: Booking accepted for processing
           headers:
             Location:
@@ -388,34 +388,34 @@ type Subscription {
 interface AuthStrategy {
   // JWT-based authentication
   jwt: {
-    issuer: "rental-portal-auth";
-    audience: ["api", "admin", "partner"];
-    algorithms: ["RS256"];
+    issuer: 'rental-portal-auth';
+    audience: ['api', 'admin', 'partner'];
+    algorithms: ['RS256'];
     publicKey: string;
   };
 
   // API Keys for partners
   apiKey: {
-    prefix: "rp_";
-    hashAlgorithm: "sha256";
+    prefix: 'rp_';
+    hashAlgorithm: 'sha256';
     rateLimitPerKey: number;
   };
 
   // Webhook signatures
   webhook: {
-    provider: "stripe" | "twilio" | "sendgrid";
+    provider: 'stripe' | 'twilio' | 'sendgrid';
     secret: string;
     tolerance: number; // seconds
   };
 }
 
 interface RBACMatrix {
-  roles: ["renter", "owner", "admin", "support", "finance"];
+  roles: ['renter', 'owner', 'admin', 'support', 'finance'];
   permissions: {
-    "listings:create": ["owner", "admin"];
-    "bookings:cancel": ["renter", "owner", "admin"];
-    "payments:refund": ["finance", "admin"];
-    "disputes:resolve": ["support", "admin"];
+    'listings:create': ['owner', 'admin'];
+    'bookings:cancel': ['renter', 'owner', 'admin'];
+    'payments:refund': ['finance', 'admin'];
+    'disputes:resolve': ['support', 'admin'];
   };
 }
 ```
@@ -426,25 +426,25 @@ interface RBACMatrix {
 // Encryption at rest
 interface EncryptionConfig {
   // PII Fields
-  pii: ["email", "phone", "address", "license_number"];
-  algorithm: "aes-256-gcm";
-  keyRotation: "90 days";
+  pii: ['email', 'phone', 'address', 'license_number'];
+  algorithm: 'aes-256-gcm';
+  keyRotation: '90 days';
 
   // Payment data (PCI compliance)
   pci: {
-    tokenization: "stripe_elements";
-    neverStore: ["card_number", "cvc"];
+    tokenization: 'stripe_elements';
+    neverStore: ['card_number', 'cvc'];
     auditLogging: true;
   };
 }
 
 // Data masking
 function maskSensitiveData(data: any, role: string): any {
-  if (role === "public") {
+  if (role === 'public') {
     return {
       ...data,
-      email: data.email?.replace(/(.).*@(.).*/, "$1***@$2***"),
-      phone: data.phone?.replace(/.(?=.{4})/g, "*"),
+      email: data.email?.replace(/(.).*@(.).*/, '$1***@$2***'),
+      phone: data.phone?.replace(/.(?=.{4})/g, '*'),
     };
   }
   return data;
@@ -491,20 +491,20 @@ interface TraceContext {
 // Correlation IDs across services
 async function processBooking(traceContext: TraceContext) {
   // Propagate trace across async operations
-  const span = tracer.startSpan("process.booking", { traceContext });
+  const span = tracer.startSpan('process.booking', { traceContext });
 
   try {
     // All downstream calls include trace headers
     await paymentService.createPayment(payload, {
       headers: {
-        "x-trace-id": traceContext.traceId,
-        "x-span-id": span.id,
+        'x-trace-id': traceContext.traceId,
+        'x-span-id': span.id,
       },
     });
 
-    span.setTag("booking.status", "processed");
+    span.setTag('booking.status', 'processed');
   } catch (error) {
-    span.setTag("error", true);
+    span.setTag('error', true);
     span.log({ error: error.message });
     throw error;
   } finally {
@@ -519,11 +519,11 @@ async function processBooking(traceContext: TraceContext) {
 
 ```yaml
 # docker-compose.yml (development)
-version: "3.8"
+version: '3.8'
 services:
   api-gateway:
     image: nginx:alpine
-    ports: ["8080:80"]
+    ports: ['8080:80']
     depends_on: [identity-service, catalog-service]
 
   identity-service:
@@ -609,11 +609,7 @@ interface BookingStateMachine {
     toState: BookingStatus,
     context: TransitionContext,
   ): Promise<Booking>;
-  canTransition(
-    from: BookingStatus,
-    to: BookingStatus,
-    context: TransitionContext,
-  ): boolean;
+  canTransition(from: BookingStatus, to: BookingStatus, context: TransitionContext): boolean;
   getAvailableTransitions(booking: Booking): BookingStatus[];
 
   // Event handlers
@@ -622,7 +618,7 @@ interface BookingStateMachine {
 }
 
 interface TransitionContext {
-  triggeredBy: "system" | "renter" | "owner" | "admin";
+  triggeredBy: 'system' | 'renter' | 'owner' | 'admin';
   reason?: string;
   metadata?: Record<string, any>;
   timestamp: DateTime;
@@ -631,25 +627,22 @@ interface TransitionContext {
 // State definitions
 const bookingStates: Record<BookingStatus, StateDefinition> = {
   DRAFT: {
-    allowedTransitions: ["PENDING_OWNER_APPROVAL", "CANCELLED"],
-    invariants: [
-      "paymentIntentId must be null",
-      "agreementSnapshot must be null",
-    ],
+    allowedTransitions: ['PENDING_OWNER_APPROVAL', 'CANCELLED'],
+    invariants: ['paymentIntentId must be null', 'agreementSnapshot must be null'],
     onEnter: async (booking) => {
-      await auditLog.log("booking.draft.created", booking);
+      await auditLog.log('booking.draft.created', booking);
     },
   },
 
   CONFIRMED: {
-    allowedTransitions: ["IN_PROGRESS", "CANCELLED"],
+    allowedTransitions: ['IN_PROGRESS', 'CANCELLED'],
     invariants: [
-      "paymentIntent must be succeeded",
-      "deposit must be held or captured",
-      "agreementSnapshot must exist",
+      'paymentIntent must be succeeded',
+      'deposit must be held or captured',
+      'agreementSnapshot must exist',
     ],
     onEnter: async (booking) => {
-      await eventBus.publish("booking.confirmed", booking);
+      await eventBus.publish('booking.confirmed', booking);
       await notificationService.sendConfirmation(booking);
     },
   },
@@ -731,10 +724,8 @@ class StateTransitionError extends ApplicationError {
     public reason: string,
     public invariantChecks: InvariantCheck[],
   ) {
-    super(
-      `Cannot transition from ${currentState} to ${targetState}: ${reason}`,
-    );
-    this.code = "STATE_TRANSITION_ERROR";
+    super(`Cannot transition from ${currentState} to ${targetState}: ${reason}`);
+    this.code = 'STATE_TRANSITION_ERROR';
     this.statusCode = 409; // Conflict
   }
 }
@@ -747,14 +738,14 @@ interface InvariantCheck {
 
 // Usage
 try {
-  await bookingStateMachine.transition(booking, "CONFIRMED", {
-    triggeredBy: "system",
-    metadata: { paymentIntentId: "pi_123" },
+  await bookingStateMachine.transition(booking, 'CONFIRMED', {
+    triggeredBy: 'system',
+    metadata: { paymentIntentId: 'pi_123' },
   });
 } catch (error) {
   if (error instanceof StateTransitionError) {
     // Log detailed invariant failures
-    logger.error("State transition failed", {
+    logger.error('State transition failed', {
       bookingId: booking.id,
       currentState: error.currentState,
       targetState: error.targetState,
@@ -762,8 +753,8 @@ try {
     });
 
     // Return structured error to client
-    throw new APIError("Cannot confirm booking", 409, {
-      code: "INVARIANT_VIOLATION",
+    throw new APIError('Cannot confirm booking', 409, {
+      code: 'INVARIANT_VIOLATION',
       details: error.invariantChecks,
     });
   }
@@ -797,7 +788,7 @@ interface LedgerEntry {
 
   // Audit
   createdAt: DateTime;
-  createdBy: "system" | UUID; // user ID or 'system'
+  createdBy: 'system' | UUID; // user ID or 'system'
 
   // Reconciliation
   reconciled: boolean;
@@ -805,47 +796,41 @@ interface LedgerEntry {
 }
 
 type AccountCode =
-  | "assets.cash" // Money we hold
-  | "assets.deposits.held" // Security deposits
-  | "liabilities.owners" // Money owed to owners
-  | "revenue.platform_fee" // Our earnings
-  | "revenue.late_fees" // Additional revenue
-  | "expenses.refunds" // Money returned
-  | "expenses.chargebacks"; // Disputed charges
+  | 'assets.cash' // Money we hold
+  | 'assets.deposits.held' // Security deposits
+  | 'liabilities.owners' // Money owed to owners
+  | 'revenue.platform_fee' // Our earnings
+  | 'revenue.late_fees' // Additional revenue
+  | 'expenses.refunds' // Money returned
+  | 'expenses.chargebacks'; // Disputed charges
 
 // Ledger transaction builder
 class LedgerTransaction {
   private entries: LedgerEntry[] = [];
 
   // Booking confirmation: renter pays $100 + $20 platform fee
-  static createBookingPayment(
-    booking: Booking,
-    payment: PaymentIntent,
-  ): LedgerTransaction {
+  static createBookingPayment(booking: Booking, payment: PaymentIntent): LedgerTransaction {
     const tx = new LedgerTransaction();
 
     // Debit: cash increases
-    tx.debit("assets.cash", 120, "Payment received for booking");
+    tx.debit('assets.cash', 120, 'Payment received for booking');
 
     // Credit: split between owner revenue and our fee
-    tx.credit("liabilities.owners", 100, "Amount due to owner");
-    tx.credit("revenue.platform_fee", 20, "Platform service fee");
+    tx.credit('liabilities.owners', 100, 'Amount due to owner');
+    tx.credit('revenue.platform_fee', 20, 'Platform service fee');
 
     return tx;
   }
 
   // Deposit hold: $500 security deposit
-  static createDepositHold(
-    booking: Booking,
-    deposit: DepositHold,
-  ): LedgerTransaction {
+  static createDepositHold(booking: Booking, deposit: DepositHold): LedgerTransaction {
     const tx = new LedgerTransaction();
 
     // Debit: deposits held (asset)
-    tx.debit("assets.deposits.held", 500, "Security deposit held");
+    tx.debit('assets.deposits.held', 500, 'Security deposit held');
 
     // Credit: deposit liability
-    tx.credit("liabilities.deposits", 500, "Security deposit liability");
+    tx.credit('liabilities.deposits', 500, 'Security deposit liability');
 
     return tx;
   }
@@ -853,15 +838,15 @@ class LedgerTransaction {
   async commit(): Promise<void> {
     // Validate: sum of debits must equal sum of credits
     const debitTotal = this.entries
-      .filter((e) => e.side === "debit")
+      .filter((e) => e.side === 'debit')
       .reduce((sum, e) => sum + e.amount, 0);
 
     const creditTotal = this.entries
-      .filter((e) => e.side === "credit")
+      .filter((e) => e.side === 'credit')
       .reduce((sum, e) => sum + e.amount, 0);
 
     if (Math.abs(debitTotal - creditTotal) > 0.01) {
-      throw new LedgerError("Transaction not balanced");
+      throw new LedgerError('Transaction not balanced');
     }
 
     // Store all entries in a single database transaction
@@ -872,7 +857,7 @@ class LedgerTransaction {
     });
 
     // Emit event for reconciliation
-    await eventBus.publish("ledger.transaction.committed", {
+    await eventBus.publish('ledger.transaction.committed', {
       transactionId: this.id,
       bookingId: this.bookingId,
       entryCount: this.entries.length,
@@ -1034,10 +1019,7 @@ class CategoryTemplateRegistry {
     this.indexers.set(template.name, indexer);
 
     // Register with search service
-    await searchService.registerSchema(
-      template.name,
-      this.getSearchSchema(template),
-    );
+    await searchService.registerSchema(template.name, this.getSearchSchema(template));
   }
 
   async validate(listing: Listing): Promise<ValidationResult> {
@@ -1085,10 +1067,7 @@ class CategoryTemplateRegistry {
       transform: (listing: Listing) => ({
         id: listing.id,
         category: listing.category,
-        attributes: this.flattenAttributes(
-          listing.attributes,
-          searchableFields,
-        ),
+        attributes: this.flattenAttributes(listing.attributes, searchableFields),
         location: listing.location,
         pricing: listing.pricing,
         availability: listing.availability,
@@ -1264,7 +1243,7 @@ class SearchService {
 
     // Execute search
     const result = await this.elasticsearch.search({
-      index: "listings",
+      index: 'listings',
       body: esQuery,
     });
 
@@ -1298,21 +1277,21 @@ class SearchService {
     if (query.dateRange) {
       filter.push({
         nested: {
-          path: "availability",
+          path: 'availability',
           query: {
             bool: {
               must: [
                 {
                   range: {
-                    "availability.start_date": { lte: query.dateRange.end },
+                    'availability.start_date': { lte: query.dateRange.end },
                   },
                 },
                 {
                   range: {
-                    "availability.end_date": { gte: query.dateRange.start },
+                    'availability.end_date': { gte: query.dateRange.start },
                   },
                 },
-                { term: { "availability.available": true } },
+                { term: { 'availability.available': true } },
               ],
             },
           },
@@ -1324,7 +1303,7 @@ class SearchService {
     if (query.location) {
       filter.push({
         geo_distance: {
-          distance: query.radius || "10km",
+          distance: query.radius || '10km',
           location: {
             lat: query.location.lat,
             lon: query.location.lng,
@@ -1339,9 +1318,7 @@ class SearchService {
       const filterableFields = template?.uiConfig?.searchFilters || [];
 
       for (const filterItem of query.filters) {
-        const fieldConfig = filterableFields.find(
-          (f) => f.field === filterItem.field,
-        );
+        const fieldConfig = filterableFields.find((f) => f.field === filterItem.field);
         if (fieldConfig) {
           filter.push(this.buildFieldFilter(filterItem, fieldConfig));
         }
@@ -1353,8 +1330,8 @@ class SearchService {
       must.push({
         multi_match: {
           query: query.q,
-          fields: ["title^3", "description^2", "attributes.*^1"],
-          fuzziness: "AUTO",
+          fields: ['title^3', 'description^2', 'attributes.*^1'],
+          fuzziness: 'AUTO',
         },
       });
     }
@@ -1376,7 +1353,7 @@ class SearchService {
 
   private buildFieldFilter(filter: SearchFilter, config: FilterConfig): any {
     switch (config.type) {
-      case "range":
+      case 'range':
         return {
           range: {
             [`attributes.${filter.field}`]: {
@@ -1386,14 +1363,14 @@ class SearchService {
           },
         };
 
-      case "multi_select":
+      case 'multi_select':
         return {
           terms: {
             [`attributes.${filter.field}.keyword`]: filter.value,
           },
         };
 
-      case "boolean":
+      case 'boolean':
         return {
           term: {
             [`attributes.${filter.field}`]: filter.value,
@@ -1409,22 +1386,20 @@ class SearchService {
     }
   }
 
-  private buildSort(sortBy: string, sortOrder: "asc" | "desc"): any[] {
+  private buildSort(sortBy: string, sortOrder: 'asc' | 'desc'): any[] {
     switch (sortBy) {
-      case "price":
-        return [{ "pricing.base_amount": sortOrder }];
+      case 'price':
+        return [{ 'pricing.base_amount': sortOrder }];
 
-      case "distance":
-        return [
-          { _geo_distance: { location: "user_location", order: sortOrder } },
-        ];
+      case 'distance':
+        return [{ _geo_distance: { location: 'user_location', order: sortOrder } }];
 
-      case "rating":
-        return [{ "trust_metrics.avg_rating": sortOrder }];
+      case 'rating':
+        return [{ 'trust_metrics.avg_rating': sortOrder }];
 
-      case "relevance":
+      case 'relevance':
       default:
-        return [{ _score: "desc" }];
+        return [{ _score: 'desc' }];
     }
   }
 }
@@ -1449,24 +1424,20 @@ class IndexingService {
 
     // Index in Elasticsearch
     await this.elasticsearch.index({
-      index: "listings",
+      index: 'listings',
       id: listing.id,
       body: document,
-      refresh: "wait_for", // Wait for index to be searchable
+      refresh: 'wait_for', // Wait for index to be searchable
     });
 
     // Update availability cache
     await this.updateAvailabilityCache(listing);
   }
 
-  async updateAvailability(
-    listingId: string,
-    date: Date,
-    available: boolean,
-  ): Promise<void> {
+  async updateAvailability(listingId: string, date: Date, available: boolean): Promise<void> {
     // Update availability in listing document
     await this.elasticsearch.update({
-      index: "listings",
+      index: 'listings',
       id: listingId,
       body: {
         script: {
@@ -1495,7 +1466,7 @@ class IndexingService {
             ]);
           `,
           params: {
-            date: date.toISOString().split("T")[0],
+            date: date.toISOString().split('T')[0],
             available: available,
           },
         },
@@ -1626,29 +1597,25 @@ Structured dispute management with evidence collection, SLA tracking, and resolu
 class DisputeStateMachine {
   private readonly states: Record<DisputeStatus, StateDefinition> = {
     DRAFT: {
-      allowedTransitions: ["OPEN"],
-      invariants: ["evidenceBundle must not be empty"],
+      allowedTransitions: ['OPEN'],
+      invariants: ['evidenceBundle must not be empty'],
       onEnter: async (dispute) => {
         await this.validateDisputeEligibility(dispute);
       },
     },
 
     OPEN: {
-      allowedTransitions: ["UNDER_REVIEW", "RESOLVED", "ESCALATED"],
-      invariants: ["initiator must have responded"],
+      allowedTransitions: ['UNDER_REVIEW', 'RESOLVED', 'ESCALATED'],
+      invariants: ['initiator must have responded'],
       onEnter: async (dispute) => {
         await this.startSLATimers(dispute);
-        await this.notifyParties(dispute, "dispute.opened");
+        await this.notifyParties(dispute, 'dispute.opened');
       },
     },
 
     UNDER_REVIEW: {
-      allowedTransitions: [
-        "RESOLVED",
-        "ESCALATED",
-        "ADDITIONAL_EVIDENCE_REQUIRED",
-      ],
-      invariants: ["assignedAdmin must exist"],
+      allowedTransitions: ['RESOLVED', 'ESCALATED', 'ADDITIONAL_EVIDENCE_REQUIRED'],
+      invariants: ['assignedAdmin must exist'],
       onEnter: async (dispute) => {
         await this.assignToAdmin(dispute);
         await this.requestEvidenceIfNeeded(dispute);
@@ -1656,8 +1623,8 @@ class DisputeStateMachine {
     },
 
     ADDITIONAL_EVIDENCE_REQUIRED: {
-      allowedTransitions: ["UNDER_REVIEW", "ESCALATED"],
-      invariants: ["evidenceRequest must exist"],
+      allowedTransitions: ['UNDER_REVIEW', 'ESCALATED'],
+      invariants: ['evidenceRequest must exist'],
       onEnter: async (dispute) => {
         await this.sendEvidenceRequest(dispute);
         await this.startResponseTimer(dispute);
@@ -1665,8 +1632,8 @@ class DisputeStateMachine {
     },
 
     ESCALATED: {
-      allowedTransitions: ["RESOLVED", "EXTERNAL_ARBITRATION"],
-      invariants: ["escalationReason must be provided"],
+      allowedTransitions: ['RESOLVED', 'EXTERNAL_ARBITRATION'],
+      invariants: ['escalationReason must be provided'],
       onEnter: async (dispute) => {
         await this.escalateToSeniorAdmin(dispute);
         await this.updateSLA(dispute, { additionalDays: 3 });
@@ -1675,17 +1642,17 @@ class DisputeStateMachine {
 
     RESOLVED: {
       allowedTransitions: [],
-      invariants: ["outcome must exist", "resolutionSummary must not be empty"],
+      invariants: ['outcome must exist', 'resolutionSummary must not be empty'],
       onEnter: async (dispute) => {
         await this.executeResolution(dispute);
         await this.finalizeDispute(dispute);
-        await this.notifyParties(dispute, "dispute.resolved");
+        await this.notifyParties(dispute, 'dispute.resolved');
       },
     },
 
     EXTERNAL_ARBITRATION: {
-      allowedTransitions: ["RESOLVED"],
-      invariants: ["externalCaseId must exist"],
+      allowedTransitions: ['RESOLVED'],
+      invariants: ['externalCaseId must exist'],
       onEnter: async (dispute) => {
         await this.submitToExternalArbitration(dispute);
       },
@@ -1711,11 +1678,11 @@ class DisputeStateMachine {
       initiatorId,
       reason,
       category: this.mapReasonToCategory(reason),
-      status: "DRAFT",
+      status: 'DRAFT',
       evidenceBundle,
       timeline: [
         {
-          event: "created",
+          event: 'created',
           timestamp: new Date(),
           actor: initiatorId,
           metadata: { reason },
@@ -1729,8 +1696,8 @@ class DisputeStateMachine {
     await this.validateDisputeRules(dispute);
 
     // Transition to OPEN
-    await this.transition(dispute, "OPEN", {
-      triggeredBy: "system",
+    await this.transition(dispute, 'OPEN', {
+      triggeredBy: 'system',
       metadata: { autoOpen: true },
     });
 
@@ -1741,19 +1708,19 @@ class DisputeStateMachine {
     const { outcome } = dispute;
 
     switch (outcome?.decision) {
-      case "refund_renter":
+      case 'refund_renter':
         await this.refundRenter(dispute, outcome.amount);
         break;
 
-      case "charge_renter":
+      case 'charge_renter':
         await this.chargeRenter(dispute, outcome.amount);
         break;
 
-      case "split":
+      case 'split':
         await this.splitPayment(dispute, outcome.amount);
         break;
 
-      case "dismissed":
+      case 'dismissed':
         // No financial action, just close dispute
         break;
     }
@@ -1783,15 +1750,10 @@ class EvidenceManager {
     ]);
 
     // Filter to relevant time period
-    const relevantPeriod = this.getRelevantPeriod(
-      booking,
-      additionalEvidence.reason,
-    );
+    const relevantPeriod = this.getRelevantPeriod(booking, additionalEvidence.reason);
 
     const filteredMessages = messages.filter(
-      (msg) =>
-        msg.createdAt >= relevantPeriod.start &&
-        msg.createdAt <= relevantPeriod.end,
+      (msg) => msg.createdAt >= relevantPeriod.start && msg.createdAt <= relevantPeriod.end,
     );
 
     const filteredReports = conditionReports.filter(
@@ -1855,21 +1817,21 @@ class EvidenceManager {
   private validateEvidenceFile(file: UploadedFile): void {
     const maxSize = 10 * 1024 * 1024; // 10MB
     const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/gif",
-      "video/mp4",
-      "video/quicktime",
-      "application/pdf",
-      "text/plain",
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'video/mp4',
+      'video/quicktime',
+      'application/pdf',
+      'text/plain',
     ];
 
     if (file.size > maxSize) {
-      throw new ValidationError("File too large");
+      throw new ValidationError('File too large');
     }
 
     if (!allowedTypes.includes(file.mimetype)) {
-      throw new ValidationError("Invalid file type");
+      throw new ValidationError('Invalid file type');
     }
   }
 }

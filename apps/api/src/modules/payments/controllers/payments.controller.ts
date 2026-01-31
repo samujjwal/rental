@@ -95,7 +95,7 @@ export class PaymentsController {
       bookingId,
       toNumber(booking.totalPrice),
       booking.currency,
-      booking.renter.stripeCustomerId,
+      booking.renter.stripeCustomerId || undefined,
     );
 
     return result;

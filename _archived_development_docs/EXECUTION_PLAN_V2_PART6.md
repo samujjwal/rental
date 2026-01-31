@@ -835,7 +835,7 @@ CMD ["node", "dist/main.js"]
 
 ```yaml
 # docker-compose.yml
-version: "3.8"
+version: '3.8'
 
 services:
   postgres:
@@ -845,11 +845,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -857,12 +857,12 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -872,14 +872,13 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - 'ES_JAVA_OPTS=-Xms512m -Xmx512m'
     ports:
-      - "9200:9200"
+      - '9200:9200'
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
-      test:
-        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      test: ['CMD-SHELL', 'curl -f http://localhost:9200/_cluster/health || exit 1']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -891,7 +890,7 @@ services:
       target: builder
     command: npm run start:dev
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rentalportal_dev
       REDIS_URL: redis://redis:6379
@@ -916,7 +915,7 @@ services:
       dockerfile: Dockerfile.dev
     command: npm run dev
     ports:
-      - "5173:5173"
+      - '5173:5173'
     environment:
       VITE_API_URL: http://localhost:3000
     volumes:
@@ -981,8 +980,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: '20'
+          cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
@@ -1127,8 +1126,8 @@ jobs:
 
 ```typescript
 // shared/monitoring/metrics.service.ts
-import { Injectable } from "@nestjs/common";
-import { Counter, Histogram, Gauge, Registry } from "prom-client";
+import { Injectable } from '@nestjs/common';
+import { Counter, Histogram, Gauge, Registry } from 'prom-client';
 
 @Injectable()
 export class MetricsService {
@@ -1155,94 +1154,87 @@ export class MetricsService {
 
     // HTTP metrics
     this.httpRequestsTotal = new Counter({
-      name: "http_requests_total",
-      help: "Total number of HTTP requests",
-      labelNames: ["method", "route", "status_code"],
+      name: 'http_requests_total',
+      help: 'Total number of HTTP requests',
+      labelNames: ['method', 'route', 'status_code'],
       registers: [this.registry],
     });
 
     this.httpRequestDuration = new Histogram({
-      name: "http_request_duration_seconds",
-      help: "HTTP request duration in seconds",
-      labelNames: ["method", "route", "status_code"],
+      name: 'http_request_duration_seconds',
+      help: 'HTTP request duration in seconds',
+      labelNames: ['method', 'route', 'status_code'],
       buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10],
       registers: [this.registry],
     });
 
     // Booking metrics
     this.bookingsCreatedTotal = new Counter({
-      name: "bookings_created_total",
-      help: "Total number of bookings created",
-      labelNames: ["category", "type"],
+      name: 'bookings_created_total',
+      help: 'Total number of bookings created',
+      labelNames: ['category', 'type'],
       registers: [this.registry],
     });
 
     this.activeBookingsGauge = new Gauge({
-      name: "active_bookings",
-      help: "Number of active bookings",
-      labelNames: ["status"],
+      name: 'active_bookings',
+      help: 'Number of active bookings',
+      labelNames: ['status'],
       registers: [this.registry],
     });
 
     // Payment metrics
     this.paymentsProcessedTotal = new Counter({
-      name: "payments_processed_total",
-      help: "Total number of successful payments",
-      labelNames: ["payment_method"],
+      name: 'payments_processed_total',
+      help: 'Total number of successful payments',
+      labelNames: ['payment_method'],
       registers: [this.registry],
     });
 
     this.paymentsFailedTotal = new Counter({
-      name: "payments_failed_total",
-      help: "Total number of failed payments",
-      labelNames: ["reason"],
+      name: 'payments_failed_total',
+      help: 'Total number of failed payments',
+      labelNames: ['reason'],
       registers: [this.registry],
     });
 
     this.pendingPayoutsGauge = new Gauge({
-      name: "pending_payouts_amount",
-      help: "Total amount of pending payouts in cents",
+      name: 'pending_payouts_amount',
+      help: 'Total amount of pending payouts in cents',
       registers: [this.registry],
     });
 
     // Database metrics
     this.databaseQueryDuration = new Histogram({
-      name: "database_query_duration_seconds",
-      help: "Database query duration in seconds",
-      labelNames: ["operation", "model"],
+      name: 'database_query_duration_seconds',
+      help: 'Database query duration in seconds',
+      labelNames: ['operation', 'model'],
       buckets: [0.01, 0.05, 0.1, 0.3, 0.5, 1],
       registers: [this.registry],
     });
 
     // Cache metrics
     this.cacheOperationDuration = new Histogram({
-      name: "cache_operation_duration_seconds",
-      help: "Cache operation duration in seconds",
-      labelNames: ["operation"],
+      name: 'cache_operation_duration_seconds',
+      help: 'Cache operation duration in seconds',
+      labelNames: ['operation'],
       buckets: [0.001, 0.005, 0.01, 0.05, 0.1],
       registers: [this.registry],
     });
 
     this.cacheHitRateGauge = new Gauge({
-      name: "cache_hit_rate",
-      help: "Cache hit rate percentage",
+      name: 'cache_hit_rate',
+      help: 'Cache hit rate percentage',
       registers: [this.registry],
     });
   }
 
-  recordHttpRequest(
-    method: string,
-    route: string,
-    statusCode: number,
-    duration: number,
-  ) {
+  recordHttpRequest(method: string, route: string, statusCode: number, duration: number) {
     this.httpRequestsTotal.labels(method, route, statusCode.toString()).inc();
-    this.httpRequestDuration
-      .labels(method, route, statusCode.toString())
-      .observe(duration);
+    this.httpRequestDuration.labels(method, route, statusCode.toString()).observe(duration);
   }
 
-  recordBookingCreated(category: string, type: "INSTANT" | "REQUEST") {
+  recordBookingCreated(category: string, type: 'INSTANT' | 'REQUEST') {
     this.bookingsCreatedTotal.labels(category, type).inc();
   }
 
@@ -1266,7 +1258,7 @@ export class MetricsService {
     this.databaseQueryDuration.labels(operation, model).observe(duration);
   }
 
-  recordCacheOperation(operation: "get" | "set" | "delete", duration: number) {
+  recordCacheOperation(operation: 'get' | 'set' | 'delete', duration: number) {
     this.cacheOperationDuration.labels(operation).observe(duration);
   }
 
@@ -1284,17 +1276,17 @@ export class MetricsService {
 
 ```typescript
 // shared/monitoring/metrics.controller.ts
-import { Controller, Get, Header } from "@nestjs/common";
-import { MetricsService } from "./metrics.service";
-import { Public } from "@/auth/decorators/public.decorator";
+import { Controller, Get, Header } from '@nestjs/common';
+import { MetricsService } from './metrics.service';
+import { Public } from '@/auth/decorators/public.decorator';
 
-@Controller("metrics")
+@Controller('metrics')
 export class MetricsController {
   constructor(private readonly metricsService: MetricsService) {}
 
   @Get()
   @Public()
-  @Header("Content-Type", "text/plain")
+  @Header('Content-Type', 'text/plain')
   async getMetrics() {
     return this.metricsService.getMetrics();
   }
@@ -1385,8 +1377,8 @@ export class MetricsController {
 
 ```typescript
 // main.ts
-import * as Sentry from "@sentry/node";
-import { ProfilingIntegration } from "@sentry/profiling-node";
+import * as Sentry from '@sentry/node';
+import { ProfilingIntegration } from '@sentry/profiling-node';
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -1397,7 +1389,7 @@ Sentry.init({
     new Sentry.Integrations.Express({ app }),
     new Sentry.Integrations.Prisma({ client: prismaClient }),
   ],
-  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
   profilesSampleRate: 0.1,
   beforeSend(event, hint) {
     // Filter out sensitive data
@@ -1413,8 +1405,8 @@ Sentry.init({
 });
 
 // Sentry error filter
-import { ArgumentsHost, Catch, HttpException } from "@nestjs/common";
-import { BaseExceptionFilter } from "@nestjs/core";
+import { ArgumentsHost, Catch, HttpException } from '@nestjs/common';
+import { BaseExceptionFilter } from '@nestjs/core';
 
 @Catch()
 export class SentryFilter extends BaseExceptionFilter {
@@ -1541,9 +1533,9 @@ resource "aws_sns_topic_subscription" "alerts_slack" {
 
 ```typescript
 // shared/guards/throttle.guard.ts
-import { Injectable, ExecutionContext } from "@nestjs/common";
-import { ThrottlerGuard, ThrottlerException } from "@nestjs/throttler";
-import { CacheService } from "../cache/cache.service";
+import { Injectable, ExecutionContext } from '@nestjs/common';
+import { ThrottlerGuard, ThrottlerException } from '@nestjs/throttler';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class CustomThrottleGuard extends ThrottlerGuard {
@@ -1551,13 +1543,9 @@ export class CustomThrottleGuard extends ThrottlerGuard {
     super();
   }
 
-  async handleRequest(
-    context: ExecutionContext,
-    limit: number,
-    ttl: number,
-  ): Promise<boolean> {
+  async handleRequest(context: ExecutionContext, limit: number, ttl: number): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const key = this.generateKey(context, request.ip, "default");
+    const key = this.generateKey(context, request.ip, 'default');
 
     const isAllowed = await this.cacheService.checkRateLimit(
       key,
@@ -1572,13 +1560,9 @@ export class CustomThrottleGuard extends ThrottlerGuard {
     return true;
   }
 
-  protected generateKey(
-    context: ExecutionContext,
-    suffix: string,
-    name: string,
-  ): string {
+  protected generateKey(context: ExecutionContext, suffix: string, name: string): string {
     const request = context.switchToHttp().getRequest();
-    const userId = request.user?.id || "anonymous";
+    const userId = request.user?.id || 'anonymous';
     const route = request.route.path;
     return `throttle:${userId}:${route}:${suffix}`;
   }
@@ -1589,9 +1573,9 @@ export class CustomThrottleGuard extends ThrottlerGuard {
 
 ```typescript
 // app.module.ts
-import { ThrottlerModule } from "@nestjs/throttler";
-import { APP_GUARD } from "@nestjs/core";
-import { CustomThrottleGuard } from "./shared/guards/throttle.guard";
+import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { CustomThrottleGuard } from './shared/guards/throttle.guard';
 
 @Module({
   imports: [
@@ -1614,17 +1598,17 @@ export class AppModule {}
 
 ```typescript
 // shared/pipes/sanitize.pipe.ts
-import { PipeTransform, Injectable, ArgumentMetadata } from "@nestjs/common";
-import * as DOMPurify from "isomorphic-dompurify";
+import { PipeTransform, Injectable, ArgumentMetadata } from '@nestjs/common';
+import * as DOMPurify from 'isomorphic-dompurify';
 
 @Injectable()
 export class SanitizePipe implements PipeTransform {
   transform(value: any, metadata: ArgumentMetadata) {
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       return DOMPurify.sanitize(value, { ALLOWED_TAGS: [] });
     }
 
-    if (typeof value === "object" && value !== null) {
+    if (typeof value === 'object' && value !== null) {
       return this.sanitizeObject(value);
     }
 
@@ -1638,9 +1622,9 @@ export class SanitizePipe implements PipeTransform {
       if (obj.hasOwnProperty(key)) {
         const value = obj[key];
 
-        if (typeof value === "string") {
+        if (typeof value === 'string') {
           sanitized[key] = DOMPurify.sanitize(value, { ALLOWED_TAGS: [] });
-        } else if (typeof value === "object" && value !== null) {
+        } else if (typeof value === 'object' && value !== null) {
           sanitized[key] = this.sanitizeObject(value);
         } else {
           sanitized[key] = value;
@@ -1659,16 +1643,12 @@ export class SanitizePipe implements PipeTransform {
 // main.ts
 app.enableCors({
   origin:
-    process.env.NODE_ENV === "production"
-      ? [
-          "https://rentalportal.com",
-          "https://www.rentalportal.com",
-          /\.rentalportal\.com$/,
-        ]
+    process.env.NODE_ENV === 'production'
+      ? ['https://rentalportal.com', 'https://www.rentalportal.com', /\.rentalportal\.com$/]
       : true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  exposedHeaders: ["X-Total-Count", "X-Page-Count"],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
   credentials: true,
   maxAge: 86400, // 24 hours
 });
@@ -1678,21 +1658,21 @@ app.enableCors({
 
 ```typescript
 // main.ts
-import helmet from "helmet";
+import helmet from 'helmet';
 
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        scriptSrc: ["'self'", "https://js.stripe.com"],
-        imgSrc: ["'self'", "data:", "https:", "blob:"],
-        connectSrc: ["'self'", "https://api.stripe.com", "wss:"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        scriptSrc: ["'self'", 'https://js.stripe.com'],
+        imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+        connectSrc: ["'self'", 'https://api.stripe.com', 'wss:'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
-        frameSrc: ["'self'", "https://js.stripe.com"],
+        frameSrc: ["'self'", 'https://js.stripe.com'],
       },
     },
     crossOriginEmbedderPolicy: false,
@@ -1715,9 +1695,9 @@ app.use(
 
 ```typescript
 // shared/prisma/prisma.service.ts
-import { Injectable, OnModuleInit, Logger } from "@nestjs/common";
-import { PrismaClient } from "@prisma/client";
-import { MetricsService } from "../monitoring/metrics.service";
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+import { MetricsService } from '../monitoring/metrics.service';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
@@ -1726,9 +1706,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(private readonly metricsService: MetricsService) {
     super({
       log: [
-        { emit: "event", level: "query" },
-        { emit: "event", level: "error" },
-        { emit: "event", level: "warn" },
+        { emit: 'event', level: 'query' },
+        { emit: 'event', level: 'error' },
+        { emit: 'event', level: 'warn' },
       ],
     });
   }
@@ -1737,30 +1717,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     await this.$connect();
 
     // Log slow queries
-    this.$on("query" as never, (e: any) => {
+    this.$on('query' as never, (e: any) => {
       const duration = e.duration / 1000; // Convert to seconds
 
       if (duration > 1) {
-        this.logger.warn(
-          `Slow query detected: ${e.query} (${duration.toFixed(2)}s)`,
-        );
+        this.logger.warn(`Slow query detected: ${e.query} (${duration.toFixed(2)}s)`);
       }
 
       // Record metrics
       this.metricsService.recordDatabaseQuery(
-        e.query.split(" ")[0], // Operation (SELECT, INSERT, etc.)
-        e.target || "unknown",
+        e.query.split(' ')[0], // Operation (SELECT, INSERT, etc.)
+        e.target || 'unknown',
         duration,
       );
     });
 
-    this.$on("error" as never, (e: any) => {
+    this.$on('error' as never, (e: any) => {
       this.logger.error(`Database error: ${e.message}`);
     });
   }
 
   async enableShutdownHooks(app: any) {
-    this.$on("beforeExit", async () => {
+    this.$on('beforeExit', async () => {
       await app.close();
     });
   }
@@ -1841,8 +1819,8 @@ super({
       url: process.env.DATABASE_URL,
     },
   },
-  log: ["error", "warn"],
-  errorFormat: "minimal",
+  log: ['error', 'warn'],
+  errorFormat: 'minimal',
   // Connection pool configuration
   pool: {
     max: 20, // Maximum number of connections
@@ -1859,27 +1837,25 @@ super({
 
 ```typescript
 // React Router v7 server setup
-import { createRequestHandler } from "@react-router/express";
+import { createRequestHandler } from '@react-router/express';
 
-app.use("*", (req, res, next) => {
+app.use('*', (req, res, next) => {
   // Set cache headers for static assets
-  if (
-    req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)
-  ) {
-    res.set("Cache-Control", "public, max-age=31536000, immutable");
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)) {
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
   } else if (req.path.match(/\.(html|json)$/)) {
-    res.set("Cache-Control", "public, max-age=0, must-revalidate");
+    res.set('Cache-Control', 'public, max-age=0, must-revalidate');
   }
 
   next();
 });
 
 app.all(
-  "*",
+  '*',
   createRequestHandler({
-    build: () => import("./build/server/index.js"),
+    build: () => import('./build/server/index.js'),
     getLoadContext: (req, res) => ({
-      serverBuild: require("./build/server/index.js"),
+      serverBuild: require('./build/server/index.js'),
     }),
   }),
 );
@@ -1889,9 +1865,9 @@ app.all(
 
 ```typescript
 // shared/services/image-optimization.service.ts
-import { Injectable } from "@nestjs/common";
-import sharp from "sharp";
-import { S3 } from "aws-sdk";
+import { Injectable } from '@nestjs/common';
+import sharp from 'sharp';
+import { S3 } from 'aws-sdk';
 
 @Injectable()
 export class ImageOptimizationService {
@@ -1913,13 +1889,13 @@ export class ImageOptimizationService {
 
     // Optimize original image
     const optimizedBuffer = await sharp(file.buffer)
-      .resize(1920, 1080, { fit: "inside", withoutEnlargement: true })
+      .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 85 })
       .toBuffer();
 
     // Create thumbnail
     const thumbnailBuffer = await sharp(file.buffer)
-      .resize(400, 300, { fit: "cover" })
+      .resize(400, 300, { fit: 'cover' })
       .webp({ quality: 80 })
       .toBuffer();
 
@@ -1930,8 +1906,8 @@ export class ImageOptimizationService {
           Bucket: this.bucketName,
           Key: originalKey,
           Body: optimizedBuffer,
-          ContentType: "image/webp",
-          CacheControl: "public, max-age=31536000",
+          ContentType: 'image/webp',
+          CacheControl: 'public, max-age=31536000',
         })
         .promise(),
 
@@ -1940,8 +1916,8 @@ export class ImageOptimizationService {
           Bucket: this.bucketName,
           Key: thumbnailKey,
           Body: thumbnailBuffer,
-          ContentType: "image/webp",
-          CacheControl: "public, max-age=31536000",
+          ContentType: 'image/webp',
+          CacheControl: 'public, max-age=31536000',
         })
         .promise(),
     ]);
@@ -1959,12 +1935,12 @@ export class ImageOptimizationService {
 
 ```typescript
 // main.ts
-import * as compression from "compression";
+import * as compression from 'compression';
 
 app.use(
   compression({
     filter: (req, res) => {
-      if (req.headers["x-no-compression"]) {
+      if (req.headers['x-no-compression']) {
         return false;
       }
       return compression.filter(req, res);

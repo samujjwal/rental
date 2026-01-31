@@ -9,10 +9,12 @@
 ## 📋 Pre-Deployment Checklist
 
 ### Phase 1: External Services Configuration (CRITICAL)
+
 **Estimated Time:** 2-3 hours  
 **Priority:** P0 - Blocking
 
 #### ✅ Step 1: SendGrid Email Service
+
 ```bash
 # 1. Create account at https://sendgrid.com
 # 2. Verify sender email
@@ -24,6 +26,7 @@ SENDGRID_FROM_NAME="Universal Rental Portal"
 ```
 
 **Test Command:**
+
 ```bash
 curl --request POST \
   --url https://api.sendgrid.com/v3/mail/send \
@@ -43,6 +46,7 @@ curl --request POST \
 ```
 
 #### ✅ Step 2: Twilio SMS Service
+
 ```bash
 # 1. Create account at https://twilio.com
 # 2. Purchase phone number
@@ -54,6 +58,7 @@ TWILIO_PHONE_NUMBER=+1234567890
 ```
 
 **Test Command:**
+
 ```bash
 curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json" \
   --data-urlencode "Body=Test SMS from Rental Portal" \
@@ -63,6 +68,7 @@ curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Mes
 ```
 
 #### ✅ Step 3: Firebase Push Notifications
+
 ```bash
 # 1. Create project at https://console.firebase.google.com
 # 2. Enable Cloud Messaging
@@ -76,6 +82,7 @@ FCM_SERVER_KEY=AAAAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 #### ✅ Step 4: OpenAI Content Moderation
+
 ```bash
 # 1. Create account at https://platform.openai.com
 # 2. Generate API key
@@ -86,6 +93,7 @@ MODERATION_CONFIDENCE_THRESHOLD=0.7
 ```
 
 **Test Command:**
+
 ```bash
 curl https://api.openai.com/v1/moderations \
   -H "Content-Type: application/json" \
@@ -96,6 +104,7 @@ curl https://api.openai.com/v1/moderations \
 ```
 
 #### ✅ Step 5: AWS Services
+
 ```bash
 # 1. Create AWS account
 # 2. Create IAM user with programmatic access
@@ -111,6 +120,7 @@ AWS_TEXTRACT_ENABLED=true
 ```
 
 **Create S3 Bucket:**
+
 ```bash
 aws s3 mb s3://rental-portal-uploads --region us-east-1
 
@@ -133,6 +143,7 @@ aws s3api put-bucket-versioning --bucket rental-portal-uploads \
 ```
 
 **Test Upload:**
+
 ```bash
 echo "test" > test.txt
 aws s3 cp test.txt s3://rental-portal-uploads/test.txt
@@ -140,6 +151,7 @@ aws s3 ls s3://rental-portal-uploads/
 ```
 
 #### ✅ Step 6: Elasticsearch/OpenSearch
+
 ```bash
 # Option 1: AWS OpenSearch
 # 1. Create OpenSearch domain in AWS Console
@@ -162,6 +174,7 @@ ELASTICSEARCH_PASSWORD=changeme
 ```
 
 **Test Connection:**
+
 ```bash
 curl -X GET "http://localhost:9200/_cluster/health?pretty"
 ```
@@ -169,10 +182,12 @@ curl -X GET "http://localhost:9200/_cluster/health?pretty"
 ---
 
 ### Phase 2: Testing Execution (HIGH PRIORITY)
+
 **Estimated Time:** 4-6 hours  
 **Priority:** P1
 
 #### ✅ Step 1: Run Unit Tests
+
 ```bash
 cd /Users/samujjwal/Development/rental/apps/api
 npm run test
@@ -185,6 +200,7 @@ npm run test
 **Fix any failing tests before proceeding!**
 
 #### ✅ Step 2: Run E2E Tests
+
 ```bash
 cd /Users/samujjwal/Development/rental/apps/api
 npm run test:e2e
@@ -199,6 +215,7 @@ npm run test:e2e
 ```
 
 #### ✅ Step 3: Load Testing
+
 ```bash
 cd /Users/samujjwal/Development/rental/apps/api/test/load
 
@@ -219,6 +236,7 @@ npm run load:messaging
 ```
 
 #### ✅ Step 4: Security Testing
+
 ```bash
 cd /Users/samujjwal/Development/rental/apps/api/test/security
 
@@ -239,10 +257,12 @@ cd /Users/samujjwal/Development/rental/apps/api/test/security
 ---
 
 ### Phase 3: Infrastructure Setup (MEDIUM PRIORITY)
+
 **Estimated Time:** 2-3 days  
 **Priority:** P2
 
 #### Step 1: AWS Account Setup
+
 ```bash
 # 1. Create AWS account if not exists
 # 2. Enable MFA on root account
@@ -258,6 +278,7 @@ aws configure
 ```
 
 #### Step 2: Terraform Infrastructure
+
 ```bash
 # Create infrastructure directory
 mkdir -p infrastructure/terraform
@@ -285,6 +306,7 @@ terraform apply tfplan
 ```
 
 **Terraform Configuration Template:**
+
 ```hcl
 # infrastructure/terraform/main.tf
 provider "aws" {
@@ -294,17 +316,17 @@ provider "aws" {
 # VPC
 module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
-  
+
   name = "rental-portal-vpc"
   cidr = "10.0.0.0/16"
-  
+
   azs             = ["us-east-1a", "us-east-1b", "us-east-1c"]
   private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
-  
+
   enable_nat_gateway = true
   enable_vpn_gateway = false
-  
+
   tags = {
     Environment = "production"
     Project     = "rental-portal"
@@ -327,12 +349,12 @@ resource "aws_rds_cluster" "postgresql" {
   master_password         = random_password.db_password.result
   backup_retention_period = 7
   preferred_backup_window = "03:00-04:00"
-  
+
   serverlessv2_scaling_configuration {
     max_capacity = 2.0
     min_capacity = 0.5
   }
-  
+
   vpc_security_group_ids = [aws_security_group.db.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 }
@@ -349,7 +371,7 @@ resource "aws_elasticache_replication_group" "redis" {
   port                       = 6379
   subnet_group_name          = aws_elasticache_subnet_group.main.name
   security_group_ids         = [aws_security_group.redis.id]
-  
+
   automatic_failover_enabled = true
 }
 
@@ -357,23 +379,23 @@ resource "aws_elasticache_replication_group" "redis" {
 resource "aws_opensearch_domain" "main" {
   domain_name    = "rental-portal-search"
   engine_version = "OpenSearch_2.9"
-  
+
   cluster_config {
     instance_type  = "t3.small.search"
     instance_count = 2
-    
+
     zone_awareness_enabled = true
     zone_awareness_config {
       availability_zone_count = 2
     }
   }
-  
+
   ebs_options {
     ebs_enabled = true
     volume_size = 20
     volume_type = "gp3"
   }
-  
+
   vpc_options {
     subnet_ids         = module.vpc.private_subnets
     security_group_ids = [aws_security_group.opensearch.id]
@@ -387,9 +409,9 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = module.vpc.public_subnets
-  
+
   enable_deletion_protection = true
-  
+
   tags = {
     Environment = "production"
   }
@@ -400,7 +422,7 @@ resource "aws_cloudfront_distribution" "main" {
   origin {
     domain_name = aws_lb.main.dns_name
     origin_id   = "alb"
-    
+
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -408,37 +430,37 @@ resource "aws_cloudfront_distribution" "main" {
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
-  
+
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-  
+
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "alb"
-    
+
     forwarded_values {
       query_string = true
       headers      = ["Host", "Authorization"]
-      
+
       cookies {
         forward = "all"
       }
     }
-    
+
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
   }
-  
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
     }
   }
-  
+
   viewer_certificate {
     cloudfront_default_certificate = true
   }
@@ -446,6 +468,7 @@ resource "aws_cloudfront_distribution" "main" {
 ```
 
 #### Step 3: GitHub Actions CI/CD
+
 ```yaml
 # .github/workflows/ci.yml
 name: CI/CD Pipeline
@@ -459,7 +482,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: pgvector/pgvector:pg15
@@ -472,7 +495,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7-alpine
         options: >-
@@ -482,53 +505,53 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
-          
+
       - name: Install pnpm
         run: npm install -g pnpm
-        
+
       - name: Install dependencies
         run: pnpm install
-        
+
       - name: Run linter
         run: pnpm run lint
-        
+
       - name: Run tests
         run: pnpm run test
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-          
+
       - name: Run E2E tests
         run: pnpm run test:e2e
-  
+
   build:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-      
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-      
+
       - name: Build and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -539,22 +562,22 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-  
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-      
+
       - name: Deploy to ECS
         run: |
           aws ecs update-service \
@@ -566,10 +589,12 @@ jobs:
 ---
 
 ### Phase 4: Monitoring Setup (MEDIUM PRIORITY)
+
 **Estimated Time:** 1-2 days  
 **Priority:** P2
 
 #### Step 1: Prometheus & Grafana
+
 ```bash
 # Docker Compose for monitoring stack
 cat > docker-compose.monitoring.yml << 'EOF'
@@ -586,7 +611,7 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-  
+
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -610,6 +635,7 @@ docker compose -f docker-compose.monitoring.yml up -d
 ```
 
 **Prometheus Configuration:**
+
 ```yaml
 # prometheus.yml
 global:
@@ -624,6 +650,7 @@ scrape_configs:
 ```
 
 #### Step 2: Sentry Error Tracking
+
 ```bash
 # 1. Create project at https://sentry.io
 # 2. Get DSN
@@ -644,6 +671,7 @@ Sentry.init({
 ```
 
 #### Step 3: CloudWatch Alarms
+
 ```bash
 # Create SNS topic for alerts
 aws sns create-topic --name rental-portal-alerts
@@ -671,6 +699,7 @@ aws cloudwatch put-metric-alarm \
 ---
 
 ### Phase 5: Database Migration & Seeding
+
 **Estimated Time:** 2-4 hours  
 **Priority:** P1
 
@@ -692,6 +721,7 @@ npx prisma studio
 ---
 
 ### Phase 6: SSL/TLS Configuration
+
 **Estimated Time:** 1-2 hours  
 **Priority:** P1
 
@@ -718,6 +748,7 @@ aws acm request-certificate \
 ## 🚀 Deployment Execution
 
 ### Staging Deployment
+
 ```bash
 # 1. Deploy infrastructure
 cd infrastructure/terraform
@@ -739,6 +770,7 @@ curl https://staging.yourdomain.com
 ```
 
 ### Production Deployment
+
 ```bash
 # 1. Create production branch
 git checkout -b production
@@ -776,6 +808,7 @@ curl https://api.yourdomain.com/health
 ## 📊 Post-Deployment Checklist
 
 ### Immediate (Day 1)
+
 - [ ] Verify all services are running
 - [ ] Check database connections
 - [ ] Test critical user flows
@@ -784,6 +817,7 @@ curl https://api.yourdomain.com/health
 - [ ] Test external service integrations
 
 ### Short-term (Week 1)
+
 - [ ] Review performance metrics
 - [ ] Analyze user behavior
 - [ ] Check for security issues
@@ -792,6 +826,7 @@ curl https://api.yourdomain.com/health
 - [ ] Fix critical bugs
 
 ### Medium-term (Month 1)
+
 - [ ] Optimize database queries
 - [ ] Scale infrastructure as needed
 - [ ] Implement user feedback

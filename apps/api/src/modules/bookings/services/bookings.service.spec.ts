@@ -91,9 +91,9 @@ describe('BookingsService', () => {
 
     const mockListing = {
       id: 'listing-1',
-      status: 'ACTIVE',
+      status: 'AVAILABLE',
       ownerId: 'owner-1',
-      bookingMode: BookingMode.REQUEST_TO_BOOK,
+      bookingMode: BookingMode.REQUEST,
       currency: 'USD',
     };
 

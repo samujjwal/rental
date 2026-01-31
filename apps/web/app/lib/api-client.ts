@@ -45,13 +45,16 @@ class ApiClient {
                 refreshToken,
               });
 
-              const { accessToken, refreshToken: newRefreshToken, user } =
-                response.data;
-              
+              const {
+                accessToken,
+                refreshToken: newRefreshToken,
+                user,
+              } = response.data;
+
               // Update both localStorage and auth store
               localStorage.setItem("accessToken", accessToken);
               localStorage.setItem("refreshToken", newRefreshToken);
-              
+
               // Update the auth store with new tokens
               const authStore = useAuthStore.getState();
               authStore.setTokens(accessToken, newRefreshToken);
@@ -64,11 +67,11 @@ class ApiClient {
             localStorage.removeItem("accessToken");
             localStorage.removeItem("refreshToken");
             localStorage.removeItem("user");
-            
+
             // Clear auth store
             const authStore = useAuthStore.getState();
             authStore.clearAuth();
-            
+
             window.location.href = "/auth/login";
             return Promise.reject(refreshError);
           }

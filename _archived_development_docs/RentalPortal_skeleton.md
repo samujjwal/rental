@@ -1,6 +1,7 @@
 # Universal Rental Portal — Technical Artifacts Skeleton
 
 ## Directory Structure
+
 ```
 src/
 ├── core/                    # Shared domain logic
@@ -13,6 +14,7 @@ src/
 ## Core Domain Entities (Interfaces)
 
 ### 1. User & Identity
+
 ```typescript
 // src/core/identity/
 interface User {
@@ -42,6 +44,7 @@ interface VerificationFlags {
 ```
 
 ### 2. Category Templates
+
 ```typescript
 // src/core/categories/
 interface CategoryTemplate {
@@ -70,6 +73,7 @@ interface CategoryAttributes {
 ```
 
 ### 3. Listings
+
 ```typescript
 // src/modules/listings/
 interface Listing {
@@ -78,27 +82,27 @@ interface Listing {
   category: CategoryType;
   templateVersion: string;
   status: 'draft' | 'published' | 'unpublished' | 'suspended';
-  
+
   // Template-driven attributes
   attributes: Record<string, any>;
-  
+
   // Pricing
   pricingModel: PricingModel;
   fees: Fee[];
   discounts?: Discount[];
-  
+
   // Policies
   cancellationPolicy: CancellationPolicy;
   depositPolicy: DepositPolicy;
   houseRules?: string[];
-  
+
   // Media
   media: ListingMedia[];
-  
+
   // Availability
   availability: AvailabilityRule[];
   blackoutDates: Date[];
-  
+
   createdAt: DateTime;
   publishedAt?: DateTime;
 }
@@ -114,6 +118,7 @@ interface ListingMedia {
 ```
 
 ### 4. Availability & Pricing
+
 ```typescript
 // src/modules/availability/
 interface AvailabilityRule {
@@ -130,12 +135,12 @@ interface PricingModel {
   type: 'per_night' | 'per_day' | 'per_hour' | 'per_event' | 'package';
   baseAmount: Money;
   currency: string;
-  
+
   // Category-specific
   mileageRules?: MileageRule[];
   cleaningFee?: Money;
   securityDeposit?: Money;
-  
+
   // Discounts
   weeklyDiscount?: Percentage;
   monthlyDiscount?: Percentage;
@@ -147,12 +152,12 @@ interface Quote {
   renterId: UUID;
   dateRange: DateRange;
   quantity: number;
-  
+
   lineItems: LineItem[];
   subtotal: Money;
   total: Money;
   deposit: Money;
-  
+
   expiresAt: DateTime;
   snapshot: BookingAgreementSnapshot;
 }
@@ -166,6 +171,7 @@ interface LineItem {
 ```
 
 ### 5. Booking Engine
+
 ```typescript
 // src/modules/bookings/
 interface Booking {
@@ -173,33 +179,33 @@ interface Booking {
   listingId: UUID;
   renterId: UUID;
   ownerId: UUID;
-  
+
   status: BookingStatus;
   statusHistory: BookingStateTransition[];
-  
+
   dateRange: DateRange;
   quantity: number;
-  
+
   // Financial
   quoteSnapshot: Quote;
   paymentIntentId?: string;
   depositHoldId?: string;
-  
+
   // Fulfillment
   fulfillmentMethod: FulfillmentMethod;
   checkInDetails?: CheckInDetails;
   checkOutDetails?: CheckOutDetails;
-  
+
   // Legal
   agreementSnapshot: BookingAgreementSnapshot;
   termsAcceptedAt: DateTime;
-  
+
   createdAt: DateTime;
   confirmedAt?: DateTime;
   completedAt?: DateTime;
 }
 
-type BookingStatus = 
+type BookingStatus =
   | 'draft'
   | 'pending_owner_approval'
   | 'pending_payment'
@@ -223,6 +229,7 @@ interface BookingStateTransition {
 ```
 
 ### 6. Payments & Ledger
+
 ```typescript
 // src/modules/payments/
 interface PaymentIntent {
@@ -255,14 +262,14 @@ interface LedgerEntry {
   description: string;
   metadata: Record<string, any>;
   createdAt: DateTime;
-  
+
   // For reconciliation
   externalId?: string;
   externalType?: 'charge' | 'refund' | 'payout';
   reconciled: boolean;
 }
 
-type LedgerEntryType = 
+type LedgerEntryType =
   | 'charge'
   | 'refund'
   | 'platform_fee'
@@ -274,6 +281,7 @@ type LedgerEntryType =
 ```
 
 ### 7. Fulfillment & Condition Reports
+
 ```typescript
 // src/modules/fulfillment/
 interface ConditionReport {
@@ -281,10 +289,10 @@ interface ConditionReport {
   bookingId: UUID;
   type: 'check_in' | 'check_out';
   status: 'draft' | 'submitted' | 'confirmed';
-  
+
   checklist: ChecklistResponse[];
   evidence: EvidenceAttachment[];
-  
+
   submittedBy: UUID; // user ID
   submittedAt?: DateTime;
   confirmedBy?: UUID; // user ID (other party)
@@ -321,6 +329,7 @@ interface EvidenceAttachment {
 ```
 
 ### 8. Messaging
+
 ```typescript
 // src/modules/messaging/
 interface MessageThread {
@@ -338,10 +347,10 @@ interface Message {
   senderId: UUID;
   content: string;
   attachments: MessageAttachment[];
-  
+
   // Privacy
   maskedContactInfo: boolean;
-  
+
   status: 'sent' | 'delivered' | 'read';
   createdAt: DateTime;
   readAt?: DateTime;
@@ -355,19 +364,20 @@ interface MessageAttachment {
 ```
 
 ### 9. Reviews & Reputation
+
 ```typescript
 // src/modules/reviews/
 interface Review {
   id: UUID;
   bookingId: UUID;
   reviewerId: UUID; // who wrote the review
-  targetId: UUID;   // who/what is being reviewed (user or listing)
+  targetId: UUID; // who/what is being reviewed (user or listing)
   targetType: 'user' | 'listing';
-  
+
   rating: number; // 1-5
   tags: ReviewTag[];
   comment?: string;
-  
+
   status: 'pending' | 'published' | 'flagged' | 'removed';
   createdAt: DateTime;
   publishedAt?: DateTime;
@@ -380,6 +390,7 @@ interface ReviewTag {
 ```
 
 ### 10. Disputes
+
 ```typescript
 // src/modules/disputes/
 interface Dispute {
@@ -388,20 +399,20 @@ interface Dispute {
   initiatorId: UUID; // renter or owner
   reason: DisputeReason;
   category: DisputeCategory;
-  
+
   status: 'open' | 'under_review' | 'resolved' | 'escalated';
-  
+
   evidenceBundle: DisputeEvidenceBundle;
   timeline: DisputeEvent[];
-  
+
   sla: {
     responseDueBy: DateTime;
     resolutionDueBy: DateTime;
   };
-  
+
   outcome?: DisputeOutcome;
   resolvedAt?: DateTime;
-  
+
   createdAt: DateTime;
 }
 
@@ -423,6 +434,7 @@ interface DisputeOutcome {
 ```
 
 ### 11. Admin & Policy Engine
+
 ```typescript
 // src/modules/admin/
 interface AdminUser {
@@ -462,6 +474,7 @@ interface AuditLog {
 ```
 
 ### 12. Search & Discovery
+
 ```typescript
 // src/modules/search/
 interface SearchCriteria {
@@ -498,6 +511,7 @@ interface SearchIndexDocument {
 ## API Layer Contracts
 
 ### 1. REST API Structure
+
 ```typescript
 // src/api/routes/
 interface APIRoutes {
@@ -509,7 +523,7 @@ interface APIRoutes {
       '/refresh': RefreshRequest → RefreshResponse;
     };
   };
-  
+
   // Users
   '/users': {
     GET: {
@@ -520,7 +534,7 @@ interface APIRoutes {
       '/me': UpdateProfileRequest → UserProfile;
     };
   };
-  
+
   // Listings
   '/listings': {
     GET: {
@@ -535,7 +549,7 @@ interface APIRoutes {
       '/:id/publish': → Listing;
     };
   };
-  
+
   // Bookings
   '/bookings': {
     GET: {
@@ -548,7 +562,7 @@ interface APIRoutes {
       '/:id/cancel': CancelBookingRequest → Booking;
     };
   };
-  
+
   // Payments
   '/payments': {
     POST: {
@@ -556,7 +570,7 @@ interface APIRoutes {
       '/:id/confirm': ConfirmPaymentRequest → PaymentIntent;
     };
   };
-  
+
   // Messages
   '/messages': {
     GET: {
@@ -567,7 +581,7 @@ interface APIRoutes {
       '/threads/:id/messages': SendMessageRequest → Message;
     };
   };
-  
+
   // Admin
   '/admin': {
     GET: {
@@ -584,6 +598,7 @@ interface APIRoutes {
 ```
 
 ### 2. Webhook Handlers
+
 ```typescript
 // src/infrastructure/webhooks/
 interface WebhookEvents {
@@ -599,6 +614,7 @@ interface WebhookEvents {
 ## Infrastructure Interfaces
 
 ### 1. External Service Adapters
+
 ```typescript
 // src/infrastructure/services/
 interface PaymentProvider {
@@ -628,6 +644,7 @@ interface SearchService {
 ```
 
 ### 2. Job Queues
+
 ```typescript
 // src/infrastructure/queues/
 interface JobQueue {
@@ -648,6 +665,7 @@ interface JobTypes {
 ## Shared Types & Utilities
 
 ### 1. Type Definitions
+
 ```typescript
 // src/shared/types/
 type UUID = string;
@@ -680,17 +698,27 @@ interface Paginated<T> {
 ```
 
 ### 2. Validation Schemas
+
 ```typescript
 // src/shared/validation/
 const schemas = {
-  user: z.object({/* ... */}),
-  listing: z.object({/* ... */}),
-  booking: z.object({/* ... */}),
-  payment: z.object({/* ... */}),
+  user: z.object({
+    /* ... */
+  }),
+  listing: z.object({
+    /* ... */
+  }),
+  booking: z.object({
+    /* ... */
+  }),
+  payment: z.object({
+    /* ... */
+  }),
 } as const;
 ```
 
 ### 3. Error Types
+
 ```typescript
 // src/shared/errors/
 class ApplicationError extends Error {
@@ -699,16 +727,27 @@ class ApplicationError extends Error {
   details?: any;
 }
 
-class ValidationError extends ApplicationError { /* ... */ }
-class AuthorizationError extends ApplicationError { /* ... */ }
-class NotFoundError extends ApplicationError { /* ... */ }
-class ConflictError extends ApplicationError { /* ... */ }
-class PaymentError extends ApplicationError { /* ... */ }
+class ValidationError extends ApplicationError {
+  /* ... */
+}
+class AuthorizationError extends ApplicationError {
+  /* ... */
+}
+class NotFoundError extends ApplicationError {
+  /* ... */
+}
+class ConflictError extends ApplicationError {
+  /* ... */
+}
+class PaymentError extends ApplicationError {
+  /* ... */
+}
 ```
 
 ## Database Schema Outline
 
 ### 1. Main Tables
+
 ```sql
 -- Users
 users (id, email, phone, verification_tier, status, created_at, updated_at)
@@ -758,6 +797,7 @@ policy_rules (id, type, category, condition_json, action_json, ...)
 ## Configuration Files
 
 ### 1. Environment Configuration
+
 ```typescript
 // config/
 interface AppConfig {
@@ -806,6 +846,7 @@ interface AppConfig {
 ```
 
 ### 2. Category Templates Configuration
+
 ```json
 // config/categories/spaces.json
 {
@@ -867,6 +908,7 @@ interface AppConfig {
 ## Deployment Artifacts
 
 ### 1. Docker Configuration
+
 ```dockerfile
 # Dockerfile
 FROM node:18-alpine
@@ -883,6 +925,7 @@ CMD ["node", "dist/index.js"]
 ```
 
 ### 2. Infrastructure as Code
+
 ```hcl
 # terraform/
 resource "aws_rds_cluster" "database" {

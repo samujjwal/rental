@@ -203,6 +203,7 @@ curl -X POST http://localhost:3000/api/moderation/text \
 ## AWS Services
 
 ### Required Services
+
 - **S3**: File storage (images, documents)
 - **Rekognition**: Image moderation
 - **Textract**: Document verification (insurance policies)
@@ -311,12 +312,14 @@ curl -X POST http://localhost:3000/api/test/upload
 ### Development vs Production
 
 **Development:**
+
 - Use free tiers and trial accounts
 - Test with dummy data
 - Enable verbose logging
 - Use localhost URLs
 
 **Production:**
+
 - Upgrade to paid plans with appropriate limits
 - Use production domains
 - Enable monitoring and alerts

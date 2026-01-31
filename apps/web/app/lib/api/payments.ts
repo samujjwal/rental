@@ -1,4 +1,4 @@
-import { api } from '~/lib/api-client';
+import { api } from "~/lib/api-client";
 
 export interface CreatePaymentIntentRequest {
   bookingId: string;
@@ -22,12 +22,18 @@ export interface OwnerEarnings {
 }
 
 export const paymentsApi = {
-  async createPaymentIntent(bookingId: string): Promise<CreatePaymentIntentResponse> {
-    return api.post<CreatePaymentIntentResponse>('/payments/create-intent', { bookingId });
+  async createPaymentIntent(
+    bookingId: string
+  ): Promise<CreatePaymentIntentResponse> {
+    return api.post<CreatePaymentIntentResponse>("/payments/create-intent", {
+      bookingId,
+    });
   },
 
   async confirmPayment(paymentIntentId: string): Promise<{ success: boolean }> {
-    return api.post<{ success: boolean }>(`/payments/${paymentIntentId}/confirm`);
+    return api.post<{ success: boolean }>(
+      `/payments/${paymentIntentId}/confirm`
+    );
   },
 
   async getPaymentHistory(userId: string): Promise<any[]> {

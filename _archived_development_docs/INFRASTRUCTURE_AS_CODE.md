@@ -1,4 +1,5 @@
 # Infrastructure as Code - Complete Setup
+
 ## Terraform, Kubernetes, CI/CD Implementation
 
 **Platform**: Universal Rental Portal  
@@ -21,6 +22,7 @@
 ## 🏗️ Infrastructure Overview
 
 ### Architecture Diagram
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Cloudflare CDN                          │
@@ -49,6 +51,7 @@
 ### Cost Estimation
 
 **Development Environment**: $50-80/month
+
 - EKS Cluster: $73/month (control plane)
 - RDS db.t4g.micro: $15/month
 - ElastiCache cache.t4g.micro: $12/month
@@ -56,6 +59,7 @@
 - Data Transfer: ~$10/month
 
 **Production Environment**: $300-500/month
+
 - EKS Cluster: $73/month
 - RDS db.m5.large: $140/month
 - ElastiCache cache.m5.large: $90/month
@@ -71,6 +75,7 @@
 ## 🔧 Terraform Modules
 
 ### Directory Structure
+
 ```
 infrastructure/
 ├── terraform/
@@ -804,6 +809,7 @@ aws_region   = "us-east-1"
 ## ☸️ Kubernetes Manifests
 
 ### Directory Structure
+
 ```
 infrastructure/kubernetes/
 ├── base/
@@ -864,127 +870,127 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
-      
+
       containers:
-      - name: api
-        image: rental-portal-api:latest
-        imagePullPolicy: IfNotPresent
-        
-        ports:
-        - name: http
-          containerPort: 3000
-          protocol: TCP
-        
-        env:
-        - name: NODE_ENV
-          value: "production"
-        - name: PORT
-          value: "3000"
-        
-        # Database credentials from secret
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: rental-secrets
-              key: database-url
-        
-        # Redis URL from secret
-        - name: REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: rental-secrets
-              key: redis-url
-        
-        # JWT secrets
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: rental-secrets
-              key: jwt-secret
-        - name: JWT_REFRESH_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: rental-secrets
-              key: jwt-refresh-secret
-        
-        # External service keys
-        - name: STRIPE_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: rental-secrets
-              key: stripe-secret-key
-        - name: RESEND_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: rental-secrets
-              key: resend-api-key
-        - name: R2_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: rental-secrets
-              key: r2-access-key
-        - name: R2_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: rental-secrets
-              key: r2-secret-key
-        
-        # Configuration from ConfigMap
-        - name: WEB_URL
-          valueFrom:
-            configMapKeyRef:
-              name: rental-config
-              key: web-url
-        - name: API_URL
-          valueFrom:
-            configMapKeyRef:
-              name: rental-config
-              key: api-url
-        
-        resources:
-          requests:
-            cpu: 500m
-            memory: 512Mi
-          limits:
-            cpu: 1000m
-            memory: 1Gi
-        
-        livenessProbe:
-          httpGet:
-            path: /api/health
-            port: http
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        
-        readinessProbe:
-          httpGet:
-            path: /api/health/ready
-            port: http
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
-        
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop:
-            - ALL
-        
-        volumeMounts:
-        - name: tmp
-          mountPath: /tmp
-        - name: logs
-          mountPath: /app/logs
-      
+        - name: api
+          image: rental-portal-api:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          env:
+            - name: NODE_ENV
+              value: 'production'
+            - name: PORT
+              value: '3000'
+
+            # Database credentials from secret
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rental-secrets
+                  key: database-url
+
+            # Redis URL from secret
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rental-secrets
+                  key: redis-url
+
+            # JWT secrets
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: rental-secrets
+                  key: jwt-secret
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: rental-secrets
+                  key: jwt-refresh-secret
+
+            # External service keys
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rental-secrets
+                  key: stripe-secret-key
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rental-secrets
+                  key: resend-api-key
+            - name: R2_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: rental-secrets
+                  key: r2-access-key
+            - name: R2_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rental-secrets
+                  key: r2-secret-key
+
+            # Configuration from ConfigMap
+            - name: WEB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: rental-config
+                  key: web-url
+            - name: API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: rental-config
+                  key: api-url
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /api/health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /app/logs
+
       volumes:
-      - name: tmp
-        emptyDir: {}
-      - name: logs
-        emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
 ```
 
 ```yaml
@@ -999,10 +1005,10 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 80
-    targetPort: http
-    protocol: TCP
-    name: http
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
   selector:
     app: rental-api
 ```
@@ -1022,34 +1028,34 @@ spec:
   minReplicas: 2
   maxReplicas: 10
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
       policies:
-      - type: Percent
-        value: 50
-        periodSeconds: 60
+        - type: Percent
+          value: 50
+          periodSeconds: 60
     scaleUp:
       stabilizationWindowSeconds: 0
       policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 15
-      - type: Pods
-        value: 2
-        periodSeconds: 15
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 2
+          periodSeconds: 15
       selectPolicy: Max
 ```
 
@@ -1061,29 +1067,29 @@ metadata:
   name: rental-portal
   namespace: rental-portal
   annotations:
-    kubernetes.io/ingress.class: "alb"
-    alb.ingress.kubernetes.io/scheme: "internet-facing"
-    alb.ingress.kubernetes.io/target-type: "ip"
+    kubernetes.io/ingress.class: 'alb'
+    alb.ingress.kubernetes.io/scheme: 'internet-facing'
+    alb.ingress.kubernetes.io/target-type: 'ip'
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
-    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
-    alb.ingress.kubernetes.io/healthcheck-path: "/api/health"
-    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
-    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
-    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
-    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-arn: 'arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID'
+    alb.ingress.kubernetes.io/healthcheck-path: '/api/health'
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '2'
 spec:
   rules:
-  - host: api.rentalportal.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: rental-api
-            port:
-              number: 80
+    - host: api.rentalportal.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rental-api
+                port:
+                  number: 80
 ```
 
 ---
@@ -1114,7 +1120,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -1128,7 +1134,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7
         options: >-
@@ -1138,45 +1144,45 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'pnpm'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 8
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Generate Prisma Client
         run: |
           cd packages/database
           pnpm prisma generate
-      
+
       - name: Run linting
         run: pnpm run lint
-      
+
       - name: Run unit tests
         run: pnpm run test:cov
         env:
           DATABASE_URL: postgresql://postgres:test@localhost:5432/rental_portal_test
           REDIS_URL: redis://localhost:6379
-      
+
       - name: Run E2E tests
         run: pnpm run test:e2e
         env:
           DATABASE_URL: postgresql://postgres:test@localhost:5432/rental_portal_test
           REDIS_URL: redis://localhost:6379
-      
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -1189,25 +1195,25 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-    
+
     outputs:
       image-tag: ${{ steps.build-image.outputs.image }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-      
+
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
         env:
@@ -1217,7 +1223,7 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f apps/api/Dockerfile .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-      
+
       - name: Tag as latest (main branch)
         if: github.ref == 'refs/heads/main'
         env:
@@ -1233,28 +1239,28 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/develop'
     environment: staging
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      
+
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig --region $AWS_REGION --name rental-portal-staging
-      
+
       - name: Deploy to Kubernetes
         run: |
           kubectl set image deployment/rental-api \
             api=${{ needs.build-and-push.outputs.image-tag }} \
             -n rental-portal
-          
+
           kubectl rollout status deployment/rental-api -n rental-portal
 
   deploy-production:
@@ -1263,35 +1269,35 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     environment: production
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      
+
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
-      
+
       - name: Deploy to Kubernetes
         run: |
           kubectl set image deployment/rental-api \
             api=${{ needs.build-and-push.outputs.image-tag }} \
             -n rental-portal
-          
+
           kubectl rollout status deployment/rental-api -n rental-portal
-      
+
       - name: Verify deployment
         run: |
           kubectl get pods -n rental-portal
           kubectl get services -n rental-portal
-      
+
       - name: Run smoke tests
         run: |
           API_URL=$(kubectl get ingress rental-portal -n rental-portal -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
@@ -1302,7 +1308,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [deploy-staging, deploy-production]
     if: always()
-    
+
     steps:
       - name: Send Slack notification
         uses: 8398a7/action-slack@v3

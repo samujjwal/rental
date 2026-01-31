@@ -11,6 +11,7 @@ Run the automated setup script:
 ```
 
 This will:
+
 - Create `.env` file from template
 - Generate secure JWT secrets
 - Guide you through service configuration
@@ -30,31 +31,38 @@ If you prefer to configure manually or need detailed instructions:
 #### Setup Steps:
 
 1. **Create Account**
+
    ```
    https://resend.com/signup
    ```
+
    - No credit card required
    - Verify your email address
 
 2. **Get API Key**
+
    ```
    https://resend.com/api-keys
    ```
+
    - Click "Create API Key"
    - Name: "Rental Portal Development"
    - Permission: "Full Access"
    - Copy the key (starts with `re_`)
 
 3. **Update .env**
+
    ```bash
    RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxx
    EMAIL_FROM=noreply@resend.dev
    ```
-   
+
    For production with custom domain:
+
    ```bash
    EMAIL_FROM=noreply@yourdomain.com
    ```
+
    (You'll need to verify domain in Resend dashboard)
 
 4. **Test Email Service**
@@ -65,6 +73,7 @@ If you prefer to configure manually or need detailed instructions:
    ```
 
 **Limits:**
+
 - Free: 3,000 emails/month
 - 100 emails/day
 - Upgrade: $20/month for 50,000 emails
@@ -80,27 +89,33 @@ If you prefer to configure manually or need detailed instructions:
 #### Setup Steps:
 
 1. **Create Account**
+
    ```
    https://dashboard.stripe.com/register
    ```
 
 2. **Get Test API Keys**
+
    ```
    https://dashboard.stripe.com/test/apikeys
    ```
+
    - Publishable key (starts with `pk_test_`)
    - Secret key (starts with `sk_test_`)
 
 3. **Update .env**
+
    ```bash
    STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxx
    STRIPE_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxx
    ```
 
 4. **Set Up Webhook**
+
    ```
    https://dashboard.stripe.com/test/webhooks
    ```
+
    - Click "Add endpoint"
    - Endpoint URL: `http://localhost:3000/payments/webhook`
    - Events to send:
@@ -111,14 +126,17 @@ If you prefer to configure manually or need detailed instructions:
    - Copy webhook signing secret
 
 5. **Add Webhook Secret to .env**
+
    ```bash
    STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxx
    ```
 
 6. **Configure Stripe Connect** (for owner payouts)
+
    ```
    https://dashboard.stripe.com/settings/connect
    ```
+
    - Enable Express accounts
    - Configure branding
    - Set up payout schedule
@@ -130,6 +148,7 @@ If you prefer to configure manually or need detailed instructions:
    ```
 
 **Fees:**
+
 - 2.9% + $0.30 per successful charge
 - No monthly fees
 - International cards: +1.5%
@@ -147,6 +166,7 @@ For MVP, local storage is sufficient. Configure R2 for production:
 #### Setup Steps:
 
 1. **Create Cloudflare Account**
+
    ```
    https://dash.cloudflare.com/sign-up
    ```
@@ -160,14 +180,17 @@ For MVP, local storage is sufficient. Configure R2 for production:
    - Location: Auto (or choose closest region)
 
 4. **Generate API Token**
+
    ```
    Account → R2 → Manage R2 API Tokens → Create API Token
    ```
+
    - Permissions: Object Read & Write
    - TTL: Never expire (or set expiry)
    - Copy Account ID, Access Key ID, and Secret Access Key
 
 5. **Update .env**
+
    ```bash
    R2_ACCOUNT_ID=your_account_id_here
    R2_ACCESS_KEY_ID=your_access_key_id_here
@@ -182,6 +205,7 @@ For MVP, local storage is sufficient. Configure R2 for production:
    - Configure custom domain for production
 
 **Development:** Leave empty to use local storage
+
 ```bash
 # .env for development
 R2_ACCOUNT_ID=
@@ -189,6 +213,7 @@ R2_ACCOUNT_ID=
 ```
 
 **Limits:**
+
 - Free: 10GB storage
 - 1 million Class A operations/month
 - 10 million Class B operations/month
@@ -245,6 +270,7 @@ redis-cli -h localhost -p 6382 ping
 Uses `bad-words` library - no API keys needed.
 
 Features:
+
 - Profanity filtering
 - Spam detection
 - Contact information blocking
@@ -357,6 +383,7 @@ curl -X POST http://localhost:3000/payments/test \
 ### Email not sending
 
 1. **Check API key**
+
    ```bash
    echo $RESEND_API_KEY
    # Should return: re_xxxxx
@@ -377,6 +404,7 @@ curl -X POST http://localhost:3000/payments/test \
 ### Stripe webhook not working
 
 1. **Test webhook locally** with Stripe CLI
+
    ```bash
    # Install Stripe CLI
    brew install stripe/stripe-cli/stripe
@@ -397,6 +425,7 @@ curl -X POST http://localhost:3000/payments/test \
 ### File upload failing
 
 1. **Check storage configuration**
+
    ```bash
    # For local storage
    ls -la ./uploads
@@ -438,15 +467,15 @@ Before deploying to production:
 
 ### Free Tier Limits
 
-| Service | Free Tier | Cost After Limit |
-|---------|-----------|------------------|
-| Resend | 3,000 emails/month | $20/mo for 50k |
-| Stripe | No limit | 2.9% + $0.30/txn |
-| Cloudflare R2 | 10GB storage | $0.015/GB/month |
-| PostgreSQL | Self-hosted | $0 (AWS RDS $15/mo) |
-| Redis | Self-hosted | $0 (AWS ElastiCache $15/mo) |
-| Content Moderation | Unlimited | $0 |
-| Search | Unlimited | $0 |
+| Service            | Free Tier          | Cost After Limit            |
+| ------------------ | ------------------ | --------------------------- |
+| Resend             | 3,000 emails/month | $20/mo for 50k              |
+| Stripe             | No limit           | 2.9% + $0.30/txn            |
+| Cloudflare R2      | 10GB storage       | $0.015/GB/month             |
+| PostgreSQL         | Self-hosted        | $0 (AWS RDS $15/mo)         |
+| Redis              | Self-hosted        | $0 (AWS ElastiCache $15/mo) |
+| Content Moderation | Unlimited          | $0                          |
+| Search             | Unlimited          | $0                          |
 
 **Total MVP Cost:** $0/month (assuming <3k emails, <10GB storage)
 

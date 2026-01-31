@@ -111,7 +111,7 @@ describe('LedgerService', () => {
 
       const balance = await service.getUserBalance(userId, currency);
       expect(prisma.booking.findMany).toHaveBeenCalledWith({
-        where: { ownerId: userId },
+        where: { owner: { id: userId } },
         select: { id: true },
       });
       expect(balance).toBe(80); // 100 - 20

@@ -906,9 +906,9 @@ model AuditLog {
 ```typescript
 // apps/api/src/common/cache/cache.service.ts
 
-import { Injectable } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import Redis from "ioredis";
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 
 @Injectable()
 export class CacheService {
@@ -917,27 +917,27 @@ export class CacheService {
 
   constructor(private readonly config: ConfigService) {
     // Standalone Redis for development
-    if (config.get("NODE_ENV") === "development") {
+    if (config.get('NODE_ENV') === 'development') {
       this.redis = new Redis({
-        host: config.get("REDIS_HOST"),
-        port: config.get("REDIS_PORT"),
-        password: config.get("REDIS_PASSWORD"),
+        host: config.get('REDIS_HOST'),
+        port: config.get('REDIS_PORT'),
+        password: config.get('REDIS_PASSWORD'),
         db: 0,
-        keyPrefix: "rental:",
+        keyPrefix: 'rental:',
         retryStrategy: (times) => Math.min(times * 50, 2000),
       });
     } else {
       // Redis Cluster for production
       this.cluster = new Redis.Cluster(
         [
-          { host: config.get("REDIS_NODE_1"), port: 6379 },
-          { host: config.get("REDIS_NODE_2"), port: 6379 },
-          { host: config.get("REDIS_NODE_3"), port: 6379 },
+          { host: config.get('REDIS_NODE_1'), port: 6379 },
+          { host: config.get('REDIS_NODE_2'), port: 6379 },
+          { host: config.get('REDIS_NODE_3'), port: 6379 },
         ],
         {
           redisOptions: {
-            password: config.get("REDIS_PASSWORD"),
-            keyPrefix: "rental:",
+            password: config.get('REDIS_PASSWORD'),
+            keyPrefix: 'rental:',
           },
         },
       );
@@ -1023,14 +1023,14 @@ export class CacheService {
 
   // Pub/Sub for cache invalidation across instances
   async publishInvalidation(key: string): Promise<void> {
-    await this.getClient().publish("cache:invalidate", key);
+    await this.getClient().publish('cache:invalidate', key);
   }
 
   subscribeToInvalidations(handler: (key: string) => void): void {
     const subscriber = this.getClient().duplicate();
-    subscriber.subscribe("cache:invalidate");
-    subscriber.on("message", (channel, message) => {
-      if (channel === "cache:invalidate") {
+    subscriber.subscribe('cache:invalidate');
+    subscriber.on('message', (channel, message) => {
+      if (channel === 'cache:invalidate') {
         handler(message);
       }
     });
@@ -1039,11 +1039,7 @@ export class CacheService {
   // ==================== Specific Cache Methods ====================
 
   // User cache
-  async cacheUser(
-    userId: string,
-    user: any,
-    ttl: number = 3600,
-  ): Promise<void> {
+  async cacheUser(userId: string, user: any, ttl: number = 3600): Promise<void> {
     await this.set(`user:${userId}`, user, ttl);
   }
 
@@ -1056,11 +1052,7 @@ export class CacheService {
   }
 
   // Listing cache
-  async cacheListing(
-    listingId: string,
-    listing: any,
-    ttl: number = 1800,
-  ): Promise<void> {
+  async cacheListing(listingId: string, listing: any, ttl: number = 1800): Promise<void> {
     await this.set(`listing:${listingId}`, listing, ttl);
   }
 
@@ -1075,20 +1067,12 @@ export class CacheService {
   }
 
   // Search results cache
-  async cacheSearchResults(
-    searchKey: string,
-    results: any,
-    ttl: number = 300,
-  ): Promise<void> {
+  async cacheSearchResults(searchKey: string, results: any, ttl: number = 300): Promise<void> {
     await this.set(`search:${searchKey}`, results, ttl);
   }
 
   // Session cache
-  async cacheSession(
-    sessionId: string,
-    session: any,
-    ttl: number = 86400,
-  ): Promise<void> {
+  async cacheSession(sessionId: string, session: any, ttl: number = 86400): Promise<void> {
     await this.set(`session:${sessionId}`, session, ttl);
   }
 
@@ -1113,7 +1097,7 @@ export class CacheService {
     const count = await client.zcard(rateLimitKey);
 
     if (count >= limit) {
-      const oldestEntry = await client.zrange(rateLimitKey, 0, 0, "WITHSCORES");
+      const oldestEntry = await client.zrange(rateLimitKey, 0, 0, 'WITHSCORES');
       const resetAt = new Date(parseInt(oldestEntry[1]) + windowSeconds * 1000);
 
       return {
@@ -1136,22 +1120,13 @@ export class CacheService {
 
   // ==================== Distributed Locks ====================
 
-  async acquireLock(
-    key: string,
-    ttlSeconds: number = 10,
-  ): Promise<string | null> {
+  async acquireLock(key: string, ttlSeconds: number = 10): Promise<string | null> {
     const lockKey = `lock:${key}`;
     const lockValue = crypto.randomUUID();
 
-    const result = await this.getClient().set(
-      lockKey,
-      lockValue,
-      "EX",
-      ttlSeconds,
-      "NX",
-    );
+    const result = await this.getClient().set(lockKey, lockValue, 'EX', ttlSeconds, 'NX');
 
-    return result === "OK" ? lockValue : null;
+    return result === 'OK' ? lockValue : null;
   }
 
   async releaseLock(key: string, lockValue: string): Promise<boolean> {
@@ -1181,9 +1156,9 @@ export class CacheService {
 ```typescript
 // apps/api/src/common/queue/queue.module.ts
 
-import { Module, Global } from "@nestjs/common";
-import { BullModule } from "@nestjs/bull";
-import { ConfigModule, ConfigService } from "@nestjs/config";
+import { Module, Global } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Global()
 @Module({
@@ -1192,14 +1167,14 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
         redis: {
-          host: config.get("REDIS_HOST"),
-          port: config.get("REDIS_PORT"),
-          password: config.get("REDIS_PASSWORD"),
+          host: config.get('REDIS_HOST'),
+          port: config.get('REDIS_PORT'),
+          password: config.get('REDIS_PASSWORD'),
         },
         defaultJobOptions: {
           attempts: 3,
           backoff: {
-            type: "exponential",
+            type: 'exponential',
             delay: 1000,
           },
           removeOnComplete: 100,
@@ -1211,13 +1186,13 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 
     // Register queues
     BullModule.registerQueue(
-      { name: "emails" },
-      { name: "notifications" },
-      { name: "bookings" },
-      { name: "payments" },
-      { name: "search-indexing" },
-      { name: "reports" },
-      { name: "cleanup" },
+      { name: 'emails' },
+      { name: 'notifications' },
+      { name: 'bookings' },
+      { name: 'payments' },
+      { name: 'search-indexing' },
+      { name: 'reports' },
+      { name: 'cleanup' },
     ),
   ],
   exports: [BullModule],
@@ -1228,16 +1203,10 @@ export class QueueModule {}
 ```typescript
 // apps/api/src/modules/bookings/processors/booking.processor.ts
 
-import {
-  Processor,
-  Process,
-  OnQueueActive,
-  OnQueueCompleted,
-  OnQueueFailed,
-} from "@nestjs/bull";
-import { Job } from "bull";
+import { Processor, Process, OnQueueActive, OnQueueCompleted, OnQueueFailed } from '@nestjs/bull';
+import { Job } from 'bull';
 
-@Processor("bookings")
+@Processor('bookings')
 export class BookingProcessor {
   constructor(
     private readonly bookingService: BookingService,
@@ -1245,35 +1214,35 @@ export class BookingProcessor {
     private readonly notificationService: NotificationService,
   ) {}
 
-  @Process("expire-booking-request")
+  @Process('expire-booking-request')
   async expireBookingRequest(job: Job<{ bookingId: string }>) {
     const { bookingId } = job.data;
 
     const booking = await this.bookingService.findById(bookingId);
 
-    if (booking.status === "PENDING_OWNER_APPROVAL") {
+    if (booking.status === 'PENDING_OWNER_APPROVAL') {
       await this.stateMachine.transition(bookingId, BookingStatus.CANCELLED, {
-        triggeredBy: "system",
-        reason: "Booking request expired (48 hours)",
+        triggeredBy: 'system',
+        reason: 'Booking request expired (48 hours)',
       });
     }
   }
 
-  @Process("expire-payment-window")
+  @Process('expire-payment-window')
   async expirePaymentWindow(job: Job<{ bookingId: string }>) {
     const { bookingId } = job.data;
 
     const booking = await this.bookingService.findById(bookingId);
 
-    if (booking.status === "PENDING_PAYMENT") {
+    if (booking.status === 'PENDING_PAYMENT') {
       await this.stateMachine.transition(bookingId, BookingStatus.CANCELLED, {
-        triggeredBy: "system",
-        reason: "Payment window expired (15 minutes)",
+        triggeredBy: 'system',
+        reason: 'Payment window expired (15 minutes)',
       });
     }
   }
 
-  @Process("send-booking-reminder")
+  @Process('send-booking-reminder')
   async sendBookingReminder(job: Job<{ bookingId: string }>) {
     const { bookingId } = job.data;
 
@@ -1282,7 +1251,7 @@ export class BookingProcessor {
     // Send reminder 24 hours before start
     await this.notificationService.send({
       userId: booking.renterId,
-      type: "booking_reminder",
+      type: 'booking_reminder',
       data: {
         bookingId,
         startDate: booking.startDate,
@@ -1290,22 +1259,22 @@ export class BookingProcessor {
     });
   }
 
-  @Process("auto-complete-inspection")
+  @Process('auto-complete-inspection')
   async autoCompleteInspection(job: Job<{ bookingId: string }>) {
     const { bookingId } = job.data;
 
     const booking = await this.bookingService.findById(bookingId);
 
-    if (booking.status === "AWAITING_RETURN_INSPECTION") {
+    if (booking.status === 'AWAITING_RETURN_INSPECTION') {
       // No disputes filed, auto-complete
       await this.stateMachine.transition(bookingId, BookingStatus.COMPLETED, {
-        triggeredBy: "system",
-        reason: "Inspection window expired without disputes",
+        triggeredBy: 'system',
+        reason: 'Inspection window expired without disputes',
       });
     }
   }
 
-  @Process("process-payout")
+  @Process('process-payout')
   async processPayout(job: Job<{ bookingId: string }>) {
     const { bookingId } = job.data;
 
@@ -1334,9 +1303,9 @@ export class BookingProcessor {
 ```typescript
 // apps/api/src/common/scheduler/scheduler.module.ts
 
-import { Module } from "@nestjs/common";
-import { ScheduleModule } from "@nestjs/schedule";
-import { SchedulerService } from "./scheduler.service";
+import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
+import { SchedulerService } from './scheduler.service';
 
 @Module({
   imports: [ScheduleModule.forRoot()],
@@ -1349,8 +1318,8 @@ export class SchedulerModule {}
 ```typescript
 // apps/api/src/common/scheduler/scheduler.service.ts
 
-import { Injectable } from "@nestjs/common";
-import { Cron, CronExpression } from "@nestjs/schedule";
+import { Injectable } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class SchedulerService {
@@ -1363,36 +1332,36 @@ export class SchedulerService {
   // Check for expired booking requests every 5 minutes
   @Cron(CronExpression.EVERY_5_MINUTES)
   async handleExpiredBookings() {
-    console.log("Checking for expired bookings...");
+    console.log('Checking for expired bookings...');
     await this.bookingStateMachine.checkAndTransitionExpiredBookings();
   }
 
   // Auto-complete inspections every hour
   @Cron(CronExpression.EVERY_HOUR)
   async handleInspectionCompletion() {
-    console.log("Checking for inspection completions...");
+    console.log('Checking for inspection completions...');
     await this.bookingStateMachine.autoCompleteAfterInspection();
   }
 
   // Reindex search every night at 2 AM
-  @Cron("0 2 * * *")
+  @Cron('0 2 * * *')
   async reindexSearch() {
-    console.log("Reindexing search...");
+    console.log('Reindexing search...');
     await this.searchService.reindexAll();
   }
 
   // Clean up old data weekly
   @Cron(CronExpression.EVERY_WEEK)
   async cleanupOldData() {
-    console.log("Cleaning up old data...");
+    console.log('Cleaning up old data...');
     await this.cleanupService.archiveOldBookings();
     await this.cleanupService.deleteOldAuditLogs();
   }
 
   // Generate daily reports at 6 AM
-  @Cron("0 6 * * *")
+  @Cron('0 6 * * *')
   async generateDailyReports() {
-    console.log("Generating daily reports...");
+    console.log('Generating daily reports...');
     // Report generation logic
   }
 }
@@ -1408,16 +1377,16 @@ export class SchedulerService {
 
 ```typescript
 // listings/services/listing.service.spec.ts
-import { Test, TestingModule } from "@nestjs/testing";
-import { ListingService } from "./listing.service";
-import { PrismaService } from "@/shared/prisma/prisma.service";
-import { CategoryService } from "@/categories/services/category.service";
-import { CacheService } from "@/shared/cache/cache.service";
-import { SearchService } from "@/search/services/search.service";
-import { CreateListingDto } from "../dto/create-listing.dto";
-import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { Test, TestingModule } from '@nestjs/testing';
+import { ListingService } from './listing.service';
+import { PrismaService } from '@/shared/prisma/prisma.service';
+import { CategoryService } from '@/categories/services/category.service';
+import { CacheService } from '@/shared/cache/cache.service';
+import { SearchService } from '@/search/services/search.service';
+import { CreateListingDto } from '../dto/create-listing.dto';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 
-describe("ListingService", () => {
+describe('ListingService', () => {
   let service: ListingService;
   let prisma: PrismaService;
   let categoryService: CategoryService;
@@ -1473,35 +1442,35 @@ describe("ListingService", () => {
     jest.clearAllMocks();
   });
 
-  describe("createListing", () => {
-    const userId = "user-123";
+  describe('createListing', () => {
+    const userId = 'user-123';
     const createDto: CreateListingDto = {
-      categoryId: "cat-vehicles",
-      title: "Luxury Sedan for Rent",
-      description: "Comfortable ride for business trips",
+      categoryId: 'cat-vehicles',
+      title: 'Luxury Sedan for Rent',
+      description: 'Comfortable ride for business trips',
       categoryData: {
-        vehicleType: "sedan",
-        make: "BMW",
-        model: "5 Series",
+        vehicleType: 'sedan',
+        make: 'BMW',
+        model: '5 Series',
         year: 2022,
-        fuelType: "gasoline",
+        fuelType: 'gasoline',
       },
-      pricingMode: "per_day",
+      pricingMode: 'per_day',
       basePrice: 150,
       location: {
-        address: "123 Main St",
-        city: "New York",
-        state: "NY",
-        zipCode: "10001",
-        country: "US",
+        address: '123 Main St',
+        city: 'New York',
+        state: 'NY',
+        zipCode: '10001',
+        country: 'US',
         latitude: 40.7128,
         longitude: -74.006,
       },
     };
 
-    it("should create a listing with valid data", async () => {
-      const category = { id: "cat-vehicles", name: "Vehicles" };
-      const createdListing = { id: "listing-123", ...createDto, userId };
+    it('should create a listing with valid data', async () => {
+      const category = { id: 'cat-vehicles', name: 'Vehicles' };
+      const createdListing = { id: 'listing-123', ...createDto, userId };
 
       mockCategoryService.getCategoryById.mockResolvedValue(category);
       mockCategoryService.validateCategoryData.mockResolvedValue(true);
@@ -1510,9 +1479,7 @@ describe("ListingService", () => {
 
       const result = await service.createListing(userId, createDto);
 
-      expect(categoryService.getCategoryById).toHaveBeenCalledWith(
-        createDto.categoryId,
-      );
+      expect(categoryService.getCategoryById).toHaveBeenCalledWith(createDto.categoryId);
       expect(categoryService.validateCategoryData).toHaveBeenCalledWith(
         createDto.categoryId,
         createDto.categoryData,
@@ -1522,7 +1489,7 @@ describe("ListingService", () => {
           userId,
           categoryId: createDto.categoryId,
           title: createDto.title,
-          status: "DRAFT",
+          status: 'DRAFT',
         }),
         include: expect.any(Object),
       });
@@ -1530,35 +1497,31 @@ describe("ListingService", () => {
       expect(result).toEqual(createdListing);
     });
 
-    it("should throw NotFoundException for invalid category", async () => {
+    it('should throw NotFoundException for invalid category', async () => {
       mockCategoryService.getCategoryById.mockResolvedValue(null);
 
-      await expect(service.createListing(userId, createDto)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.createListing(userId, createDto)).rejects.toThrow(NotFoundException);
       expect(prisma.listing.create).not.toHaveBeenCalled();
     });
 
-    it("should handle validation errors for category data", async () => {
-      const category = { id: "cat-vehicles", name: "Vehicles" };
+    it('should handle validation errors for category data', async () => {
+      const category = { id: 'cat-vehicles', name: 'Vehicles' };
       mockCategoryService.getCategoryById.mockResolvedValue(category);
-      mockCategoryService.validateCategoryData.mockRejectedValue(
-        new Error("Invalid vehicle data"),
-      );
+      mockCategoryService.validateCategoryData.mockRejectedValue(new Error('Invalid vehicle data'));
 
       await expect(service.createListing(userId, createDto)).rejects.toThrow(
-        "Invalid vehicle data",
+        'Invalid vehicle data',
       );
       expect(prisma.listing.create).not.toHaveBeenCalled();
     });
   });
 
-  describe("updateListing", () => {
-    it("should update listing when user is owner", async () => {
-      const listingId = "listing-123";
-      const userId = "user-123";
-      const updateData = { title: "Updated Title", basePrice: 200 };
-      const existingListing = { id: listingId, userId, title: "Old Title" };
+  describe('updateListing', () => {
+    it('should update listing when user is owner', async () => {
+      const listingId = 'listing-123';
+      const userId = 'user-123';
+      const updateData = { title: 'Updated Title', basePrice: 200 };
+      const existingListing = { id: listingId, userId, title: 'Old Title' };
       const updatedListing = { ...existingListing, ...updateData };
 
       mockPrisma.listing.findUnique.mockResolvedValue(existingListing);
@@ -1576,22 +1539,20 @@ describe("ListingService", () => {
         data: updateData,
         include: expect.any(Object),
       });
-      expect(cacheService.invalidate).toHaveBeenCalledWith(
-        `listing:${listingId}`,
-      );
+      expect(cacheService.invalidate).toHaveBeenCalledWith(`listing:${listingId}`);
       expect(searchService.indexListing).toHaveBeenCalledWith(updatedListing);
       expect(result).toEqual(updatedListing);
     });
 
-    it("should throw ForbiddenException when user is not owner", async () => {
-      const listingId = "listing-123";
-      const userId = "user-456";
-      const existingListing = { id: listingId, userId: "user-123" };
+    it('should throw ForbiddenException when user is not owner', async () => {
+      const listingId = 'listing-123';
+      const userId = 'user-456';
+      const existingListing = { id: listingId, userId: 'user-123' };
 
       mockPrisma.listing.findUnique.mockResolvedValue(existingListing);
 
       await expect(
-        service.updateListing(listingId, userId, { title: "New Title" }),
+        service.updateListing(listingId, userId, { title: 'New Title' }),
       ).rejects.toThrow(ForbiddenException);
       expect(prisma.listing.update).not.toHaveBeenCalled();
     });
@@ -1604,21 +1565,21 @@ describe("ListingService", () => {
 ```typescript
 // jest.config.js
 module.exports = {
-  moduleFileExtensions: ["js", "json", "ts"],
-  rootDir: "src",
-  testRegex: ".*\\.spec\\.ts$",
+  moduleFileExtensions: ['js', 'json', 'ts'],
+  rootDir: 'src',
+  testRegex: '.*\\.spec\\.ts$',
   transform: {
-    "^.+\\.(t|j)s$": "ts-jest",
+    '^.+\\.(t|j)s$': 'ts-jest',
   },
   collectCoverageFrom: [
-    "**/*.(t|j)s",
-    "!**/*.module.ts",
-    "!**/main.ts",
-    "!**/*.interface.ts",
-    "!**/*.dto.ts",
+    '**/*.(t|j)s',
+    '!**/*.module.ts',
+    '!**/main.ts',
+    '!**/*.interface.ts',
+    '!**/*.dto.ts',
   ],
-  coverageDirectory: "../coverage",
-  testEnvironment: "node",
+  coverageDirectory: '../coverage',
+  testEnvironment: 'node',
   coverageThresholds: {
     global: {
       branches: 80,
@@ -1636,14 +1597,14 @@ module.exports = {
 
 ```typescript
 // test/bookings/create-booking.e2e-spec.ts
-import { Test, TestingModule } from "@nestjs/testing";
-import { INestApplication, ValidationPipe } from "@nestjs/common";
-import * as request from "supertest";
-import { AppModule } from "@/app.module";
-import { PrismaService } from "@/shared/prisma/prisma.service";
-import { JwtService } from "@nestjs/jwt";
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import * as request from 'supertest';
+import { AppModule } from '@/app.module';
+import { PrismaService } from '@/shared/prisma/prisma.service';
+import { JwtService } from '@nestjs/jwt';
 
-describe("Bookings API (e2e)", () => {
+describe('Bookings API (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let jwtService: JwtService;
@@ -1657,9 +1618,7 @@ describe("Bookings API (e2e)", () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
 
     prisma = app.get<PrismaService>(PrismaService);
@@ -1673,10 +1632,10 @@ describe("Bookings API (e2e)", () => {
     // Create test user
     const user = await prisma.user.create({
       data: {
-        email: "renter@test.com",
-        firstName: "John",
-        lastName: "Doe",
-        passwordHash: "hashed_password",
+        email: 'renter@test.com',
+        firstName: 'John',
+        lastName: 'Doe',
+        passwordHash: 'hashed_password',
         emailVerified: true,
         phoneVerified: true,
       },
@@ -1687,23 +1646,23 @@ describe("Bookings API (e2e)", () => {
     // Create test listing
     const listing = await prisma.listing.create({
       data: {
-        userId: "owner-123",
-        categoryId: "cat-vehicles",
-        title: "Test Vehicle",
-        description: "Test description",
-        pricingMode: "per_day",
+        userId: 'owner-123',
+        categoryId: 'cat-vehicles',
+        title: 'Test Vehicle',
+        description: 'Test description',
+        pricingMode: 'per_day',
         basePrice: 100,
         location: {
-          address: "123 Main St",
-          city: "New York",
-          state: "NY",
-          zipCode: "10001",
-          country: "US",
+          address: '123 Main St',
+          city: 'New York',
+          state: 'NY',
+          zipCode: '10001',
+          country: 'US',
           latitude: 40.7128,
           longitude: -74.006,
         },
         categoryData: {},
-        status: "ACTIVE",
+        status: 'ACTIVE',
         instantBookEnabled: true,
       },
     });
@@ -1715,8 +1674,8 @@ describe("Bookings API (e2e)", () => {
     await app.close();
   });
 
-  describe("POST /api/bookings", () => {
-    it("should create an instant booking", async () => {
+  describe('POST /api/bookings', () => {
+    it('should create an instant booking', async () => {
       const bookingData = {
         listingId,
         startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1725,17 +1684,17 @@ describe("Bookings API (e2e)", () => {
       };
 
       const response = await request(app.getHttpServer())
-        .post("/api/bookings")
-        .set("Authorization", `Bearer ${userToken}`)
+        .post('/api/bookings')
+        .set('Authorization', `Bearer ${userToken}`)
         .send(bookingData)
         .expect(201);
 
       expect(response.body).toMatchObject({
         listingId,
         renterId: userId,
-        status: "CONFIRMED",
+        status: 'CONFIRMED',
         totalPrice: 300,
-        bookingType: "INSTANT",
+        bookingType: 'INSTANT',
       });
       expect(response.body.id).toBeDefined();
       expect(response.body.confirmationCode).toBeDefined();
@@ -1745,10 +1704,10 @@ describe("Bookings API (e2e)", () => {
         where: { id: response.body.id },
       });
       expect(booking).toBeTruthy();
-      expect(booking.status).toBe("CONFIRMED");
+      expect(booking.status).toBe('CONFIRMED');
     });
 
-    it("should reject booking with past start date", async () => {
+    it('should reject booking with past start date', async () => {
       const bookingData = {
         listingId,
         startDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
@@ -1757,13 +1716,13 @@ describe("Bookings API (e2e)", () => {
       };
 
       await request(app.getHttpServer())
-        .post("/api/bookings")
-        .set("Authorization", `Bearer ${userToken}`)
+        .post('/api/bookings')
+        .set('Authorization', `Bearer ${userToken}`)
         .send(bookingData)
         .expect(400);
     });
 
-    it("should reject booking with unavailable dates", async () => {
+    it('should reject booking with unavailable dates', async () => {
       // Create existing booking
       const startDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       const endDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
@@ -1771,12 +1730,12 @@ describe("Bookings API (e2e)", () => {
       await prisma.booking.create({
         data: {
           listingId,
-          renterId: "other-user-123",
+          renterId: 'other-user-123',
           startDate,
           endDate,
-          status: "CONFIRMED",
+          status: 'CONFIRMED',
           totalPrice: 300,
-          bookingType: "INSTANT",
+          bookingType: 'INSTANT',
         },
       });
 
@@ -1789,24 +1748,21 @@ describe("Bookings API (e2e)", () => {
       };
 
       const response = await request(app.getHttpServer())
-        .post("/api/bookings")
-        .set("Authorization", `Bearer ${userToken}`)
+        .post('/api/bookings')
+        .set('Authorization', `Bearer ${userToken}`)
         .send(bookingData)
         .expect(409);
 
-      expect(response.body.message).toContain("not available");
+      expect(response.body.message).toContain('not available');
     });
 
-    it("should require authentication", async () => {
-      await request(app.getHttpServer())
-        .post("/api/bookings")
-        .send({ listingId })
-        .expect(401);
+    it('should require authentication', async () => {
+      await request(app.getHttpServer()).post('/api/bookings').send({ listingId }).expect(401);
     });
   });
 
-  describe("POST /api/bookings/:id/cancel", () => {
-    it("should cancel booking with full refund within policy", async () => {
+  describe('POST /api/bookings/:id/cancel', () => {
+    it('should cancel booking with full refund within policy', async () => {
       // Create booking
       const booking = await prisma.booking.create({
         data: {
@@ -1814,27 +1770,27 @@ describe("Bookings API (e2e)", () => {
           renterId: userId,
           startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           endDate: new Date(Date.now() + 33 * 24 * 60 * 60 * 1000),
-          status: "CONFIRMED",
+          status: 'CONFIRMED',
           totalPrice: 300,
-          bookingType: "INSTANT",
+          bookingType: 'INSTANT',
         },
       });
 
       const response = await request(app.getHttpServer())
         .post(`/api/bookings/${booking.id}/cancel`)
-        .set("Authorization", `Bearer ${userToken}`)
-        .send({ reason: "Change of plans" })
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ reason: 'Change of plans' })
         .expect(200);
 
       expect(response.body).toMatchObject({
-        status: "CANCELLED_BY_RENTER",
+        status: 'CANCELLED_BY_RENTER',
         refundAmount: 300,
       });
 
       const updatedBooking = await prisma.booking.findUnique({
         where: { id: booking.id },
       });
-      expect(updatedBooking.status).toBe("CANCELLED_BY_RENTER");
+      expect(updatedBooking.status).toBe('CANCELLED_BY_RENTER');
     });
   });
 });
@@ -1846,26 +1802,24 @@ describe("Bookings API (e2e)", () => {
 
 ```typescript
 // e2e/booking-flow.spec.ts
-import { test, expect } from "@playwright/test";
+import { test, expect } from '@playwright/test';
 
-test.describe("Complete Booking Flow", () => {
+test.describe('Complete Booking Flow', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("http://localhost:5173");
+    await page.goto('http://localhost:5173');
   });
 
-  test("user can search, view, and book a listing", async ({ page }) => {
+  test('user can search, view, and book a listing', async ({ page }) => {
     // 1. Search for listings
-    await page.fill('[data-testid="search-input"]', "New York");
-    await page.selectOption('[data-testid="category-select"]', "vehicles");
-    await page.fill('[data-testid="start-date"]', "2026-06-01");
-    await page.fill('[data-testid="end-date"]', "2026-06-05");
+    await page.fill('[data-testid="search-input"]', 'New York');
+    await page.selectOption('[data-testid="category-select"]', 'vehicles');
+    await page.fill('[data-testid="start-date"]', '2026-06-01');
+    await page.fill('[data-testid="end-date"]', '2026-06-05');
     await page.click('[data-testid="search-button"]');
 
     // Wait for search results
     await page.waitForSelector('[data-testid="listing-card"]');
-    const listingCount = await page
-      .locator('[data-testid="listing-card"]')
-      .count();
+    const listingCount = await page.locator('[data-testid="listing-card"]').count();
     expect(listingCount).toBeGreaterThan(0);
 
     // 2. Click first listing
@@ -1873,28 +1827,26 @@ test.describe("Complete Booking Flow", () => {
     await page.waitForURL(/\/listings\/\w+/);
 
     // Verify listing details page
-    await expect(page.locator("h1")).toBeVisible();
+    await expect(page.locator('h1')).toBeVisible();
     await expect(page.locator('[data-testid="price-display"]')).toBeVisible();
     await expect(page.locator('[data-testid="host-info"]')).toBeVisible();
 
     // 3. Fill booking form
-    await page.fill('[data-testid="guests-input"]', "2");
-    await page.fill('[data-testid="booking-start-date"]', "2026-06-01");
-    await page.fill('[data-testid="booking-end-date"]', "2026-06-05");
+    await page.fill('[data-testid="guests-input"]', '2');
+    await page.fill('[data-testid="booking-start-date"]', '2026-06-01');
+    await page.fill('[data-testid="booking-end-date"]', '2026-06-05');
 
     // Verify price calculation
-    const totalPrice = await page
-      .locator('[data-testid="total-price"]')
-      .textContent();
-    expect(totalPrice).toContain("$");
+    const totalPrice = await page.locator('[data-testid="total-price"]').textContent();
+    expect(totalPrice).toContain('$');
 
     // 4. Login if not authenticated
     await page.click('[data-testid="book-now-button"]');
 
     const url = page.url();
-    if (url.includes("/login")) {
-      await page.fill('[data-testid="email-input"]', "test@example.com");
-      await page.fill('[data-testid="password-input"]', "Test123!@#");
+    if (url.includes('/login')) {
+      await page.fill('[data-testid="email-input"]', 'test@example.com');
+      await page.fill('[data-testid="password-input"]', 'Test123!@#');
       await page.click('[data-testid="login-button"]');
       await page.waitForURL(/\/listings\/\w+/);
     }
@@ -1904,75 +1856,60 @@ test.describe("Complete Booking Flow", () => {
     await page.waitForURL(/\/bookings\/\w+\/payment/);
 
     // Fill Stripe payment form
-    const stripeFrame = page
-      .frameLocator('[name^="__privateStripeFrame"]')
-      .first();
-    await stripeFrame.locator('[name="cardnumber"]').fill("4242424242424242");
-    await stripeFrame.locator('[name="exp-date"]').fill("12/30");
-    await stripeFrame.locator('[name="cvc"]').fill("123");
-    await stripeFrame.locator('[name="postal"]').fill("10001");
+    const stripeFrame = page.frameLocator('[name^="__privateStripeFrame"]').first();
+    await stripeFrame.locator('[name="cardnumber"]').fill('4242424242424242');
+    await stripeFrame.locator('[name="exp-date"]').fill('12/30');
+    await stripeFrame.locator('[name="cvc"]').fill('123');
+    await stripeFrame.locator('[name="postal"]').fill('10001');
 
     await page.click('[data-testid="pay-button"]');
 
     // 6. Verify confirmation
     await page.waitForURL(/\/bookings\/\w+\/confirmation/, { timeout: 10000 });
-    await expect(
-      page.locator('[data-testid="confirmation-message"]'),
-    ).toContainText("confirmed");
-    await expect(
-      page.locator('[data-testid="confirmation-code"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="confirmation-message"]')).toContainText('confirmed');
+    await expect(page.locator('[data-testid="confirmation-code"]')).toBeVisible();
 
     // Verify booking appears in user's trips
     await page.click('[data-testid="my-trips-link"]');
-    await page.waitForURL("/account/trips");
-    await expect(
-      page.locator('[data-testid="booking-card"]').first(),
-    ).toBeVisible();
+    await page.waitForURL('/account/trips');
+    await expect(page.locator('[data-testid="booking-card"]').first()).toBeVisible();
   });
 
-  test("user can message host about listing", async ({ page, context }) => {
+  test('user can message host about listing', async ({ page, context }) => {
     // Login
-    await page.goto("http://localhost:5173/login");
-    await page.fill('[data-testid="email-input"]', "test@example.com");
-    await page.fill('[data-testid="password-input"]', "Test123!@#");
+    await page.goto('http://localhost:5173/login');
+    await page.fill('[data-testid="email-input"]', 'test@example.com');
+    await page.fill('[data-testid="password-input"]', 'Test123!@#');
     await page.click('[data-testid="login-button"]');
 
     // Navigate to listing
-    await page.goto("http://localhost:5173/listings/test-listing-id");
+    await page.goto('http://localhost:5173/listings/test-listing-id');
 
     // Open messaging panel
     await page.click('[data-testid="contact-host-button"]');
     await expect(page.locator('[data-testid="message-panel"]')).toBeVisible();
 
     // Send message
-    await page.fill(
-      '[data-testid="message-input"]',
-      "Is this available for June 1-5?",
-    );
+    await page.fill('[data-testid="message-input"]', 'Is this available for June 1-5?');
     await page.click('[data-testid="send-message-button"]');
 
     // Verify message sent
     await expect(
-      page
-        .locator('[data-testid="message-bubble"]')
-        .filter({ hasText: "Is this available" }),
+      page.locator('[data-testid="message-bubble"]').filter({ hasText: 'Is this available' }),
     ).toBeVisible();
 
     // Verify real-time delivery in second tab (host view)
     const hostPage = await context.newPage();
-    await hostPage.goto("http://localhost:5173/messages");
-    await hostPage.fill('[data-testid="email-input"]', "host@example.com");
-    await hostPage.fill('[data-testid="password-input"]', "Host123!@#");
+    await hostPage.goto('http://localhost:5173/messages');
+    await hostPage.fill('[data-testid="email-input"]', 'host@example.com');
+    await hostPage.fill('[data-testid="password-input"]', 'Host123!@#');
     await hostPage.click('[data-testid="login-button"]');
 
     await hostPage.waitForSelector('[data-testid="conversation-item"]');
     await hostPage.click('[data-testid="conversation-item"]:first-child');
 
     await expect(
-      hostPage
-        .locator('[data-testid="message-bubble"]')
-        .filter({ hasText: "Is this available" }),
+      hostPage.locator('[data-testid="message-bubble"]').filter({ hasText: 'Is this available' }),
     ).toBeVisible();
   });
 });
@@ -1982,53 +1919,53 @@ test.describe("Complete Booking Flow", () => {
 
 ```typescript
 // playwright.config.ts
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: [["html"], ["junit", { outputFile: "test-results/junit.xml" }]],
+  reporter: [['html'], ['junit', { outputFile: 'test-results/junit.xml' }]],
   use: {
-    baseURL: "http://localhost:5173",
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
+    baseURL: 'http://localhost:5173',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
   },
   projects: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
     },
     {
-      name: "webkit",
-      use: { ...devices["Desktop Safari"] },
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
     },
     {
-      name: "Mobile Chrome",
-      use: { ...devices["Pixel 5"] },
+      name: 'Mobile Chrome',
+      use: { ...devices['Pixel 5'] },
     },
     {
-      name: "Mobile Safari",
-      use: { ...devices["iPhone 12"] },
+      name: 'Mobile Safari',
+      use: { ...devices['iPhone 12'] },
     },
   ],
   webServer: [
     {
-      command: "npm run dev",
+      command: 'npm run dev',
       port: 5173,
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: "npm run start:dev",
+      command: 'npm run start:dev',
       port: 3000,
       reuseExistingServer: !process.env.CI,
-      cwd: "./backend",
+      cwd: './backend',
     },
   ],
 });
@@ -2040,39 +1977,39 @@ export default defineConfig({
 
 ```javascript
 // k6/booking-load-test.js
-import http from "k6/http";
-import { check, sleep } from "k6";
-import { Rate } from "k6/metrics";
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+import { Rate } from 'k6/metrics';
 
-const errorRate = new Rate("errors");
+const errorRate = new Rate('errors');
 
 export const options = {
   stages: [
-    { duration: "2m", target: 100 }, // Ramp up to 100 users
-    { duration: "5m", target: 100 }, // Stay at 100 users
-    { duration: "2m", target: 200 }, // Ramp up to 200 users
-    { duration: "5m", target: 200 }, // Stay at 200 users
-    { duration: "2m", target: 0 }, // Ramp down to 0 users
+    { duration: '2m', target: 100 }, // Ramp up to 100 users
+    { duration: '5m', target: 100 }, // Stay at 100 users
+    { duration: '2m', target: 200 }, // Ramp up to 200 users
+    { duration: '5m', target: 200 }, // Stay at 200 users
+    { duration: '2m', target: 0 }, // Ramp down to 0 users
   ],
   thresholds: {
-    http_req_duration: ["p(95)<500", "p(99)<1000"], // 95% under 500ms, 99% under 1s
-    http_req_failed: ["rate<0.01"], // Error rate under 1%
-    errors: ["rate<0.05"], // Business logic errors under 5%
+    http_req_duration: ['p(95)<500', 'p(99)<1000'], // 95% under 500ms, 99% under 1s
+    http_req_failed: ['rate<0.01'], // Error rate under 1%
+    errors: ['rate<0.05'], // Business logic errors under 5%
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || "http://localhost:3000";
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 
 export function setup() {
   // Create test user and get auth token
   const loginRes = http.post(
     `${BASE_URL}/api/auth/login`,
     JSON.stringify({
-      email: "loadtest@example.com",
-      password: "LoadTest123!",
+      email: 'loadtest@example.com',
+      password: 'LoadTest123!',
     }),
     {
-      headers: { "Content-Type": "application/json" },
+      headers: { 'Content-Type': 'application/json' },
     },
   );
 
@@ -2083,7 +2020,7 @@ export function setup() {
 
 export default function (data) {
   const headers = {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
     Authorization: `Bearer ${data.authToken}`,
   };
 
@@ -2094,8 +2031,8 @@ export default function (data) {
   );
 
   check(searchRes, {
-    "search status is 200": (r) => r.status === 200,
-    "search returns results": (r) => JSON.parse(r.body).results.length > 0,
+    'search status is 200': (r) => r.status === 200,
+    'search returns results': (r) => JSON.parse(r.body).results.length > 0,
   }) || errorRate.add(1);
 
   sleep(1);
@@ -2109,8 +2046,8 @@ export default function (data) {
     });
 
     check(detailsRes, {
-      "details status is 200": (r) => r.status === 200,
-      "details load time < 300ms": (r) => r.timings.duration < 300,
+      'details status is 200': (r) => r.status === 200,
+      'details load time < 300ms': (r) => r.timings.duration < 300,
     }) || errorRate.add(1);
   }
 
@@ -2122,15 +2059,15 @@ export default function (data) {
     const availabilityRes = http.post(
       `${BASE_URL}/api/listings/${listingId}/check-availability`,
       JSON.stringify({
-        startDate: "2026-06-01T00:00:00Z",
-        endDate: "2026-06-05T00:00:00Z",
+        startDate: '2026-06-01T00:00:00Z',
+        endDate: '2026-06-05T00:00:00Z',
       }),
       { headers },
     );
 
     check(availabilityRes, {
-      "availability check status is 200": (r) => r.status === 200,
-      "availability responds quickly": (r) => r.timings.duration < 200,
+      'availability check status is 200': (r) => r.status === 200,
+      'availability responds quickly': (r) => r.timings.duration < 200,
     }) || errorRate.add(1);
   }
 
@@ -2143,17 +2080,16 @@ export default function (data) {
       `${BASE_URL}/api/bookings`,
       JSON.stringify({
         listingId,
-        startDate: "2026-06-01T00:00:00Z",
-        endDate: "2026-06-05T00:00:00Z",
+        startDate: '2026-06-01T00:00:00Z',
+        endDate: '2026-06-05T00:00:00Z',
         guests: 2,
       }),
       { headers },
     );
 
     check(bookingRes, {
-      "booking creation status is 201": (r) => r.status === 201,
-      "booking has confirmation code": (r) =>
-        JSON.parse(r.body).confirmationCode !== undefined,
+      'booking creation status is 201': (r) => r.status === 201,
+      'booking has confirmation code': (r) => JSON.parse(r.body).confirmationCode !== undefined,
     }) || errorRate.add(1);
   }
 
@@ -2169,42 +2105,42 @@ export function teardown(data) {
 
 ```javascript
 // k6/search-performance-test.js
-import http from "k6/http";
-import { check } from "k6";
+import http from 'k6/http';
+import { check } from 'k6';
 
 export const options = {
   scenarios: {
     constant_load: {
-      executor: "constant-vus",
+      executor: 'constant-vus',
       vus: 50,
-      duration: "5m",
+      duration: '5m',
     },
     spike_test: {
-      executor: "ramping-vus",
+      executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: "10s", target: 500 }, // Spike to 500 users
-        { duration: "1m", target: 500 }, // Stay at 500
-        { duration: "10s", target: 0 }, // Drop to 0
+        { duration: '10s', target: 500 }, // Spike to 500 users
+        { duration: '1m', target: 500 }, // Stay at 500
+        { duration: '10s', target: 0 }, // Drop to 0
       ],
-      startTime: "5m", // Start after constant load
+      startTime: '5m', // Start after constant load
     },
   },
   thresholds: {
-    "http_req_duration{scenario:constant_load}": ["p(95)<400"],
-    "http_req_duration{scenario:spike_test}": ["p(95)<800"],
-    http_req_failed: ["rate<0.01"],
+    'http_req_duration{scenario:constant_load}': ['p(95)<400'],
+    'http_req_duration{scenario:spike_test}': ['p(95)<800'],
+    http_req_failed: ['rate<0.01'],
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || "http://localhost:3000";
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 
 const searchQueries = [
-  "?category=vehicles&location=New%20York",
-  "?category=spaces&priceMin=50&priceMax=200",
-  "?category=instruments&query=guitar",
-  "?location=Los%20Angeles&radius=25",
-  "?verified=true&instantBook=true",
+  '?category=vehicles&location=New%20York',
+  '?category=spaces&priceMin=50&priceMax=200',
+  '?category=instruments&query=guitar',
+  '?location=Los%20Angeles&radius=25',
+  '?verified=true&instantBook=true',
 ];
 
 export default function () {
@@ -2212,9 +2148,9 @@ export default function () {
   const res = http.get(`${BASE_URL}/api/listings/search${query}`);
 
   check(res, {
-    "search successful": (r) => r.status === 200,
-    "returns results": (r) => JSON.parse(r.body).results !== undefined,
-    "fast response": (r) => r.timings.duration < 500,
+    'search successful': (r) => r.status === 200,
+    'returns results': (r) => JSON.parse(r.body).results !== undefined,
+    'fast response': (r) => r.timings.duration < 500,
   });
 }
 ```
@@ -2232,7 +2168,7 @@ on:
     branches: [main, develop]
   pull_request:
   schedule:
-    - cron: "0 2 * * 1" # Weekly on Monday at 2 AM
+    - cron: '0 2 * * 1' # Weekly on Monday at 2 AM
 
 jobs:
   dependency-check:
@@ -2264,12 +2200,12 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: rental-portal:test
-          format: "sarif"
-          output: "trivy-results.sarif"
+          format: 'sarif'
+          output: 'trivy-results.sarif'
       - name: Upload results
         uses: github/codeql-action/upload-sarif@v2
         with:
-          sarif_file: "trivy-results.sarif"
+          sarif_file: 'trivy-results.sarif'
 ```
 
 **Manual Security Test Cases:**
