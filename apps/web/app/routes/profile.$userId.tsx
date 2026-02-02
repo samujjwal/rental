@@ -24,28 +24,33 @@ import type { Listing } from "~/types/listing";
 import type { Review } from "~/types/review";
 import { format } from "date-fns";
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof clientLoader> = ({ data }) => {
   return [
-    { title: `${data?.user?.fullName || "User"} Profile | GharBatai Rentals` },
+    {
+      title: `${data?.user?.firstName} ${data?.user?.lastName || ""} Profile | GharBatai Rentals`,
+    },
   ];
 };
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function clientLoader({ params }: LoaderFunctionArgs) {
   const userId = params.userId;
   if (!userId) {
     throw redirect("/");
   }
 
   try {
-    const [user, listings, reviews] = await Promise.all([
+    const [user, listingsResponse, reviewsResponse] = await Promise.all([
       usersApi.getUserById(userId),
       listingsApi.getListingsByOwnerId(userId),
       reviewsApi.getReviewsForUser(userId),
     ]);
 
+    const listings = listingsResponse.listings || [];
+    const reviews = reviewsResponse.reviews || [];
+
     // Calculate statistics
     const totalListings = listings.length;
-    const activeListings = listings.filter((l) => l.status === "ACTIVE").length;
+    const activeListings = listings.filter((l) => l.status === "AVAILABLE").length;
     const averageRating =
       reviews.length > 0
         ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
@@ -114,7 +119,7 @@ function ReviewCard({ review }: { review: Review }) {
           </div>
           <div className="ml-3">
             <p className="font-medium text-foreground">
-              {review.reviewer?.fullName}
+              {review.reviewer?.firstName} {review.reviewer?.lastName}
             </p>
             <p className="text-sm text-muted-foreground">
               {format(new Date(review.createdAt), "MMM d, yyyy")}
@@ -151,7 +156,7 @@ function ListingCard({ listing }: { listing: Listing }) {
       <div className="aspect-video bg-muted relative">
         {listing.images?.[0] ? (
           <img
-            src={listing.images[0].url}
+            src={listing.images[0]}
             alt={listing.title}
             className="w-full h-full object-cover"
           />
@@ -160,7 +165,7 @@ function ListingCard({ listing }: { listing: Listing }) {
             <Package className="w-12 h-12 text-muted-foreground" />
           </div>
         )}
-        {listing.status === "ACTIVE" && (
+        {listing.status === "AVAILABLE" && (
           <span className="absolute top-2 right-2 px-2 py-1 bg-success text-success-foreground text-xs font-semibold rounded">
             Available
           </span>
@@ -175,13 +180,13 @@ function ListingCard({ listing }: { listing: Listing }) {
         </p>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
-            ${listing.dailyRate}/day
+            ${listing.pricePerDay}/day
           </span>
-          {listing.averageRating > 0 && (
+          {(listing.averageRating || 0) > 0 && (
             <div className="flex items-center">
               <Star className="w-4 h-4 text-yellow-400 fill-current" />
               <span className="ml-1 text-sm text-muted-foreground">
-                {listing.averageRating.toFixed(1)}
+                {(listing.averageRating || 0).toFixed(1)}
               </span>
             </div>
           )}
@@ -192,14 +197,14 @@ function ListingCard({ listing }: { listing: Listing }) {
 }
 
 export default function ProfileRoute() {
-  const { user, listings, reviews, stats } = useLoaderData<typeof loader>();
+  const { user, listings, reviews, stats } = useLoaderData<typeof clientLoader>();
   const [activeTab, setActiveTab] = useState<"listings" | "reviews">(
     "listings"
   );
 
   const memberSince = format(new Date(user.createdAt), "MMMM yyyy");
-  const responseRate = user.responseRate || 0;
-  const responseTime = user.responseTime || "N/A";
+  const responseRate = user.responseRate ?? 100;
+  const responseTime = user.responseTime || "1 hour";
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -209,14 +214,14 @@ export default function ProfileRoute() {
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             {/* Avatar */}
             <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center text-primary text-3xl font-bold flex-shrink-0">
-              {user.avatarUrl ? (
+              {user.avatar ? (
                 <img
-                  src={user.avatarUrl}
-                  alt={user.fullName}
+                  src={user.avatar}
+                  alt={`${user.firstName} ${user.lastName}`}
                   className="w-full h-full rounded-full object-cover"
                 />
               ) : (
-                user.fullName.charAt(0).toUpperCase()
+                user.firstName.charAt(0).toUpperCase()
               )}
             </div>
 
@@ -225,23 +230,23 @@ export default function ProfileRoute() {
               <div className="flex items-start justify-between">
                 <div>
                   <h1 className="text-3xl font-bold text-foreground mb-2">
-                    {user.fullName}
+                    {user.firstName} {user.lastName}
                   </h1>
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center">
                       <Mail className="w-4 h-4 mr-1" />
                       {user.email}
                     </div>
-                    {user.phoneNumber && (
+                    {user.phone && (
                       <div className="flex items-center">
                         <Phone className="w-4 h-4 mr-1" />
-                        {user.phoneNumber}
+                        {user.phone}
                       </div>
                     )}
                     {user.location && (
                       <div className="flex items-center">
                         <MapPin className="w-4 h-4 mr-1" />
-                        {user.location}
+                        {user.location.city}, {user.location.state}
                       </div>
                     )}
                     <div className="flex items-center">

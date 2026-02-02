@@ -123,7 +123,55 @@ export class SearchService {
 
     // Category filter
     if (searchQuery.categoryId) {
-      where.categoryId = searchQuery.categoryId;
+      const catId = searchQuery.categoryId.toUpperCase();
+      if (catId === 'SPACES') {
+        where.category = {
+          slug: {
+            in: [
+              'apartment',
+              'house',
+              'villa',
+              'studio',
+              'condo',
+              'townhouse',
+              'cottage',
+            ],
+          },
+        };
+      } else if (catId === 'VEHICLES') {
+        where.category = {
+          slug: { in: ['cars', 'motorcycles', 'bicycles', 'rvs-campers', 'boats'] },
+        };
+      } else if (catId === 'INSTRUMENTS') {
+        where.category = {
+          slug: { in: ['musical-instruments', 'audio-equipment'] },
+        };
+      } else if (catId === 'EVENT_VENUES') {
+        where.category = { slug: { in: ['event-venues'] } };
+      } else if (catId === 'EVENT_ITEMS' || catId === 'PARTY') {
+        where.category = { slug: { in: ['event-equipment', 'party-supplies'] } };
+      } else if (catId === 'WEARABLES') {
+        where.category = { slug: { in: ['formal-wear'] } };
+      } else if (catId === 'SPORTS') {
+        where.category = { slug: { in: ['sports-equipment'] } };
+      } else if (catId === 'PHOTOGRAPHY') {
+        where.category = { slug: { in: ['photography-equipment'] } };
+      } else {
+        // Default to exact ID match or fuzzy name/slug match
+        where.OR = [
+          { categoryId: searchQuery.categoryId },
+          {
+            category: {
+              name: { contains: searchQuery.categoryId, mode: 'insensitive' },
+            },
+          },
+          {
+            category: {
+              slug: { contains: searchQuery.categoryId, mode: 'insensitive' },
+            },
+          },
+        ];
+      }
     }
 
     // Location filtering
@@ -176,10 +224,10 @@ export class SearchService {
 
     try {
       // Get total count
-      const total = await this.prisma.property.count({ where });
+      const total = await this.prisma.listing.count({ where });
 
       // Get listings with relations
-      const listings = await this.prisma.property.findMany({
+      const listings = await this.prisma.listing.findMany({
         where,
         include: {
           owner: {
@@ -260,7 +308,7 @@ export class SearchService {
     if (cached) return cached;
 
     try {
-      const listings = await this.prisma.property.findMany({
+      const listings = await this.prisma.listing.findMany({
         where: {
           status: PROPERTY_STATUS.AVAILABLE,
           verificationStatus: VERIFICATION_STATUS.VERIFIED,

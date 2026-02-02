@@ -1,5 +1,5 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link, useSearchParams } from "react-router";
+import { useLoaderData, Link, useSearchParams, useNavigation, useRevalidator } from "react-router";
 import { useState } from "react";
 import {
   Calendar,
@@ -16,8 +16,16 @@ import { bookingsApi } from "~/lib/api/bookings";
 import type { Booking } from "~/types/booking";
 import { format } from "date-fns";
 import { cn } from "~/lib/utils";
-import { Button, Badge } from "~/components/ui";
-import { Card, CardContent } from "~/components/ui";
+import {
+  Button,
+  Badge,
+  Card,
+  CardContent,
+  BookingCardSkeleton,
+  EmptyStatePresets,
+  RouteErrorBoundary,
+  Alert,
+} from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -26,7 +34,7 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const status = url.searchParams.get("status") || undefined;
   const view = url.searchParams.get("view") || "renter";
@@ -36,10 +44,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       view === "owner"
         ? await bookingsApi.getOwnerBookings(status)
         : await bookingsApi.getMyBookings(status);
-    return { bookings, view, status };
+    return { bookings, view, status, error: null };
   } catch (error) {
     console.error("Bookings error:", error);
-    return { bookings: [], view, status };
+    return { bookings: [], view, status, error: "Failed to load bookings. Please try again." };
   }
 }
 
@@ -65,11 +73,14 @@ const STATUS_ICONS = {
 };
 
 export default function BookingsPage() {
-  const { bookings, view, status } = useLoaderData<typeof loader>();
+  const { bookings, view, status, error } = useLoaderData<typeof clientLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const navigation = useNavigation();
+  const revalidator = useRevalidator();
+  const isLoading = navigation.state === "loading";
 
   const handleViewChange = (newView: string) => {
     setSearchParams({ view: newView });
@@ -92,7 +103,7 @@ export default function BookingsPage() {
       await bookingsApi.cancelBooking(selectedBooking.id, cancelReason);
       setShowCancelModal(false);
       setCancelReason("");
-      window.location.reload();
+      revalidator.revalidate();
     } catch (error) {
       console.error("Cancel error:", error);
       alert("Failed to cancel booking. Please try again.");
@@ -102,7 +113,7 @@ export default function BookingsPage() {
   const handleConfirmBooking = async (bookingId: string) => {
     try {
       await bookingsApi.confirmBooking(bookingId);
-      window.location.reload();
+      revalidator.revalidate();
     } catch (error) {
       console.error("Confirm error:", error);
       alert("Failed to confirm booking. Please try again.");
@@ -112,7 +123,7 @@ export default function BookingsPage() {
   const handleCompleteBooking = async (bookingId: string) => {
     try {
       await bookingsApi.completeBooking(bookingId);
-      window.location.reload();
+      revalidator.revalidate();
     } catch (error) {
       console.error("Complete error:", error);
       alert("Failed to complete booking. Please try again.");
@@ -204,25 +215,34 @@ export default function BookingsPage() {
           </div>
         </div>
 
-        {/* Bookings List */}
-        {bookings.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              No bookings found
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              {view === "renter"
-                ? "Start browsing and book your first rental"
-                : "Your listings don't have any bookings yet"}
-            </p>
-            <Link to={view === "renter" ? "/search" : "/listings/new"}>
-              <Button>
-                {view === "renter" ? "Browse Rentals" : "Create Listing"}
-              </Button>
-            </Link>
+        {/* Error Alert */}
+        {error && (
+          <Alert
+            type="error"
+            title="Error Loading Bookings"
+            message={error}
+            className="mb-6"
+          />
+        )}
+
+        {/* Loading State */}
+        {isLoading && (
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <BookingCardSkeleton key={i} />
+            ))}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && bookings.length === 0 && !error && (
+          <Card className="p-12">
+            <EmptyStatePresets.NoBookings />
           </Card>
-        ) : (
+        )}
+
+        {/* Bookings List */}
+        {!isLoading && bookings.length > 0 && (
           <div className="space-y-4">
             {bookings.map((booking) => {
               const StatusIcon = STATUS_ICONS[booking.status];
@@ -344,7 +364,7 @@ export default function BookingsPage() {
                     <div className="flex items-center gap-3 pt-4 border-t border-border">
                       <Link to={`/messages?booking=${booking.id}`}>
                         <Button
-                          variant="outline"
+                          variant="outlined"
                           className="flex items-center gap-2"
                         >
                           <MessageSquare className="w-4 h-4" />
@@ -354,7 +374,8 @@ export default function BookingsPage() {
 
                       {isRenter && booking.status === "pending" && (
                         <Button
-                          variant="destructive"
+                          variant="contained"
+                          color="error"
                           onClick={() => {
                             setSelectedBooking(booking);
                             setShowCancelModal(true);
@@ -376,7 +397,8 @@ export default function BookingsPage() {
                             Confirm
                           </Button>
                           <Button
-                            variant="destructive"
+                            variant="contained"
+                            color="error"
                             onClick={() => {
                               setSelectedBooking(booking);
                               setShowCancelModal(true);
@@ -440,7 +462,7 @@ export default function BookingsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Button
-                  variant="outline"
+                  variant="outlined"
                   onClick={() => {
                     setShowCancelModal(false);
                     setCancelReason("");
@@ -450,7 +472,8 @@ export default function BookingsPage() {
                   Keep Booking
                 </Button>
                 <Button
-                  variant="destructive"
+                  variant="contained"
+                  color="error"
                   onClick={handleCancelBooking}
                   disabled={!cancelReason}
                   className="flex-1"
@@ -465,3 +488,6 @@ export default function BookingsPage() {
     </div>
   );
 }
+
+// Error boundary for route errors
+export { RouteErrorBoundary as ErrorBoundary };

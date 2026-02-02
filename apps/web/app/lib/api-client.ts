@@ -1,7 +1,8 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
 import { useAuthStore } from "./store/auth";
+import { requestNavigation } from "~/lib/navigation";
 
-const API_BASE_URL = process.env.API_URL || "http://localhost:3400/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3400/api";
 
 class ApiClient {
   private client: AxiosInstance;
@@ -18,6 +19,11 @@ class ApiClient {
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
       (config) => {
+        // Skip adding token for auth routes
+        if (config.url?.includes("/auth/login") || config.url?.includes("/auth/refresh")) {
+          return config;
+        }
+        
         if (typeof window !== "undefined") {
           const token = localStorage.getItem("accessToken");
           if (token) {
@@ -35,7 +41,13 @@ class ApiClient {
       async (error) => {
         const originalRequest = error.config;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Don't try to refresh if it's already an auth route or if it's not a 401
+        if (
+          error.response?.status === 401 && 
+          !originalRequest._retry &&
+          !originalRequest.url?.includes("/auth/login") &&
+          !originalRequest.url?.includes("/auth/refresh")
+        ) {
           originalRequest._retry = true;
 
           try {
@@ -48,7 +60,6 @@ class ApiClient {
               const {
                 accessToken,
                 refreshToken: newRefreshToken,
-                user,
               } = response.data;
 
               // Update both localStorage and auth store
@@ -72,7 +83,7 @@ class ApiClient {
             const authStore = useAuthStore.getState();
             authStore.clearAuth();
 
-            window.location.href = "/auth/login";
+            requestNavigation("/auth/login", { replace: true });
             return Promise.reject(refreshError);
           }
         }

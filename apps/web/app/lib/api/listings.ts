@@ -27,12 +27,20 @@ export const listingsApi = {
     return api.get<Listing>(`/listings/${id}`);
   },
 
-  async getListingsByOwnerId(ownerId: string): Promise<Listing[]> {
-    return api.get<Listing[]>(`/listings?ownerId=${ownerId}`);
+  async getListingsByOwnerId(ownerId: string): Promise<ListingSearchResponse> {
+    return api.get<ListingSearchResponse>(`/listings?ownerId=${ownerId}`);
   },
 
   async getFavoriteListings(userId: string): Promise<Listing[]> {
-    return api.get<Listing[]>(`/listings/favorites?userId=${userId}`);
+    return api.get<Listing[]>(`/favorites?userId=${userId}`);
+  },
+
+  async addFavorite(listingId: string): Promise<void> {
+    return api.post<void>(`/favorites`, { listingId });
+  },
+
+  async removeFavorite(listingId: string): Promise<void> {
+    return api.delete<void>(`/favorites/${listingId}`);
   },
 
   async getRecommendations(userId: string): Promise<Listing[]> {

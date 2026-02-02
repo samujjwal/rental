@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { Link, redirect } from "react-router";
+import { Link, redirect, useNavigate } from "react-router";
 import { useAuthStore } from "~/lib/store/auth";
-import { getUser } from "~/utils/auth.server";
+import { getUser } from "~/utils/auth";
 import {
   Home,
   Search,
@@ -16,7 +16,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "~/components/ui";
 import { PageContainer } from "~/components/layout";
 import { cn } from "~/lib/utils";
@@ -28,38 +27,27 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  console.log("Dashboard loader: starting");
+export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
-  console.log("Dashboard loader: user result:", user ? user.email : "null");
 
   if (!user) {
-    console.log("Dashboard loader: no user, redirecting to login");
     return redirect("/auth/login");
   }
 
   // Redirect admin users to admin dashboard
   if (user.role === "ADMIN") {
-    console.log("Dashboard loader: admin user detected, redirecting to /admin");
     return redirect("/admin");
   }
 
   // Redirect owners and renters to their specific dashboards
   if (user.role === "OWNER") {
-    console.log(
-      "Dashboard loader: owner user, redirecting to /dashboard/owner"
-    );
     return redirect("/dashboard/owner");
   }
 
   if (user.role === "RENTER") {
-    console.log(
-      "Dashboard loader: renter user, redirecting to /dashboard/renter"
-    );
     return redirect("/dashboard/renter");
   }
 
-  console.log("Dashboard loader: returning user data for:", user.email);
   return { user };
 }
 
@@ -95,10 +83,11 @@ function StatCard({ title, value, icon, iconBg }: StatCardProps) {
 
 export default function Dashboard() {
   const { user, clearAuth } = useAuthStore();
+  const navigate = useNavigate();
 
   const handleLogout = () => {
     clearAuth();
-    window.location.href = "/auth/login";
+    navigate("/auth/login", { replace: true });
   };
 
   return (

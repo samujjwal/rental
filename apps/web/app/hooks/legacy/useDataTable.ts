@@ -148,17 +148,21 @@ export function useDataTable<T extends Record<string, any>>(
 
             case "date":
               if (!cellValue || !value) return true;
-              const cellDate = new Date(cellValue as string);
-              const filterDate = new Date(value as string);
-              return cellDate.toDateString() === filterDate.toDateString();
+              {
+                const cellDate = new Date(cellValue as string);
+                const filterDate = new Date(value as string);
+                return cellDate.toDateString() === filterDate.toDateString();
+              }
 
             case "daterange":
               if (!cellValue || !value) return true;
-              const cellD = new Date(cellValue as string);
-              const range = value as { from?: string; to?: string };
-              if (range.from && cellD < new Date(range.from)) return false;
-              if (range.to && cellD > new Date(range.to)) return false;
-              return true;
+              {
+                const cellD = new Date(cellValue as string);
+                const range = value as { from?: string; to?: string };
+                if (range.from && cellD < new Date(range.from)) return false;
+                if (range.to && cellD > new Date(range.to)) return false;
+                return true;
+              }
 
             default:
               return true;
@@ -178,8 +182,8 @@ export function useDataTable<T extends Record<string, any>>(
 
     try {
       return [...filteredData].sort((a, b) => {
-        const aValue = a[sort.key];
-        const bValue = b[sort.key];
+        const aValue = a[sort.key] as unknown;
+        const bValue = b[sort.key] as unknown;
 
         // Handle null/undefined values
         if (aValue === null || aValue === undefined) return 1;
@@ -448,7 +452,10 @@ export function useDataTable<T extends Record<string, any>>(
       setFilters(newFilters);
       onFiltersChange?.(newFilters);
     },
-    setSort: handleSort,
+    setSort: (newSort: SortState<T>) => {
+      setSort(newSort);
+      onSortChange?.(newSort);
+    },
     setPage,
     setLimit,
     toggleRowSelection,

@@ -15,10 +15,13 @@ import {
   Plus,
   ArrowUpRight,
 } from "lucide-react";
-import { requireUserId, getUserToken } from "~/utils/auth.server";
-import { apiClient } from "~/lib/api-client";
+import { requireUserId, getUserToken } from "~/utils/auth";
+import { listingsApi } from "~/lib/api/listings";
+import { bookingsApi } from "~/lib/api/bookings";
+import { paymentsApi } from "~/lib/api/payments";
 import type { Listing } from "~/types/listing";
 import type { Booking } from "~/types/booking";
+import type { OwnerEarnings } from "~/lib/api/payments";
 import { format } from "date-fns";
 import {
   Card,
@@ -27,38 +30,75 @@ import {
   CardTitle,
   Badge,
 } from "~/components/ui";
-import { PageContainer, PageHeader } from "~/components/layout";
+import { PageContainer, PageHeader, DashboardSidebar } from "~/components/layout";
+import type { SidebarSection } from "~/components/layout";
 import { cn } from "~/lib/utils";
+
+// Define owner navigation items
+import {
+  LayoutDashboard,
+  Package as PackageIcon,
+  Calendar as CalendarIcon,
+  CalendarDays,
+  DollarSign as DollarIcon,
+  MessageCircle as MessageIcon,
+  Star as StarIcon,
+  Settings,
+  TrendingUp as TrendingIcon,
+  BarChart3,
+} from "lucide-react";
+
+const ownerNavSections: SidebarSection[] = [
+  {
+    items: [
+      { href: "/dashboard/owner", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/listings", label: "Listings", icon: PackageIcon },
+      { href: "/bookings", label: "Bookings", icon: CalendarIcon },
+      { href: "/dashboard/owner/calendar", label: "Calendar", icon: CalendarDays },
+      { href: "/dashboard/owner/earnings", label: "Earnings", icon: DollarIcon },
+      { href: "/messages", label: "Messages", icon: MessageIcon },
+      { href: "/reviews", label: "Reviews", icon: StarIcon },
+      { href: "/settings", label: "Settings", icon: Settings },
+    ],
+  },
+  {
+    title: "Insights",
+    items: [
+      { href: "/dashboard/owner/performance", label: "Performance", icon: TrendingIcon },
+      { href: "/dashboard/owner/insights", label: "Insights", icon: BarChart3 },
+    ],
+  },
+];
 
 export const meta: MetaFunction = () => {
   return [{ title: "Owner Dashboard | GharBatai Rentals" }];
 };
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const token = await getUserToken(request);
   const headers = { Authorization: `Bearer ${token}` };
 
   try {
     const [listings, bookings, earnings] = await Promise.all([
-      apiClient.get<Listing[]>(`/listings?ownerId=${userId}`, { headers }),
-      apiClient.get<Booking[]>(`/bookings/owner/${userId}`, { headers }),
-      apiClient.get<any>(`/payments/earnings/${userId}`, { headers }),
+      listingsApi.getMyListings(),
+      bookingsApi.getOwnerBookings(),
+      paymentsApi.getEarnings(),
     ]);
 
     // Calculate statistics
     const activeListings = listings.filter(
-      (l) => l.availability === "available"
+      (l: Listing) => l.availability === "available"
     ).length;
     const totalListings = listings.length;
     const pendingBookings = bookings.filter(
-      (b) => b.status === "pending"
+      (b: Booking) => b.status === "pending"
     ).length;
     const activeBookings = bookings.filter(
-      (b) => b.status === "confirmed" || b.status === "active"
+      (b: Booking) => b.status === "confirmed" || b.status === "active"
     ).length;
     const completedBookings = bookings.filter(
-      (b) => b.status === "completed"
+      (b: Booking) => b.status === "completed"
     ).length;
 
     const stats = {
@@ -74,7 +114,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Get recent bookings
     const recentBookings = bookings
       .sort(
-        (a, b) =>
+        (a: Booking, b: Booking) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )
       .slice(0, 5);
@@ -253,7 +293,7 @@ function ListingCard({ listing }: { listing: Listing }) {
 }
 
 export default function OwnerDashboardRoute() {
-  const { stats, listings, recentBookings } = useLoaderData<typeof loader>();
+  const { stats, listings, recentBookings } = useLoaderData<typeof clientLoader>();
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -265,205 +305,213 @@ export default function OwnerDashboardRoute() {
           className="mb-8"
         />
 
-        {/* Statistics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard
-            icon={Package}
-            label="Active Listings"
-            value={`${stats.activeListings}/${stats.totalListings}`}
-          />
-          <StatCard
-            icon={DollarSign}
-            label="Total Earnings"
-            value={`$${stats.totalEarnings.toFixed(2)}`}
-            trend="+12%"
-            variant="success"
-          />
-          <StatCard
-            icon={Calendar}
-            label="Active Bookings"
-            value={stats.activeBookings}
-            variant="info"
-          />
-          <StatCard
-            icon={Star}
-            label="Completed Rentals"
-            value={stats.completedBookings}
-            variant="warning"
-          />
-        </div>
+        <div className="flex gap-8">
+          {/* Sidebar Navigation */}
+          <DashboardSidebar sections={ownerNavSections} />
 
-        {/* Pending Actions */}
-        {stats.pendingBookings > 0 && (
-          <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 mb-8 flex items-start">
-            <AlertCircle className="w-5 h-5 text-warning mr-3 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-semibold text-foreground mb-1">
-                Action Required
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                You have {stats.pendingBookings} booking
-                {stats.pendingBookings !== 1 ? "s" : ""} waiting for your
-                approval.
-              </p>
-            </div>
-            <Link
-              to="/bookings?filter=pending"
-              className="px-4 py-2 bg-warning text-warning-foreground rounded-md hover:bg-warning/90 transition-colors text-sm font-medium"
-            >
-              Review Now
-            </Link>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Recent Bookings */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Recent Bookings</CardTitle>
-                <Link
-                  to="/bookings"
-                  className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
-                >
-                  View All
-                  <ArrowUpRight className="w-4 h-4 ml-1" />
-                </Link>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {recentBookings.length > 0 ? (
-                    recentBookings.map((booking) => (
-                      <BookingCard key={booking.id} booking={booking} />
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No bookings yet</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+          <div className="flex-1 space-y-8">
+            {/* Statistics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <StatCard
+                icon={Package}
+                label="Active Listings"
+                value={`${stats.activeListings}/${stats.totalListings}`}
+              />
+              <StatCard
+                icon={DollarSign}
+                label="Total Earnings"
+                value={`$${stats.totalEarnings.toFixed(2)}`}
+                trend="+12%"
+                variant="success"
+              />
+              <StatCard
+                icon={Calendar}
+                label="Active Bookings"
+                value={stats.activeBookings}
+                variant="info"
+              />
+              <StatCard
+                icon={Star}
+                label="Completed Rentals"
+                value={stats.completedBookings}
+                variant="warning"
+              />
+            </div>
 
-            {/* My Listings */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>My Listings</CardTitle>
-                <div className="flex gap-3">
-                  <Link
-                    to="/listings"
-                    className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
-                  >
-                    View All
-                    <ArrowUpRight className="w-4 h-4 ml-1" />
-                  </Link>
-                  <Link
-                    to="/listings/new"
-                    className="inline-flex items-center justify-center h-9 px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    New Listing
-                  </Link>
+            {/* Pending Actions */}
+            {stats.pendingBookings > 0 && (
+              <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 flex items-start">
+                <AlertCircle className="w-5 h-5 text-warning mr-3 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-foreground mb-1">
+                    Action Required
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    You have {stats.pendingBookings} booking
+                    {stats.pendingBookings !== 1 ? "s" : ""} waiting for your
+                    approval.
+                  </p>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {listings.length > 0 ? (
-                    listings.map((listing) => (
-                      <ListingCard key={listing.id} listing={listing} />
-                    ))
-                  ) : (
-                    <div className="col-span-2 text-center py-8">
-                      <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground mb-4">
-                        No listings yet
-                      </p>
+                <Link
+                  to="/bookings?filter=pending"
+                  className="px-4 py-2 bg-warning text-warning-foreground rounded-md hover:bg-warning/90 transition-colors text-sm font-medium"
+                >
+                  Review Now
+                </Link>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Main Content */}
+              <div className="lg:col-span-2 space-y-8">
+                {/* Recent Bookings */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Recent Bookings</CardTitle>
+                    <Link
+                      to="/bookings"
+                      className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
+                    >
+                      View All
+                      <ArrowUpRight className="w-4 h-4 ml-1" />
+                    </Link>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {recentBookings.length > 0 ? (
+                        recentBookings.map((booking: Booking) => (
+                          <BookingCard key={booking.id} booking={booking} />
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                          <p className="text-muted-foreground">No bookings yet</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* My Listings */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>My Listings</CardTitle>
+                    <div className="flex gap-3">
+                      <Link
+                        to="/listings"
+                        className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
+                      >
+                        View All
+                        <ArrowUpRight className="w-4 h-4 ml-1" />
+                      </Link>
                       <Link
                         to="/listings/new"
-                        className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                        className="inline-flex items-center justify-center h-9 px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
                       >
-                        <Plus className="w-5 h-5 mr-2" />
-                        Create Your First Listing
+                        <Plus className="w-4 h-4 mr-1" />
+                        New Listing
                       </Link>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {listings.length > 0 ? (
+                        listings.map((listing: Listing) => (
+                          <ListingCard key={listing.id} listing={listing} />
+                        ))
+                      ) : (
+                        <div className="col-span-2 text-center py-8">
+                          <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                          <p className="text-muted-foreground mb-4">
+                            No listings yet
+                          </p>
+                          <Link
+                            to="/listings/new"
+                            className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                          >
+                            <Plus className="w-5 h-5 mr-2" />
+                            Create Your First Listing
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Earnings Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Earnings Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center pb-3 border-b">
-                    <span className="text-muted-foreground">Total Earned</span>
-                    <span className="text-xl font-bold text-success">
-                      ${stats.totalEarnings.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pb-3 border-b">
-                    <span className="text-muted-foreground">Pending</span>
-                    <span className="text-lg font-semibold text-warning">
-                      ${stats.pendingEarnings.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">
-                      Completed Rentals
-                    </span>
-                    <span className="font-semibold text-foreground">
-                      {stats.completedBookings}
-                    </span>
-                  </div>
-                </div>
-                <Link
-                  to="/payments"
-                  className="mt-6 w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-center block"
-                >
-                  View Payment History
-                </Link>
-              </CardContent>
-            </Card>
+              {/* Sidebar Content */}
+              <div className="space-y-6">
+                {/* Earnings Summary */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Earnings Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center pb-3 border-b">
+                        <span className="text-muted-foreground">Total Earned</span>
+                        <span className="text-xl font-bold text-success">
+                          ${stats.totalEarnings.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center pb-3 border-b">
+                        <span className="text-muted-foreground">Pending</span>
+                        <span className="text-lg font-semibold text-warning">
+                          ${stats.pendingEarnings.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">
+                          Completed Rentals
+                        </span>
+                        <span className="font-semibold text-foreground">
+                          {stats.completedBookings}
+                        </span>
+                      </div>
+                    </div>
+                    <Link
+                      to="/dashboard/owner/earnings"
+                      className="mt-6 w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-center block"
+                    >
+                      View Earnings Details
+                    </Link>
+                  </CardContent>
+                </Card>
 
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Link
-                    to="/listings/new"
-                    className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                  >
-                    <Plus className="w-5 h-5 mr-3 text-primary" />
-                    Create New Listing
-                  </Link>
-                  <Link
-                    to="/messages"
-                    className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                  >
-                    <MessageCircle className="w-5 h-5 mr-3 text-primary" />
-                    View Messages
-                  </Link>
-                  <Link
-                    to="/settings/profile"
-                    className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                  >
-                    <Users className="w-5 h-5 mr-3 text-primary" />
-                    Edit Profile
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+                {/* Quick Actions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Quick Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <Link
+                        to="/listings/new"
+                        className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                      >
+                        <Plus className="w-5 h-5 mr-3 text-primary" />
+                        Create New Listing
+                      </Link>
+                      <Link
+                        to="/dashboard/owner/calendar"
+                        className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                      >
+                        <Calendar className="w-5 h-5 mr-3 text-primary" />
+                        View Calendar
+                      </Link>
+                      <Link
+                        to="/messages"
+                        className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                      >
+                        <MessageCircle className="w-5 h-5 mr-3 text-primary" />
+                        View Messages
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </div>
         </div>
       </PageContainer>

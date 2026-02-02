@@ -17,13 +17,10 @@ describe('SearchService', () => {
   };
 
   const mockPrismaService = {
-    property: {
+    listing: {
       count: jest.fn(),
       findMany: jest.fn(),
-    },
-    listing: {
       findUnique: jest.fn(),
-      findMany: jest.fn(),
     },
   };
 
@@ -71,10 +68,10 @@ describe('SearchService', () => {
         aggregations: {},
       };
 
-      // Ensure mock match overload
+            // Ensure mock match overload
       mockElasticsearchService.search.mockResolvedValue(mockEsResponse as any);
-      mockPrismaService.property.count.mockResolvedValue(10);
-      mockPrismaService.property.findMany.mockResolvedValue([
+      mockPrismaService.listing.count.mockResolvedValue(10);
+      mockPrismaService.listing.findMany.mockResolvedValue([
         {
           id: 'listing-1',
           title: 'Test Listing',
@@ -113,7 +110,7 @@ describe('SearchService', () => {
   describe('autocomplete', () => {
     it('should return suggestions', async () => {
       mockCacheService.get.mockResolvedValue(null);
-      mockPrismaService.property.findMany.mockResolvedValue([
+      mockPrismaService.listing.findMany.mockResolvedValue([
         { title: 'Car Rental' },
         { title: 'Cargo Van' },
       ]);

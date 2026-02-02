@@ -1,10 +1,11 @@
 import type { MetaFunction, ActionFunctionArgs } from "react-router";
-import { Form, useNavigate, useActionData } from "react-router";
+import { Form, useNavigate, useActionData, useSubmit } from "react-router";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ArrowRight, Upload, X, CheckCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, X, CheckCircle, Loader2 } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
+import { uploadApi } from "~/lib/api/upload";
 import { listingSchema, type ListingInput } from "~/lib/validation/listing";
 import { redirect } from "react-router";
 import { cn } from "~/lib/utils";
@@ -18,7 +19,7 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function clientAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const data = JSON.parse(formData.get("data") as string);
 
@@ -72,10 +73,12 @@ const CATEGORIES = [
 
 export default function CreateListing() {
   const navigate = useNavigate();
-  const actionData = useActionData<typeof action>();
+  const submit = useSubmit();
+  const actionData = useActionData<typeof clientAction>();
   const [currentStep, setCurrentStep] = useState(1);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
@@ -84,7 +87,7 @@ export default function CreateListing() {
     setValue,
     formState: { errors },
   } = useForm<ListingInput>({
-    resolver: zodResolver(listingSchema),
+    resolver: zodResolver(listingSchema) as any,
     defaultValues: {
       instantBooking: false,
       deliveryOptions: {
@@ -123,15 +126,29 @@ export default function CreateListing() {
   };
 
   const onSubmit = async (data: ListingInput) => {
-    // In production, upload images to cloud storage first
-    console.log("Form data:", data);
-
-    const formData = new FormData();
-    formData.append("data", JSON.stringify(data));
-
-    // Submit form (will be handled by action)
-    const form = document.getElementById("listing-form") as HTMLFormElement;
-    form.submit();
+    setIsSubmitting(true);
+    try {
+      let finalImages: string[] = [];
+      
+      // Upload images if any
+      if (imageFiles.length > 0) {
+        // Upload images first
+        const results = await uploadApi.uploadImages(imageFiles);
+        finalImages = results.map(r => r.url);
+      }
+      
+      // Update data with real image URLs
+      data.images = finalImages;
+      
+      const formData = new FormData();
+      formData.append("data", JSON.stringify(data));
+      
+      submit(formData, { method: "post" });
+    } catch (error) {
+      console.error("Failed to create listing:", error);
+      alert("Failed to create listing. Please try again.");
+      setIsSubmitting(false);
+    }
   };
 
   const nextStep = () => {
@@ -727,7 +744,7 @@ export default function CreateListing() {
                 {currentStep > 1 ? (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="outlined"
                     onClick={prevStep}
                     className="flex items-center gap-2"
                   >
@@ -750,10 +767,15 @@ export default function CreateListing() {
                 ) : (
                   <Button
                     type="submit"
+                    disabled={isSubmitting}
                     className="flex items-center gap-2 bg-success hover:bg-success/90 text-success-foreground"
                   >
-                    <CheckCircle className="w-5 h-5" />
-                    Create Listing
+                    {isSubmitting ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-5 h-5" />
+                    )}
+                    {isSubmitting ? "Creating..." : "Create Listing"}
                   </Button>
                 )}
               </div>

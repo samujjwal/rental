@@ -15,7 +15,7 @@ export function useAuthInit() {
       hasInitialized.current = true;
       useAuthStore.getState().restoreSession();
     }
-  }, []); // Empty dependency array - only run on mount
+  }, [isInitialized]);
 
   return { isInitialized };
 }

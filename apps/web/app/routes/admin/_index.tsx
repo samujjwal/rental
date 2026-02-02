@@ -1,7 +1,9 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link } from "react-router";
-import { requireAdmin } from "~/utils/auth.server";
-import { getAdminAnalytics } from "~/utils/adminAnalytics.server";
+import { useState } from "react";
+import { requireAdmin } from "~/utils/auth";
+import { getAdminAnalytics } from "~/utils/adminAnalytics";
+import { adminApi } from "~/lib/api/admin";
 import {
   Box,
   Typography,
@@ -11,6 +13,8 @@ import {
   Button,
   Alert,
   AlertTitle,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import {
   ArrowForward as ArrowRightIcon,
@@ -21,12 +25,56 @@ import {
   Security as ShieldIcon,
   TrendingUp as TrendingUpIcon,
   CheckCircle as CheckCircleIcon,
+  Dashboard as DashboardIcon,
+  Gavel as DisputeIcon,
+  Assessment as ReportsIcon,
 } from "@mui/icons-material";
+import { ActivityFeed } from "~/components/admin/ActivityFeed";
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await requireAdmin(request);
-  const analytics = await getAdminAnalytics(request, "30d");
-  return { user, analytics };
+  const [analytics, auditLogs] = await Promise.all([
+    getAdminAnalytics(request, "30d"),
+    adminApi.getAuditLogs({ limit: 20 })
+  ]);
+  
+  // Transform audit logs to activity items
+  const activities = auditLogs.logs.map(log => ({
+    id: log.id,
+    type: log.entity.toLowerCase() as any,
+    action: log.action,
+    description: `${log.userEmail} ${log.action} on ${log.entity} #${log.entityId}`,
+    timestamp: log.createdAt,
+    user: { name: log.userEmail },
+    severity: determineSeverity(log.action),
+    link: getEntityLink(log.entity, log.entityId),
+  }));
+  
+  return { user, analytics, activities };
+}
+
+function determineSeverity(action: string): "success" | "error" | "warning" | "info" {
+  if (action.includes("delete") || action.includes("suspend") || action.includes("reject")) {
+    return "error";
+  }
+  if (action.includes("flag") || action.includes("warning")) {
+    return "warning";
+  }
+  if (action.includes("create") || action.includes("approve") || action.includes("complete")) {
+    return "success";
+  }
+  return "info";
+}
+
+function getEntityLink(entity: string, entityId: string): string | undefined {
+  const entityMap: Record<string, string> = {
+    user: "/admin/users",
+    listing: "/admin/listings",
+    booking: "/admin/bookings",
+    dispute: "/admin/disputes",
+    payment: "/admin/payments",
+  };
+  return entityMap[entity.toLowerCase()];
 }
 
 function formatCurrency(value: number): string {
@@ -42,8 +90,9 @@ function formatNumber(value: number): string {
 }
 
 export default function AdminDashboard() {
-  const { user, analytics } = useLoaderData<typeof loader>();
+  const { user, analytics, activities } = useLoaderData<typeof clientLoader>();
   const { summary, alerts } = analytics;
+  const [activeTab, setActiveTab] = useState(0);
 
   const quickLinks = [
     {
@@ -95,6 +144,19 @@ export default function AdminDashboard() {
 
   return (
     <Box sx={{ p: 3 }}>
+      {/* Top Navigation Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs 
+          value={activeTab} 
+          onChange={(_, newValue) => setActiveTab(newValue)}
+          aria-label="Admin dashboard tabs"
+        >
+          <Tab icon={<DashboardIcon />} label="Overview" iconPosition="start" />
+          <Tab icon={<DisputeIcon />} label="Disputes" iconPosition="start" component={Link} to="/admin/disputes" />
+          <Tab icon={<ReportsIcon />} label="Reports" iconPosition="start" />
+        </Tabs>
+      </Box>
+
       {/* Welcome Section */}
       <Paper
         sx={{
@@ -300,6 +362,30 @@ export default function AdminDashboard() {
             </Card>
           ))}
         </Box>
+      </Box>
+
+      {/* Activity Feed Section */}
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+          <Typography variant="h6">
+            Recent Activity
+          </Typography>
+          <Button
+            variant="text"
+            component={Link}
+            to="/admin/system/audit"
+            endIcon={<ArrowRightIcon />}
+          >
+            View All
+          </Button>
+        </Box>
+        <Paper sx={{ p: 2 }}>
+          <ActivityFeed 
+            activities={activities}
+            maxItems={5}
+            showViewAll={false}
+          />
+        </Paper>
       </Box>
     </Box>
   );

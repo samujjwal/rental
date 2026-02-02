@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
-import { Property, toNumber } from '@rental-portal/database';
+import { Listing as Property, toNumber } from '@rental-portal/database';
 
 export interface ValidationResult {
   isValid: boolean;

@@ -30,5 +30,12 @@ export default defineConfig(({ mode }) => {
     define: {
       "process.env.SESSION_SECRET": JSON.stringify(env.SESSION_SECRET),
     },
+    test: {
+      // Exclude e2e tests from vitest - those are run by Playwright
+      exclude: ["**/node_modules/**", "**/e2e/**"],
+      include: ["app/**/*.{test,spec}.{ts,tsx}"],
+      // Allow test suite to pass when no tests exist
+      passWithNoTests: true,
+    },
   };
 });

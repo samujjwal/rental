@@ -1,10 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
-import { logout } from "~/utils/auth.server";
+import { logout } from "~/utils/auth";
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function clientAction({ request }: ActionFunctionArgs) {
   return logout(request);
 }
 
-export async function loader({ request }: ActionFunctionArgs) {
+export async function clientLoader({ request }: ActionFunctionArgs) {
   return logout(request);
 }

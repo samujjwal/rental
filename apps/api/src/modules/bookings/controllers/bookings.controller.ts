@@ -166,6 +166,13 @@ export class BookingsController {
     return this.bookingsService.getBookingStats(id);
   }
 
+  @Get('blocked-dates/:listingId')
+  @ApiOperation({ summary: 'Get blocked dates for a listing' })
+  @ApiResponse({ status: 200, description: 'Blocked dates retrieved' })
+  async getBlockedDates(@Param('listingId') listingId: string) {
+    return this.bookingsService.getBlockedDates(listingId);
+  }
+
   @Post('calculate-price')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Calculate booking price' })

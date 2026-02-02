@@ -135,7 +135,7 @@ export class OrganizationsService {
             },
           },
         },
-        properties: {
+        listings: {
           select: {
             id: true,
             title: true,
@@ -147,7 +147,7 @@ export class OrganizationsService {
         },
         _count: {
           select: {
-            properties: true,
+            listings: true,
             members: true,
           },
         },
@@ -343,7 +343,7 @@ export class OrganizationsService {
           include: {
             _count: {
               select: {
-                properties: true,
+                listings: true,
                 members: true,
               },
             },

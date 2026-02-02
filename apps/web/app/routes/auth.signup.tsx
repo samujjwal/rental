@@ -5,20 +5,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { authApi } from "~/lib/api/auth";
-import { createUserSession } from "~/utils/auth.server";
+import { useAuthStore } from "~/lib/store/auth";
+import { createUserSession } from "~/utils/auth";
 import { signupSchema, type SignupInput } from "~/lib/validation/auth";
-import {
-  Box,
-  Button,
-  TextField,
-  FormControl,
-  InputLabel,
-  InputAdornment,
-  Typography,
-  Paper,
-  Alert,
-} from "@mui/material";
 import { cn } from "~/lib/utils";
+import { Button } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -27,7 +18,7 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function clientAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -46,6 +37,9 @@ export async function action({ request }: ActionFunctionArgs) {
       role,
     });
 
+    // Update auth store immediately for better SPA experience
+    useAuthStore.getState().setAuth(response.user, response.accessToken, response.refreshToken);
+
     return createUserSession({
       userId: response.user.id,
       accessToken: response.accessToken,
@@ -63,7 +57,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Signup() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -122,7 +116,7 @@ export default function Signup() {
 
         {/* Signup Form */}
         <div className="bg-card border rounded-lg shadow-lg p-8">
-          <Form method="post" onSubmit={handleSubmit(() => {})}>
+          <Form method="post">
             {/* Error Message */}
             {actionData?.error && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">

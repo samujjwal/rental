@@ -129,21 +129,23 @@ export class BookingCalculationService {
   ): Array<{ type: string; amount: number; reason: string }> {
     const discounts: Array<{ type: string; amount: number; reason: string }> = [];
 
-    // Weekly discount (10% off for 7+ days)
-    if (duration.type === 'days' && duration.value >= 7) {
-      discounts.push({
-        type: 'weekly',
-        amount: basePrice * 0.1,
-        reason: 'Weekly booking discount (10%)',
-      });
-    }
-
-    // Monthly discount (20% off for 30+ days)
+    // Apply only the highest discount (monthly > weekly)
+    // to prevent stacking and excessive discounts
+    
+    // Monthly discount (20% off for 30+ days) - highest priority
     if (duration.type === 'days' && duration.value >= 30) {
       discounts.push({
         type: 'monthly',
         amount: basePrice * 0.2,
         reason: 'Monthly booking discount (20%)',
+      });
+    }
+    // Weekly discount (10% off for 7+ days) - only if monthly not applied
+    else if (duration.type === 'days' && duration.value >= 7) {
+      discounts.push({
+        type: 'weekly',
+        amount: basePrice * 0.1,
+        reason: 'Weekly booking discount (10%)',
       });
     }
 

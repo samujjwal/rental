@@ -392,7 +392,8 @@ export type DeepPartial<T> = {
 export type EventHandler<T = void> = (event: T) => void;
 export type AsyncEventHandler<T = void> = (event: T) => Promise<void>;
 
-export type ComponentWithRef<T, P = {}> = React.ForwardRefExoticComponent<
+export type ComponentWithRef<T, P = Record<string, unknown>> =
+  React.ForwardRefExoticComponent<
   P & React.RefAttributes<T>
 >;
 

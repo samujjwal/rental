@@ -122,6 +122,11 @@ export class ReviewsService {
         revieweeId,
         type: dbReviewType,
         rating: dto.overallRating,
+        overallRating: dto.overallRating,
+        accuracyRating: dto.accuracyRating,
+        communicationRating: dto.communicationRating,
+        cleanlinessRating: dto.cleanlinessRating,
+        valueRating: dto.valueRating,
         comment: dto.comment || '',
       },
       include: {

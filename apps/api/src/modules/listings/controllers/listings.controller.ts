@@ -10,6 +10,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@rental-portal/database';
@@ -28,6 +30,7 @@ import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { SearchService, SearchQuery } from '@/modules/search/services/search.service';
 
 @ApiTags('Listings')
 @Controller('listings')
@@ -35,6 +38,8 @@ export class ListingsController {
   constructor(
     private readonly listingsService: PropertysService,
     private readonly availabilityService: AvailabilityService,
+    @Inject(forwardRef(() => SearchService))
+    private readonly searchService: SearchService,
   ) {}
 
   @Post()
@@ -47,6 +52,96 @@ export class ListingsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async create(@CurrentUser('id') userId: string, @Body() dto: CreateListingDto) {
     return this.listingsService.create(userId, dto);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search listings' })
+  @ApiQuery({ name: 'query', required: false, type: String })
+  @ApiQuery({ name: 'category', required: false, type: String })
+  @ApiQuery({ name: 'location', required: false, type: String })
+  @ApiQuery({ name: 'minPrice', required: false, type: Number })
+  @ApiQuery({ name: 'maxPrice', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  async searchListings(
+    @Query('query') query?: string,
+    @Query('category') categoryId?: string,
+    @Query('location') location?: string,
+    @Query('minPrice') minPrice?: number,
+    @Query('maxPrice') maxPrice?: number,
+    @Query('condition') condition?: string,
+    @Query('instantBooking') instantBooking?: boolean,
+    @Query('delivery') delivery?: boolean,
+    @Query('sortBy') sortBy?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    const searchQuery: SearchQuery = {
+      query,
+      categoryId,
+      page: page || 1,
+      size: limit || 20,
+      sort: sortBy as any,
+    };
+
+    if (location) {
+      searchQuery.location = { city: location };
+    }
+
+    if (minPrice || maxPrice) {
+      searchQuery.priceRange = { min: minPrice, max: maxPrice };
+    }
+
+    if (condition || instantBooking || delivery) {
+      searchQuery.filters = {
+        condition,
+        bookingMode: instantBooking ? 'INSTANT_BOOK' : undefined,
+      };
+    }
+
+    const result = await this.searchService.search(searchQuery);
+    
+    // Transform to match frontend expectation
+    return {
+      listings: result.results.map((listing) => ({
+        id: listing.id,
+        title: listing.title,
+        description: listing.description,
+        slug: listing.slug,
+        category: listing.categoryName,
+        categorySlug: listing.categorySlug,
+        images: listing.photos,
+        location: {
+          city: listing.city,
+          state: listing.state,
+          country: listing.country,
+          lat: listing.location?.lat,
+          lon: listing.location?.lon,
+        },
+        pricePerDay: Number(listing.basePrice),
+        currency: listing.currency,
+        rating: listing.averageRating,
+        totalReviews: listing.totalReviews,
+        owner: {
+          name: listing.ownerName,
+          rating: listing.ownerRating,
+        },
+        instantBooking: listing.bookingMode === 'INSTANT_BOOK',
+        condition: listing.condition,
+        features: listing.features || [],
+        deliveryOptions: {
+          pickup: true,
+          delivery: false,
+          shipping: false,
+        },
+      })),
+      total: result.total,
+      page: result.page,
+      limit: result.size,
+      totalPages: Math.ceil(result.total / result.size),
+    };
   }
 
   @Get()
@@ -65,7 +160,15 @@ export class ListingsController {
     @Query('limit') limit?: number,
     @Query() filters?: ListingFilters,
   ) {
-    return this.listingsService.findAll(filters || {}, page || 1, limit || 20);
+    const result = await this.listingsService.findAll(
+      filters || {},
+      page || 1,
+      limit || 20,
+    );
+    return {
+      ...result,
+      listings: result.listings.map((l) => this.mapToFrontendListing(l)),
+    };
   }
 
   @Get('my-listings')
@@ -73,8 +176,15 @@ export class ListingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user listings' })
   @ApiResponse({ status: 200, description: 'Listings retrieved successfully' })
-  async getMyListings(@CurrentUser('id') userId: string, @Query('all') all?: boolean) {
-    return this.listingsService.getOwnerPropertys(userId, all === true);
+  async getMyListings(
+    @CurrentUser('id') userId: string,
+    @Query('all') all?: boolean,
+  ) {
+    const listings = await this.listingsService.getOwnerPropertys(
+      userId,
+      all === true,
+    );
+    return listings.map((l) => this.mapToFrontendListing(l));
   }
 
   @Get(':id')
@@ -82,7 +192,8 @@ export class ListingsController {
   @ApiResponse({ status: 200, description: 'Listing retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Listing not found' })
   async findById(@Param('id') id: string) {
-    return this.listingsService.findById(id);
+    const listing = await this.listingsService.findById(id);
+    return this.mapToFrontendListing(listing);
   }
 
   @Get('slug/:slug')
@@ -90,7 +201,66 @@ export class ListingsController {
   @ApiResponse({ status: 200, description: 'Listing retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Listing not found' })
   async findBySlug(@Param('slug') slug: string) {
-    return this.listingsService.findBySlug(slug);
+    const listing = await this.listingsService.findBySlug(slug);
+    return this.mapToFrontendListing(listing);
+  }
+
+  private mapToFrontendListing(listing: any) {
+    return {
+      id: listing.id,
+      ownerId: listing.ownerId,
+      title: listing.title,
+      description: listing.description,
+      category: listing.category?.name || 'Uncategorized',
+      pricePerDay: Number(listing.basePrice),
+      basePrice: Number(listing.basePrice),
+      currency: listing.currency,
+      condition: listing.condition?.toLowerCase() || 'good',
+      location: {
+        address: listing.address,
+        city: listing.city,
+        state: listing.state,
+        country: listing.country,
+        postalCode: listing.zipCode,
+        coordinates: {
+          lat: listing.latitude,
+          lng: listing.longitude,
+        },
+      },
+      images: listing.photos || listing.images || [],
+      status: listing.status,
+      availability: listing.status === 'AVAILABLE' ? 'available' : 'rented',
+      features: listing.features || [],
+      rating: listing.averageRating || 0,
+      totalReviews: listing.totalReviews || 0,
+      totalBookings: listing.totalBookings || 0,
+      views: listing.views || listing.viewCount || 0,
+      featured: listing.featured || false,
+      verified: listing.verificationStatus === 'VERIFIED',
+      instantBooking:
+        listing.bookingMode === 'INSTANT_BOOK' || listing.instantBookable,
+      deliveryOptions: {
+        pickup: true,
+        delivery: false,
+        shipping: false,
+      },
+      securityDeposit: Number(listing.securityDeposit || 0),
+      minimumRentalPeriod: listing.minStayNights || 1,
+      maximumRentalPeriod: listing.maxStayNights || null,
+      cancellationPolicy:
+        listing.cancellationPolicy?.name?.toLowerCase() || 'flexible',
+      rules: Array.isArray(listing.rules) ? listing.rules.join('\n') : listing.rules || '',
+      owner: {
+        id: listing.owner?.id,
+        firstName: listing.owner?.firstName,
+        lastName: listing.owner?.lastName,
+        avatar: listing.owner?.profilePhotoUrl,
+        rating: listing.owner?.averageRating,
+        verified: listing.owner?.idVerificationStatus === 'VERIFIED',
+      },
+      createdAt: listing.createdAt,
+      updatedAt: listing.updatedAt,
+    };
   }
 
   @Patch(':id')

@@ -13,7 +13,8 @@ export { PrismaClient, PrismaWrapper, toNumber, decimalAdd, decimalSubtract, dec
 // Export all types for API usage
 export type {
   User,
-  Property,
+  Listing as Property,
+  Listing,
   Booking,
   Review,
   Category,
@@ -28,6 +29,8 @@ export type {
   CancellationPolicy,
   ConditionReport,
   InsurancePolicy,
+  InsuranceClaim,
+  EmailTemplate,
   Conversation,
   Message,
   ConversationParticipant,
@@ -122,6 +125,18 @@ export enum DisputeStatus {
   INVESTIGATING = 'INVESTIGATING',
   RESOLVED = 'RESOLVED',
   CLOSED = 'CLOSED',
+}
+
+export enum DisputeType {
+  PROPERTY_DAMAGE = 'PROPERTY_DAMAGE',
+  PAYMENT_ISSUE = 'PAYMENT_ISSUE',
+  CANCELLATION = 'CANCELLATION',
+  CLEANING_FEE = 'CLEANING_FEE',
+  RULES_VIOLATION = 'RULES_VIOLATION',
+  MISSING_ITEMS = 'MISSING_ITEMS',
+  CONDITION_MISMATCH = 'CONDITION_MISMATCH',
+  REFUND_REQUEST = 'REFUND_REQUEST',
+  OTHER = 'OTHER',
 }
 
 export enum ReviewType {
@@ -228,6 +243,32 @@ export enum OrganizationRole {
   OWNER = 'OWNER',
   ADMIN = 'ADMIN',
   MEMBER = 'MEMBER',
+}
+
+export enum ClaimStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  PROCESSING = 'PROCESSING',
+  PAID = 'PAID',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum EmailTemplateType {
+  BOOKING_CONFIRMATION = 'BOOKING_CONFIRMATION',
+  BOOKING_CANCELLATION = 'BOOKING_CANCELLATION',
+  PAYMENT_CONFIRMATION = 'PAYMENT_CONFIRMATION',
+  PAYMENT_RECEIPT = 'PAYMENT_RECEIPT',
+  WELCOME = 'WELCOME',
+  PASSWORD_RESET = 'PASSWORD_RESET',
+  EMAIL_VERIFICATION = 'EMAIL_VERIFICATION',
+  LISTING_APPROVED = 'LISTING_APPROVED',
+  LISTING_REJECTED = 'LISTING_REJECTED',
+  REVIEW_REMINDER = 'REVIEW_REMINDER',
+  PAYOUT_NOTIFICATION = 'PAYOUT_NOTIFICATION',
+  DISPUTE_OPENED = 'DISPUTE_OPENED',
+  DISPUTE_RESOLVED = 'DISPUTE_RESOLVED',
+  SYSTEM_NOTIFICATION = 'SYSTEM_NOTIFICATION',
 }
 
 // Also export as const objects for backward compatibility

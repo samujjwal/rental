@@ -1,114 +1,83 @@
-import { Form, useLoaderData, useActionData } from "react-router";
-import { useState, useEffect } from "react";
-import { cn } from "~/lib/utils";
-import type { Route } from "./+types/settings.notifications";
-
-interface NotificationPreferences {
-  [key: string]: {
-    email: boolean;
-    push: boolean;
-    sms: boolean;
-    "in-app": boolean;
-  };
-}
+import type { ActionFunctionArgs } from "react-router";
+import { Form, useActionData, useLoaderData } from "react-router";
+import { useState } from "react";
+import { notificationsApi, type NotificationPreferences } from "~/lib/api/notifications";
 
 export async function clientLoader() {
-  const response = await fetch("/api/notifications/preferences", {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch preferences");
+  try {
+    const preferences = await notificationsApi.getPreferences();
+    return { preferences, error: null };
+  } catch (error: any) {
+    console.error("Failed to fetch notification preferences:", error);
+    // Return default preferences if API fails
+    return {
+      preferences: {} as NotificationPreferences,
+      error: error?.message || "Failed to load preferences",
+    };
   }
-
-  const preferences = await response.json();
-  return { preferences };
 }
 
-export async function clientAction({ request }: Route.ClientActionArgs) {
+export async function clientAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const preferences = JSON.parse(formData.get("preferences") as string);
 
-  const response = await fetch("/api/notifications/preferences", {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-    body: JSON.stringify(preferences),
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to update preferences");
+  try {
+    await notificationsApi.updatePreferences(preferences);
+    return { success: true, message: "Preferences updated successfully" };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error?.response?.data?.message || error?.message || "Failed to update preferences",
+    };
   }
-
-  return { success: true, message: "Preferences updated successfully" };
 }
 
-export default function NotificationSettings({
-  loaderData,
-  actionData,
-}: Route.ComponentProps) {
-  const { preferences: initialPreferences } = loaderData;
+export default function NotificationSettings() {
+  const { preferences: initialPreferences, error: loadError } =
+    useLoaderData<typeof clientLoader>();
+  const actionData = useActionData<typeof clientAction>();
   const [preferences, setPreferences] =
     useState<NotificationPreferences>(initialPreferences);
 
   const notificationTypes = [
     {
-      key: "booking.request",
-      label: "Booking Requests",
-      description: "When someone requests to book your item",
+      key: "bookingUpdates",
+      label: "Booking Updates",
+      description: "Booking requests, confirmations, and changes",
     },
     {
-      key: "booking.confirmed",
-      label: "Booking Confirmations",
-      description: "When your booking is confirmed by the owner",
+      key: "paymentUpdates",
+      label: "Payment Updates",
+      description: "Payments sent, received, and payouts",
     },
     {
-      key: "payment.received",
-      label: "Payment Confirmations",
-      description: "When a payment is processed",
+      key: "messages",
+      label: "Messages",
+      description: "New messages from other users",
     },
     {
-      key: "message.received",
-      label: "New Messages",
-      description: "When you receive a new message",
-    },
-    {
-      key: "review.received",
-      label: "New Reviews",
-      description: "When someone leaves you a review",
-    },
-    {
-      key: "dispute.opened",
-      label: "Dispute Notifications",
-      description: "When a dispute is opened",
-    },
-    {
-      key: "listing.insurance_required",
-      label: "Insurance Reminders",
-      description: "When insurance is required for your listing",
-    },
-    {
-      key: "listing.published",
-      label: "Listing Status Updates",
-      description: "When your listing is published or needs attention",
+      key: "reviews",
+      label: "Reviews",
+      description: "New reviews and rating updates",
     },
     {
       key: "marketing",
-      label: "Marketing & Promotions",
-      description: "Updates about new features and special offers",
+      label: "Marketing",
+      description: "Promotions and news",
+    },
+    {
+      key: "securityAlerts",
+      label: "Security Alerts",
+      description: "Login alerts and security changes",
     },
   ];
 
   const updatePreference = (type: string, channel: string, value: boolean) => {
     setPreferences((prev) => ({
       ...prev,
-      [type]: {
-        ...prev[type],
-        [channel]: value,
+      [channel]: {
+        ...(prev as any)[channel],
+        [type]: value,
       },
     }));
   };
@@ -117,7 +86,6 @@ export default function NotificationSettings({
     { key: "email", label: "Email", icon: "📧" },
     { key: "push", label: "Push", icon: "🔔" },
     { key: "sms", label: "SMS", icon: "📱" },
-    { key: "in-app", label: "In-App", icon: "💬" },
   ];
 
   return (
@@ -139,6 +107,13 @@ export default function NotificationSettings({
           {actionData?.success && (
             <div className="mx-6 mt-6 bg-success/10 border border-success/20 text-success px-4 py-3 rounded">
               {actionData.message}
+            </div>
+          )}
+
+          {/* Error Messages */}
+          {(loadError || actionData?.success === false) && (
+            <div className="mx-6 mt-6 bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded">
+              {loadError || actionData?.message}
             </div>
           )}
 
@@ -182,7 +157,7 @@ export default function NotificationSettings({
                           <input
                             type="checkbox"
                             checked={
-                              preferences[type.key]?.[channel.key] ?? false
+                              (preferences as any)[channel.key]?.[type.key] ?? false
                             }
                             onChange={(e) =>
                               updatePreference(
@@ -210,13 +185,18 @@ export default function NotificationSettings({
                   type="button"
                   onClick={() => {
                     const newPrefs = { ...preferences };
-                    notificationTypes.forEach((type) => {
-                      newPrefs[type.key] = {
-                        email: true,
-                        push: true,
-                        sms: false,
-                        "in-app": true,
-                      };
+                    const channels = ["email", "push", "sms"] as const;
+                    
+                    channels.forEach((channel) => {
+                      if ((newPrefs as any)[channel]) {
+                        const channelPrefs = { ...(newPrefs as any)[channel] };
+                        notificationTypes.forEach((type) => {
+                          if (Object.prototype.hasOwnProperty.call(channelPrefs, type.key)) {
+                            channelPrefs[type.key] = true;
+                          }
+                        });
+                        (newPrefs as any)[channel] = channelPrefs;
+                      }
                     });
                     setPreferences(newPrefs);
                   }}
@@ -228,13 +208,18 @@ export default function NotificationSettings({
                   type="button"
                   onClick={() => {
                     const newPrefs = { ...preferences };
-                    notificationTypes.forEach((type) => {
-                      newPrefs[type.key] = {
-                        email: false,
-                        push: false,
-                        sms: false,
-                        "in-app": false,
-                      };
+                    const channels = ["email", "push", "sms"] as const;
+                    
+                    channels.forEach((channel) => {
+                      if ((newPrefs as any)[channel]) {
+                        const channelPrefs = { ...(newPrefs as any)[channel] };
+                        notificationTypes.forEach((type) => {
+                          if (Object.prototype.hasOwnProperty.call(channelPrefs, type.key)) {
+                            channelPrefs[type.key] = false;
+                          }
+                        });
+                        (newPrefs as any)[channel] = channelPrefs;
+                      }
                     });
                     setPreferences(newPrefs);
                   }}

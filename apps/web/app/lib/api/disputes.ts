@@ -1,4 +1,4 @@
-import { apiClient } from "~/lib/api-client";
+import { api } from "~/lib/api-client";
 
 export interface Dispute {
   id: string;
@@ -32,23 +32,19 @@ export interface CreateDisputeRequest {
 
 export const disputesApi = {
   getDisputeById: async (id: string): Promise<Dispute> => {
-    const response = await apiClient.get(`/disputes/${id}`);
-    return response.data;
+    return api.get<Dispute>(`/disputes/${id}`);
   },
 
   getDisputesForBooking: async (bookingId: string): Promise<Dispute[]> => {
-    const response = await apiClient.get(`/bookings/${bookingId}/disputes`);
-    return response.data;
+    return api.get<Dispute[]>(`/bookings/${bookingId}/disputes`);
   },
 
-  getMyDisputes: async (): Promise<Dispute[]> => {
-    const response = await apiClient.get("/disputes/my-disputes");
-    return response.data;
+  getMyDisputes: async (params?: { status?: string }): Promise<Dispute[]> => {
+    return api.get<Dispute[]>("/disputes/my-disputes", { params });
   },
 
   createDispute: async (data: CreateDisputeRequest): Promise<Dispute> => {
-    const response = await apiClient.post("/disputes", data);
-    return response.data;
+    return api.post<Dispute>("/disputes", data);
   },
 
   addEvidence: async (
@@ -59,20 +55,15 @@ export const disputesApi = {
       description?: string;
     }
   ): Promise<Dispute> => {
-    const response = await apiClient.post(
-      `/disputes/${disputeId}/evidence`,
-      evidence
-    );
-    return response.data;
+    return api.post<Dispute>(`/disputes/${disputeId}/evidence`, evidence);
   },
 
   respondToDispute: async (
     disputeId: string,
-    response: string
+    responseText: string
   ): Promise<Dispute> => {
-    const apiResponse = await apiClient.post(`/disputes/${disputeId}/respond`, {
-      response,
+    return api.post<Dispute>(`/disputes/${disputeId}/respond`, {
+      response: responseText,
     });
-    return apiResponse.data;
   },
 };

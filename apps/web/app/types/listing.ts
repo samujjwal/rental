@@ -3,9 +3,10 @@ export interface Listing {
   ownerId: string;
   title: string;
   description: string;
-  category: string;
+  category: string | { id: string; name: string; slug: string };
   subcategory: string | null;
   pricePerDay: number;
+  basePrice?: number; // Alias for pricePerDay
   pricePerWeek: number | null;
   pricePerMonth: number | null;
   currency: string;
@@ -23,6 +24,7 @@ export interface Listing {
   };
   images: string[];
   availability: "available" | "rented" | "maintenance";
+  status?: "AVAILABLE" | "RENTED" | "MAINTENANCE" | "DRAFT" | "PENDING" | "INACTIVE"; // Alternative status field
   availabilitySchedule: {
     startDate: string | null;
     endDate: string | null;
@@ -42,8 +44,12 @@ export interface Listing {
   rules: string | null;
   features: string[];
   rating: number | null;
+  averageRating?: number; // Alias for rating
   totalReviews: number;
+  reviewCount?: number; // Alias for totalReviews
   totalBookings: number;
+  bookingsCount?: number; // Alias for totalBookings
+  totalEarnings?: number; // Total earnings from this listing
   views: number;
   featured: boolean;
   verified: boolean;
@@ -96,7 +102,7 @@ export interface CreateListingRequest {
   features?: string[];
 }
 
-export interface UpdateListingRequest extends Partial<CreateListingRequest> {}
+export type UpdateListingRequest = Partial<CreateListingRequest>;
 
 export interface ListingSearchParams {
   query?: string;

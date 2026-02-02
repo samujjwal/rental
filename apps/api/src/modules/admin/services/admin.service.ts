@@ -562,7 +562,7 @@ export class AdminService {
         _count: {
           select: {
             listings: true,
-            bookingsAsRenter: true,
+            bookings: true,
             reviewsGiven: true,
           },
         },
@@ -640,7 +640,7 @@ export class AdminService {
     };
   }
 
-  async updateOrganizationStatus(adminId: string, orgId: string, status: OrganizationStatus) {
+  async updateOrganizationStatus(adminId: string, orgId: string, status: OrganizationStatus): Promise<any> {
     await this.verifyAdmin(adminId);
     return this.prisma.organization.update({
       where: { id: orgId },
@@ -745,7 +745,7 @@ export class AdminService {
       include: {
         _count: {
           select: {
-            properties: true,
+            listings: true,
           },
         },
       },
@@ -1464,7 +1464,7 @@ export class AdminService {
   async getReviews(
     adminId: string,
     params: { page?: number; limit?: number; status?: string; search?: string },
-  ) {
+  ): Promise<any> {
     await this.verifyAdmin(adminId);
     const { page = 1, limit = 10, status, search } = params;
     const skip = (page - 1) * limit;
@@ -1505,7 +1505,7 @@ export class AdminService {
     };
   }
 
-  async updateReviewStatus(adminId: string, reviewId: string, status: any) {
+  async updateReviewStatus(adminId: string, reviewId: string, status: any): Promise<any> {
     await this.verifyAdmin(adminId);
     return this.prisma.review.update({
       where: { id: reviewId },
@@ -1562,7 +1562,7 @@ export class AdminService {
   // ===================================  FINANCE & LEDGER  ==========================================
   // =================================================================================================
 
-  async getRefunds(adminId: string, params: { page?: number; limit?: number; status?: string }) {
+  async getRefunds(adminId: string, params: { page?: number; limit?: number; status?: string }): Promise<any> {
     await this.verifyAdmin(adminId);
     const { page = 1, limit = 10, status } = params;
     const skip = (page - 1) * limit;
@@ -1599,7 +1599,7 @@ export class AdminService {
     };
   }
 
-  async getPayouts(adminId: string, params: { page?: number; limit?: number; status?: string }) {
+  async getPayouts(adminId: string, params: { page?: number; limit?: number; status?: string }): Promise<any> {
     await this.verifyAdmin(adminId);
     const { page = 1, limit = 10, status } = params;
     const skip = (page - 1) * limit;
@@ -1651,7 +1651,7 @@ export class AdminService {
     };
   }
 
-  async getLedger(adminId: string, params: { page?: number; limit?: number }) {
+  async getLedger(adminId: string, params: { page?: number; limit?: number }): Promise<any> {
     await this.verifyAdmin(adminId);
     const { page = 1, limit = 10 } = params;
     const skip = (page - 1) * limit;
@@ -1730,7 +1730,7 @@ export class AdminService {
     };
   }
 
-  async updateDisputeStatus(adminId: string, disputeId: string, status: DisputeStatus) {
+  async updateDisputeStatus(adminId: string, disputeId: string, status: DisputeStatus): Promise<any> {
     await this.verifyAdmin(adminId);
     return this.prisma.dispute.update({
       where: { id: disputeId },
@@ -1738,7 +1738,7 @@ export class AdminService {
     });
   }
 
-  async updateRefundStatus(adminId: string, refundId: string, status: any) {
+  async updateRefundStatus(adminId: string, refundId: string, status: any): Promise<any> {
     await this.verifyAdmin(adminId);
     return this.prisma.refund.update({
       where: { id: refundId },
@@ -2328,6 +2328,146 @@ export class AdminService {
         ],
         actions: ['view'],
       },
+      claims: {
+        name: 'Claim',
+        pluralName: 'Claims',
+        slug: 'claims',
+        description: 'Manage insurance claims',
+        fields: [
+          { name: 'id', type: 'text', label: 'ID', readOnly: true },
+          { name: 'policyId', type: 'text', label: 'Policy ID' },
+          { name: 'bookingId', type: 'text', label: 'Booking ID' },
+          { name: 'claimAmount', type: 'number', label: 'Claim Amount' },
+          { name: 'description', type: 'textarea', label: 'Description' },
+          {
+            name: 'status',
+            type: 'select',
+            label: 'Status',
+            options: ['PENDING', 'APPROVED', 'REJECTED', 'PROCESSING', 'PAID'],
+          },
+          { name: 'claimDate', type: 'date', label: 'Claim Date' },
+          { name: 'createdAt', type: 'datetime', label: 'Created At', readOnly: true },
+        ],
+        columns: [
+          { accessorKey: 'id', header: 'ID', width: '80px' },
+          { accessorKey: 'policyId', header: 'Policy', width: '150px' },
+          { accessorKey: 'claimAmount', header: 'Amount', width: '120px' },
+          { accessorKey: 'status', header: 'Status', width: '100px' },
+          { accessorKey: 'claimDate', header: 'Claim Date', width: '120px' },
+          { accessorKey: 'createdAt', header: 'Created', width: '150px' },
+        ],
+        filters: [
+          { key: 'policyId', label: 'Policy ID', type: 'text', operator: 'equals' },
+          { key: 'bookingId', label: 'Booking ID', type: 'text', operator: 'equals' },
+          { key: 'claimAmount', label: 'Min Amount', type: 'number', operator: 'gte' },
+          { key: 'claimAmount', label: 'Max Amount', type: 'number', operator: 'lte' },
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'PENDING', label: 'Pending' },
+              { value: 'APPROVED', label: 'Approved' },
+              { value: 'REJECTED', label: 'Rejected' },
+              { value: 'PROCESSING', label: 'Processing' },
+              { value: 'PAID', label: 'Paid' },
+            ],
+          },
+          { key: 'claimDate', label: 'Claim Date From', type: 'date', operator: 'gte' },
+          { key: 'claimDate', label: 'Claim Date To', type: 'date', operator: 'lte' },
+          { key: 'createdAt', label: 'Created After', type: 'date', operator: 'gte' },
+          { key: 'createdAt', label: 'Created Before', type: 'date', operator: 'lte' },
+        ],
+        actions: ['view', 'edit', 'updateStatus'],
+      },
+      'email-templates': {
+        name: 'Email Template',
+        pluralName: 'Email Templates',
+        slug: 'email-templates',
+        description: 'Manage email templates',
+        fields: [
+          { name: 'id', type: 'text', label: 'ID', readOnly: true },
+          { name: 'name', type: 'text', label: 'Name', required: true },
+          { name: 'subject', type: 'text', label: 'Subject', required: true },
+          { name: 'body', type: 'textarea', label: 'Body', required: true },
+          { name: 'description', type: 'textarea', label: 'Description' },
+          {
+            name: 'type',
+            type: 'select',
+            label: 'Type',
+            options: [
+              'WELCOME',
+              'BOOKING_CONFIRMATION',
+              'BOOKING_REMINDER',
+              'BOOKING_CANCELLED',
+              'PAYMENT_RECEIVED',
+              'PAYMENT_FAILED',
+              'REVIEW_REQUEST',
+              'PASSWORD_RESET',
+              'EMAIL_VERIFICATION',
+              'LISTING_APPROVED',
+              'LISTING_REJECTED',
+              'DISPUTE_OPENED',
+              'DISPUTE_RESOLVED',
+              'CUSTOM',
+            ],
+          },
+          { name: 'isActive', type: 'boolean', label: 'Is Active' },
+          { name: 'createdAt', type: 'datetime', label: 'Created At', readOnly: true },
+          { name: 'updatedAt', type: 'datetime', label: 'Updated At', readOnly: true },
+        ],
+        columns: [
+          { accessorKey: 'id', header: 'ID', width: '80px' },
+          { accessorKey: 'name', header: 'Name', width: '200px' },
+          { accessorKey: 'subject', header: 'Subject', width: '250px' },
+          { accessorKey: 'type', header: 'Type', width: '150px' },
+          { accessorKey: 'isActive', header: 'Active', width: '80px' },
+          { accessorKey: 'updatedAt', header: 'Updated', width: '150px' },
+        ],
+        filters: [
+          { key: 'name', label: 'Name', type: 'text', operator: 'contains' },
+          { key: 'subject', label: 'Subject', type: 'text', operator: 'contains' },
+          { key: 'description', label: 'Description', type: 'text', operator: 'contains' },
+          {
+            key: 'type',
+            label: 'Type',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'WELCOME', label: 'Welcome' },
+              { value: 'BOOKING_CONFIRMATION', label: 'Booking Confirmation' },
+              { value: 'BOOKING_REMINDER', label: 'Booking Reminder' },
+              { value: 'BOOKING_CANCELLED', label: 'Booking Cancelled' },
+              { value: 'PAYMENT_RECEIVED', label: 'Payment Received' },
+              { value: 'PAYMENT_FAILED', label: 'Payment Failed' },
+              { value: 'REVIEW_REQUEST', label: 'Review Request' },
+              { value: 'PASSWORD_RESET', label: 'Password Reset' },
+              { value: 'EMAIL_VERIFICATION', label: 'Email Verification' },
+              { value: 'LISTING_APPROVED', label: 'Listing Approved' },
+              { value: 'LISTING_REJECTED', label: 'Listing Rejected' },
+              { value: 'DISPUTE_OPENED', label: 'Dispute Opened' },
+              { value: 'DISPUTE_RESOLVED', label: 'Dispute Resolved' },
+              { value: 'CUSTOM', label: 'Custom' },
+            ],
+          },
+          {
+            key: 'isActive',
+            label: 'Status',
+            type: 'select',
+            operator: 'equals',
+            options: [
+              { value: 'true', label: 'Active' },
+              { value: 'false', label: 'Inactive' },
+            ],
+          },
+          { key: 'createdAt', label: 'Created After', type: 'date', operator: 'gte' },
+          { key: 'createdAt', label: 'Created Before', type: 'date', operator: 'lte' },
+          { key: 'updatedAt', label: 'Updated After', type: 'date', operator: 'gte' },
+          { key: 'updatedAt', label: 'Updated Before', type: 'date', operator: 'lte' },
+        ],
+        actions: ['view', 'edit', 'delete', 'duplicate'],
+      },
     };
 
     const schema = schemas[entity.toLowerCase()];
@@ -2400,6 +2540,16 @@ export class AdminService {
         model: 'conditionReport',
         searchFields: ['notes'],
         defaultSort: 'createdAt',
+      },
+      claims: {
+        model: 'insuranceClaim',
+        searchFields: ['description'],
+        defaultSort: 'createdAt',
+      },
+      'email-templates': {
+        model: 'emailTemplate',
+        searchFields: ['name', 'subject', 'description'],
+        defaultSort: 'updatedAt',
       },
     };
 
@@ -2738,6 +2888,66 @@ export class AdminService {
               },
             }),
             this.prisma.conditionReport.count({ where }),
+          ]);
+          break;
+
+        case 'insuranceClaim':
+          [data, total] = await Promise.all([
+            this.prisma.insuranceClaim.findMany({
+              where,
+              skip,
+              take: limit,
+              orderBy,
+              include: {
+                policy: {
+                  select: {
+                    id: true,
+                    policyNumber: true,
+                    provider: true,
+                  },
+                },
+                booking: {
+                  select: {
+                    id: true,
+                    listing: {
+                      select: {
+                        title: true,
+                      },
+                    },
+                  },
+                },
+                property: {
+                  select: {
+                    id: true,
+                    title: true,
+                  },
+                },
+              },
+            }),
+            this.prisma.insuranceClaim.count({ where }),
+          ]);
+          break;
+
+        case 'emailTemplate':
+          [data, total] = await Promise.all([
+            this.prisma.emailTemplate.findMany({
+              where,
+              skip,
+              take: limit,
+              orderBy,
+              select: {
+                id: true,
+                name: true,
+                subject: true,
+                type: true,
+                description: true,
+                isActive: true,
+                category: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            }),
+            this.prisma.emailTemplate.count({ where }),
           ]);
           break;
 

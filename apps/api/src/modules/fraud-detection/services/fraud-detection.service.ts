@@ -34,6 +34,34 @@ export class FraudDetectionService {
     private readonly cache: CacheService,
   ) {}
 
+  async getHighRiskUsers(limit = 20): Promise<any[]> {
+     // Find users with potential risk factors
+     const users = await this.prisma.user.findMany({
+        where: {
+           OR: [
+              { disputesDefended: { some: {} } },
+              { averageRating: { lt: 3.5, not: 0 } },
+              { emailVerified: false }
+           ]
+        },
+        take: limit * 2, // Fetch more to filter down
+        include: {
+           _count: {
+              select: { disputesDefended: true, bookings: true }
+           }
+        }
+     });
+
+     const results = [];
+     for(const user of users) {
+        const check = await this.checkUserRisk(user.id);
+        if (check.riskScore >= 50) {
+           results.push({ user, check });
+        }
+     }
+     return results.slice(0, limit);
+  }
+
   /**
    * Check user for fraud indicators
    */
@@ -44,7 +72,7 @@ export class FraudDetectionService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        bookingsAsRenter: {
+        bookings: {
           where: {
             status: { in: ['CANCELLED', 'DISPUTED'] },
             createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) }, // Last 90 days
@@ -109,7 +137,7 @@ export class FraudDetectionService {
     }
 
     // Check recent cancellations
-    const recentCancellations = user.bookingsAsRenter.filter(
+    const recentCancellations = user.bookings.filter(
       (b) => b.status === 'CANCELLED',
     ).length;
     if (recentCancellations > 2) {
@@ -192,7 +220,7 @@ export class FraudDetectionService {
     const user = await this.prisma.user.findUnique({
       where: { id: bookingData.userId },
       include: {
-        bookingsAsRenter: {
+        bookings: {
           where: { status: { in: ['COMPLETED', 'SETTLED'] } },
         },
       },
@@ -214,7 +242,7 @@ export class FraudDetectionService {
       }
 
       // Check first booking protection
-      if (user.bookingsAsRenter.length === 0 && bookingData.totalPrice > 300) {
+      if (user.bookings.length === 0 && bookingData.totalPrice > 300) {
         riskScore += 15;
         flags.push({
           type: 'FIRST_HIGH_VALUE_BOOKING',
@@ -406,12 +434,23 @@ export class FraudDetectionService {
   private async checkBookingVelocity(
     userId: string,
   ): Promise<{ count: number; windowMinutes: number }> {
-    const windowMinutes = 60;
-    const cacheKey = `booking:velocity:${userId}`;
+    const windowMinutes = 5; // 5 minute window for velocity check
+    const now = Date.now();
+    const windowKey = Math.floor(now / (windowMinutes * 60 * 1000));
+    const cacheKey = `booking:velocity:${userId}:${windowKey}`;
 
-    const count = await this.cache.increment(cacheKey);
-    if (count === 1) {
-      await this.cache.expire(cacheKey, windowMinutes * 60);
+    // Use atomic increment with error handling
+    let count = 1;
+    try {
+      count = await this.cache.increment(cacheKey);
+      if (count === 1) {
+        // Set expiry only on first increment to prevent race condition
+        await this.cache.expire(cacheKey, windowMinutes * 60);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to check booking velocity for user ${userId}:`, error);
+      // On cache error, allow the operation but log it
+      // Better to allow legitimate bookings than block on cache issues
     }
 
     return { count, windowMinutes };

@@ -13,6 +13,9 @@ export interface User {
   totalListings: number;
   createdAt: string;
   updatedAt: string;
+  responseRate?: number;
+  responseTime?: string;
+  bio?: string;
 }
 
 export interface LoginRequest {

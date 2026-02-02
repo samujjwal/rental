@@ -28,7 +28,7 @@ import {
   CardDescription,
 } from "~/components/ui";
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof clientLoader> = ({ data }) => {
   if (!data?.listing) {
     return [{ title: "Listing Not Found" }];
   }
@@ -38,21 +38,28 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   ];
 };
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function clientLoader({ params }: LoaderFunctionArgs) {
   const { id } = params;
   if (!id) throw new Error("Listing ID is required");
 
   try {
     const listing = await listingsApi.getListingById(id);
-    const blockedDates = await bookingsApi.getBlockedDates(id);
+    let blockedDates: string[] = [];
+    try {
+      blockedDates = await bookingsApi.getBlockedDates(id);
+    } catch (blockError) {
+      // Blocked dates are optional, continue without them
+      console.warn("Failed to load blocked dates:", blockError);
+    }
     return { listing, blockedDates };
   } catch (error) {
+    console.error("Failed to load listing:", error, "ID:", id);
     throw new Response("Listing not found", { status: 404 });
   }
 }
 
 export default function ListingDetail() {
-  const { listing, blockedDates } = useLoaderData<typeof loader>();
+  const { listing, blockedDates } = useLoaderData<typeof clientLoader>();
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -471,7 +478,8 @@ export default function ListingDetail() {
 
                     {/* Calculate Button */}
                     <Button
-                      variant="secondary"
+                      variant="outlined"
+                      color="secondary"
                       onClick={handleCalculatePrice}
                       disabled={!startDate || !endDate || loading}
                       className="w-full mb-4"

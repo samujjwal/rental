@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
-import { Property, PropertyStatus, VerificationStatus } from '@rental-portal/database';
+import { Listing as Property, PropertyStatus, VerificationStatus } from '@rental-portal/database';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
 import { PropertyValidationService } from './listing-validation.service';
 

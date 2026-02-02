@@ -9,12 +9,12 @@ export class PrismaWrapper {
 
   // Provide listing alias for property
   get listing() {
-    return this.prisma.property;
+    return this.prisma.listing;
   }
 
   // Provide property alias
   get property() {
-    return this.prisma.property;
+    return this.prisma.listing;
   }
 
   // Provide all other models directly
@@ -76,6 +76,14 @@ export class PrismaWrapper {
 
   get insurancePolicy() {
     return this.prisma.insurancePolicy;
+  }
+
+  get insuranceClaim() {
+    return this.prisma.insuranceClaim;
+  }
+
+  get emailTemplate() {
+    return this.prisma.emailTemplate;
   }
 
   get conversation() {

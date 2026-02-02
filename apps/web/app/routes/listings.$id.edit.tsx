@@ -27,7 +27,7 @@ export const meta: MetaFunction = () => {
   return [{ title: "Edit Listing | GharBatai Rentals" }];
 };
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function clientLoader({ params }: LoaderFunctionArgs) {
   const listingId = params.id;
   if (!listingId) {
     throw redirect("/dashboard");
@@ -42,7 +42,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+export async function clientAction({ request, params }: ActionFunctionArgs) {
   const listingId = params.id;
   if (!listingId) {
     return { error: "Listing ID is required" };
@@ -76,7 +76,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       pricePerMonth: formData.get("pricePerMonth")
         ? Number(formData.get("pricePerMonth"))
         : undefined,
-      condition: formData.get("condition") as string,
+      condition: formData.get("condition") as any,
       location: JSON.parse(formData.get("location") as string),
       images: JSON.parse(formData.get("images") as string),
       instantBooking: formData.get("instantBooking") === "true",
@@ -92,7 +92,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       maximumRentalPeriod: formData.get("maximumRentalPeriod")
         ? Number(formData.get("maximumRentalPeriod"))
         : undefined,
-      cancellationPolicy: formData.get("cancellationPolicy") as string,
+      cancellationPolicy: formData.get("cancellationPolicy") as any,
       rules: formData.get("rules") as string,
       features: JSON.parse(formData.get("features") as string),
     };
@@ -145,27 +145,27 @@ export default function EditListing() {
     setValue,
     formState: { errors },
   } = useForm<ListingInput>({
-    resolver: zodResolver(listingSchema),
+    resolver: zodResolver(listingSchema) as any,
     defaultValues: {
       title: listing.title,
       description: listing.description,
-      category: listing.category,
-      subcategory: listing.subcategory,
+      category: (listing.category as any)?.id || listing.category,
+      subcategory: listing.subcategory || undefined,
       pricePerDay: listing.pricePerDay,
-      pricePerWeek: listing.pricePerWeek,
-      pricePerMonth: listing.pricePerMonth,
+      pricePerWeek: listing.pricePerWeek || undefined,
+      pricePerMonth: listing.pricePerMonth || undefined,
       condition: listing.condition,
       location: listing.location,
       images: listing.images,
       instantBooking: listing.instantBooking,
       deliveryOptions: listing.deliveryOptions,
-      deliveryRadius: listing.deliveryRadius,
-      deliveryFee: listing.deliveryFee,
+      deliveryRadius: listing.deliveryRadius || undefined,
+      deliveryFee: listing.deliveryFee || undefined,
       securityDeposit: listing.securityDeposit,
       minimumRentalPeriod: listing.minimumRentalPeriod,
-      maximumRentalPeriod: listing.maximumRentalPeriod,
+      maximumRentalPeriod: listing.maximumRentalPeriod || undefined,
       cancellationPolicy: listing.cancellationPolicy,
-      rules: listing.rules,
+      rules: listing.rules || undefined,
       features: listing.features || [],
     },
   });

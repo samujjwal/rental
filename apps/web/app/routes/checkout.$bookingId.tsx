@@ -45,7 +45,7 @@ const stripePromise = loadStripe(
   import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ""
 );
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function clientLoader({ params }: LoaderFunctionArgs) {
   const bookingId = params.bookingId;
   if (!bookingId) {
     throw redirect("/bookings");
@@ -54,8 +54,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
 
-    // Check if booking is in correct state for payment
-    if (booking.state !== "PENDING_PAYMENT") {
+    // Check if booking is in correct status for payment
+    if (booking.status !== "pending") {
       throw redirect(`/bookings/${bookingId}`);
     }
 
@@ -73,7 +73,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+export async function clientAction({ request, params }: ActionFunctionArgs) {
   const bookingId = params.bookingId;
   if (!bookingId) {
     return { error: "Booking ID is required" };
@@ -104,7 +104,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
   const stripe = useStripe();
   const elements = useElements();
   const navigate = useNavigate();
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof clientAction>();
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -200,7 +200,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
 }
 
 export default function CheckoutRoute() {
-  const { booking, clientSecret } = useLoaderData<typeof loader>();
+  const { booking, clientSecret } = useLoaderData<typeof clientLoader>();
   const navigate = useNavigate();
 
   const startDate = new Date(booking.startDate);
@@ -241,7 +241,7 @@ export default function CheckoutRoute() {
                       {booking.listing?.title || "Item"}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {booking.listing?.category?.name || "Category"}
+                      {(booking.listing as any)?.category || "Category"}
                     </p>
                   </div>
                 </div>
@@ -252,7 +252,7 @@ export default function CheckoutRoute() {
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground">Owner</p>
                     <p className="font-medium text-foreground">
-                      {booking.listing?.owner?.fullName || "Owner"}
+                      {(booking.listing as any)?.owner?.fullName || "Owner"}
                     </p>
                   </div>
                 </div>
@@ -283,32 +283,32 @@ export default function CheckoutRoute() {
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span className="text-foreground">
-                      ${booking.subtotalAmount.toFixed(2)}
+                      ${booking.totalAmount.toFixed(2)}
                     </span>
                   </div>
-                  {booking.taxAmount > 0 && (
+                  {(booking as any).taxAmount > 0 && (
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-muted-foreground">Tax</span>
                       <span className="text-foreground">
-                        ${booking.taxAmount.toFixed(2)}
+                        ${(booking as any).taxAmount.toFixed(2)}
                       </span>
                     </div>
                   )}
-                  {booking.serviceFeeAmount > 0 && (
+                  {(booking as any).serviceFeeAmount > 0 && (
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-muted-foreground">Service Fee</span>
                       <span className="text-foreground">
-                        ${booking.serviceFeeAmount.toFixed(2)}
+                        ${(booking as any).serviceFeeAmount.toFixed(2)}
                       </span>
                     </div>
                   )}
-                  {booking.securityDepositAmount > 0 && (
+                  {(booking as any).securityDepositAmount > 0 && (
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-muted-foreground">
                         Security Deposit
                       </span>
                       <span className="text-foreground">
-                        ${booking.securityDepositAmount.toFixed(2)}
+                        ${(booking as any).securityDepositAmount.toFixed(2)}
                       </span>
                     </div>
                   )}

@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+
 import {
   Links,
   Meta,
@@ -5,17 +7,18 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
+  useNavigate,
+  useRevalidator,
 } from "react-router";
+import * as React from "react";
 import { useAuthInit } from "./hooks/useAuthInit";
 import { useAuthStore } from "./lib/store/auth";
-import { getUser, getUserToken, getSession } from "~/utils/auth.server";
+import { getUser, getSession } from "~/utils/auth";
 import { useEffect } from "react";
-import { ThemeProvider } from "@mui/material/styles";
-import { CssBaseline } from "@mui/material";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import theme from "~/theme/muiTheme";
+import { OfflineBanner, RouteErrorBoundary } from "~/components/ui";
 
-import type { Route } from "./+types/root";
+import type { LinksFunction } from "react-router";
 import stylesheet from "./tailwind.css?url";
 
 // Create React Query client
@@ -28,7 +31,7 @@ const queryClient = new QueryClient({
   },
 });
 
-export const links: Route.LinksFunction = () => [
+export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
@@ -42,7 +45,7 @@ export const links: Route.LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
 ];
 
-export async function loader({ request }: { request: Request }) {
+export async function clientLoader({ request }: { request: Request }) {
   const user = await getUser(request);
   const session = await getSession(request);
   const accessToken = session.get("accessToken");
@@ -53,7 +56,7 @@ export async function loader({ request }: { request: Request }) {
     accessToken,
     refreshToken,
     ENV: {
-      API_URL: process.env.API_URL || "http://localhost:3400/api/v1",
+      API_URL: import.meta.env.VITE_API_URL || "http://localhost:3400/api",
     },
   };
 }
@@ -77,12 +80,42 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 function RootContent() {
-  const loaderData = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof clientLoader>();
   const isInitialized = useAuthStore((state) => state.isInitialized);
   const isLoading = useAuthStore((state) => state.isLoading);
   const setAuth = useAuthStore((state) => state.setAuth);
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
 
   useAuthInit();
+
+  // Allow non-component code (e.g., API client, error boundaries) to request
+  // navigation/revalidation without using hard reloads.
+  useEffect(() => {
+    function onNavigate(event: Event) {
+      const customEvent = event as CustomEvent<{ to: string; replace?: boolean }>;
+      if (!customEvent.detail?.to) {
+        return;
+      }
+      navigate(customEvent.detail.to, { replace: !!customEvent.detail.replace });
+    }
+
+    function onRevalidate() {
+      revalidator.revalidate();
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("app:navigate", onNavigate);
+      window.addEventListener("app:revalidate", onRevalidate);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("app:navigate", onNavigate);
+        window.removeEventListener("app:revalidate", onRevalidate);
+      }
+    };
+  }, [navigate, revalidator]);
 
   // Sync server-side auth to client-side store if needed
   useEffect(() => {
@@ -101,9 +134,12 @@ function RootContent() {
           loaderData.accessToken,
           loaderData.refreshToken
         );
+
+        // New tokens should invalidate any stale loaders.
+        revalidator.revalidate();
       }
     }
-  }, [loaderData, setAuth]);
+  }, [loaderData, setAuth, revalidator]);
 
   // Show loading state while restoring session
   if (!isInitialized || isLoading) {
@@ -119,10 +155,8 @@ function RootContent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Outlet />
-      </ThemeProvider>
+      <OfflineBanner />
+      <Outlet />
     </QueryClientProvider>
   );
 }
@@ -141,3 +175,6 @@ export function HydrateFallback() {
     </div>
   );
 }
+
+// Global error boundary for the entire app
+export { RouteErrorBoundary as ErrorBoundary };

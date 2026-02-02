@@ -5,7 +5,7 @@ import {
   Refresh as RefreshIcon,
   Home as HomeIcon,
 } from "@mui/icons-material";
-import { Link, useRouteError, isRouteErrorResponse } from "react-router";
+import { Link, useRouteError, isRouteErrorResponse, useRevalidator } from "react-router";
 
 interface AdminErrorBoundaryProps {
   children: React.ReactNode;
@@ -98,6 +98,7 @@ function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
 
 export function AdminErrorBoundary() {
   const error = useRouteError();
+  const revalidator = useRevalidator();
 
   let errorMessage = "An unexpected error occurred";
   let errorStack = "";
@@ -176,7 +177,7 @@ export function AdminErrorBoundary() {
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
-            onClick={() => window.location.reload()}
+            onClick={() => revalidator.revalidate()}
           >
             Refresh Page
           </Button>

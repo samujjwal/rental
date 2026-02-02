@@ -23,7 +23,7 @@ export const bookingsApi = {
 
   async getOwnerBookings(status?: string): Promise<Booking[]> {
     const params = status ? `?status=${status}` : "";
-    return api.get<Booking[]>(`/bookings/owner-bookings${params}`);
+    return api.get<Booking[]>(`/bookings/host-bookings${params}`);
   },
 
   async getBookingById(id: string): Promise<Booking> {
@@ -58,7 +58,7 @@ export const bookingsApi = {
     endDate: string,
     deliveryMethod: "pickup" | "delivery" | "shipping"
   ): Promise<BookingCalculation> {
-    return api.post<BookingCalculation>("/bookings/calculate", {
+    return api.post<BookingCalculation>("/bookings/calculate-price", {
       listingId,
       startDate,
       endDate,
@@ -71,8 +71,9 @@ export const bookingsApi = {
     startDate: string,
     endDate: string
   ): Promise<BookingAvailability> {
-    return api.get<BookingAvailability>(
-      `/bookings/availability?listingId=${listingId}&startDate=${startDate}&endDate=${endDate}`
+    return api.post<BookingAvailability>(
+      `/listings/${listingId}/check-availability`,
+      { startDate, endDate }
     );
   },
 

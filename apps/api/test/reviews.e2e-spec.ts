@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/common/database/prisma.service';
+import { PrismaService } from '../src/common/prisma/prisma.service';
 import { BookingStatus, ListingStatus, UserRole, BookingMode } from '@rental-portal/database';
 
 /**
@@ -85,7 +85,7 @@ describe('Reviews (e2e)', () => {
       firstName: 'Test',
       lastName: 'Owner',
       phone: '+1234567890',
-      role: UserRole.OWNER,
+      role: UserRole.HOST,
     });
     ownerToken = ownerRes.body.tokens.accessToken;
     ownerId = ownerRes.body.user.id;
@@ -96,7 +96,7 @@ describe('Reviews (e2e)', () => {
       firstName: 'Test',
       lastName: 'Renter',
       phone: '+1234567891',
-      role: UserRole.RENTER,
+      role: UserRole.USER,
     });
     renterToken = renterRes.body.tokens.accessToken;
     renterId = renterRes.body.user.id;
@@ -109,7 +109,7 @@ describe('Reviews (e2e)', () => {
         description: 'Test category',
         icon: 'test',
         isActive: true,
-        schema: {},
+        templateSchema: '{}',
       },
     });
 
@@ -128,7 +128,7 @@ describe('Reviews (e2e)', () => {
         latitude: 40.7128,
         longitude: -74.006,
         status: ListingStatus.ACTIVE,
-        bookingMode: BookingMode.INSTANT,
+        bookingMode: BookingMode.INSTANT_BOOK,
         minRentalDays: 1,
         maxRentalDays: 30,
         details: {},
@@ -149,8 +149,9 @@ describe('Reviews (e2e)', () => {
         startDate,
         endDate,
         status: BookingStatus.COMPLETED,
-        subtotal: 30000,
-        totalAmount: 33000,
+        basePrice: 300,
+        totalPrice: 330,
+        totalAmount: 330,
         currency: 'USD',
         platformFee: 2000,
         serviceFee: 1000,
@@ -224,8 +225,9 @@ describe('Reviews (e2e)', () => {
           startDate: new Date(),
           endDate: new Date(Date.now() + 86400000),
           status: BookingStatus.IN_PROGRESS,
-          subtotal: 10000,
-          totalAmount: 11000,
+          basePrice: 100,
+          totalPrice: 110,
+          totalAmount: 110,
           currency: 'USD',
           platformFee: 500,
           serviceFee: 500,
@@ -281,7 +283,7 @@ describe('Reviews (e2e)', () => {
         firstName: 'User',
         lastName: 'Three',
         phone: '+1234567892',
-        role: UserRole.RENTER,
+        role: UserRole.USER,
       });
       const user3Token = user3Res.body.tokens.accessToken;
 
@@ -465,8 +467,9 @@ describe('Reviews (e2e)', () => {
             startDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
             endDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
             status: BookingStatus.COMPLETED,
-            subtotal: 10000,
-            totalAmount: 11000,
+            basePrice: 100,
+            totalPrice: 110,
+            totalAmount: 110,
             currency: 'USD',
             platformFee: 500,
             serviceFee: 500,
@@ -658,8 +661,9 @@ describe('Reviews (e2e)', () => {
             startDate: new Date(Date.now() - (10 + i) * 24 * 60 * 60 * 1000),
             endDate: new Date(Date.now() - (8 + i) * 24 * 60 * 60 * 1000),
             status: BookingStatus.COMPLETED,
-            subtotal: 10000,
-            totalAmount: 11000,
+            basePrice: 100,
+            totalPrice: 110,
+            totalAmount: 110,
             currency: 'USD',
             platformFee: 500,
             serviceFee: 500,

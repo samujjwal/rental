@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/common/database/prisma.service';
-import { SearchIndexService } from '../src/modules/search/services/search-index.service';
+import { PrismaService } from '../src/common/prisma/prisma.service';
 import { ListingStatus, UserRole, BookingMode } from '@rental-portal/database';
 
 /**
@@ -19,7 +18,6 @@ import { ListingStatus, UserRole, BookingMode } from '@rental-portal/database';
 describe('Search (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let searchIndex: SearchIndexService;
   let adminToken: string;
   let categoryId: string;
   let listing1Id: string;
@@ -42,7 +40,6 @@ describe('Search (e2e)', () => {
     );
 
     prisma = app.get<PrismaService>(PrismaService);
-    searchIndex = app.get<SearchIndexService>(SearchIndexService);
 
     await app.init();
   });
@@ -82,7 +79,7 @@ describe('Search (e2e)', () => {
       firstName: 'Owner',
       lastName: 'User',
       phone: '+1234567891',
-      role: UserRole.OWNER,
+      role: UserRole.HOST,
     });
     const ownerId = ownerRes.body.user.id;
 
@@ -94,7 +91,7 @@ describe('Search (e2e)', () => {
         description: 'Test category for search',
         icon: 'test',
         isActive: true,
-        schema: {},
+        templateSchema: '{}',
       },
     });
     categoryId = category.id;
@@ -143,7 +140,7 @@ describe('Search (e2e)', () => {
         latitude: 34.0522,
         longitude: -118.2437,
         status: ListingStatus.ACTIVE,
-        bookingMode: BookingMode.INSTANT,
+        bookingMode: BookingMode.INSTANT_BOOK,
         minRentalDays: 2,
         maxRentalDays: 14,
         condition: 'GOOD',
@@ -184,13 +181,8 @@ describe('Search (e2e)', () => {
     });
     listing3Id = listing3.id;
 
-    // Index listings in Elasticsearch
-    await searchIndex.updateListing(listing1Id);
-    await searchIndex.updateListing(listing2Id);
-    await searchIndex.updateListing(listing3Id);
-
-    // Wait for Elasticsearch to index
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Wait for indexing
+    await new Promise((resolve) => setTimeout(resolve, 500));
   });
 
   describe('GET /api/search - Basic search', () => {
@@ -606,7 +598,7 @@ describe('Search (e2e)', () => {
           firstName: 'Regular',
           lastName: 'User',
           phone: '+1234567892',
-          role: UserRole.RENTER,
+          role: UserRole.USER,
         });
         const userToken = userRes.body.tokens.accessToken;
 

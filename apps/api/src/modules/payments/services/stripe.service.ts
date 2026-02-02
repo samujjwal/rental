@@ -98,7 +98,10 @@ export class StripeService {
     }
 
     // Create payment intent with application fee
-    const platformFeeAmount = Math.round(toNumber(booking.platformFee) * 100);
+    // Use 15% default platform fee if not set to prevent revenue loss
+    const platformFeeAmount = booking.platformFee 
+      ? Math.round(toNumber(booking.platformFee) * 100)
+      : Math.round(amount * 0.15); // 15% default platform fee
 
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents

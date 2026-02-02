@@ -1,44 +1,12 @@
-import { useLoaderData, Link } from "react-router";
-import { cn } from "~/lib/utils";
-import { Button, Badge } from "~/components/ui";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "~/components/ui";
+/* eslint-disable react-refresh/only-export-components */
 
-interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  type: "BUSINESS" | "NONPROFIT" | "GOVERNMENT" | "EDUCATIONAL";
-  verificationStatus: "PENDING" | "VERIFIED" | "REJECTED";
-  isActive: boolean;
-  description?: string;
-  logoUrl?: string;
-  website?: string;
-  taxId?: string;
-  createdAt: string;
-  _count: {
-    members: number;
-    listings: number;
-  };
-}
+import { useLoaderData, Link } from "react-router";
+import { Button, Badge, Card, CardContent } from "~/components/ui";
+import { organizationsApi } from "~/lib/api/organizations";
+import type { Organization } from "~/lib/api/organizations";
 
 export async function clientLoader() {
-  const response = await fetch("/api/organizations", {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch organizations");
-  }
-
-  const organizations = await response.json();
+  const { organizations } = await organizationsApi.getMyOrganizations();
   return { organizations };
 }
 
@@ -58,16 +26,16 @@ export default function OrganizationsIndex() {
     }
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "BUSINESS":
+  const getTypeIcon = (businessType?: string | null) => {
+    switch (businessType) {
+      case "INDIVIDUAL":
+        return "👤";
+      case "LLC":
         return "🏢";
-      case "NONPROFIT":
-        return "💚";
-      case "GOVERNMENT":
+      case "CORPORATION":
         return "🏛️";
-      case "EDUCATIONAL":
-        return "🎓";
+      case "PARTNERSHIP":
+        return "🤝";
       default:
         return "🏢";
     }
@@ -135,7 +103,7 @@ export default function OrganizationsIndex() {
                       />
                     ) : (
                       <div className="h-12 w-12 bg-primary/10 rounded flex items-center justify-center text-2xl">
-                        {getTypeIcon(org.type)}
+                        {getTypeIcon(org.businessType)}
                       </div>
                     )}
                     <div className="ml-4">
@@ -157,11 +125,11 @@ export default function OrganizationsIndex() {
 
                   {/* Status Badge */}
                   <div className="flex items-center justify-between mb-4">
-                    <Badge variant={getStatusVariant(org.verificationStatus)}>
-                      {org.verificationStatus}
+                    <Badge variant={getStatusVariant(org.verificationStatus || "PENDING")}>
+                      {org.verificationStatus || "PENDING"}
                     </Badge>
-                    {!org.isActive && (
-                      <Badge variant="secondary">Inactive</Badge>
+                    {org.status !== "ACTIVE" && (
+                      <Badge variant="secondary">{org.status}</Badge>
                     )}
                   </div>
 
@@ -169,13 +137,13 @@ export default function OrganizationsIndex() {
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="text-center p-3 bg-muted rounded">
                       <p className="text-2xl font-bold text-foreground">
-                        {org._count.members}
+                        {org._count?.members ?? 0}
                       </p>
                       <p className="text-xs text-muted-foreground">Members</p>
                     </div>
                     <div className="text-center p-3 bg-muted rounded">
                       <p className="text-2xl font-bold text-foreground">
-                        {org._count.listings}
+                        {org._count?.properties ?? 0}
                       </p>
                       <p className="text-xs text-muted-foreground">Listings</p>
                     </div>
@@ -190,7 +158,7 @@ export default function OrganizationsIndex() {
                       to={`/organizations/${org.id}/listings`}
                       className="flex-1"
                     >
-                      <Button variant="outline" className="w-full">
+                      <Button variant="outlined" className="w-full">
                         Listings
                       </Button>
                     </Link>

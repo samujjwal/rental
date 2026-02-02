@@ -112,19 +112,19 @@ export const CardView: React.FC<DataViewProps> = ({
 
   const getPrimaryField = () => {
     const nameField = columns.find((col: any) =>
-      ["name", "title", "label"].includes(col.id || col.accessorKey)
+      ["name", "title", "label"].includes((col as any).id || (col as any).accessorKey)
     );
     return (
-      nameField?.id ||
-      nameField?.accessorKey ||
-      columns[0]?.id ||
-      columns[0]?.accessorKey
+      (nameField as any)?.id ||
+      (nameField as any)?.accessorKey ||
+      (columns[0] as any)?.id ||
+      (columns[0] as any)?.accessorKey
     );
   };
 
   const getSecondaryFields = () => {
     return columns.slice(0, 4).filter((col: any) => {
-      const id = col.id || col.accessorKey;
+      const id = (col as any).id || (col as any).accessorKey;
       return id !== getPrimaryField() && id !== "id" && id !== "actions";
     });
   };
@@ -136,7 +136,7 @@ export const CardView: React.FC<DataViewProps> = ({
         const secondaryFields = getSecondaryFields();
 
         return (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={row.id || index}>
+          <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={row.id || index}>
             <Card
               sx={{
                 height: "100%",
@@ -247,29 +247,29 @@ export const ListView: React.FC<DataViewProps> = ({
 
   const getPrimaryField = () => {
     const nameField = columns.find((col: any) =>
-      ["name", "title", "label"].includes(col.id || col.accessorKey)
+      ["name", "title", "label"].includes((col as any).id || (col as any).accessorKey)
     );
     return (
-      nameField?.id ||
-      nameField?.accessorKey ||
-      columns[0]?.id ||
-      columns[0]?.accessorKey
+      (nameField as any)?.id ||
+      (nameField as any)?.accessorKey ||
+      (columns[0] as any)?.id ||
+      (columns[0] as any)?.accessorKey
     );
   };
 
   const getSecondaryField = () => {
     const secondaryFields = columns.filter((col: any) => {
-      const id = col.id || col.accessorKey;
+      const id = (col as any).id || (col as any).accessorKey;
       return id !== getPrimaryField() && id !== "id" && id !== "actions";
     });
-    return secondaryFields[0]?.id || secondaryFields[0]?.accessorKey;
+    return (secondaryFields[0] as any)?.id || (secondaryFields[0] as any)?.accessorKey;
   };
 
   const getStatusField = () => {
     const statusField = columns.find((col: any) =>
-      ["status", "state", "active"].includes(col.id || col.accessorKey)
+      ["status", "state", "active"].includes((col as any).id || (col as any).accessorKey)
     );
-    return statusField?.id || statusField?.accessorKey;
+    return (statusField as any)?.id || (statusField as any)?.accessorKey;
   };
 
   return (

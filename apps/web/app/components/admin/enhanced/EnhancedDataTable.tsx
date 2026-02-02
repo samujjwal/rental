@@ -205,11 +205,11 @@ export function EnhancedDataTable<T = any>({
       rowSelection,
       pagination: { pageIndex, pageSize },
     },
-    onSortingChange,
-    onColumnFiltersChange,
+    onSortingChange: onSortingChange as any,
+    onColumnFiltersChange: onColumnFiltersChange as any,
     onGlobalFilterChange,
-    onRowSelectionChange,
-    onPaginationChange,
+    onRowSelectionChange: onRowSelectionChange as any,
+    onPaginationChange: onPaginationChange as any,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -531,6 +531,7 @@ export function EnhancedDataTable<T = any>({
           <CardView
             data={data}
             columns={columns}
+            viewMode={viewMode}
             onRowClick={onRowClick}
             onRowEdit={onRowEdit}
             onRowDelete={onRowDelete}
@@ -542,6 +543,7 @@ export function EnhancedDataTable<T = any>({
           <ListView
             data={data}
             columns={columns}
+            viewMode={viewMode}
             onRowClick={onRowClick}
             onRowEdit={onRowEdit}
             onRowDelete={onRowDelete}

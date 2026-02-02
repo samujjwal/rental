@@ -96,7 +96,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const [listingsCount, bookingsAsRenter, bookingsAsOwner, reviewsGiven, reviewsReceived] =
+    const [listingsCount, bookingsCount, taskBookingsAsOwner, reviewsGiven, reviewsReceived] =
       await Promise.all([
         this.prisma.listing.count({ where: { ownerId: userId } }),
         this.prisma.booking.count({ where: { renterId: userId } }),
@@ -107,8 +107,8 @@ export class UsersService {
 
     return {
       listingsCount,
-      bookingsAsRenter,
-      bookingsAsOwner,
+      bookingsAsRenter: bookingsCount,
+      bookingsAsOwner: taskBookingsAsOwner,
       reviewsGiven,
       reviewsReceived,
       averageRating: user.averageRating,

@@ -1,35 +1,26 @@
-import { Form, useLoaderData, useNavigate } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData, useNavigate } from "react-router";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
-import type { Route } from "./+types/insurance.upload";
+import { api } from "~/lib/api-client";
 
-export async function clientLoader() {
-  // Get listing ID from URL params
-  const listingId = new URLSearchParams(window.location.search).get(
-    "listingId"
-  );
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const listingId = url.searchParams.get("listingId");
 
   if (!listingId) {
     throw new Error("Listing ID required");
   }
 
-  // Fetch insurance requirement
-  const response = await fetch(
-    `/api/insurance/listings/${listingId}/requirement`,
-    {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-    }
+  const requirement = await api.get<any>(
+    `/insurance/listings/${listingId}/requirement`
   );
-
-  const requirement = await response.json();
 
   return { listingId, requirement };
 }
 
-export default function InsuranceUpload({ loaderData }: Route.ComponentProps) {
-  const { listingId, requirement } = loaderData;
+export default function InsuranceUpload() {
+  const { listingId, requirement } = useLoaderData<typeof clientLoader>();
   const navigate = useNavigate();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,23 +39,11 @@ export default function InsuranceUpload({ loaderData }: Route.ComponentProps) {
       coverageAmount: parseInt(formData.get("coverageAmount") as string),
       effectiveDate: formData.get("effectiveDate") as string,
       expirationDate: formData.get("expirationDate") as string,
-      documentUrl: formData.get("documentUrl") as string, // In production: upload file to S3 first
+      documentUrl: formData.get("documentUrl") as string,
     };
 
     try {
-      const response = await fetch("/api/insurance/policies", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to upload insurance policy");
-      }
+      await api.post("/insurance/policies", data);
 
       // Success - redirect to listings
       navigate("/listings?status=pending_insurance");

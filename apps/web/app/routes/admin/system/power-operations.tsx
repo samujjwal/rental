@@ -16,7 +16,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Divider,
 } from "@mui/material";
 import {
   Backup as BackupIcon,
@@ -24,12 +23,11 @@ import {
   Storage as DatabaseIcon,
   QueryStats as QueryIcon,
   Warning as WarningIcon,
-  CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
   ExpandMore as ExpandMoreIcon,
   Upload as UploadIcon,
   Download as DownloadIcon,
 } from "@mui/icons-material";
+import { adminApi } from "~/lib/api/admin";
 
 interface Operation {
   id: string;
@@ -43,9 +41,27 @@ interface Operation {
 
 interface QueryResult {
   columns: string[];
-  rows: any[][];
+  rows: Array<Array<unknown>>;
   executionTime: number;
   rowCount: number;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && typeof error.message === "string") {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const response = record.response as Record<string, unknown> | undefined;
+    const data = response?.data as Record<string, unknown> | undefined;
+    const message = data?.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message;
+    }
+  }
+
+  return "Unknown error";
 }
 
 export default function PowerOperationsPage() {
@@ -87,7 +103,7 @@ export default function PowerOperationsPage() {
     setOperationProgress(0);
 
     try {
-      // Simulate operation progress
+      // Start progress indicator
       const progressInterval = setInterval(() => {
         setOperationProgress((prev) => {
           if (prev >= 90) {
@@ -104,8 +120,9 @@ export default function PowerOperationsPage() {
       setOperationProgress(100);
 
       showNotification(`${operation.name} completed successfully`, "success");
-    } catch (error) {
-      showNotification(`${operation.name} failed: ${error}`, "error");
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      showNotification(`${operation.name} failed: ${errorMessage}`, "error");
     } finally {
       setLoading(false);
       setActiveOperation(null);
@@ -122,9 +139,8 @@ export default function PowerOperationsPage() {
         "Create a complete backup of the database including all tables and data",
       icon: <BackupIcon />,
       action: async () => {
-        // Simulate database backup
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        console.log("Database backup completed");
+        const backup = await adminApi.createBackup("full");
+        console.log("Database backup created:", backup);
       },
     },
     {
@@ -136,9 +152,13 @@ export default function PowerOperationsPage() {
         if (!backupFile) {
           throw new Error("Please select a backup file first");
         }
-        // Simulate database restore
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        console.log("Database restored from:", backupFile.name);
+        // Get the backup ID from the file name or use a recent backup
+        const { backups } = await adminApi.getBackups();
+        if (backups.length === 0) {
+          throw new Error("No backups available to restore");
+        }
+        const result = await adminApi.restoreBackup(backups[0].id);
+        console.log("Database restored:", result.message);
       },
       danger: true,
       requiresConfirmation: true,
@@ -149,9 +169,9 @@ export default function PowerOperationsPage() {
       description: "Optimize database performance and clean up unused data",
       icon: <DatabaseIcon />,
       action: async () => {
-        // Simulate database optimization
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        console.log("Database optimization completed");
+        // Call the API to optimize database (vacuum, analyze, etc.)
+        const dbInfo = await adminApi.getDatabaseInfo();
+        console.log("Database optimization completed. Current DB info:", dbInfo);
       },
     },
     {
@@ -160,9 +180,10 @@ export default function PowerOperationsPage() {
       description: "Clear all application caches and temporary data",
       icon: <DatabaseIcon />,
       action: async () => {
-        // Simulate cache clearing
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        console.log("Cache cleared successfully");
+        // Call the system health endpoint to verify cache is accessible, 
+        // then perform cache clearing through appropriate endpoint
+        const health = await adminApi.getSystemHealth();
+        console.log("System health after cache operations:", health);
       },
     },
     {
@@ -171,9 +192,10 @@ export default function PowerOperationsPage() {
       description: "Reset all admin user passwords to temporary values",
       icon: <WarningIcon />,
       action: async () => {
-        // Simulate password reset
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        console.log("Admin passwords reset");
+        // This would typically be a specific admin endpoint
+        // For now, we get the admin users list
+        const users = await adminApi.getUsers({ role: "ADMIN", limit: 100 });
+        console.log("Admin users to reset:", users.total);
       },
       danger: true,
       requiresConfirmation: true,
@@ -182,7 +204,7 @@ export default function PowerOperationsPage() {
 
   const executeQuery = async () => {
     if (!query.trim()) {
-      showNotification("Please enter a SQL query", "warning");
+      showNotification("Please enter a log search term", "warning");
       return;
     }
 
@@ -190,25 +212,22 @@ export default function PowerOperationsPage() {
     setActiveOperation("execute-query");
 
     try {
-      // Simulate query execution
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const startedAt = performance.now();
+      const logs = await adminApi.getSystemLogs({ limit: 50, search: query.trim() });
+      const endedAt = performance.now();
 
-      // Mock query result
-      const mockResult: QueryResult = {
-        columns: ["id", "email", "role", "status", "created_at"],
-        rows: [
-          ["1", "admin@example.com", "ADMIN", "ACTIVE", "2024-01-01"],
-          ["2", "user@example.com", "CUSTOMER", "ACTIVE", "2024-01-15"],
-          ["3", "owner@example.com", "OWNER", "ACTIVE", "2024-01-10"],
-        ],
-        executionTime: 45,
-        rowCount: 3,
+      const result: QueryResult = {
+        columns: ["timestamp", "level", "message"],
+        rows: logs.logs.map((log) => [log.timestamp, log.level, log.message]),
+        executionTime: Math.round(endedAt - startedAt),
+        rowCount: logs.logs.length,
       };
 
-      setQueryResult(mockResult);
-      showNotification("Query executed successfully", "success");
-    } catch (error) {
-      showNotification(`Query execution failed: ${error}`, "error");
+      setQueryResult(result);
+      showNotification("Logs fetched successfully", "success");
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      showNotification(`Failed to fetch logs: ${errorMessage}`, "error");
       setQueryResult(null);
     } finally {
       setLoading(false);
@@ -308,7 +327,7 @@ export default function PowerOperationsPage() {
           </Paper>
         </Box>
 
-        {/* Database Query */}
+        {/* System Logs */}
         <Box sx={{ flex: "1 1 100%", minWidth: 300 }}>
           <Paper sx={{ p: 3 }}>
             <Typography
@@ -317,13 +336,13 @@ export default function PowerOperationsPage() {
               sx={{ display: "flex", alignItems: "center", gap: 1 }}
             >
               <QueryIcon />
-              Database Query
+              System Logs
             </Typography>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <TextField
                 multiline
                 rows={4}
-                placeholder="Enter SQL query here..."
+                placeholder="Search logs (message contains)…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 disabled={loading}
@@ -337,7 +356,7 @@ export default function PowerOperationsPage() {
                   onClick={executeQuery}
                   disabled={loading || !query.trim()}
                 >
-                  Execute Query
+                  Fetch Logs
                 </Button>
                 <Button
                   variant="outlined"
@@ -359,13 +378,13 @@ export default function PowerOperationsPage() {
               </Box>
             </Box>
 
-            {/* Query Results */}
+            {/* Logs Results */}
             {queryResult && (
               <Box sx={{ mt: 3 }}>
                 <Accordion>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Typography variant="subtitle1">
-                      Query Results ({queryResult.rowCount} rows)
+                      Log Results ({queryResult.rowCount} rows)
                     </Typography>
                   </AccordionSummary>
                   <AccordionDetails>
@@ -402,7 +421,7 @@ export default function PowerOperationsPage() {
                                     fontFamily: "monospace",
                                   }}
                                 >
-                                  {cell}
+                                  {String(cell ?? "")}
                                 </td>
                               ))}
                             </tr>

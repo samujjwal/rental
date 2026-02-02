@@ -31,7 +31,7 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function clientLoader({ params }: LoaderFunctionArgs) {
   const bookingId = params.bookingId;
   if (!bookingId) throw new Error("Booking ID is required");
 
@@ -43,7 +43,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+export async function clientAction({ request, params }: ActionFunctionArgs) {
   const bookingId = params.bookingId;
   if (!bookingId) return { error: "Booking ID is required" };
 
@@ -97,8 +97,8 @@ const DISPUTE_TYPES = [
 ];
 
 export default function DisputeNewRoute() {
-  const { booking } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
+  const { booking } = useLoaderData<typeof clientLoader>();
+  const actionData = useActionData<typeof clientAction>();
   const navigate = useNavigate();
   const [selectedType, setSelectedType] = useState("");
   const [description, setDescription] = useState("");
@@ -155,7 +155,7 @@ export default function DisputeNewRoute() {
             <div>
               <p className="text-sm text-muted-foreground">Total Amount</p>
               <p className="text-sm font-medium text-foreground">
-                ${booking.totalPrice?.toFixed(2) || "0.00"}
+                ${booking.totalAmount?.toFixed(2) || "0.00"}
               </p>
             </div>
             <div>
@@ -262,7 +262,7 @@ export default function DisputeNewRoute() {
                   name="requestedAmount"
                   step="0.01"
                   min="0"
-                  max={booking.totalPrice}
+                  max={booking.totalAmount}
                   value={requestedAmount}
                   onChange={(e) => setRequestedAmount(e.target.value)}
                   placeholder="0.00"
@@ -270,7 +270,7 @@ export default function DisputeNewRoute() {
                 />
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Maximum: ${booking.totalPrice?.toFixed(2) || "0.00"}
+                Maximum: ${booking.totalAmount?.toFixed(2) || "0.00"}
               </p>
             </div>
 

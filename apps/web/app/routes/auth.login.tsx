@@ -9,19 +9,8 @@ import {
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import { useState, useEffect } from "react";
 import { authApi } from "~/lib/api/auth";
-import { createUserSession } from "~/utils/auth.server";
+import { createUserSession } from "~/utils/auth";
 import { useAuthStore } from "~/lib/store/auth";
-import {
-  Box,
-  Button,
-  TextField,
-  FormControl,
-  InputLabel,
-  InputAdornment,
-  Typography,
-  Paper,
-  Alert,
-} from "@mui/material";
 import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
@@ -31,7 +20,7 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function clientAction({ request }: ActionFunctionArgs) {
   try {
     const formData = await request.formData();
     const email = formData.get("email") as string;
@@ -46,6 +35,9 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const response = await authApi.login({ email, password });
+
+    // Update auth store immediately for better SPA experience
+    useAuthStore.getState().setAuth(response.user, response.accessToken, response.refreshToken);
 
     // Store in server session
     const sessionResponse = await createUserSession({
@@ -72,7 +64,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Login() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const [showPassword, setShowPassword] = useState(false);
   const isSubmitting = navigation.state === "submitting";
@@ -100,7 +92,7 @@ export default function Login() {
 
         {/* Login Form */}
         <div className="bg-card border rounded-lg shadow-lg p-8">
-          <form method="post" className="space-y-6">
+          <Form method="post" className="space-y-6">
             {/* Error Message */}
             {actionData?.error && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -195,7 +187,7 @@ export default function Login() {
                 </>
               )}
             </button>
-          </form>
+          </Form>
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">

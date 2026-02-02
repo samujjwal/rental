@@ -19,17 +19,22 @@ import {
   AlertCircle,
   FileText,
   Star,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { bookingsApi } from "~/lib/api/bookings";
-import { redirect } from "react-router";
+import { reviewsApi } from "~/lib/api/reviews";
+import { redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Booking } from "~/types/booking";
 import { format } from "date-fns";
+import { useAuthStore } from "~/lib/store/auth";
+import { useEffect, useState } from "react";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Booking Details | GharBatai Rentals" }];
 };
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function clientLoader({ params }: LoaderFunctionArgs) {
   const bookingId = params.id;
   if (!bookingId) {
     throw redirect("/bookings");
@@ -44,7 +49,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+export async function clientAction({ request, params }: ActionFunctionArgs) {
   const bookingId = params.id;
   if (!bookingId) {
     return { error: "Booking ID is required" };
@@ -59,12 +64,25 @@ export async function action({ request, params }: ActionFunctionArgs) {
         await bookingsApi.confirmBooking(bookingId);
         return { success: "Booking confirmed successfully" };
       case "cancel":
-        const reason = formData.get("reason") as string;
-        await bookingsApi.cancelBooking(bookingId, reason);
-        return redirect("/bookings");
+        {
+          const reason = formData.get("reason") as string;
+          await bookingsApi.cancelBooking(bookingId, reason);
+          return redirect("/bookings");
+        }
       case "complete":
         await bookingsApi.completeBooking(bookingId);
         return { success: "Booking marked as complete" };
+      case "review":
+        {
+          const rating = parseInt(formData.get("rating") as string);
+          const comment = formData.get("comment") as string;
+          await reviewsApi.createReview({
+            bookingId,
+            rating,
+            comment,
+          });
+          return { success: "Review submitted successfully" };
+        }
       default:
         return { error: "Invalid action" };
     }
@@ -105,9 +123,48 @@ export default function BookingDetail() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  const isOwner = false; // TODO: Check if current user is the owner
-  const isRenter = true; // TODO: Check if current user is the renter
+  const [searchParams] = useSearchParams();
+  const revalidator = useRevalidator();
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
+
+  // Check for successful payment redirect
+  useEffect(() => {
+    const paymentSuccess = searchParams.get("payment") === "success";
+    const needsVerification =
+      booking.status === "pending" || booking.paymentStatus === "pending";
+
+    if (paymentSuccess && needsVerification) {
+      setIsVerifyingPayment(true);
+      
+      // Poll for status update
+      const interval = setInterval(() => {
+        revalidator.revalidate();
+      }, 2000);
+
+      // Stop polling after 30 seconds
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        setIsVerifyingPayment(false);
+      }, 30000);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
+    } else if (booking.status === "confirmed" && isVerifyingPayment) {
+      setIsVerifyingPayment(false);
+    }
+  }, [searchParams, booking.status, booking.paymentStatus, revalidator]);
+
+  // Get current user from auth store to determine ownership
+  const { user } = useAuthStore();
+  const currentUserId = user?.id || "";
+
+  // Determine user role in this booking
+  const isOwner = (booking.listing as any)?.ownerId === currentUserId || booking.ownerId === currentUserId;
+  const isRenter = booking.renterId === currentUserId;
 
   const canConfirm = isOwner && booking.status === "pending";
   const canCancel = ["pending", "confirmed"].includes(booking.status);
@@ -148,6 +205,20 @@ export default function BookingDetail() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Payment Verification Banner */}
+        {isVerifyingPayment && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-4 rounded-lg flex items-center gap-3 animate-pulse">
+            <RefreshCw className="w-5 h-5 animate-spin" />
+            <div>
+              <p className="font-semibold">Verifying your payment...</p>
+              <p className="text-sm">
+                Please wait while we confirm your transaction with the payment
+                provider. This usually takes a few seconds.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Success/Error Messages */}
         {actionData?.success && (
           <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
@@ -561,7 +632,8 @@ export default function BookingDetail() {
       {/* Review Modal */}
       {showReviewModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <Form method="post" className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <input type="hidden" name="intent" value="review" />
             <h3 className="text-xl font-bold text-gray-900 mb-4">
               Leave a Review
             </h3>
@@ -588,12 +660,14 @@ export default function BookingDetail() {
                 ))}
                 <span className="ml-2 text-gray-600">{rating} out of 5</span>
               </div>
+              <input type="hidden" name="rating" value={rating} />
             </div>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Review
               </label>
               <textarea
+                name="comment"
                 value={review}
                 onChange={(e) => setReview(e.target.value)}
                 rows={4}
@@ -611,18 +685,15 @@ export default function BookingDetail() {
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={() => {
-                  // TODO: Submit review
-                  console.log("Submit review:", { rating, review });
-                  setShowReviewModal(false);
-                }}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                type="submit"
+                disabled={isSubmittingReview || !review.trim()}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
+                {isSubmittingReview && <Loader2 className="w-4 h-4 animate-spin" />}
                 Submit Review
               </button>
             </div>
-          </div>
+          </Form>
         </div>
       )}
     </div>

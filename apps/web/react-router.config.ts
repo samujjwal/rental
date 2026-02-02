@@ -1,11 +1,8 @@
 import type { Config } from "@react-router/dev/config";
 
 export default {
-  ssr: true,
+  ssr: false,
   basename: "/",
   appDirectory: "app",
-  routeFile: "app/routes.ts",
-  async prerender() {
-    return ["/"];
-  },
+  // routeFile: "app/routes.ts",
 } satisfies Config;

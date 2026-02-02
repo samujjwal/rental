@@ -45,7 +45,7 @@ const profileSchema = z.object({
     .or(z.literal("")),
 });
 
-export async function loader() {
+export async function clientLoader() {
   try {
     const user = await api.get("/users/me");
     return { user };
@@ -54,7 +54,7 @@ export async function loader() {
   }
 }
 
-export async function action({ request }: any) {
+export async function clientAction({ request }: any) {
   const formData = await request.formData();
   const data = Object.fromEntries(formData);
 
@@ -84,12 +84,8 @@ interface User {
 
 export default function ProfileSettings() {
   const { user: loaderUser } = useLoaderData<{ user: User }>();
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof clientAction>();
   const { user, updateUser } = useAuthStore();
-
-  if (!loaderUser) {
-    return <div>Loading...</div>;
-  }
 
   const {
     register,
@@ -98,12 +94,16 @@ export default function ProfileSettings() {
   } = useForm({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      firstName: loaderUser.firstName || "",
-      lastName: loaderUser.lastName || "",
-      email: loaderUser.email || "",
-      phone: loaderUser.phone || "",
+      firstName: loaderUser?.firstName || "",
+      lastName: loaderUser?.lastName || "",
+      email: loaderUser?.email || "",
+      phone: loaderUser?.phone || "",
     },
   });
+
+  if (!loaderUser) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -184,7 +184,7 @@ export default function ProfileSettings() {
                     </button>
                   </div>
                   <div>
-                    <Button variant="outline">Change Photo</Button>
+                    <Button variant="outlined">Change Photo</Button>
                     <p className="text-sm text-muted-foreground mt-2">
                       JPG, PNG or GIF. Max size 5MB
                     </p>
@@ -360,7 +360,8 @@ export default function ProfileSettings() {
                   </div>
                   <div className="flex items-center justify-end pt-4 border-t border-border">
                     <Button
-                      variant="secondary"
+                      variant="outlined"
+                      color="primary"
                       className="flex items-center gap-2"
                     >
                       <Key className="w-5 h-5" />
@@ -381,7 +382,7 @@ export default function ProfileSettings() {
                   Once you delete your account, there is no going back. Please
                   be certain.
                 </p>
-                <Button variant="destructive">Delete Account</Button>
+                <Button variant="contained" color="error">Delete Account</Button>
               </CardContent>
             </Card>
           </div>

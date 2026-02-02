@@ -1,0 +1,7 @@
+
+> @rental-portal/api@1.0.0 test /Users/samujjwal/Development/rental/apps/api
+> jest
+
+/Users/samujjwal/Development/rental/apps/api:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @rental-portal/api@1.0.0 test: `jest`
+Command failed with signal "SIGINT"

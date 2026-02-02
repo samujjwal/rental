@@ -13,9 +13,7 @@ export const bookingSchema = z
         return selectedDate >= today;
       }, "Start date must be today or in the future"),
     endDate: z.string().min(1, "End date is required"),
-    deliveryMethod: z.enum(["pickup", "delivery", "shipping"], {
-      required_error: "Delivery method is required",
-    }),
+    deliveryMethod: z.enum(["pickup", "delivery", "shipping"]),
     deliveryAddress: z.string().optional(),
     specialRequests: z
       .string()

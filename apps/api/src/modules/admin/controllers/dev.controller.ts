@@ -30,7 +30,6 @@ export class DevController {
       data: {
         email: 'admin@dev.local',
         username: 'admin',
-        password: 'admin123',
         firstName: 'Dev',
         lastName: 'Admin',
         role: UserRole.ADMIN,

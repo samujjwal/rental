@@ -373,8 +373,8 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     {...commonProps}
                     type="date"
                     value={
-                      fieldApi.state.value
-                        ? new Date(fieldApi.state.value)
+                      fieldApi.state.value && typeof fieldApi.state.value !== 'object'
+                        ? new Date(fieldApi.state.value as string | number)
                             .toISOString()
                             .split("T")[0]
                         : ""

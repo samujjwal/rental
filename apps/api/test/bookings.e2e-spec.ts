@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/common/database/prisma.service';
+import { PrismaService } from '../src/common/prisma/prisma.service';
 import { BookingStatus, ListingStatus, UserRole, BookingMode } from '@rental-portal/database';
 
 describe('Bookings (e2e)', () => {
@@ -68,7 +68,7 @@ describe('Bookings (e2e)', () => {
       firstName: 'Test',
       lastName: 'Owner',
       phone: '+1234567890',
-      role: UserRole.OWNER,
+      role: UserRole.HOST,
     });
     ownerToken = ownerRes.body.tokens.accessToken;
     ownerId = ownerRes.body.user.id;
@@ -80,7 +80,7 @@ describe('Bookings (e2e)', () => {
       firstName: 'Test',
       lastName: 'Renter',
       phone: '+1234567891',
-      role: UserRole.RENTER,
+      role: UserRole.USER,
     });
     renterToken = renterRes.body.tokens.accessToken;
     renterId = renterRes.body.user.id;
@@ -218,8 +218,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.CONFIRMED,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -292,8 +293,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -341,8 +343,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -377,8 +380,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -421,8 +425,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -462,8 +467,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -505,8 +511,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.CONFIRMED,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -549,8 +556,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.CONFIRMED,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -590,8 +598,9 @@ describe('Bookings (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.IN_PROGRESS,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -607,7 +616,7 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .expect(200);
 
-      expect(response.body.status).toBe(BookingStatus.PENDING_RETURN_INSPECTION);
+      expect(response.body.status).toBe(BookingStatus.AWAITING_RETURN_INSPECTION);
     });
 
     it('should reject return request by owner', async () => {
@@ -631,9 +640,10 @@ describe('Bookings (e2e)', () => {
           listingId,
           startDate,
           endDate,
-          status: BookingStatus.PENDING_RETURN_INSPECTION,
-          subtotal: 30000,
-          totalAmount: 33000,
+          status: BookingStatus.AWAITING_RETURN_INSPECTION,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -714,7 +724,7 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .expect(200);
 
-      expect(returnReq.body.status).toBe(BookingStatus.PENDING_RETURN_INSPECTION);
+      expect(returnReq.body.status).toBe(BookingStatus.AWAITING_RETURN_INSPECTION);
 
       // 6. Approve return
       const completeRes = await request(app.getHttpServer())

@@ -5,6 +5,7 @@ import { CacheService } from '../../../common/cache/cache.service';
 import { AvailabilityService } from '../../listings/services/availability.service';
 import { BookingStateMachineService } from './booking-state-machine.service';
 import { BookingCalculationService } from './booking-calculation.service';
+import { FraudDetectionService } from '../../fraud-detection/services/fraud-detection.service';
 import { BookingMode, BookingStatus } from '@rental-portal/database';
 import { BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 
@@ -17,13 +18,14 @@ describe('BookingsService', () => {
   let calculation: BookingCalculationService;
 
   const mockPrismaService = {
+    $transaction: jest.fn().mockImplementation((cb) => cb(mockPrismaService)),
     listing: {
-      findUnique: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue(null),
     },
     booking: {
       create: jest.fn(),
-      findUnique: jest.fn(),
-      findMany: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
     },
   };
 
@@ -42,6 +44,11 @@ describe('BookingsService', () => {
   const mockCalculationService = {
     calculatePrice: jest.fn(),
     calculateRefund: jest.fn(),
+  };
+
+  const mockFraudDetectionService = {
+    checkBooking: jest.fn().mockResolvedValue({ score: 0.1, riskLevel: 'low', isAllowed: true }),
+    checkUserRisk: jest.fn().mockResolvedValue({ allowBooking: true, reason: null }),
   };
 
   beforeEach(async () => {
@@ -68,6 +75,10 @@ describe('BookingsService', () => {
           provide: BookingCalculationService,
           useValue: mockCalculationService,
         },
+        {
+          provide: FraudDetectionService,
+          useValue: mockFraudDetectionService,
+        },
       ],
     }).compile();
 
@@ -77,6 +88,8 @@ describe('BookingsService', () => {
     availability = module.get<AvailabilityService>(AvailabilityService);
     stateMachine = module.get<BookingStateMachineService>(BookingStateMachineService);
     calculation = module.get<BookingCalculationService>(BookingCalculationService);
+    // @ts-ignore
+    const fraud = module.get<FraudDetectionService>(FraudDetectionService);
 
     jest.clearAllMocks();
   });
@@ -169,6 +182,7 @@ describe('BookingsService', () => {
 
     it('should throw BadRequest if dates unavailable', async () => {
       mockPrismaService.listing.findUnique.mockResolvedValue(mockListing);
+      mockPrismaService.booking.findMany.mockResolvedValue([{ id: 'existing-booking' }]);
       mockAvailabilityService.checkAvailability.mockResolvedValue({
         isAvailable: false,
         conflicts: [],

@@ -330,7 +330,7 @@ export class LedgerService {
     // Owner Balance = OWNER_EARNING + PAYOUT (Negative)
 
     const ownerBookings = await this.prisma.booking.findMany({
-      where: { owner: { id: userId } },
+      where: { ownerId: userId },
       select: { id: true },
     });
     const ownerBookingIds = ownerBookings.map((b) => b.id);

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "~/types/auth";
+import { api } from "~/lib/api-client";
 
 const STORAGE_KEY = "auth-storage";
 const ACCESS_TOKEN_KEY = "accessToken";
@@ -92,33 +93,22 @@ export const useAuthStore = create<AuthState>()(
             if (isTokenExpired(storedAccessToken)) {
               // Try to refresh the token
               try {
-                const response = await fetch("/api/v1/auth/refresh", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ refreshToken: storedRefreshToken }),
+                const data = await api.post<{ accessToken: string; refreshToken: string; user: User }>(
+                  "/auth/refresh",
+                  { refreshToken: storedRefreshToken }
+                );
+
+                localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
+                localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+
+                set({
+                  user: data.user,
+                  accessToken: data.accessToken,
+                  refreshToken: data.refreshToken,
+                  isInitialized: true,
+                  isLoading: false,
                 });
-
-                if (response.ok) {
-                  const data = await response.json();
-                  localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-                  localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-
-                  set({
-                    user: data.user,
-                    accessToken: data.accessToken,
-                    refreshToken: data.refreshToken,
-                    isInitialized: true,
-                    isLoading: false,
-                  });
-                  return;
-                } else {
-                  // Refresh failed, clear auth
-                  get().clearAuth();
-                  set({ isInitialized: true, isLoading: false });
-                  return;
-                }
+                return;
               } catch (error) {
                 console.error("Token refresh failed:", error);
                 get().clearAuth();

@@ -22,4 +22,8 @@ export const usersApi = {
     formData.append("avatar", file);
     return api.post<{ avatarUrl: string }>(`/users/${userId}/avatar`, formData);
   },
+
+  async upgradeToOwner(): Promise<User> {
+    return api.post<User>("/users/upgrade-to-owner");
+  },
 };

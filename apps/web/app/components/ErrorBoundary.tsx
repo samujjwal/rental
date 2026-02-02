@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { Button } from "~/components/ui/button";
 import { AlertTriangle, RefreshCw, Home, Bug } from "lucide-react";
+import { requestNavigation, requestRevalidate } from "~/lib/navigation";
 
 // ============================================================================
 // Error Types
@@ -80,10 +81,10 @@ export class ErrorBoundary extends Component<
       id: this.generateErrorId(),
       name: error.name,
       message: error.message,
-      stack: error.stack,
+      stack: error.stack ?? undefined,
       timestamp: new Date(),
       context: {
-        component: errorInfo.componentStack,
+        component: errorInfo.componentStack ?? undefined,
         action: "render",
         url: window.location.href,
         userAgent: navigator.userAgent,
@@ -156,13 +157,13 @@ export class ErrorBoundary extends Component<
 
   private reportError(error: AppError, errorInfo: ErrorInfo) {
     // Log to console in development
-    if (process.env.NODE_ENV === "development") {
+    if (import.meta.env.MODE === "development") {
       console.error("Error Boundary caught an error:", error, errorInfo);
     }
 
     // Send to error reporting service (if configured)
     if (
-      process.env.NODE_ENV === "production" &&
+      import.meta.env.MODE === "production" &&
       typeof window !== "undefined" &&
       window.errorReporting
     ) {
@@ -210,7 +211,11 @@ export class ErrorBoundary extends Component<
         error.name === "ChunkLoadError" ||
         error.message.includes("Loading chunk")
       ) {
-        window.location.reload();
+        requestRevalidate();
+        requestNavigation(
+          `${window.location.pathname}${window.location.search}${window.location.hash}`,
+          { replace: true }
+        );
         return;
       }
 
@@ -225,7 +230,7 @@ export class ErrorBoundary extends Component<
   };
 
   private handleGoHome = () => {
-    window.location.href = "/";
+    requestNavigation("/", { replace: true });
   };
 
   render() {
@@ -254,7 +259,7 @@ export class ErrorBoundary extends Component<
                 : "We encountered an unexpected error. Please refresh the page or contact support if the problem persists."}
             </p>
 
-            {process.env.NODE_ENV === "development" &&
+            {import.meta.env.MODE === "development" &&
               this.props.showErrorDetails && (
                 <details className="mb-6">
                   <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
@@ -310,7 +315,7 @@ export class ErrorBoundary extends Component<
               )}
 
               <Button
-                variant="outline"
+                variant="outlined"
                 onClick={this.handleGoHome}
                 className="flex items-center justify-center"
               >
@@ -318,9 +323,9 @@ export class ErrorBoundary extends Component<
                 Go Home
               </Button>
 
-              {process.env.NODE_ENV === "development" && (
+              {import.meta.env.MODE === "development" && (
                 <Button
-                  variant="ghost"
+                  variant="text"
                   onClick={() => {
                     console.log("Error details:", error);
                     console.log("Error info:", this.state.errorInfo);
@@ -457,14 +462,14 @@ export function useError(): UseErrorReturn {
     }
 
     // Report to error tracking service
-    if (process.env.NODE_ENV === "production" && window.errorReporting) {
+    if (import.meta.env.MODE === "production" && window.errorReporting) {
       window.errorReporting.captureException(appError, {
         extra: appError.context,
       });
     }
 
     // Log to console in development
-    if (process.env.NODE_ENV === "development") {
+    if (import.meta.env.MODE === "development") {
       console.error("Reported error:", appError);
     }
   };
@@ -554,7 +559,7 @@ class ErrorReportingService {
     }
 
     // In a real implementation, this would send to Sentry, Bugsnag, etc.
-    if (process.env.NODE_ENV === "production") {
+    if (import.meta.env.MODE === "production") {
       // Send to error reporting service
       console.log("Error captured:", error, context);
     } else {
@@ -598,19 +603,26 @@ export const errorReporting = new ErrorReportingService();
 // ============================================================================
 
 export function DevErrorOverlay() {
-  if (process.env.NODE_ENV !== "development") {
-    return null;
-  }
+  const isDev = import.meta.env.MODE === "development";
 
   const [errors, setErrors] = useState<AppError[]>([]);
 
   useEffect(() => {
+    if (!isDev) {
+      return;
+    }
     // Load errors from localStorage
     try {
       const storedErrors = JSON.parse(
         localStorage.getItem("app_errors") || "[]"
       );
-      setErrors(storedErrors.slice(-10)); // Show last 10 errors
+      const normalized = Array.isArray(storedErrors)
+        ? storedErrors.map((err) => ({
+            ...err,
+            timestamp: err?.timestamp ? new Date(err.timestamp) : new Date(),
+          }))
+        : [];
+      setErrors(normalized.slice(-10)); // Show last 10 errors
     } catch (e) {
       // Ignore
     }
@@ -621,7 +633,13 @@ export function DevErrorOverlay() {
         const storedErrors = JSON.parse(
           localStorage.getItem("app_errors") || "[]"
         );
-        setErrors(storedErrors.slice(-10));
+        const normalized = Array.isArray(storedErrors)
+          ? storedErrors.map((err) => ({
+              ...err,
+              timestamp: err?.timestamp ? new Date(err.timestamp) : new Date(),
+            }))
+          : [];
+        setErrors(normalized.slice(-10));
       } catch (e) {
         // Ignore
       }
@@ -629,7 +647,11 @@ export function DevErrorOverlay() {
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  }, [isDev]);
+
+  if (!isDev) {
+    return null;
+  }
 
   if (errors.length === 0) {
     return null;

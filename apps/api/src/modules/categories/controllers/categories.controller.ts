@@ -22,7 +22,7 @@ import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { UserRole } from '@rental-portal/database';
 
 @ApiTags('categories')
-@Controller({ path: 'categories', version: '1' })
+@Controller('categories')
 export class CategoriesController {
   constructor(
     private readonly categoriesService: CategoriesService,

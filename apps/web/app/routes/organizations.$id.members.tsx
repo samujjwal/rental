@@ -1,107 +1,74 @@
-import { useLoaderData, Form } from "react-router";
+/* eslint-disable react-refresh/only-export-components */
+
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData, useRevalidator, Link } from "react-router";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
-import type { Route } from "./+types/organizations.$id.members";
+import { organizationsApi } from "~/lib/api/organizations";
+import type { OrganizationMember, OrganizationRole } from "~/lib/api/organizations";
 
-interface Member {
-  id: string;
-  role: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER";
-  joinedAt: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    profileImageUrl?: string;
+export async function clientLoader({ params }: LoaderFunctionArgs) {
+  if (!params.id) {
+    throw new Response("Organization not found", { status: 404 });
+  }
+  const [organization, membersData] = await Promise.all([
+    organizationsApi.getOrganization(params.id),
+    organizationsApi.getMembers(params.id),
+  ]);
+
+  return { 
+    organization: {
+      ...organization,
+      members: membersData.members,
+    }
   };
 }
 
-interface Organization {
-  id: string;
-  name: string;
-  members: Member[];
-}
-
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const response = await fetch(`/api/organizations/${params.id}/members`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch members");
-  }
-
-  const data = await response.json();
-  return { organization: data };
-}
-
-export default function OrganizationMembers({
-  loaderData,
-}: Route.ComponentProps) {
-  const { organization } = loaderData;
+export default function OrganizationMembers() {
+  const { organization } = useLoaderData<typeof clientLoader>();
+  const revalidator = useRevalidator();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER" | "VIEWER">(
-    "MEMBER"
-  );
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [inviteRole, setInviteRole] = useState<OrganizationRole>("MEMBER");
+  const [selectedMember, setSelectedMember] = useState<OrganizationMember | null>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
 
-  const handleInvite = async () => {
-    const response = await fetch(
-      `/api/organizations/${organization.id}/members/invite`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-      }
-    );
+  const getUserDisplayName = (member: OrganizationMember) => {
+    const lastName = member.user.lastName ? ` ${member.user.lastName}` : "";
+    return `${member.user.firstName}${lastName}`;
+  };
 
-    if (response.ok) {
-      setShowInviteModal(false);
+  const handleInvite = async () => {
+    try {
+      await organizationsApi.inviteMember(organization.id, {
+        email: inviteEmail,
+        role: inviteRole,
+      });
       setInviteEmail("");
-      window.location.reload();
+      setShowInviteModal(false);
+      revalidator.revalidate();
+    } catch (error) {
+      console.error("Failed to invite member:", error);
     }
   };
 
-  const handleChangeRole = async (memberId: string, newRole: string) => {
-    const response = await fetch(
-      `/api/organizations/${organization.id}/members/${memberId}/role`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ role: newRole }),
-      }
-    );
-
-    if (response.ok) {
+  const handleUpdateRole = async (memberId: string, newRole: OrganizationRole) => {
+    try {
+      await organizationsApi.updateMemberRole(organization.id, memberId, { role: newRole });
       setShowRoleModal(false);
-      window.location.reload();
+      setSelectedMember(null);
+      revalidator.revalidate();
+    } catch (error) {
+      console.error("Failed to update member role:", error);
     }
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm("Are you sure you want to remove this member?")) return;
-
-    const response = await fetch(
-      `/api/organizations/${organization.id}/members/${memberId}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    );
-
-    if (response.ok) {
-      window.location.reload();
+    try {
+      await organizationsApi.removeMember(organization.id, memberId);
+      revalidator.revalidate();
+    } catch (error) {
+      console.error("Failed to remove member:", error);
     }
   };
 
@@ -113,8 +80,6 @@ export default function OrganizationMembers({
         return "bg-primary/10 text-primary";
       case "MEMBER":
         return "bg-success/10 text-success";
-      case "VIEWER":
-        return "bg-muted text-muted-foreground";
       default:
         return "bg-muted text-muted-foreground";
     }
@@ -128,8 +93,6 @@ export default function OrganizationMembers({
         return "Manage members, listings, and settings";
       case "MEMBER":
         return "Create and manage listings";
-      case "VIEWER":
-        return "View only access";
       default:
         return "";
     }
@@ -141,12 +104,12 @@ export default function OrganizationMembers({
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-4 mb-4">
-            <a
-              href={`/organizations/${organization.id}`}
+            <Link
+              to={`/organizations/${organization.id}`}
               className="text-primary hover:text-primary/80"
             >
               ← Back to Organization
-            </a>
+            </Link>
           </div>
           <div className="flex justify-between items-center">
             <div>
@@ -169,21 +132,21 @@ export default function OrganizationMembers({
         {/* Members List */}
         <div className="bg-card shadow rounded-lg overflow-hidden">
           <ul className="divide-y divide-border">
-            {organization.members.map((member: Member) => (
+            {organization.members.map((member: OrganizationMember) => (
               <li key={member.id} className="p-6 hover:bg-muted/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     {/* Avatar */}
-                    {member.user.profileImageUrl ? (
+                    {member.user.profilePhotoUrl ? (
                       <img
-                        src={member.user.profileImageUrl}
-                        alt={member.user.name}
+                        src={member.user.profilePhotoUrl}
+                        alt={getUserDisplayName(member)}
                         className="h-12 w-12 rounded-full object-cover"
                       />
                     ) : (
                       <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                         <span className="text-xl font-medium text-primary">
-                          {member.user.name.charAt(0).toUpperCase()}
+                          {member.user.firstName.charAt(0).toUpperCase()}
                         </span>
                       </div>
                     )}
@@ -191,14 +154,14 @@ export default function OrganizationMembers({
                     {/* User Info */}
                     <div>
                       <h3 className="text-lg font-medium text-foreground">
-                        {member.user.name}
+                        {getUserDisplayName(member)}
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         {member.user.email}
                       </p>
                       <p className="text-xs text-muted-foreground/70 mt-1">
                         Joined{" "}
-                        {new Date(member.joinedAt).toLocaleDateString("en-US", {
+                        {new Date(member.joinedAt || member.createdAt).toLocaleDateString("en-US", {
                           month: "long",
                           year: "numeric",
                         })}
@@ -282,10 +245,6 @@ export default function OrganizationMembers({
                     <strong>Member:</strong> Create and manage their own
                     listings and bookings
                   </li>
-                  <li>
-                    <strong>Viewer:</strong> Read-only access to organization
-                    data
-                  </li>
                 </ul>
               </div>
             </div>
@@ -322,13 +281,10 @@ export default function OrganizationMembers({
                 <select
                   value={inviteRole}
                   onChange={(e) =>
-                    setInviteRole(
-                      e.target.value as "ADMIN" | "MEMBER" | "VIEWER"
-                    )
+                    setInviteRole(e.target.value as OrganizationRole)
                   }
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 >
-                  <option value="VIEWER">Viewer - Read only</option>
                   <option value="MEMBER">Member - Create listings</option>
                   <option value="ADMIN">Admin - Manage team</option>
                 </select>
@@ -362,14 +318,14 @@ export default function OrganizationMembers({
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-medium text-foreground mb-4">
-              Change Role for {selectedMember.user.name}
+              Change Role for {getUserDisplayName(selectedMember)}
             </h3>
 
             <div className="space-y-2">
-              {["ADMIN", "MEMBER", "VIEWER"].map((role) => (
+              {(["ADMIN", "MEMBER"] as OrganizationRole[]).map((role) => (
                 <button
                   key={role}
-                  onClick={() => handleChangeRole(selectedMember.id, role)}
+                  onClick={() => handleUpdateRole(selectedMember.id, role)}
                   className={cn(
                     "w-full text-left px-4 py-3 border rounded-md hover:bg-muted",
                     selectedMember.role === role

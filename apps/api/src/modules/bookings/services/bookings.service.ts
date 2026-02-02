@@ -10,6 +10,7 @@ import { Booking, BookingStatus, BookingMode } from '@rental-portal/database';
 import { AvailabilityService } from '@/modules/listings/services/availability.service';
 import { BookingStateMachineService } from './booking-state-machine.service';
 import { BookingCalculationService } from './booking-calculation.service';
+import { FraudDetectionService } from '@/modules/fraud-detection/services/fraud-detection.service';
 
 export interface CreateBookingDto {
   listingId: string;
@@ -35,6 +36,7 @@ export class BookingsService {
     private readonly availabilityService: AvailabilityService,
     private readonly stateMachine: BookingStateMachineService,
     private readonly calculation: BookingCalculationService,
+    private readonly fraudDetection: FraudDetectionService,
   ) {}
 
   async create(renterId: string, dto: CreateBookingDto): Promise<Booking> {
@@ -56,21 +58,14 @@ export class BookingsService {
       throw new BadRequestException('Cannot book your own listing');
     }
 
-    // Check availability
-    const availabilityCheck = await this.availabilityService.checkAvailability({
-      propertyId: dto.listingId,
-      startDate: dto.startDate,
-      endDate: dto.endDate,
-    });
-
-    if (!availabilityCheck.isAvailable) {
-      throw new BadRequestException({
-        message: 'Listing not available for selected dates',
-        conflicts: availabilityCheck.conflicts,
-      });
+    // Check for fraud
+    const fraudCheck = await this.fraudDetection.checkUserRisk(renterId);
+    if (!fraudCheck.allowBooking) {
+        // Log this?
+        throw new ForbiddenException('Booking rejected due to security policies');
     }
 
-    // Calculate pricing
+    // Calculate pricing first (outside transaction)
     const pricing = await this.calculation.calculatePrice(
       dto.listingId,
       dto.startDate,
@@ -86,56 +81,102 @@ export class BookingsService {
       initialStatus = BookingStatus.PENDING_OWNER_APPROVAL;
     }
 
-    // Create booking
-    const booking = await this.prisma.booking.create({
-      data: {
-        renterId,
-        listingId: dto.listingId,
-        startDate: dto.startDate,
-        endDate: dto.endDate,
-        guestCount: dto.guestCount,
-        renterMessage: dto.message,
-        status: initialStatus,
-        platformFee: pricing.platformFee,
-        serviceFee: pricing.serviceFee,
-        depositAmount: pricing.depositAmount,
-        totalAmount: pricing.total,
-        ownerEarnings: pricing.ownerEarnings,
-        currency: listing.currency,
-        stateHistory: {
-          create: {
-            toState: initialStatus,
-            changedBy: renterId,
-            changedAt: new Date(),
-            reason: 'Booking created',
+    // Create booking within transaction to prevent race conditions
+    const booking = (await this.prisma.$transaction(async (tx) => {
+      // Check for conflicting bookings within the transaction
+      const conflicts = await tx.booking.findMany({
+        where: {
+          listingId: dto.listingId,
+          status: {
+            notIn: ['CANCELLED', 'REFUNDED', 'REJECTED'],
           },
-        },
-      } as any,
-      include: {
-        renter: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            profilePhotoUrl: true,
-            averageRating: true,
-          },
-        },
-        listing: {
-          include: {
-            owner: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                profilePhotoUrl: true,
-              },
+          OR: [
+            {
+              AND: [
+                { startDate: { lte: dto.startDate } },
+                { endDate: { gte: dto.startDate } },
+              ],
             },
-            category: true,
+            {
+              AND: [
+                { startDate: { lte: dto.endDate } },
+                { endDate: { gte: dto.endDate } },
+              ],
+            },
+            {
+              AND: [
+                { startDate: { gte: dto.startDate } },
+                { endDate: { lte: dto.endDate } },
+              ],
+            },
+          ],
+        },
+      });
+
+      if (conflicts.length > 0) {
+        throw new BadRequestException({
+          message: 'Listing not available for selected dates',
+          conflicts: conflicts.map(c => ({
+            startDate: c.startDate,
+            endDate: c.endDate,
+            bookingId: c.id,
+          })),
+        });
+      }
+
+      // Create booking atomically
+      return tx.booking.create({
+        data: {
+          renterId,
+          listingId: dto.listingId,
+          startDate: dto.startDate,
+          endDate: dto.endDate,
+          guestCount: dto.guestCount,
+          renterMessage: dto.message,
+          status: initialStatus,
+          basePrice: pricing.breakdown.basePrice,
+          totalPrice: pricing.total,
+          platformFee: pricing.platformFee,
+          serviceFee: pricing.serviceFee,
+          depositAmount: pricing.depositAmount,
+          totalAmount: pricing.total,
+          ownerEarnings: pricing.ownerEarnings,
+          currency: listing.currency,
+          stateHistory: {
+            create: {
+              toState: initialStatus,
+              changedBy: renterId,
+              changedAt: new Date(),
+              reason: 'Booking created',
+            },
+          },
+        } as any,
+        include: {
+          renter: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              profilePhotoUrl: true,
+              averageRating: true,
+            },
+          },
+          listing: {
+            include: {
+              owner: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  profilePhotoUrl: true,
+                },
+              },
+              category: true,
+            },
           },
         },
-      },
-    });
+      });
+    })) as unknown as Booking;
 
     // Send notification to owner
     await this.cacheService.publish('booking:created', {
@@ -149,7 +190,7 @@ export class BookingsService {
     return booking;
   }
 
-  async findById(id: string, includePrivate: boolean = false): Promise<Booking> {
+  async findById(id: string, includePrivate: boolean = false, userId?: string): Promise<Booking> {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
       include: {
@@ -186,6 +227,24 @@ export class BookingsService {
 
     if (!booking) {
       throw new NotFoundException('Booking not found');
+    }
+
+    // Authorization check if userId is provided
+    if (userId && includePrivate) {
+      const isRenter = booking.renterId === userId;
+      const isOwner = (booking.listing as any).ownerId === userId;
+      
+      if (!isRenter && !isOwner) {
+        // Check if user is admin
+        const user = await this.prisma.user.findUnique({ 
+          where: { id: userId },
+          select: { role: true }
+        });
+        
+        if (user?.role !== 'ADMIN') {
+          throw new ForbiddenException('Not authorized to view this booking');
+        }
+      }
     }
 
     return booking;
@@ -278,6 +337,18 @@ export class BookingsService {
     // Calculate refund
     const refund = await this.calculation.calculateRefund(bookingId, new Date());
 
+    // Process refund if applicable
+    if (refund.refundAmount > 0 && booking.paymentIntentId) {
+      // Import StripeService via constructor if needed
+      // For now, publish event to payment service to handle refund
+      await this.cacheService.publish('booking:cancelled', {
+        bookingId,
+        paymentIntentId: booking.paymentIntentId,
+        refundAmount: refund.refundAmount,
+        reason: refund.reason,
+      });
+    }
+
     await this.stateMachine.transition(
       bookingId,
       'CANCEL',
@@ -366,5 +437,54 @@ export class BookingsService {
       actor: h.transitionedByUser,
       metadata: h.metadata,
     }));
+  }
+
+  async getBlockedDates(listingId: string): Promise<string[]> {
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        listingId,
+        status: {
+          in: [
+            BookingStatus.CONFIRMED,
+            BookingStatus.PENDING_PAYMENT,
+            BookingStatus.IN_PROGRESS,
+            BookingStatus.AWAITING_RETURN_INSPECTION,
+          ],
+        },
+      },
+      select: {
+        startDate: true,
+        endDate: true,
+      },
+    });
+
+    const blockedDates: string[] = [];
+    bookings.forEach((booking) => {
+      let current = new Date(booking.startDate);
+      const end = new Date(booking.endDate);
+      while (current <= end) {
+        blockedDates.push(current.toISOString().split('T')[0]);
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    // Also include manually blocked dates from availability table
+    const manuallyBlocked = await this.prisma.availability.findMany({
+      where: {
+        propertyId: listingId,
+        status: 'blocked',
+      },
+    });
+
+    manuallyBlocked.forEach((rule) => {
+      let current = new Date(rule.startDate);
+      const end = new Date(rule.endDate);
+      while (current <= end) {
+        blockedDates.push(current.toISOString().split('T')[0]);
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    return [...new Set(blockedDates)];
   }
 }

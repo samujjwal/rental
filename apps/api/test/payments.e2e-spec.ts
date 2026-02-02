@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/common/database/prisma.service';
+import { PrismaService } from '../src/common/prisma/prisma.service';
 import { StripeService } from '../src/modules/payments/services/stripe.service';
 import { BookingStatus, ListingStatus, UserRole, BookingMode } from '@rental-portal/database';
 
@@ -54,9 +54,7 @@ describe('Payments (e2e)', () => {
     await prisma.depositHold.deleteMany({
       where: { booking: { renter: { email: { contains: '@paymenttest.com' } } } },
     });
-    await prisma.ledgerEntry.deleteMany({
-      where: { user: { email: { contains: '@paymenttest.com' } } },
-    });
+    await prisma.ledgerEntry.deleteMany({});
     await prisma.booking.deleteMany({
       where: {
         OR: [
@@ -82,7 +80,7 @@ describe('Payments (e2e)', () => {
       firstName: 'Test',
       lastName: 'Owner',
       phone: '+1234567890',
-      role: UserRole.OWNER,
+      role: UserRole.HOST,
     });
     ownerToken = ownerRes.body.tokens.accessToken;
     ownerId = ownerRes.body.user.id;
@@ -93,7 +91,7 @@ describe('Payments (e2e)', () => {
       firstName: 'Test',
       lastName: 'Renter',
       phone: '+1234567891',
-      role: UserRole.RENTER,
+      role: UserRole.USER,
     });
     renterToken = renterRes.body.tokens.accessToken;
     renterId = renterRes.body.user.id;
@@ -106,7 +104,7 @@ describe('Payments (e2e)', () => {
         description: 'Test category',
         icon: 'test',
         isActive: true,
-        schema: {},
+        templateSchema: '{}',
       },
     });
 
@@ -125,7 +123,7 @@ describe('Payments (e2e)', () => {
         latitude: 40.7128,
         longitude: -74.006,
         status: ListingStatus.ACTIVE,
-        bookingMode: BookingMode.INSTANT,
+        bookingMode: BookingMode.INSTANT_BOOK,
         minRentalDays: 1,
         maxRentalDays: 30,
         instantBooking: true,
@@ -286,8 +284,9 @@ describe('Payments (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.PENDING_PAYMENT,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -355,8 +354,9 @@ describe('Payments (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.CONFIRMED,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -460,8 +460,9 @@ describe('Payments (e2e)', () => {
           startDate,
           endDate,
           status: BookingStatus.CONFIRMED,
-          subtotal: 30000,
-          totalAmount: 33000,
+          basePrice: 300,
+          totalPrice: 330,
+          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -473,18 +474,22 @@ describe('Payments (e2e)', () => {
       await prisma.ledgerEntry.createMany({
         data: [
           {
-            userId: renterId,
+            accountId: renterId,
+            accountType: 'USER',
+            side: 'DEBIT',
+            transactionType: 'PAYMENT',
             bookingId,
-            type: 'CHARGE',
-            amount: 33000,
+            amount: 330,
             currency: 'USD',
             description: 'Booking payment',
           },
           {
-            userId: ownerId,
+            accountId: ownerId,
+            accountType: 'USER',
+            side: 'CREDIT',
+            transactionType: 'EARNINGS',
             bookingId,
-            type: 'CREDIT',
-            amount: 28000,
+            amount: 280,
             currency: 'USD',
             description: 'Rental earnings',
           },
@@ -559,9 +564,11 @@ describe('Payments (e2e)', () => {
       // Create earnings ledger entry
       await prisma.ledgerEntry.create({
         data: {
-          userId: ownerId,
-          type: 'CREDIT',
-          amount: 50000,
+          accountId: ownerId,
+          accountType: 'USER',
+          side: 'CREDIT',
+          transactionType: 'EARNINGS',
+          amount: 500,
           currency: 'USD',
           description: 'Test earnings',
         },

@@ -66,7 +66,7 @@ export class PayoutsService {
     // We need to attach this payout to a booking in the ledger for DB consistency.
     // Ideally we track which bookings are being paid out, but for now we attach to the latest valid booking.
     const lastBooking = await this.prisma.booking.findFirst({
-      where: { owner: { id: ownerId }, status: { in: ['COMPLETED', 'SETTLED'] } },
+      where: { ownerId: ownerId, status: { in: ['COMPLETED', 'SETTLED'] } },
       orderBy: { updatedAt: 'desc' },
     });
 
