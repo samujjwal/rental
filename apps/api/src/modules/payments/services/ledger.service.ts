@@ -404,4 +404,84 @@ export class LedgerService {
       total: platformFees + serviceFees,
     };
   }
+
+  async getUserTransactions(
+    userId: string,
+    options: {
+      page?: number;
+      limit?: number;
+      type?: string;
+      status?: string;
+      startDate?: Date;
+      endDate?: Date;
+    } = {},
+  ) {
+    const page = options.page || 1;
+    const limit = options.limit || 20;
+    const skip = (page - 1) * limit;
+
+    // Get user's bookings (both as owner and renter)
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        OR: [{ ownerId: userId }, { renterId: userId }],
+      },
+      select: { id: true, ownerId: true, renterId: true, totalPrice: true, currency: true, createdAt: true },
+    });
+    const bookingIds = bookings.map((b) => b.id);
+
+    if (bookingIds.length === 0) {
+      return { transactions: [], total: 0, page, limit };
+    }
+
+    // Build where clause for ledger entries
+    const where: any = {
+      bookingId: { in: bookingIds },
+    };
+
+    if (options.type) {
+      where.transactionType = options.type;
+    }
+
+    if (options.status) {
+      where.status = options.status;
+    }
+
+    if (options.startDate || options.endDate) {
+      where.createdAt = {};
+      if (options.startDate) where.createdAt.gte = options.startDate;
+      if (options.endDate) where.createdAt.lte = options.endDate;
+    }
+
+    // Get total count
+    const total = await this.prisma.ledgerEntry.count({ where });
+
+    // Get paginated entries
+    const entries = await this.prisma.ledgerEntry.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip,
+    });
+
+    // Format transactions for frontend
+    const transactions = entries.map((entry) => {
+      const booking = bookings.find((b) => b.id === entry.bookingId);
+      const isOwner = booking?.ownerId === userId;
+
+      return {
+        id: entry.id,
+        bookingId: entry.bookingId,
+        type: entry.transactionType,
+        amount: toNumber(entry.amount),
+        currency: entry.currency,
+        status: entry.status,
+        description: entry.description,
+        timestamp: entry.createdAt,
+        side: entry.side,
+        accountType: entry.accountType,
+      };
+    });
+
+    return { transactions, total, page, limit };
+  }
 }

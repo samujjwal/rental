@@ -135,7 +135,10 @@ export default function SearchPage() {
     } else {
       newParams.delete(key);
     }
-    newParams.set("page", "1"); // Reset to first page
+    // Only reset to page 1 if changing a filter, not if changing the page itself
+    if (key !== "page") {
+      newParams.set("page", "1");
+    }
     setSearchParams(newParams);
   };
 

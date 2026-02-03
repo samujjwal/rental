@@ -9,8 +9,9 @@ import {
   HttpStatus,
   Req,
   RawBodyRequest,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Request } from 'express';
 import { StripeService } from '../services/stripe.service';
 import { PayoutsService } from '../services/payouts.service';
@@ -268,6 +269,44 @@ export class PaymentsController {
   async getBalance(@CurrentUser('id') userId: string) {
     const balance = await this.ledger.getUserBalance(userId);
     return { balance, currency: 'USD' };
+  }
+
+  @Get('transactions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user transactions with pagination' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'type', required: false, type: String })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'startDate', required: false, type: String })
+  @ApiQuery({ name: 'endDate', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Transactions retrieved' })
+  async getTransactions(
+    @CurrentUser('id') userId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('type') type?: string,
+    @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const options: any = {
+      page: page ? parseInt(String(page), 10) : 1,
+      limit: limit ? parseInt(String(limit), 10) : 20,
+      type,
+      status,
+    };
+
+    if (startDate) {
+      options.startDate = new Date(startDate);
+    }
+
+    if (endDate) {
+      options.endDate = new Date(endDate);
+    }
+
+    return this.ledger.getUserTransactions(userId, options);
   }
 
   @Post('webhook')

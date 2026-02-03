@@ -33,7 +33,9 @@
   --radius-sm: calc(var(--radius) - 4px);
 
   --animate-fade-in: fade-in 0.5s ease-in-out;
-  --animate-slide-up: slide-up 0.5s ease-out;
+  --animate-slide-up: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-in: animate-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-out: animate-out 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
   @keyframes fade-in {
     0% {
@@ -68,82 +70,83 @@
 
 /*
   Unified Design System Color Palette
-  Based on Slate with a consistent Blue Primary
-  Ensures WCAG AA compliance for contrast ratios
+  Modern, Accessible, and Engaging
 */
 @layer base {
   :root {
-    /* Background and foreground */
-    --background: 210 40% 98%; /* slate-50 */
-    --foreground: 222 47% 11%; /* slate-900 - ensures 4.5:1+ contrast */
+    /* Background and foreground - Clean Slate-50 base */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
 
-    /* Card and popover surfaces */
-    --card: 0 0% 100%; /* white */
-    --card-foreground: 222 47% 11%; /* slate-900 */
+    /* Card and popover surfaces - Pure white with subtle distinction */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 0 0% 100%; /* white */
-    --popover-foreground: 222 47% 11%; /* slate-900 */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    /* Primary action color - Blue 500 */
-    --primary: 217 91% 60%; /* blue-500 */
-    --primary-foreground: 0 0% 100%; /* white - ensures contrast on primary */
+    /* Primary - Vibrant Indigo-Blue (Trust + Modernity) */
+    /* hex: #4f46e5 (indigo-600 equivalent) */
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Secondary surfaces */
-    --secondary: 210 40% 96%; /* slate-100 */
-    --secondary-foreground: 222 47% 11%; /* slate-900 */
+    /* Secondary - Soft, neutral surface */
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11.2%;
 
-    /* Muted elements */
-    --muted: 210 40% 96%; /* slate-100 */
-    --muted-foreground: 215 16% 47%; /* slate-500 - minimum for WCAG AA on white */
+    /* Muted - For de-emphasized text */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    /* Accent color (same as secondary by default) */
-    --accent: 210 40% 96%; /* slate-100 */
-    --accent-foreground: 222 47% 11%; /* slate-900 */
+    /* Accent - For hover states and subtle highlights */
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
 
-    /* Destructive/error states */
-    --destructive: 0 84% 60%; /* red-500 */
-    --destructive-foreground: 0 0% 100%; /* white */
+    /* Destructive - Modern Red */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    /* Borders and inputs */
-    --border: 214 32% 91%; /* slate-200 */
-    --input: 214 32% 91%; /* slate-200 */
-    --ring: 217 91% 60%; /* blue-500 - focus rings */
+    /* Borders and inputs - Subtle gray */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 243 75% 59%;
 
-    /* Border radius - slightly reduced for cleaner look */
-    --radius: 0.625rem;
+    /* Border radius - 0.5rem (8px) or 0.75rem (12px) for modern feel */
+    --radius: 0.75rem; /* 12px for softer, friendlier look */
   }
 
   .dark {
-    /* Dark mode backgrounds */
-    --background: 222 47% 11%; /* slate-900 */
-    --foreground: 210 40% 98%; /* slate-50 */
+    /* Background: Deep Slate/Blue Gray (Rich, not flat black) */
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
 
-    --card: 222 47% 11%; /* slate-900 */
-    --card-foreground: 210 40% 98%; /* slate-50 */
+    --card: 222 47% 10%; /* Slightly darker for depth? Or lighter? usually lighter. */
+    /* Let's go with "Elevated" dark mode strategy: cards are lighter than bg */
+    --card: 217 33% 14%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 11%; /* slate-900 */
-    --popover-foreground: 210 40% 98%; /* slate-50 */
+    --popover: 217 33% 14%;
+    --popover-foreground: 210 40% 98%;
 
-    /* Primary stays consistent */
-    --primary: 217 91% 60%; /* blue-500 */
-    --primary-foreground: 222 47% 11%; /* slate-900 */
+    /* Primary in dark mode: a bit lighter to pop against dark bg */
+    --primary: 243 100% 70%; /* brighter indigo */
+    --primary-foreground: 222 47% 11%;
 
-    /* Dark mode secondary */
-    --secondary: 217 33% 17%; /* slate-800 */
-    --secondary-foreground: 210 40% 98%; /* slate-50 */
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 217 33% 17%; /* slate-800 */
-    --muted-foreground: 215 20% 65%; /* slate-400 */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217 33% 17%; /* slate-800 */
-    --accent-foreground: 210 40% 98%; /* slate-50 */
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62% 30%; /* red-900 */
-    --destructive-foreground: 210 40% 98%; /* slate-50 */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 217 33% 17%; /* slate-800 */
-    --input: 217 33% 17%; /* slate-800 */
-    --ring: 224 76% 48%; /* blue-600 */
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 243 75% 59%;
   }
 }
 

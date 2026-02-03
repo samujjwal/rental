@@ -6,61 +6,61 @@
 export const designTokens = {
   colors: {
     primary: {
-      main: "#1976d2",
-      light: "#42a5f5",
-      dark: "#1565c0",
+      main: "#4f46e5", // Indigo 600
+      light: "#818cf8", // Indigo 400
+      dark: "#3730a3", // Indigo 800
       contrastText: "#ffffff",
     },
     secondary: {
-      main: "#dc004e",
-      light: "#f50057",
-      dark: "#c51162",
-      contrastText: "#ffffff",
+      main: "#f8fafc", // Slate 50 (Surface)
+      light: "#ffffff", 
+      dark: "#e2e8f0", // Slate 200
+      contrastText: "#0f172a", // Slate 900
     },
     success: {
-      main: "#2e7d32",
-      light: "#4caf50",
-      dark: "#1b5e20",
+      main: "#10b981", // Emerald 500
+      light: "#34d399",
+      dark: "#059669",
       contrastText: "#ffffff",
     },
     warning: {
-      main: "#ed6c02",
-      light: "#ff9800",
-      dark: "#e65100",
+      main: "#f59e0b", // Amber 500
+      light: "#fbbf24",
+      dark: "#d97706",
       contrastText: "#ffffff",
     },
     error: {
-      main: "#d32f2f",
-      light: "#ef5350",
-      dark: "#c62828",
+      main: "#ef4444", // Red 500
+      light: "#f87171",
+      dark: "#b91c1c",
       contrastText: "#ffffff",
     },
     info: {
-      main: "#0288d1",
-      light: "#03a9f4",
-      dark: "#01579b",
+      main: "#3b82f6", // Blue 500
+      light: "#60a5fa",
+      dark: "#2563eb",
       contrastText: "#ffffff",
     },
     surface: {
       main: "#ffffff",
       paper: "#ffffff",
-      elevated: "#f5f5f5",
+      elevated: "#ffffff",
     },
     background: {
-      default: "#f8f9fa",
+      default: "#ffffff", // Clean consistent white
       paper: "#ffffff",
-      elevated: "#f5f5f5",
+      elevated: "#ffffff",
     },
     text: {
-      primary: "#212529",
-      secondary: "#6c757d",
-      disabled: "#adb5bd",
-      hint: "#868e96",
+      primary: "#0f172a", // Slate 900
+      secondary: "#64748b", // Slate 500
+      disabled: "#cbd5e1", // Slate 300
+      hint: "#94a3b8", // Slate 400
     },
     border: {
-      main: "#dee2e6",
-      light: "#e9ecef",
-      dark: "#ced4da",
+      main: "#e2e8f0", // Slate 200
+      light: "#f1f5f9", // Slate 100
+      dark: "#cbd5e1", // Slate 300
     },
     action: {
       active: "rgba(0, 0, 0, 0.54)",
