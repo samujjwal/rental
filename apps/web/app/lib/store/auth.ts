@@ -14,6 +14,7 @@ interface AuthState {
   refreshToken: string | null;
   isInitialized: boolean;
   isLoading: boolean;
+  isAuthenticated: boolean;
 
   // Actions
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
@@ -31,6 +32,9 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       isInitialized: false,
       isLoading: false,
+      get isAuthenticated() {
+        return !!get().user && !!get().accessToken;
+      },
 
       setAuth: (user, accessToken, refreshToken) => {
         set({ user, accessToken, refreshToken, isInitialized: true });
@@ -93,10 +97,11 @@ export const useAuthStore = create<AuthState>()(
             if (isTokenExpired(storedAccessToken)) {
               // Try to refresh the token
               try {
-                const data = await api.post<{ accessToken: string; refreshToken: string; user: User }>(
-                  "/auth/refresh",
-                  { refreshToken: storedRefreshToken }
-                );
+                const data = await api.post<{
+                  accessToken: string;
+                  refreshToken: string;
+                  user: User;
+                }>("/auth/refresh", { refreshToken: storedRefreshToken });
 
                 localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
                 localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);

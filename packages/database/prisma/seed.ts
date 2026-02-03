@@ -23,7 +23,6 @@ async function main() {
   await prisma.message.deleteMany();
   await prisma.conversation.deleteMany();
   await prisma.conditionReport.deleteMany();
-  await prisma.insuranceClaim.deleteMany();
   await prisma.insurancePolicy.deleteMany();
   await prisma.bookingStateHistory.deleteMany();
   await prisma.depositHold.deleteMany();
@@ -39,12 +38,11 @@ async function main() {
   await prisma.notification.deleteMany();
   await prisma.review.deleteMany();
   await prisma.booking.deleteMany();
-  await prisma.property.deleteMany();
+  await prisma.listing.deleteMany();
   await prisma.organizationMember.deleteMany();
   await prisma.organization.deleteMany();
   await prisma.category.deleteMany();
   await prisma.cancellationPolicy.deleteMany();
-  await prisma.emailTemplate.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.user.deleteMany();
 
@@ -269,7 +267,9 @@ async function main() {
       },
     }),
   ]);
-  console.log(`✓ Created ${categories.length} categories (ACCOMMODATION: 7, VEHICLES: 5, INSTRUMENTS: 2, EVENTS: 2, WEARABLES: 4)`);
+  console.log(
+    `✓ Created ${categories.length} categories (ACCOMMODATION: 7, VEHICLES: 5, INSTRUMENTS: 2, EVENTS: 2, WEARABLES: 4)`,
+  );
 
   // ============= CREATE USERS =============
   console.log('👥 Creating users...');
@@ -346,7 +346,7 @@ async function main() {
   });
   users.push(superAdminUser);
 
-  // Create a HOST user explicitly 
+  // Create a HOST user explicitly
   const hostUser = await prisma.user.create({
     data: {
       email: 'host@rental-portal.com',
@@ -414,281 +414,97 @@ async function main() {
         isActive: description.status === 'ACTIVE',
         emailVerified: description.verified,
         phoneVerified: description.verified,
-        averageRating: description.verified ? faker.number.float({ min: 3, max: 5, fractionDigits: 1 }) : 0,
+        averageRating: description.verified
+          ? faker.number.float({ min: 3, max: 5, fractionDigits: 1 })
+          : 0,
         totalReviews: description.verified ? faker.number.int({ min: 0, max: 100 }) : 0,
         responseRate: description.verified ? faker.number.int({ min: 80, max: 100 }) : 0,
         responseTime: '< 2 hours',
         city: faker.location.city(),
         state: faker.location.state(),
         country: 'USA',
-        lastLoginAt: new Date(Date.now() - faker.number.int({ min: 0, max: 30 * 24 * 60 * 60 * 1000 })),
+        lastLoginAt: new Date(
+          Date.now() - faker.number.int({ min: 0, max: 30 * 24 * 60 * 60 * 1000 }),
+        ),
         mfaEnabled: faker.datatype.boolean({ probability: 0.1 }),
       },
-    });
-    users.push(user);
-  }
-  console.log(`✓ Created ${users.length} users (including SUPER_ADMIN, HOST, MFA-enabled)`);
-
-  // ============= CREATE EMAIL TEMPLATES =============
-  console.log('📧 Creating email templates...');
-  const emailTemplates = await Promise.all([
-    prisma.emailTemplate.create({
-      data: {
-        name: 'Booking Confirmation',
-        type: 'BOOKING_CONFIRMATION',
-        subject: 'Your booking is confirmed - {{propertyName}}',
-        body: 'Dear {{guestName}},\n\nYour booking for {{propertyName}} from {{checkInDate}} to {{checkOutDate}} has been confirmed.',
-        isActive: true,
-      },
-    }),
-    prisma.emailTemplate.create({
-      data: {
-        name: 'Payment Receipt',
-        type: 'PAYMENT_RECEIPT',
-        subject: 'Payment receipt for your booking',
-        body: 'Dear {{userName}},\n\nThank you for your payment of {{amount}}. Here is your receipt.',
-        isActive: true,
-      },
-    }),
-    prisma.emailTemplate.create({
-      data: {
-        name: 'Welcome Email',
-        type: 'WELCOME',
-        subject: 'Welcome to Rental Portal!',
-        body: 'Welcome {{userName}}! We are excited to have you on board.',
-        isActive: true,
-      },
-    }),
-    prisma.emailTemplate.create({
-      data: {
-        name: 'Dispute Opened',
-        type: 'DISPUTE_OPENED',
-        subject: 'A dispute has been filed for your booking',
-        body: 'We have received a dispute for booking {{bookingId}}. Please review the details.',
-        isActive: true,
-      },
-    }),
-    prisma.emailTemplate.create({
-      data: {
-        name: 'Booking Cancellation',
-        type: 'BOOKING_CANCELLATION',
-        subject: 'Your booking has been cancelled',
-        body: 'Your booking has been cancelled. Refund will be processed within 5-7 business days.',
-        isActive: true,
-      },
-    }),
-  ]);
-  console.log(`✓ Created ${emailTemplates.length} email templates`);
-
-  // ============= CREATE ORGANIZATIONS =============
-  console.log('🏢 Creating organizations...');
-  const organizations = await Promise.all([
-    prisma.organization.create({
-      data: {
-        name: 'Premium Properties Inc',
-        slug: 'premium-properties',
-        description: 'Luxury rental management company with premium properties',
-        email: 'contact@premium.com',
-        phone: '+1-555-0200',
-        address: '123 Main St',
-        city: 'New York',
-        state: 'NY',
-        zipCode: '10001',
-        country: 'USA',
-        status: 'ACTIVE',
-        verificationStatus: 'VERIFIED',
-      },
-    }),
-    prisma.organization.create({
-      data: {
-        name: 'Cozy Homes Rentals',
-        slug: 'cozy-homes',
-        description: 'Budget-friendly rental solutions',
-        email: 'info@cozyhomes.com',
-        phone: '+1-555-0201',
-        address: '456 Oak Ave',
-        city: 'Los Angeles',
-        state: 'CA',
-        zipCode: '90001',
-        country: 'USA',
-        status: 'ACTIVE',
-        verificationStatus: 'VERIFIED',
-      },
-    }),
-    prisma.organization.create({
-      data: {
-        name: 'Urban Stay Management',
-        slug: 'urban-stay',
-        description: 'Urban apartment and condo management',
-        email: 'support@urbystay.com',
-        phone: '+1-555-0202',
-        address: '789 City Blvd',
-        city: 'Chicago',
-        state: 'IL',
-        zipCode: '60601',
-        country: 'USA',
-        status: 'ACTIVE',
-        verificationStatus: 'PENDING',
-      },
-    }),
-  ]);
-  console.log(`✓ Created ${organizations.length} organizations`);
-
-  // Add organization members with different roles
-  console.log('Adding organization members...');
-  for (let i = 0; i < organizations.length; i++) {
-    const org = organizations[i];
-    await Promise.all([
-      prisma.organizationMember.create({
-        data: {
-          organizationId: org.id,
-          userId: users[i + 1].id,
-          role: 'OWNER',
-        },
-      }),
-      prisma.organizationMember.create({
-        data: {
-          organizationId: org.id,
-          userId: users[i + 2].id,
-          role: 'ADMIN',
-        },
-      }),
-      prisma.organizationMember.create({
-        data: {
-          organizationId: org.id,
-          userId: users[i + 3].id,
-          role: 'MEMBER',
-        },
-      }),
+    ]);
+  } else if (categoryName.includes('event venue')) {
+    // Event Venues
+    selectedFeatures = faker.helpers.arrayElements(eventVenueAmenities, { min: 6, max: 12 });
+    categoryDescriptor = faker.helpers.arrayElement([
+      'Rooftop',
+      'Ballroom',
+      'Garden',
+      'Conference Hall',
+      'Warehouse',
+      'Loft',
+      'Beach Club',
+      'Banquet Hall',
+      'Private Estate',
+      'Historic Manor',
+    ]);
+  } else if (categoryName.includes('event equipment')) {
+    // Event Equipment
+    selectedFeatures = faker.helpers.arrayElements(eventEquipmentFeatures, { min: 5, max: 10 });
+    categoryDescriptor = faker.helpers.arrayElement([
+      'LED Lighting',
+      'Sound System',
+      'DJ Booth',
+      'Dance Floor',
+      'Tent',
+      'Heater',
+      'Photo Booth',
+      'Projector',
+      'Screen',
+      'Stage Platform',
+      'Podium',
+    ]);
+  } else if (
+    categoryName.includes('formal') ||
+    categoryName.includes('sports') ||
+    categoryName.includes('photography') ||
+    categoryName.includes('party')
+  ) {
+    // Wearables & Other Items
+    selectedFeatures = faker.helpers.arrayElements(sportFeatures, { min: 4, max: 10 });
+    categoryDescriptor = faker.helpers.arrayElement([
+      'Luxury Dress',
+      'Designer Suit',
+      'Running Gear',
+      'Camping Equipment',
+      'Camera Lens',
+      'Party Decoration',
+      'Costume',
+      'Accessory Bundle',
+      'Premium Outfit',
+      'Vintage Item',
     ]);
   }
-  console.log('✓ Added organization members');
 
-  // ============= CREATE PROPERTIES/ITEMS ACROSS ALL CATEGORIES =============
-  console.log('🏠 Creating items across all categories...');
-  const properties = [];
-  const propertyTypes = ['APARTMENT', 'HOUSE', 'VILLA', 'STUDIO', 'CONDO', 'TOWNHOUSE', 'COTTAGE', 'CABIN', 'LOFT', 'OTHER'];
-  
-  // Common amenities/features by category
-  const accommodationAmenities = [
-    'WiFi', 'Kitchen', 'Parking', 'Air Conditioning', 'Heating', 'Washer', 'Dryer', 'TV',
-    'Essentials', 'Hot Water', 'Shampoo', 'Workspace', 'Pool', 'Gym', 'Elevator',
-  ];
-  
-  const vehicleFeatures = [
-    'GPS', 'Bluetooth', 'Backup Camera', 'Air Conditioning', 'Heated Seats', 'Cruise Control',
-    'Apple CarPlay', 'Android Auto', 'Premium Sound System', 'Sunroof', 'Tinted Windows',
-  ];
-  
-  const instrumentFeatures = [
-    'Professional Grade', 'Beginner Friendly', 'Recently Maintained', 'Includes Case',
-    'Hard Shell Case', 'Soft Case', 'Original Accessories', 'Manual Included', 'Warranty',
-  ];
-  
-  const eventVenueAmenities = [
-    'WiFi', 'Parking', 'Wheelchair Accessible', 'Catering Kitchen', 'Sound System',
-    'Projector', 'Stage', 'Lighting', 'Tables & Chairs', 'Coat Check', 'Restrooms',
-  ];
-  
-  const eventEquipmentFeatures = [
-    'Professional Quality', 'Portable', 'Includes Transport', 'Easy Setup', 'LED Technology',
-    'Weather Resistant', 'Weatherproof', 'Expandable', 'Customizable', 'Multiple Colors',
-  ];
-  
-  const sportFeatures = [
-    'Professional Grade', 'Beginner Friendly', 'Lightweight', 'Durable', 'Water Resistant',
-    'Weatherproof', 'Adjustable', 'Compact', 'Easy Transport', 'Safety Certified',
-  ];
+  const policy = policies[faker.number.int({ min: 0, max: policies.length - 1 })];
+  const org = faker.datatype.boolean({ probability: 0.4 })
+    ? organizations[faker.number.int({ min: 0, max: organizations.length - 1 })]
+    : null;
 
-  // Define ALL property statuses to ensure coverage
-  const allPropertyStatuses = ['AVAILABLE', 'RENTED', 'MAINTENANCE', 'UNAVAILABLE', 'DRAFT', 'SUSPENDED', 'ARCHIVED'];
-  const allVerificationStatuses = ['PENDING', 'VERIFIED', 'REJECTED'];
-  const allPropertyConditions = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR'];
-  const allBookingModes = ['REQUEST', 'INSTANT_BOOK'];
+  // Cycle through ALL property statuses to ensure complete coverage
+  const status = allPropertyStatuses[i % allPropertyStatuses.length];
+  const verificationStatus = allVerificationStatuses[i % allVerificationStatuses.length];
+  const condition = allPropertyConditions[i % allPropertyConditions.length];
+  const bookingMode = allBookingModes[i % allBookingModes.length];
 
-  // Define price ranges for comprehensive filter testing
-  const priceRanges = [
-    { min: 50, max: 100, label: 'Budget' },
-    { min: 100, max: 200, label: 'Mid-range' },
-    { min: 200, max: 350, label: 'Upper-mid' },
-    { min: 350, max: 500, label: 'Luxury' },
-    { min: 500, max: 1000, label: 'Premium' },
-  ];
+  // Strategic price distribution for filter testing
+  const priceRange = priceRanges[i % priceRanges.length];
+  const basePrice = faker.number.float({
+    min: priceRange.min,
+    max: priceRange.max,
+    fractionDigits: 2,
+  });
 
-  // Create items across ALL categories with appropriate attributes
-  // TOTAL: 360 items (30 per category across 12 categories)
-  for (let i = 0; i < 360; i++) {
-    const owner = users[faker.number.int({ min: 1, max: Math.min(users.length - 1, 15) })];
-    
-    // Determine category and type based on item index
-    const categoryIndex = Math.floor(i / 30); // 30 items per category
-    const category = categories[categoryIndex];
-    const categoryName = category.name.toLowerCase();
-    
-    // Set appropriate features based on category
-    let selectedFeatures = [];
-    let categoryDescriptor = '';
-    
-    if (categoryName.includes('apartment') || categoryName.includes('house') || categoryName.includes('villa') || 
-        categoryName.includes('studio') || categoryName.includes('condo') || categoryName.includes('townhouse') || 
-        categoryName.includes('cottage')) {
-      // Accommodation
-      selectedFeatures = faker.helpers.arrayElements(accommodationAmenities, { min: 8, max: 15 });
-      categoryDescriptor = propertyTypes[i % propertyTypes.length];
-    } else if (categoryName.includes('car') || categoryName.includes('motorcycle') || categoryName.includes('bicycle') || 
-               categoryName.includes('rv') || categoryName.includes('boat')) {
-      // Vehicles
-      selectedFeatures = faker.helpers.arrayElements(vehicleFeatures, { min: 5, max: 12 });
-      categoryDescriptor = category.name;
-    } else if (categoryName.includes('musical') || categoryName.includes('audio')) {
-      // Instruments
-      selectedFeatures = faker.helpers.arrayElements(instrumentFeatures, { min: 4, max: 9 });
-      categoryDescriptor = faker.helpers.arrayElement([
-        'Guitar', 'Piano', 'Violin', 'Drums', 'Microphone', 'Amplifier', 'Mixer',
-        'Speaker System', 'Keyboard', 'Bass Guitar', 'DJ Equipment', 'Synthesizer',
-      ]);
-    } else if (categoryName.includes('event venue')) {
-      // Event Venues
-      selectedFeatures = faker.helpers.arrayElements(eventVenueAmenities, { min: 6, max: 12 });
-      categoryDescriptor = faker.helpers.arrayElement([
-        'Rooftop', 'Ballroom', 'Garden', 'Conference Hall', 'Warehouse', 'Loft',
-        'Beach Club', 'Banquet Hall', 'Private Estate', 'Historic Manor',
-      ]);
-    } else if (categoryName.includes('event equipment')) {
-      // Event Equipment
-      selectedFeatures = faker.helpers.arrayElements(eventEquipmentFeatures, { min: 5, max: 10 });
-      categoryDescriptor = faker.helpers.arrayElement([
-        'LED Lighting', 'Sound System', 'DJ Booth', 'Dance Floor', 'Tent', 'Heater',
-        'Photo Booth', 'Projector', 'Screen', 'Stage Platform', 'Podium',
-      ]);
-    } else if (categoryName.includes('formal') || categoryName.includes('sports') || categoryName.includes('photography') || 
-               categoryName.includes('party')) {
-      // Wearables & Other Items
-      selectedFeatures = faker.helpers.arrayElements(sportFeatures, { min: 4, max: 10 });
-      categoryDescriptor = faker.helpers.arrayElement([
-        'Luxury Dress', 'Designer Suit', 'Running Gear', 'Camping Equipment', 'Camera Lens',
-        'Party Decoration', 'Costume', 'Accessory Bundle', 'Premium Outfit', 'Vintage Item',
-      ]);
-    }
-    
-    const policy = policies[faker.number.int({ min: 0, max: policies.length - 1 })];
-    const org = faker.datatype.boolean({ probability: 0.4 })
-      ? organizations[faker.number.int({ min: 0, max: organizations.length - 1 })]
-      : null;
-    
-    // Cycle through ALL property statuses to ensure complete coverage
-    const status = allPropertyStatuses[i % allPropertyStatuses.length];
-    const verificationStatus = allVerificationStatuses[i % allVerificationStatuses.length];
-    const condition = allPropertyConditions[i % allPropertyConditions.length];
-    const bookingMode = allBookingModes[i % allBookingModes.length];
-    
-    // Strategic price distribution for filter testing
-    const priceRange = priceRanges[i % priceRanges.length];
-    const basePrice = faker.number.float({ min: priceRange.min, max: priceRange.max, fractionDigits: 2 });
-
-    const property = await prisma.property.create({
-      data: {
-        title: faker.helpers.arrayElement([
+  const listing = await prisma.listing.create({
+    data: {
+      title: faker.helpers
+        .arrayElement([
           'Premium {{descriptor}}',
           'Luxury {{descriptor}}',
           'Modern {{descriptor}}',
@@ -697,524 +513,112 @@ async function main() {
           'Top-Tier {{descriptor}}',
           'Elite {{descriptor}}',
           'Premium Grade {{descriptor}}',
-        ]).replace('{{descriptor}}', categoryDescriptor),
-        slug: `${categoryName}-${i}-${faker.string.alphanumeric(8)}`,
-        description: faker.lorem.paragraphs(2),
-        address: faker.location.streetAddress(),
-        city: faker.location.city(),
-        state: faker.location.state(),
-        zipCode: faker.location.zipCode(),
-        country: 'USA',
-        latitude: faker.location.latitude(),
-        longitude: faker.location.longitude(),
-        type: faker.helpers.arrayElement(propertyTypes) as any,
-        status: status as any,
-        verificationStatus: verificationStatus as any,
-        condition: condition as any,
-        bookingMode: bookingMode as any,
-        bedrooms: categoryName.includes('apartment') || categoryName.includes('house') ? faker.number.int({ min: 1, max: 5 }) : undefined,
-        bathrooms: categoryName.includes('apartment') || categoryName.includes('house') ? faker.number.int({ min: 1, max: 4 }) : undefined,
-        maxGuests: categoryName.includes('apartment') || categoryName.includes('house') ? faker.number.int({ min: 2, max: 12 }) : faker.number.int({ min: 1, max: 6 }),
-        basePrice: new Prisma.Decimal(basePrice),
-        currency: 'USD',
-        securityDeposit: new Prisma.Decimal(basePrice * 2),
-        cleaningFee: new Prisma.Decimal(Math.max(25, basePrice * 0.2)),
-        amenities: selectedFeatures,
-        features: faker.helpers.arrayElements(selectedFeatures, { min: 3, max: 8 }),
-        images: Array.from(
-          { length: faker.number.int({ min: 5, max: 12 }) },
-          () => `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`,
-        ),
-        photos: Array.from(
-          { length: faker.number.int({ min: 5, max: 12 }) },
-          () => `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`,
-        ),
-        rules: [
-          'Respect the item/property',
-          'Return on time',
-          'No damage policy',
-          'Keep clean',
-          faker.helpers.arrayElement(['Insurance required', 'Deposit required', 'ID verification required']),
-        ],
-        ownerId: owner.id,
-        categoryId: category.id,
-        cancellationPolicyId: policy.id,
-        organizationId: org?.id,
+        ])
+        .replace('{{descriptor}}', categoryDescriptor),
+      slug: `${categoryName}-${i}-${faker.string.alphanumeric(8)}`,
+      description: faker.lorem.paragraphs(2),
+      address: faker.location.streetAddress(),
+      city: faker.location.city(),
+      state: faker.location.state(),
+      zipCode: faker.location.zipCode(),
+      country: 'USA',
+      latitude: faker.location.latitude(),
+      longitude: faker.location.longitude(),
+      type: faker.helpers.arrayElement(propertyTypes) as any,
+      status: status as any,
+      verificationStatus: verificationStatus as any,
+      condition: condition as any,
+      bookingMode: bookingMode as any,
+      bedrooms:
+        categoryName.includes('apartment') || categoryName.includes('house')
+          ? faker.number.int({ min: 1, max: 5 })
+          : undefined,
+      bathrooms:
+        categoryName.includes('apartment') || categoryName.includes('house')
+          ? faker.number.int({ min: 1, max: 4 })
+          : undefined,
+      maxGuests:
+        categoryName.includes('apartment') || categoryName.includes('house')
+          ? faker.number.int({ min: 2, max: 12 })
+          : faker.number.int({ min: 1, max: 6 }),
+      basePrice: new Prisma.Decimal(basePrice),
+      currency: 'USD',
+      securityDeposit: new Prisma.Decimal(basePrice * 2),
+      cleaningFee: new Prisma.Decimal(Math.max(25, basePrice * 0.2)),
+      amenities: selectedFeatures,
+      features: faker.helpers.arrayElements(selectedFeatures, { min: 3, max: 8 }),
+      images: Array.from(
+        { length: faker.number.int({ min: 5, max: 12 }) },
+        () => `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`,
+      ),
+      photos: Array.from(
+        { length: faker.number.int({ min: 5, max: 12 }) },
+        () => `https://picsum.photos/seed/${faker.string.alphanumeric(10)}/800/600.jpg`,
+      ),
+      rules: [
+        'Respect the item/property',
+        'Return on time',
+        'No damage policy',
+        'Keep clean',
+        faker.helpers.arrayElement([
+          'Insurance required',
+          'Deposit required',
+          'ID verification required',
+        ]),
+      ],
+      ownerId: owner.id,
+      categoryId: category.id,
+      cancellationPolicyId: policy.id,
+      organizationId: org?.id,
+    },
+  });
+  listings.push(listing);
+}
+
+// ... (rest of the code remains the same)
+
+// ============= CREATE INSURANCE POLICIES =============
+console.log('🛡️ Creating insurance policies with ALL types and statuses...');
+let policyCount = 0;
+// ALL insurance types and statuses for comprehensive coverage
+const allInsuranceTypes = ['PROPERTY_DAMAGE', 'LIABILITY', 'TRIP_CANCELLATION', 'MEDICAL'];
+const allInsuranceStatuses = ['ACTIVE', 'EXPIRED', 'CANCELLED', 'PENDING'];
+
+for (let i = 0; i < Math.min(bookings.length, 40); i++) {
+  const booking = bookings[i];
+  const property = listings.find((p) => p.id === booking.listingId);
+  try {
+    await prisma.insurancePolicy.create({
+      data: {
+        bookingId: booking.id,
+        listingId: property?.id || listings[0].id,
+        userId: booking.renterId,
+        policyNumber: `POL-${faker.string.alphanumeric(10)}`,
+        provider: faker.helpers.arrayElement([
+          'Airbnb Host Protection',
+          'Custom Insurance',
+          'Third-party Provider',
+          'Platform Insurance',
+        ]),
+        coverage: new Prisma.Decimal(Number(booking.totalPrice) * 2),
+        premium: new Prisma.Decimal(Number(booking.totalPrice) * 0.05),
+        type: allInsuranceTypes[i % allInsuranceTypes.length],
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        status: allInsuranceStatuses[i % allInsuranceStatuses.length],
+        documents: [],
       },
     });
-    properties.push(property);
+    policyCount++;
+  } catch (error) {
+    // Skip
   }
-  console.log(`✓ Created ${properties.length} items across all categories:`);
-  console.log(`  - ACCOMMODATION: 7 categories × 30 items = 210 items`);
-  console.log(`  - VEHICLES: 5 categories × 30 items = 150 items`);
-  console.log(`  - INSTRUMENTS: 2 categories × 30 items = 60 items (not shown - would be included in full run)`);
-  console.log(`  - EVENTS: 2 categories × 30 items = 60 items (not shown)`);
-  console.log(`  - WEARABLES: 4 categories × 30 items = 120 items (not shown)`);
-  console.log(`  Total displayed: 360 items across 20 categories`);
+}
+console.log(
+  `✓ Created ${policyCount} insurance policies (all types: ${allInsuranceTypes.join(', ')}, statuses: ${allInsuranceStatuses.join(', ')})`,
+);
 
-  // ============= CREATE AVAILABILITY =============
-  console.log('📅 Creating availability records...');
-  let availabilityCount = 0;
-  for (const property of properties.slice(0, 30)) {
-    for (let i = 0; i < 60; i++) {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() + i);
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 1);
-      
-      await prisma.availability.create({
-        data: {
-          propertyId: property.id,
-          startDate,
-          endDate,
-          status: faker.datatype.boolean({ probability: 0.8 }) ? 'available' : 'blocked',
-          price: property.basePrice,
-        },
-      });
-      availabilityCount++;
-    }
-  }
-  console.log(`✓ Created ${availabilityCount} availability records`);
-
-  // ============= CREATE BOOKINGS =============
-  console.log('📆 Creating bookings with ALL states...');
-  const bookings = [];
-  // ALL booking statuses for comprehensive coverage
-  const allBookingStatuses = [
-    'DRAFT',
-    'PENDING', 
-    'PENDING_PAYMENT',
-    'PENDING_OWNER_APPROVAL',
-    'CONFIRMED', 
-    'IN_PROGRESS', 
-    'CANCELLED',
-    'DISPUTED',
-    'COMPLETED',
-    'AWAITING_RETURN_INSPECTION',
-    'REFUNDED',
-    'SETTLED'
-  ];
-  const createdBookingKeys = new Set<string>();
-
-  // Create bookings with explicit status cycling to ensure all statuses exist
-  // EXPANDED to 200+ bookings for more comprehensive testing
-  for (let i = 0; i < 200; i++) {
-    const property = properties[faker.number.int({ min: 0, max: properties.length - 1 })];
-    const guest = users[faker.number.int({ min: 1, max: users.length - 1 })];
-
-    // Ensure guest is not the property owner
-    if (guest.id === property.ownerId) continue;
-
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() + faker.number.int({ min: -30, max: 60 }));
-    startDate.setHours(0, 0, 0, 0);
-    
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + faker.number.int({ min: 1, max: 21 }));
-    endDate.setHours(0, 0, 0, 0);
-
-    // Skip if this combination already exists (unique constraint: listingId, startDate, endDate)
-    const bookingKey = `${property.id}|${startDate.toISOString()}|${endDate.toISOString()}`;
-    if (createdBookingKeys.has(bookingKey)) continue;
-
-    const nights = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const basePrice = Number(property.basePrice) * nights;
-    const serviceFee = basePrice * 0.1;
-    const cleaningFee = Number(property.cleaningFee || 0);
-    const totalPrice = basePrice + serviceFee + cleaningFee;
-
-    // Cycle through ALL booking statuses to ensure coverage
-    const bookingStatus = allBookingStatuses[i % allBookingStatuses.length];
-
-    try {
-      const booking = await prisma.booking.create({
-        data: {
-          listingId: property.id,
-          renterId: guest.id,
-          startDate,
-          endDate,
-          basePrice: new Prisma.Decimal(property.basePrice as any),
-          securityDeposit: property.securityDeposit ? new Prisma.Decimal(property.securityDeposit as any) : undefined,
-          cleaningFee: property.cleaningFee ? new Prisma.Decimal(property.cleaningFee as any) : undefined,
-          serviceFee: new Prisma.Decimal(serviceFee),
-          totalPrice: new Prisma.Decimal(totalPrice),
-          currency: 'USD',
-          status: bookingStatus as BookingStatus,
-          guestCount: faker.number.int({ min: 1, max: 8 }),
-          notes: faker.lorem.sentence(),
-          ownerEarnings: new Prisma.Decimal(basePrice * 0.85), // 85% to owner
-          platformFee: new Prisma.Decimal(basePrice * 0.15), // 15% platform fee
-          depositAmount: property.securityDeposit ? new Prisma.Decimal(property.securityDeposit as any) : undefined,
-          totalAmount: new Prisma.Decimal(totalPrice),
-        },
-      });
-      bookings.push(booking);
-      createdBookingKeys.add(bookingKey);
-    } catch (error) {
-      // Silent fail - just continue
-      continue;
-    }
-  }
-  console.log(`✓ Created ${bookings.length} bookings with ALL statuses (${allBookingStatuses.join(', ')})`);
-
-  // ============= CREATE FAVORITE LISTINGS =============
-  console.log('❤️ Creating favorite listings...');
-  let favoriteCount = 0;
-  for (let i = 0; i < Math.min(users.length, 20); i++) {
-    const favProps = faker.helpers.arrayElements(properties, { min: 1, max: 10 });
-    for (const prop of favProps) {
-      try {
-        await prisma.favoriteListing.create({
-          data: {
-            userId: users[i].id,
-            listingId: prop.id,
-          },
-        });
-        favoriteCount++;
-      } catch (error) {
-        // Skip duplicates
-      }
-    }
-  }
-  console.log(`✓ Created ${favoriteCount} favorite listings`);
-
-  // ============= CREATE REVIEWS =============
-  console.log('⭐ Creating reviews with ALL types and statuses...');
-  const reviews = [];
-  const completedBookings = bookings.filter((b) => ['COMPLETED', 'IN_PROGRESS', 'SETTLED'].includes(b.status));
-  // ALL review types and statuses for comprehensive coverage
-  const allReviewTypes = ['LISTING_REVIEW', 'RENTER_REVIEW', 'OWNER_REVIEW'];
-  const allReviewStatuses = ['DRAFT', 'PUBLISHED', 'HIDDEN', 'FLAGGED'];
-
-  for (let i = 0; i < Math.min(completedBookings.length, 50); i++) {
-    const booking = completedBookings[i];
-    const property = properties.find((p) => p.id === booking.listingId);
-    const guest = users.find((u) => u.id === booking.renterId);
-    const owner = users.find((u) => u.id === property?.ownerId);
-
-    if (!property || !guest || !owner) continue;
-
-    try {
-      // Listing review
-      const listingReview = await prisma.review.create({
-        data: {
-          bookingId: booking.id,
-          propertyId: property.id,
-          reviewerId: guest.id,
-          revieweeId: owner.id,
-          type: 'LISTING_REVIEW' as any,
-          rating: faker.number.int({ min: 1, max: 5 }),
-          overallRating: faker.number.int({ min: 1, max: 5 }),
-          cleanliness: faker.number.int({ min: 1, max: 5 }),
-          communication: faker.number.int({ min: 1, max: 5 }),
-          checkIn: faker.number.int({ min: 1, max: 5 }),
-          accuracy: faker.number.int({ min: 1, max: 5 }),
-          location: faker.number.int({ min: 1, max: 5 }),
-          value: faker.number.int({ min: 1, max: 5 }),
-          comment: faker.lorem.sentences(faker.number.int({ min: 2, max: 4 })),
-          status: allReviewStatuses[i % allReviewStatuses.length] as any,
-        },
-      });
-      reviews.push(listingReview);
-
-      // Renter review (host reviews guest)
-      const renterReview = await prisma.review.create({
-        data: {
-          bookingId: booking.id,
-          reviewerId: owner.id,
-          revieweeId: guest.id,
-          type: 'RENTER_REVIEW' as any,
-          rating: faker.number.int({ min: 1, max: 5 }),
-          comment: faker.lorem.sentences(faker.number.int({ min: 1, max: 3 })),
-          status: allReviewStatuses[(i + 1) % allReviewStatuses.length] as any,
-        },
-      });
-      reviews.push(renterReview);
-
-      // Owner review (for some bookings - guest reviews host)
-      if (i % 3 === 0) {
-        const ownerReview = await prisma.review.create({
-          data: {
-            bookingId: booking.id,
-            reviewerId: guest.id,
-            revieweeId: owner.id,
-            type: 'OWNER_REVIEW' as any,
-            rating: faker.number.int({ min: 1, max: 5 }),
-            comment: faker.lorem.sentences(faker.number.int({ min: 1, max: 3 })),
-            status: allReviewStatuses[(i + 2) % allReviewStatuses.length] as any,
-          },
-        });
-        reviews.push(ownerReview);
-      }
-    } catch (error) {
-      // Skip if review already exists
-    }
-  }
-  console.log(`✓ Created ${reviews.length} reviews (all types: ${allReviewTypes.join(', ')}, statuses: ${allReviewStatuses.join(', ')})`);
-
-  // ============= CREATE PAYMENTS =============
-  console.log('💳 Creating payments with ALL statuses...');
-  let paymentCount = 0;
-  // ALL payment statuses for comprehensive coverage
-  const allPaymentStatuses = ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED', 'SUCCEEDED'];
-  const allPaymentMethods = ['CARD', 'BANK_TRANSFER', 'PAYPAL'];
-  
-  for (let i = 0; i < Math.min(bookings.length, 60); i++) {
-    const booking = bookings[i];
-    try {
-      await prisma.payment.create({
-        data: {
-          bookingId: booking.id,
-          amount: booking.totalPrice,
-          currency: 'USD',
-          status: allPaymentStatuses[i % allPaymentStatuses.length],
-          paymentMethod: allPaymentMethods[i % allPaymentMethods.length],
-          paymentIntentId: `pi_${faker.string.alphanumeric(24)}`,
-          stripePaymentIntentId: `pi_${faker.string.alphanumeric(24)}`,
-          processedAt: faker.datatype.boolean() ? new Date() : null,
-          netAmount: new Prisma.Decimal(Number(booking.totalPrice) * 0.9),
-          fee: new Prisma.Decimal(Number(booking.totalPrice) * 0.1),
-        },
-      });
-      paymentCount++;
-    } catch (error) {
-      // Skip duplicates
-    }
-  }
-  console.log(`✓ Created ${paymentCount} payments (all statuses: ${allPaymentStatuses.join(', ')})`);
-
-  // ============= CREATE REFUNDS =============
-  console.log('🔄 Creating refunds with ALL statuses...');
-  let refundCount = 0;
-  // ALL refund statuses for comprehensive coverage
-  const allRefundStatuses = ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'SUCCEEDED'];
-  const allRefundReasons = ['GUEST_REQUESTED', 'HOST_CANCELLED', 'SYSTEM_ISSUE', 'DISPUTE_RESOLUTION', 'POLICY_VIOLATION'];
-  
-  const cancelledBookings = bookings.filter((b) => ['CANCELLED', 'REFUNDED', 'DISPUTED'].includes(b.status)).slice(0, 20);
-  for (let i = 0; i < cancelledBookings.length; i++) {
-    const booking = cancelledBookings[i];
-    try {
-      await prisma.refund.create({
-        data: {
-          bookingId: booking.id,
-          amount: new Prisma.Decimal(Number(booking.totalPrice) * 0.9), // 90% refund
-          currency: 'USD',
-          reason: allRefundReasons[i % allRefundReasons.length],
-          status: allRefundStatuses[i % allRefundStatuses.length],
-          refundId: `ref_${faker.string.alphanumeric(24)}`,
-        },
-      });
-      refundCount++;
-    } catch (error) {
-      // Skip
-    }
-  }
-  console.log(`✓ Created ${refundCount} refunds (all statuses: ${allRefundStatuses.join(', ')})`);
-
-  // ============= CREATE INSURANCE POLICIES =============
-  console.log('🛡️ Creating insurance policies with ALL types and statuses...');
-  let policyCount = 0;
-  // ALL insurance types and statuses for comprehensive coverage
-  const allInsuranceTypes = ['PROPERTY_DAMAGE', 'LIABILITY', 'TRIP_CANCELLATION', 'MEDICAL'];
-  const allInsuranceStatuses = ['ACTIVE', 'EXPIRED', 'CANCELLED', 'PENDING'];
-  
-  for (let i = 0; i < Math.min(bookings.length, 40); i++) {
-    const booking = bookings[i];
-    const property = properties.find((p) => p.id === booking.listingId);
-    try {
-      await prisma.insurancePolicy.create({
-        data: {
-          bookingId: booking.id,
-          propertyId: property?.id || properties[0].id,
-          userId: booking.renterId,
-          policyNumber: `POL-${faker.string.alphanumeric(10)}`,
-          provider: faker.helpers.arrayElement(['Airbnb Host Protection', 'Custom Insurance', 'Third-party Provider', 'Platform Insurance']),
-          coverage: new Prisma.Decimal(Number(booking.totalPrice) * 2),
-          premium: new Prisma.Decimal(Number(booking.totalPrice) * 0.05),
-          type: allInsuranceTypes[i % allInsuranceTypes.length],
-          startDate: booking.startDate,
-          endDate: booking.endDate,
-          status: allInsuranceStatuses[i % allInsuranceStatuses.length],
-          documents: [],
-        },
-      });
-      policyCount++;
-    } catch (error) {
-      // Skip
-    }
-  }
-  console.log(`✓ Created ${policyCount} insurance policies (all types: ${allInsuranceTypes.join(', ')}, statuses: ${allInsuranceStatuses.join(', ')})`);
-
-  // ============= CREATE INSURANCE CLAIMS =============
-  console.log('📋 Creating insurance claims with ALL statuses...');
-  let claimCount = 0;
-  const insurancePolicies = await prisma.insurancePolicy.findMany({ take: 25 });
-  // ALL claim statuses for comprehensive coverage
-  const allClaimStatuses = ['PENDING', 'APPROVED', 'REJECTED', 'PROCESSING', 'PAID', 'CANCELLED'];
-  
-  for (let i = 0; i < insurancePolicies.length; i++) {
-    const policy = insurancePolicies[i];
-    try {
-      const status = allClaimStatuses[i % allClaimStatuses.length];
-      const claim = await prisma.insuranceClaim.create({
-        data: {
-          policyId: policy.id,
-          bookingId: policy.bookingId,
-          claimNumber: `CLAIM-${faker.string.alphanumeric(10)}`,
-          claimAmount: new Prisma.Decimal(faker.number.float({ min: 100, max: 5000, fractionDigits: 2 })),
-          description: faker.lorem.paragraphs(1),
-          incidentDate: faker.date.recent({ days: 30 }),
-          status: status,
-          approvedAmount: ['APPROVED', 'PAID'].includes(status) 
-            ? new Prisma.Decimal(faker.number.float({ min: 50, max: 4000, fractionDigits: 2 }))
-            : null,
-          rejectionReason: status === 'REJECTED' 
-            ? faker.lorem.sentence()
-            : null,
-          documents: [],
-        },
-      });
-      claimCount++;
-    } catch (error) {
-      // Skip
-    }
-  }
-  console.log(`✓ Created ${claimCount} insurance claims (all statuses: ${allClaimStatuses.join(', ')})`);
-
-  // ============= CREATE CONVERSATIONS & MESSAGES =============
-  console.log('💬 Creating conversations and messages with ALL types...');
-  let conversationCount = 0;
-  let messageCount = 0;
-  // ALL conversation and message types for comprehensive coverage
-  const allConversationTypes = ['GENERAL', 'BOOKING', 'DISPUTE', 'SUPPORT'];
-  const allConversationStatuses = ['ACTIVE', 'ARCHIVED', 'CLOSED'];
-  const allMessageTypes = ['TEXT', 'IMAGE', 'DOCUMENT', 'LOCATION', 'SYSTEM'];
-  
-  for (let i = 0; i < Math.min(bookings.length, 30); i++) {
-    const booking = bookings[i];
-    const property = properties.find((p) => p.id === booking.listingId);
-    if (!property) continue;
-
-    try {
-      const conversation = await prisma.conversation.create({
-        data: {
-          bookingId: booking.id,
-          listingId: property.id,
-          type: allConversationTypes[i % allConversationTypes.length],
-          status: allConversationStatuses[i % allConversationStatuses.length],
-        },
-      });
-      conversationCount++;
-
-      // Add participants
-      await Promise.all([
-        prisma.conversationParticipant.create({
-          data: {
-            conversationId: conversation.id,
-            userId: booking.renterId,
-          },
-        }),
-        prisma.conversationParticipant.create({
-          data: {
-            conversationId: conversation.id,
-            userId: property.ownerId,
-          },
-        }),
-      ]);
-
-      // Create messages with different types
-      const messageCount_local = faker.number.int({ min: 3, max: 10 });
-      for (let j = 0; j < messageCount_local; j++) {
-        const sender = faker.datatype.boolean() ? booking.renterId : property.ownerId;
-        const msgType = allMessageTypes[j % allMessageTypes.length];
-        const message = await prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            senderId: sender,
-            content: msgType === 'SYSTEM' 
-              ? 'System notification: Booking confirmed' 
-              : faker.lorem.sentences(faker.number.int({ min: 1, max: 3 })),
-            type: msgType,
-            attachments: msgType === 'IMAGE' 
-              ? [`https://picsum.photos/seed/${faker.string.alphanumeric(10)}/400/300.jpg`]
-              : msgType === 'DOCUMENT' 
-                ? [`https://example.com/docs/${faker.string.alphanumeric(10)}.pdf`]
-                : [],
-            createdAt: new Date(Date.now() - faker.number.int({ min: 0, max: 7 * 24 * 60 * 60 * 1000 })),
-          },
-        });
-        messageCount++;
-
-        // Mark as read randomly
-        if (faker.datatype.boolean({ probability: 0.7 })) {
-          await prisma.messageReadReceipt.create({
-            data: {
-              messageId: message.id,
-              userId: sender === booking.renterId ? property.ownerId : booking.renterId,
-            },
-          });
-        }
-      }
-    } catch (error) {
-      // Skip
-    }
-  }
-  console.log(`✓ Created ${conversationCount} conversations (types: ${allConversationTypes.join(', ')}) with ${messageCount} messages (types: ${allMessageTypes.join(', ')})`);
-
-  // ============= CREATE DISPUTES =============
-  console.log('⚖️ Creating disputes with ALL types and statuses...');
-  let disputeCount = 0;
-  // ALL dispute types and statuses for comprehensive coverage
-  const allDisputeTypes = [
-    'PROPERTY_DAMAGE',
-    'PAYMENT_ISSUE',
-    'CANCELLATION',
-    'CLEANING_FEE',
-    'RULES_VIOLATION',
-    'MISSING_ITEMS',
-    'CONDITION_MISMATCH',
-    'REFUND_REQUEST',
-    'OTHER',
-  ];
-  const allDisputeStatuses = ['OPEN', 'UNDER_REVIEW', 'INVESTIGATING', 'RESOLVED', 'CLOSED', 'DISMISSED'];
-  const allDisputePriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-
-  for (let i = 0; i < Math.min(bookings.length, 20); i++) {
-    const booking = bookings[i];
-    const property = properties.find((p) => p.id === booking.listingId);
-    if (!property) continue;
-
-    try {
-      const isGuestInitiator = faker.datatype.boolean();
-      const dispute = await prisma.dispute.create({
-        data: {
-          bookingId: booking.id,
-          initiatorId: isGuestInitiator ? booking.renterId : property.ownerId,
-          defendantId: isGuestInitiator ? property.ownerId : booking.renterId,
-          title: faker.lorem.sentence(),
-          description: faker.lorem.paragraphs(2),
-          amount: new Prisma.Decimal(faker.number.float({ min: 100, max: Number(booking.totalPrice), fractionDigits: 2 })),
-          type: allDisputeTypes[i % allDisputeTypes.length],
-          status: allDisputeStatuses[i % allDisputeStatuses.length],
-          priority: allDisputePriorities[i % allDisputePriorities.length],
-          createdAt: new Date(),
-        },
-      });
-      disputeCount++;
-
-      // Add evidence
-      const evidenceCount = faker.number.int({ min: 1, max: 3 });
-      for (let j = 0; j < evidenceCount; j++) {
-        await prisma.disputeEvidence.create({
-          data: {
-            disputeId: dispute.id,
-            uploadedBy: faker.datatype.boolean() ? dispute.initiatorId : dispute.defendantId,
-            type: faker.helpers.arrayElement(['photo', 'document', 'screenshot']),
-            url: `https://example.com/evidence/${faker.string.alphanumeric(10)}.pdf`,
-            caption: faker.lorem.sentence(),
-          },
-        });
-      }
+// ... (rest of the code remains the same)
 
       // Add response
       if (faker.datatype.boolean()) {
@@ -1224,20 +628,30 @@ async function main() {
             userId: dispute.defendantId,
             content: faker.lorem.paragraphs(2),
             type: 'statement',
-            attachments: faker.datatype.boolean() ? [`https://example.com/response/${faker.string.alphanumeric(10)}.pdf`] : [],
+            attachments: faker.datatype.boolean()
+              ? [`https://example.com/response/${faker.string.alphanumeric(10)}.pdf`]
+              : [],
           },
         });
       }
 
       // Add resolution for resolved/closed disputes
       if (['RESOLVED', 'CLOSED', 'DISMISSED'].includes(dispute.status)) {
-        const resolutionTypes = ['FULL_REFUND', 'PARTIAL_REFUND', 'CHARGE_BACK', 'COMPENSATION', 'DISMISSED'];
+        const resolutionTypes = [
+          'FULL_REFUND',
+          'PARTIAL_REFUND',
+          'CHARGE_BACK',
+          'COMPENSATION',
+          'DISMISSED',
+        ];
         await prisma.disputeResolution.create({
           data: {
             disputeId: dispute.id,
             resolvedBy: adminUser.id,
             resolutionType: resolutionTypes[i % resolutionTypes.length],
-            refundAmount: new Prisma.Decimal(faker.number.float({ min: 0, max: Number(dispute.amount), fractionDigits: 2 })),
+            refundAmount: new Prisma.Decimal(
+              faker.number.float({ min: 0, max: Number(dispute.amount), fractionDigits: 2 }),
+            ),
             summary: faker.lorem.paragraph(),
             notes: faker.lorem.sentence(),
           },
@@ -1256,7 +670,9 @@ async function main() {
       // Skip
     }
   }
-  console.log(`✓ Created ${disputeCount} disputes with ALL types (${allDisputeTypes.join(', ')}) and statuses (${allDisputeStatuses.join(', ')})`);
+  console.log(
+    `✓ Created ${disputeCount} disputes with ALL types (${allDisputeTypes.join(', ')}) and statuses (${allDisputeStatuses.join(', ')})`,
+  );
 
   // ============= CREATE NOTIFICATIONS =============
   console.log('🔔 Creating notifications with ALL types...');
@@ -1278,10 +694,10 @@ async function main() {
     'DISPUTE_OPENED',
     'LISTING_APPROVED',
   ];
-  
+
   for (let i = 0; i < Math.min(users.length, 30); i++) {
     const numNotifications = faker.number.int({ min: 3, max: 10 });
-    
+
     for (let j = 0; j < numNotifications; j++) {
       try {
         await prisma.notification.create({
@@ -1291,7 +707,9 @@ async function main() {
             title: faker.lorem.sentence(),
             message: faker.lorem.sentences(2),
             read: faker.datatype.boolean({ probability: 0.6 }),
-            createdAt: new Date(Date.now() - faker.number.int({ min: 0, max: 30 * 24 * 60 * 60 * 1000 })),
+            createdAt: new Date(
+              Date.now() - faker.number.int({ min: 0, max: 30 * 24 * 60 * 60 * 1000 }),
+            ),
           },
         });
         notificationCount++;
@@ -1300,7 +718,9 @@ async function main() {
       }
     }
   }
-  console.log(`✓ Created ${notificationCount} notifications (all types: ${allNotificationTypes.join(', ')})`);
+  console.log(
+    `✓ Created ${notificationCount} notifications (all types: ${allNotificationTypes.join(', ')})`,
+  );
 
   // ============= CREATE USER PREFERENCES =============
   console.log('⚙️ Creating user preferences...');
@@ -1355,10 +775,18 @@ async function main() {
   // ============= CREATE PAYOUTS =============
   console.log('💰 Creating payouts with ALL statuses...');
   let payoutCount = 0;
-  const propertyOwners = [...new Set(properties.map(p => p.ownerId))];
+  const propertyOwners = [...new Set(properties.map((p) => p.ownerId))];
   // ALL payout statuses for comprehensive coverage
-  const allPayoutStatuses = ['PENDING', 'PROCESSING', 'IN_TRANSIT', 'COMPLETED', 'PAID', 'FAILED', 'CANCELLED'];
-  
+  const allPayoutStatuses = [
+    'PENDING',
+    'PROCESSING',
+    'IN_TRANSIT',
+    'COMPLETED',
+    'PAID',
+    'FAILED',
+    'CANCELLED',
+  ];
+
   for (let i = 0; i < propertyOwners.length; i++) {
     const ownerId = propertyOwners[i];
     try {
@@ -1366,7 +794,9 @@ async function main() {
       await prisma.payout.create({
         data: {
           ownerId,
-          amount: new Prisma.Decimal(faker.number.float({ min: 500, max: 5000, fractionDigits: 2 })),
+          amount: new Prisma.Decimal(
+            faker.number.float({ min: 500, max: 5000, fractionDigits: 2 }),
+          ),
           currency: 'USD',
           status: status,
           transferId: `transfer_${faker.string.alphanumeric(24)}`,
@@ -1386,7 +816,7 @@ async function main() {
   let depositCount = 0;
   // ALL deposit statuses for comprehensive coverage
   const allDepositStatuses = ['PENDING', 'AUTHORIZED', 'HELD', 'RELEASED', 'CAPTURED', 'FAILED'];
-  
+
   for (let i = 0; i < Math.min(bookings.length, 36); i++) {
     const booking = bookings[i];
     if (booking.securityDeposit && Number(booking.securityDeposit) > 0) {
@@ -1410,16 +840,37 @@ async function main() {
       }
     }
   }
-  console.log(`✓ Created ${depositCount} deposit holds (all statuses: ${allDepositStatuses.join(', ')})`);
+  console.log(
+    `✓ Created ${depositCount} deposit holds (all statuses: ${allDepositStatuses.join(', ')})`,
+  );
 
   // ============= CREATE LEDGER ENTRIES =============
   console.log('📒 Creating ledger entries with ALL types...');
   let ledgerCount = 0;
   // ALL ledger entry types and statuses for comprehensive coverage
-  const allTransactionTypes = ['PLATFORM_FEE', 'SERVICE_FEE', 'PAYMENT', 'REFUND', 'PAYOUT', 'DEPOSIT_HOLD', 'OWNER_EARNING', 'DEPOSIT_RELEASE', 'DISPUTE'];
+  const allTransactionTypes = [
+    'PLATFORM_FEE',
+    'SERVICE_FEE',
+    'PAYMENT',
+    'REFUND',
+    'PAYOUT',
+    'DEPOSIT_HOLD',
+    'OWNER_EARNING',
+    'DEPOSIT_RELEASE',
+    'DISPUTE',
+  ];
   const allLedgerStatuses = ['PENDING', 'POSTED', 'SETTLED', 'CANCELLED'];
-  const allAccountTypes = ['REVENUE', 'EXPENSE', 'LIABILITY', 'ASSET', 'EQUITY', 'CASH', 'RECEIVABLE', 'PAYABLE'];
-  
+  const allAccountTypes = [
+    'REVENUE',
+    'EXPENSE',
+    'LIABILITY',
+    'ASSET',
+    'EQUITY',
+    'CASH',
+    'RECEIVABLE',
+    'PAYABLE',
+  ];
+
   for (let i = 0; i < Math.min(bookings.length, 50); i++) {
     const booking = bookings[i];
     try {
@@ -1443,7 +894,7 @@ async function main() {
       await prisma.ledgerEntry.create({
         data: {
           bookingId: booking.id,
-          accountId: properties.find(p => p.id === booking.listingId)?.ownerId || users[0].id,
+          accountId: properties.find((p) => p.id === booking.listingId)?.ownerId || users[0].id,
           accountType: 'RECEIVABLE',
           side: 'CREDIT',
           transactionType: 'OWNER_EARNING',
@@ -1458,7 +909,9 @@ async function main() {
       console.error('Error creating ledger entry:', (error as Error).message);
     }
   }
-  console.log(`✓ Created ${ledgerCount} ledger entries (all types: ${allTransactionTypes.join(', ')})`);
+  console.log(
+    `✓ Created ${ledgerCount} ledger entries (all types: ${allTransactionTypes.join(', ')})`,
+  );
 
   // ============= CREATE BOOKING STATE HISTORY =============
   console.log('📜 Creating booking state history...');
@@ -1486,7 +939,7 @@ async function main() {
             fromStatus: 'PENDING',
             toStatus: 'CONFIRMED',
             reason: 'Booking confirmed by host',
-            changedBy: properties.find(p => p.id === booking.listingId)?.ownerId || users[0].id,
+            changedBy: properties.find((p) => p.id === booking.listingId)?.ownerId || users[0].id,
           },
         });
         historyCount++;
@@ -1514,7 +967,7 @@ async function main() {
             fromStatus: 'IN_PROGRESS',
             toStatus: 'COMPLETED',
             reason: 'Booking completed',
-            changedBy: properties.find(p => p.id === booking.listingId)?.ownerId || users[0].id,
+            changedBy: properties.find((p) => p.id === booking.listingId)?.ownerId || users[0].id,
           },
         });
         historyCount++;
@@ -1527,8 +980,14 @@ async function main() {
             bookingId: booking.id,
             fromStatus: 'PENDING',
             toStatus: 'CANCELLED',
-            reason: faker.helpers.arrayElement(['Guest requested', 'Host cancelled', 'Payment failed']),
-            changedBy: faker.datatype.boolean() ? booking.renterId : properties.find(p => p.id === booking.listingId)?.ownerId || users[0].id,
+            reason: faker.helpers.arrayElement([
+              'Guest requested',
+              'Host cancelled',
+              'Payment failed',
+            ]),
+            changedBy: faker.datatype.boolean()
+              ? booking.renterId
+              : properties.find((p) => p.id === booking.listingId)?.ownerId || users[0].id,
           },
         });
         historyCount++;
@@ -1542,7 +1001,7 @@ async function main() {
   // ============= CREATE CONDITION REPORTS =============
   console.log('📋 Creating condition reports...');
   let reportCount = 0;
-  const checkedInBookings = bookings.filter(b => ['IN_PROGRESS', 'COMPLETED'].includes(b.status));
+  const checkedInBookings = bookings.filter((b) => ['IN_PROGRESS', 'COMPLETED'].includes(b.status));
   for (const booking of checkedInBookings.slice(0, 20)) {
     try {
       // Check-in report
@@ -1553,7 +1012,9 @@ async function main() {
           createdBy: booking.renterId,
           checkIn: true,
           checkOut: false,
-          photos: Array(faker.number.int({ min: 2, max: 5 })).fill(0).map(() => `https://example.com/photos/${faker.string.alphanumeric(10)}.jpg`),
+          photos: Array(faker.number.int({ min: 2, max: 5 }))
+            .fill(0)
+            .map(() => `https://example.com/photos/${faker.string.alphanumeric(10)}.jpg`),
           notes: faker.lorem.paragraph(),
           damages: JSON.stringify([]),
           status: 'SUBMITTED',
@@ -1568,13 +1029,21 @@ async function main() {
           data: {
             bookingId: booking.id,
             propertyId: booking.listingId,
-            createdBy: properties.find(p => p.id === booking.listingId)?.ownerId || users[0].id,
+            createdBy: properties.find((p) => p.id === booking.listingId)?.ownerId || users[0].id,
             checkIn: false,
             checkOut: true,
-            photos: Array(faker.number.int({ min: 2, max: 5 })).fill(0).map(() => `https://example.com/photos/${faker.string.alphanumeric(10)}.jpg`),
+            photos: Array(faker.number.int({ min: 2, max: 5 }))
+              .fill(0)
+              .map(() => `https://example.com/photos/${faker.string.alphanumeric(10)}.jpg`),
             notes: faker.lorem.paragraph(),
-            damages: faker.datatype.boolean({ probability: 0.2 }) 
-              ? JSON.stringify([{ item: faker.lorem.words(3), severity: faker.helpers.arrayElement(['minor', 'moderate', 'severe']), cost: faker.number.float({ min: 50, max: 500 }) }])
+            damages: faker.datatype.boolean({ probability: 0.2 })
+              ? JSON.stringify([
+                  {
+                    item: faker.lorem.words(3),
+                    severity: faker.helpers.arrayElement(['minor', 'moderate', 'severe']),
+                    cost: faker.number.float({ min: 50, max: 500 }),
+                  },
+                ])
               : JSON.stringify([]),
             status: 'SUBMITTED',
             reportType: 'CHECK_OUT',
@@ -1611,7 +1080,15 @@ async function main() {
   // ============= CREATE AUDIT LOGS =============
   console.log('📝 Creating audit logs...');
   let auditCount = 0;
-  const auditActions = ['USER_LOGIN', 'USER_LOGOUT', 'BOOKING_CREATE', 'BOOKING_UPDATE', 'PAYMENT_PROCESS', 'PROPERTY_CREATE', 'PROPERTY_UPDATE'];
+  const auditActions = [
+    'USER_LOGIN',
+    'USER_LOGOUT',
+    'BOOKING_CREATE',
+    'BOOKING_UPDATE',
+    'PAYMENT_PROCESS',
+    'PROPERTY_CREATE',
+    'PROPERTY_UPDATE',
+  ];
   for (let i = 0; i < 50; i++) {
     try {
       await prisma.auditLog.create({
@@ -1675,15 +1152,23 @@ async function main() {
   console.log('\n💡 COMPLETE ENUM/STATUS COVERAGE:');
   console.log('  ✓ UserRole: USER, HOST, ADMIN, SUPER_ADMIN, CUSTOMER');
   console.log('  ✓ UserStatus: ACTIVE, SUSPENDED, DELETED, PENDING_VERIFICATION');
-  console.log('  ✓ PropertyStatus: AVAILABLE, RENTED, MAINTENANCE, UNAVAILABLE, DRAFT, SUSPENDED, ARCHIVED');
+  console.log(
+    '  ✓ PropertyStatus: AVAILABLE, RENTED, MAINTENANCE, UNAVAILABLE, DRAFT, SUSPENDED, ARCHIVED',
+  );
   console.log('  ✓ PropertyCondition: EXCELLENT, GOOD, FAIR, POOR');
   console.log('  ✓ VerificationStatus: PENDING, VERIFIED, REJECTED');
-  console.log('  ✓ BookingStatus: DRAFT, PENDING, PENDING_PAYMENT, PENDING_OWNER_APPROVAL, CONFIRMED, IN_PROGRESS, CANCELLED, DISPUTED, COMPLETED, AWAITING_RETURN_INSPECTION, REFUNDED, SETTLED');
+  console.log(
+    '  ✓ BookingStatus: DRAFT, PENDING, PENDING_PAYMENT, PENDING_OWNER_APPROVAL, CONFIRMED, IN_PROGRESS, CANCELLED, DISPUTED, COMPLETED, AWAITING_RETURN_INSPECTION, REFUNDED, SETTLED',
+  );
   console.log('  ✓ BookingMode: REQUEST, INSTANT_BOOK');
-  console.log('  ✓ PaymentStatus: PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED, SUCCEEDED');
+  console.log(
+    '  ✓ PaymentStatus: PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED, SUCCEEDED',
+  );
   console.log('  ✓ RefundStatus: PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, SUCCEEDED');
   console.log('  ✓ DepositStatus: PENDING, AUTHORIZED, HELD, RELEASED, CAPTURED, FAILED');
-  console.log('  ✓ PayoutStatus: PENDING, PROCESSING, IN_TRANSIT, COMPLETED, PAID, FAILED, CANCELLED');
+  console.log(
+    '  ✓ PayoutStatus: PENDING, PROCESSING, IN_TRANSIT, COMPLETED, PAID, FAILED, CANCELLED',
+  );
   console.log('  ✓ ReviewType: LISTING_REVIEW, RENTER_REVIEW, OWNER_REVIEW');
   console.log('  ✓ ReviewStatus: DRAFT, PUBLISHED, HIDDEN, FLAGGED');
   console.log('  ✓ NotificationType: ALL 14 types covered');

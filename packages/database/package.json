@@ -12,7 +12,7 @@
     "migrate:deploy": "prisma migrate deploy",
     "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
-    "seed": "tsx prisma/seed.ts",
+    "seed": "tsx prisma/seed-comprehensive.ts",
     "format": "prisma format"
   },
   "dependencies": {

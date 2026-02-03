@@ -17,9 +17,12 @@ import { getUser, getSession } from "~/utils/auth";
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OfflineBanner, RouteErrorBoundary } from "~/components/ui";
+import { ToastManager } from "~/components/ui/toast-manager";
+import { SkipLink } from "~/components/accessibility/SkipLink";
 
 import type { LinksFunction } from "react-router";
 import stylesheet from "./tailwind.css?url";
+import mapStyles from "./styles/map.css?url";
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -43,6 +46,7 @@ export const links: LinksFunction = () => [
     href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
   },
   { rel: "stylesheet", href: stylesheet },
+  { rel: "stylesheet", href: mapStyles },
 ];
 
 export async function clientLoader({ request }: { request: Request }) {
@@ -155,8 +159,12 @@ function RootContent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <SkipLink />
       <OfflineBanner />
-      <Outlet />
+      <ToastManager />
+      <div id="main-content" tabIndex={-1}>
+        <Outlet />
+      </div>
     </QueryClientProvider>
   );
 }

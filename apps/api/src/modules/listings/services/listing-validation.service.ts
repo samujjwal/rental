@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
-import { Listing as Property, toNumber } from '@rental-portal/database';
+import { Listing, toNumber } from '@rental-portal/database';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -41,7 +41,7 @@ export class PropertyValidationService {
     return this.templateService.validateData(category.slug, data);
   }
 
-  validatePropertyCompleteness(listing: Property): ValidationResult {
+  validatePropertyCompleteness(listing: Listing): ValidationResult {
     const errors: string[] = [];
 
     // Required basic fields
@@ -74,13 +74,13 @@ export class PropertyValidationService {
     };
   }
 
-  // Skip pricing validation - fields don't exist in Property schema
-  validatePricingConfiguration(listing: Partial<Property>): ValidationResult {
+  // Skip pricing validation - fields don't exist in Listing schema
+  validatePricingConfiguration(listing: Partial<Listing>): ValidationResult {
     return { isValid: true, errors: [] };
   }
 
-  // Skip booking validation - fields don't exist in Property schema
-  validateBookingConfiguration(listing: Partial<Property>): ValidationResult {
+  // Skip booking validation - fields don't exist in Listing schema
+  validateBookingConfiguration(listing: Partial<Listing>): ValidationResult {
     return { isValid: true, errors: [] };
   }
 

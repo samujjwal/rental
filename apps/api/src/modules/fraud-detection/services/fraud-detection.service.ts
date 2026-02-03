@@ -35,31 +35,31 @@ export class FraudDetectionService {
   ) {}
 
   async getHighRiskUsers(limit = 20): Promise<any[]> {
-     // Find users with potential risk factors
-     const users = await this.prisma.user.findMany({
-        where: {
-           OR: [
-              { disputesDefended: { some: {} } },
-              { averageRating: { lt: 3.5, not: 0 } },
-              { emailVerified: false }
-           ]
+    // Find users with potential risk factors
+    const users = await this.prisma.user.findMany({
+      where: {
+        OR: [
+          { disputesDefended: { some: {} } },
+          { averageRating: { lt: 3.5, not: 0 } },
+          { emailVerified: false },
+        ],
+      },
+      take: limit * 2, // Fetch more to filter down
+      include: {
+        _count: {
+          select: { disputesDefended: true, bookings: true },
         },
-        take: limit * 2, // Fetch more to filter down
-        include: {
-           _count: {
-              select: { disputesDefended: true, bookings: true }
-           }
-        }
-     });
+      },
+    });
 
-     const results = [];
-     for(const user of users) {
-        const check = await this.checkUserRisk(user.id);
-        if (check.riskScore >= 50) {
-           results.push({ user, check });
-        }
-     }
-     return results.slice(0, limit);
+    const results = [];
+    for (const user of users) {
+      const check = await this.checkUserRisk(user.id);
+      if (check.riskScore >= 50) {
+        results.push({ user, check });
+      }
+    }
+    return results.slice(0, limit);
   }
 
   /**
@@ -69,7 +69,7 @@ export class FraudDetectionService {
     const flags: FraudFlag[] = [];
     let riskScore = 0;
 
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
         bookings: {
@@ -91,7 +91,7 @@ export class FraudDetectionService {
           take: 10,
         },
       },
-    });
+    })) as any;
 
     if (!user) {
       flags.push({
@@ -137,9 +137,7 @@ export class FraudDetectionService {
     }
 
     // Check recent cancellations
-    const recentCancellations = user.bookings.filter(
-      (b) => b.status === 'CANCELLED',
-    ).length;
+    const recentCancellations = user.bookings.filter((b) => b.status === 'CANCELLED').length;
     if (recentCancellations > 2) {
       riskScore += 15;
       flags.push({
@@ -217,14 +215,14 @@ export class FraudDetectionService {
     }
 
     // Check high-value booking for new users
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id: bookingData.userId },
       include: {
         bookings: {
           where: { status: { in: ['COMPLETED', 'SETTLED'] } },
         },
       },
-    });
+    })) as any;
 
     if (user) {
       const accountAgeDays = Math.floor(

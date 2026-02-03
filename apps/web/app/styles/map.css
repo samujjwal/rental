@@ -1,0 +1,97 @@
+/* Leaflet Map Styles */
+
+/* Custom marker styles */
+.custom-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Cluster styles */
+.marker-cluster {
+  background-clip: padding-box;
+  border-radius: 50%;
+}
+
+.marker-cluster div {
+  width: 30px;
+  height: 30px;
+  margin-left: 5px;
+  margin-top: 5px;
+  text-align: center;
+  border-radius: 50%;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.marker-cluster-small {
+  background-color: rgba(59, 130, 246, 0.6);
+}
+
+.marker-cluster-small div {
+  background-color: rgba(59, 130, 246, 0.8);
+  color: white;
+}
+
+.marker-cluster-medium {
+  background-color: rgba(37, 99, 235, 0.6);
+}
+
+.marker-cluster-medium div {
+  background-color: rgba(37, 99, 235, 0.8);
+  color: white;
+}
+
+.marker-cluster-large {
+  background-color: rgba(29, 78, 216, 0.6);
+}
+
+.marker-cluster-large div {
+  background-color: rgba(29, 78, 216, 0.8);
+  color: white;
+}
+
+/* Popup styles */
+.leaflet-popup-content-wrapper {
+  padding: 0;
+  border-radius: 0.5rem;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.leaflet-popup-content {
+  margin: 0;
+  width: auto !important;
+}
+
+.leaflet-popup-tip {
+  background: white;
+}
+
+/* Remove default leaflet styles that conflict */
+.leaflet-container a.leaflet-popup-close-button {
+  color: #6b7280;
+  font-size: 20px;
+  padding: 8px 8px 0 0;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: #1f2937;
+}
+
+/* Ensure map takes full height */
+.leaflet-container {
+  font-family: inherit;
+}
+
+/* Fix marker z-index for highlighted markers */
+.leaflet-marker-icon {
+  transition: transform 0.2s ease-in-out;
+}
+
+/* Smooth zoom animations */
+.leaflet-zoom-animated {
+  transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1);
+}
