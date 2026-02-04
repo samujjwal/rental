@@ -677,7 +677,7 @@ export function ModernTanStackTable<T extends Record<string, any>>({
           {filterFields.length > 0 && (
             <Button
               variant={showFilters ? "contained" : "outlined"}
-              startIcon={<FilterListIcon />}
+              leftIcon={<FilterListIcon />}
               onClick={() => setShowFilters(!showFilters)}
             >
               Filters
@@ -697,7 +697,7 @@ export function ModernTanStackTable<T extends Record<string, any>>({
           {enableColumnVisibility && (
             <Button
               variant="outlined"
-              startIcon={<VisibilityIcon />}
+              leftIcon={<VisibilityIcon />}
               onClick={(e) => setColumnVisibilityAnchorEl(e.currentTarget)}
             >
               Columns
@@ -731,7 +731,7 @@ export function ModernTanStackTable<T extends Record<string, any>>({
                 action.requiresSelection &&
                 Object.keys(rowSelection).length === 0
               }
-              startIcon={action.icon}
+              leftIcon={action.icon}
             >
               {action.label}
             </Button>
@@ -826,7 +826,7 @@ export function ModernTanStackTable<T extends Record<string, any>>({
               <Box sx={{ display: "flex", alignItems: "center" }}>
                 <Button
                   variant="outlined"
-                  startIcon={<ClearIcon />}
+                  leftIcon={<ClearIcon />}
                   onClick={() => handleColumnFiltersChange([])}
                   size="small"
                 >

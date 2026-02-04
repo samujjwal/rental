@@ -13,7 +13,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -127,14 +127,14 @@ export default function SystemLogsPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outlined" size="small">
+          <UnifiedButton variant="outline" size="small">
             <Download className="w-4 h-4 mr-2" />
             Export Logs
-          </Button>
-          <Button variant="outlined" size="small" onClick={() => revalidator.revalidate()}>
+          </UnifiedButton>
+          <UnifiedButton variant="outline" size="small" onClick={() => revalidator.revalidate()}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
-          </Button>
+          </UnifiedButton>
         </div>
       </div>
 

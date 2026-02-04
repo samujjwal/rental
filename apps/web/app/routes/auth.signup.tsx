@@ -9,7 +9,7 @@ import { useAuthStore } from "~/lib/store/auth";
 import { createUserSession } from "~/utils/auth";
 import { signupSchema, type SignupInput } from "~/lib/validation/auth";
 import { cn } from "~/lib/utils";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -289,13 +289,13 @@ export default function Signup() {
                       className={cn(
                         "text-xs font-medium",
                         passwordStrength.color === "bg-destructive" &&
-                          "text-destructive",
+                        "text-destructive",
                         passwordStrength.color === "bg-warning" &&
-                          "text-warning",
+                        "text-warning",
                         passwordStrength.color === "bg-primary" &&
-                          "text-primary",
+                        "text-primary",
                         passwordStrength.color === "bg-success" &&
-                          "text-success"
+                        "text-success"
                       )}
                     >
                       {passwordStrength.label}
@@ -359,19 +359,16 @@ export default function Signup() {
             </div>
 
             {/* Submit Button */}
-            <Button type="submit" disabled={isSubmitting} className="w-full">
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                  Creating account...
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Create Account
-                </>
-              )}
-            </Button>
+            <UnifiedButton
+              type="submit"
+              disabled={isSubmitting}
+              loading={isSubmitting}
+              leftIcon={!isSubmitting ? <UserPlus className="w-4 h-4" /> : undefined}
+              fullWidth
+              variant="primary"
+            >
+              {isSubmitting ? "Creating account..." : "Create Account"}
+            </UnifiedButton>
           </Form>
 
           {/* Sign In Link */}

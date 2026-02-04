@@ -11,3 +11,11 @@ export {
   createRoutes,
 } from "./CodeSplitting";
 export type { RouteConfig } from "./CodeSplitting";
+
+export {
+  createLazyRoute,
+  usePreloadOnHover,
+  PreloadLink,
+  RouteFallbacks,
+} from "./LazyRoute";
+export type { LazyRouteOptions, PreloadLinkProps } from "./LazyRoute";

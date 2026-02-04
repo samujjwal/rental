@@ -24,7 +24,7 @@ import {
   CardTitle,
   CardDescription,
 } from "~/components/ui";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
 import { analyticsApi, type InsightData } from "~/lib/api/analytics";
 

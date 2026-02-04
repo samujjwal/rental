@@ -1,5 +1,12 @@
-export { Button } from "./button";
-export { Input } from "./input";
+export { UnifiedButton, IconButton, ButtonGroup } from "./unified-button";
+export { UnifiedButton as Button } from "./unified-button";
+export type {
+  UnifiedButtonProps,
+  IconButtonProps,
+  ButtonGroupProps,
+} from "./unified-button";
+export { buttonVariants, buttonSizes, buttonBase } from "./button-variants";
+export type { ButtonVariant, ButtonSize } from "./button-variants";
 export {
   Card,
   CardContent,
@@ -7,8 +14,13 @@ export {
   CardTitle,
   CardDescription,
 } from "./card";
-export { Label } from "./label";
 export { Badge } from "./badge";
+export { OptimizedImage, ImageGallery, Avatar } from "./OptimizedImage";
+export type {
+  OptimizedImageProps,
+  ImageGalleryProps,
+  AvatarProps,
+} from "./OptimizedImage";
 
 // Skeleton components for loading states
 export {
@@ -53,9 +65,4 @@ export {
 } from "./offline-banner";
 
 // Toast/Alert components
-export {
-  Toast,
-  ToastContainer,
-  Alert,
-  FormError,
-} from "./toast";
+export { Toast, ToastContainer, Alert, FormError } from "./toast";

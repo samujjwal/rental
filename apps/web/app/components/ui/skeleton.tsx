@@ -42,7 +42,7 @@ export function Skeleton({
 
   const animations = {
     pulse: "animate-pulse",
-    wave: "animate-shimmer",
+    wave: "animate-shimmer bg-gradient-to-r from-muted via-muted/50 to-muted bg-[length:200%_100%]",
     none: "",
   };
 

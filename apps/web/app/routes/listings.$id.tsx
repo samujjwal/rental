@@ -19,7 +19,7 @@ import type { Listing } from "~/types/listing";
 import type { BookingCalculation } from "~/types/booking";
 import { useAuthStore } from "~/lib/store/auth";
 import { cn } from "~/lib/utils";
-import { Button, Badge } from "~/components/ui";
+import { UnifiedButton, Badge } from "~/components/ui";
 import {
   Card,
   CardContent,
@@ -477,15 +477,15 @@ export default function ListingDetail() {
                     </div>
 
                     {/* Calculate Button */}
-                    <Button
-                      variant="outlined"
-                      color="secondary"
+                    <UnifiedButton
+                      variant="secondary"
                       onClick={handleCalculatePrice}
                       disabled={!startDate || !endDate || loading}
-                      className="w-full mb-4"
+                      fullWidth
+                      className="mb-4"
                     >
                       {loading ? "Calculating..." : "Calculate Price"}
-                    </Button>
+                    </UnifiedButton>
 
                     {/* Price Breakdown */}
                     {calculation && (
@@ -522,19 +522,20 @@ export default function ListingDetail() {
                     )}
 
                     {/* Book Button */}
-                    <Button
+                    <UnifiedButton
                       onClick={handleBooking}
                       disabled={
                         !calculation ||
                         listing.availability !== "available" ||
                         loading
                       }
-                      className="w-full"
+                      fullWidth
+                      variant="primary"
                     >
                       {listing.instantBooking
                         ? "Book Instantly"
                         : "Request to Book"}
-                    </Button>
+                    </UnifiedButton>
                   </>
                 )}
 
@@ -547,7 +548,7 @@ export default function ListingDetail() {
                       to={`/listings/${listing.id}/edit`}
                       className="inline-block w-full"
                     >
-                      <Button className="w-full">Edit Listing</Button>
+                      <UnifiedButton className="w-full">Edit Listing</UnifiedButton>
                     </Link>
                   </div>
                 )}

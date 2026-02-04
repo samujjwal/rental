@@ -3,7 +3,7 @@
 import React from "react";
 import { Link, isRouteErrorResponse, useRouteError, useRevalidator } from "react-router";
 import { cn } from "~/lib/utils";
-import { Button } from "./button";
+import { UnifiedButton } from "./unified-button";
 
 interface ErrorStateProps {
   /**
@@ -122,19 +122,19 @@ export function ErrorState({
           {message}
         </p>
       )}
-      
+
       {(onRetry || showHomeButton || children) && (
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           {onRetry && (
-            <Button variant="contained" color="primary" onClick={onRetry}>
+            <UnifiedButton variant="primary" onClick={onRetry}>
               Try Again
-            </Button>
+            </UnifiedButton>
           )}
           {showHomeButton && (
             <Link to="/">
-              <Button variant="outlined" component="span">
+              <UnifiedButton variant="outline">
                 Go to Home
-              </Button>
+              </UnifiedButton>
             </Link>
           )}
           {children}
@@ -218,9 +218,9 @@ export const ErrorStatePresets = {
       showHomeButton={false}
     >
       <Link to="/auth/login">
-        <Button variant="contained" color="primary" component="span" className="mt-6">
+        <UnifiedButton variant="primary" className="mt-6">
           Log In
-        </Button>
+        </UnifiedButton>
       </Link>
     </ErrorState>
   ),
@@ -248,9 +248,9 @@ export const ErrorStatePresets = {
       showHomeButton={false}
     >
       <Link to="/search">
-        <Button variant="contained" color="primary" component="span" className="mt-6">
+        <UnifiedButton variant="primary" className="mt-6">
           Browse Similar Listings
-        </Button>
+        </UnifiedButton>
       </Link>
     </ErrorState>
   ),

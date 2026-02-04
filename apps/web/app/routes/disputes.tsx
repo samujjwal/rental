@@ -26,7 +26,7 @@ import {
   CardTitle,
   Badge,
 } from "~/components/ui";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
@@ -322,7 +322,7 @@ export default function DisputesPage() {
                     : "You don't have any disputes. Great job maintaining good rental relationships!"}
                 </p>
                 <Link to="/bookings">
-                  <Button variant="outlined">View Bookings</Button>
+                  <UnifiedButton variant="outline">View Bookings</UnifiedButton>
                 </Link>
               </CardContent>
             </Card>

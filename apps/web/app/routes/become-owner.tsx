@@ -23,7 +23,7 @@ import {
   CardTitle,
   CardDescription,
 } from "~/components/ui";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
@@ -145,13 +145,13 @@ export default function BecomeOwnerPage() {
               </p>
               <div className="flex gap-4 justify-center">
                 <Link to="/listings/new">
-                  <Button>
+                  <UnifiedButton>
                     <Package className="w-4 h-4 mr-2" />
                     Create Listing
-                  </Button>
+                  </UnifiedButton>
                 </Link>
                 <Link to="/dashboard/owner">
-                  <Button variant="outlined">Go to Dashboard</Button>
+                  <UnifiedButton variant="outline">Go to Dashboard</UnifiedButton>
                 </Link>
               </div>
             </CardContent>
@@ -293,10 +293,10 @@ export default function BecomeOwnerPage() {
                   <h3 className="text-xl font-bold text-foreground mb-2">Welcome, Owner!</h3>
                   <p className="text-muted-foreground mb-6">{actionData.message}</p>
                   <Link to="/listings/new">
-                    <Button size="large">
+                    <UnifiedButton size="large">
                       <Package className="w-5 h-5 mr-2" />
                       Create Your First Listing
-                    </Button>
+                    </UnifiedButton>
                   </Link>
                 </div>
               ) : (
@@ -361,7 +361,7 @@ export default function BecomeOwnerPage() {
                           Become an Owner
                         </>
                       )}
-                    </Button>
+                    </UnifiedButton>
                   </div>
                 </Form>
               )}

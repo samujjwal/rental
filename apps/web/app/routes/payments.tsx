@@ -20,7 +20,7 @@ import {
 import { format, formatDistanceToNow } from "date-fns";
 import { paymentsApi } from "~/lib/api/payments";
 import type { Transaction as PaymentTransaction } from "~/lib/api/payments";
-import { Button, Badge } from "~/components/ui";
+import { UnifiedButton, Badge } from "~/components/ui";
 import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
@@ -156,7 +156,7 @@ export default function PaymentsPage() {
             <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
             <h1 className="text-2xl font-bold text-foreground mb-2">Unable to load payments</h1>
             <p className="text-muted-foreground mb-6">{data.error}</p>
-            <Button onClick={() => revalidator.revalidate()}>Try Again</Button>
+            <UnifiedButton onClick={() => revalidator.revalidate()}>Try Again</UnifiedButton>
           </div>
         </div>
       </div>
@@ -176,14 +176,14 @@ export default function PaymentsPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outlined">
+              <UnifiedButton variant="outline">
                 <Download className="w-4 h-4 mr-2" />
                 Export
-              </Button>
-              <Button>
+              </UnifiedButton>
+              <UnifiedButton>
                 <Wallet className="w-4 h-4 mr-2" />
                 Request Payout
-              </Button>
+              </UnifiedButton>
             </div>
           </div>
         </div>
@@ -286,13 +286,13 @@ export default function PaymentsPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-foreground">Transaction History</h2>
               <Button
-                variant="outlined"
+                variant="outline"
                 size="small"
                 onClick={() => setShowFilters(!showFilters)}
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filters
-              </Button>
+              </UnifiedButton>
             </div>
 
             {/* Filters */}
@@ -328,7 +328,7 @@ export default function PaymentsPage() {
                 </div>
                 {(currentType || currentStatus) && (
                   <Button
-                    variant="text"
+                    variant="ghost"
                     size="small"
                     onClick={() => {
                       const params = new URLSearchParams();
@@ -336,7 +336,7 @@ export default function PaymentsPage() {
                     }}
                   >
                     Clear Filters
-                  </Button>
+                  </UnifiedButton>
                 )}
               </div>
             )}
@@ -349,12 +349,12 @@ export default function PaymentsPage() {
               <p className="text-muted-foreground">No transactions found</p>
               {(currentType || currentStatus) && (
                 <Button
-                  variant="text"
+                  variant="ghost"
                   className="mt-2"
                   onClick={() => setSearchParams(new URLSearchParams())}
                 >
                   Clear filters to see all transactions
-                </Button>
+                </UnifiedButton>
               )}
             </div>
           ) : (
@@ -446,21 +446,21 @@ export default function PaymentsPage() {
               </p>
               <div className="flex items-center gap-2">
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   size="small"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage <= 1}
                 >
                   <ChevronLeft className="w-4 h-4" />
-                </Button>
+                </UnifiedButton>
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   size="small"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage >= totalPages}
                 >
                   <ChevronRight className="w-4 h-4" />
-                </Button>
+                </UnifiedButton>
               </div>
             </div>
           )}

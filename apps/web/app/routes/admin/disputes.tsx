@@ -16,7 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && typeof error.message === "string") {
@@ -479,12 +479,12 @@ export default function AdminDisputesPage() {
                         <Form method="post">
                           <input type="hidden" name="disputeId" value={selectedDispute.id} />
                           <input type="hidden" name="intent" value="assign" />
-                          <Button type="submit" variant="outlined" disabled={isSubmitting}>
+                          <UnifiedButton type="submit" variant="outline" disabled={isSubmitting}>
                             Assign to Me
-                          </Button>
+                          </UnifiedButton>
                         </Form>
                       )}
-                      <Button type="submit" disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
+                      <UnifiedButton type="submit" disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
                         {isSubmitting ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -496,7 +496,7 @@ export default function AdminDisputesPage() {
                             Execute Resolution
                           </>
                         )}
-                      </Button>
+                      </UnifiedButton>
                     </div>
                   </Form>
                 </div>

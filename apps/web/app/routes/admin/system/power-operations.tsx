@@ -258,7 +258,7 @@ export default function PowerOperationsPage() {
             {activeOperation === "execute-query"
               ? "Executing Query..."
               : operations.find((op) => op.id === activeOperation)?.name ||
-                "Processing..."}
+              "Processing..."}
           </Typography>
           <LinearProgress
             variant="determinate"
@@ -278,17 +278,15 @@ export default function PowerOperationsPage() {
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {operations.slice(0, 3).map((operation) => (
                 <Box key={operation.id}>
-                  <Button
+                  <UnifiedButton
                     fullWidth
-                    variant={operation.danger ? "outlined" : "contained"}
-                    color={operation.danger ? "error" : "primary"}
-                    startIcon={operation.icon}
+                    variant={operation.danger ? "destructive" : "primary"}
+                    leftIcon={operation.icon}
                     onClick={() => executeOperation(operation)}
                     disabled={loading}
-                    sx={{ justifyContent: "flex-start" }}
                   >
                     {operation.name}
-                  </Button>
+                  </UnifiedButton>
                   <Typography variant="caption" color="text.secondary">
                     {operation.description}
                   </Typography>
@@ -307,17 +305,15 @@ export default function PowerOperationsPage() {
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {operations.slice(3).map((operation) => (
                 <Box key={operation.id}>
-                  <Button
+                  <UnifiedButton
                     fullWidth
-                    variant={operation.danger ? "outlined" : "contained"}
-                    color={operation.danger ? "error" : "primary"}
-                    startIcon={operation.icon}
+                    variant={operation.danger ? "destructive" : "primary"}
+                    leftIcon={operation.icon}
                     onClick={() => executeOperation(operation)}
                     disabled={loading}
-                    sx={{ justifyContent: "flex-start" }}
                   >
                     {operation.name}
-                  </Button>
+                  </UnifiedButton>
                   <Typography variant="caption" color="text.secondary">
                     {operation.description}
                   </Typography>
@@ -350,16 +346,16 @@ export default function PowerOperationsPage() {
                 sx={{ fontFamily: "monospace" }}
               />
               <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                <Button
-                  variant="contained"
-                  startIcon={<DatabaseIcon />}
+                <UnifiedButton
+                  variant="primary"
+                  leftIcon={<DatabaseIcon />}
                   onClick={executeQuery}
                   disabled={loading || !query.trim()}
                 >
                   Fetch Logs
-                </Button>
-                <Button
-                  variant="outlined"
+                </UnifiedButton>
+                <UnifiedButton
+                  variant="outline"
                   onClick={() => {
                     setQuery("");
                     setQueryResult(null);
@@ -367,7 +363,7 @@ export default function PowerOperationsPage() {
                   disabled={loading}
                 >
                   Clear
-                </Button>
+                </UnifiedButton>
                 {queryResult && (
                   <Chip
                     label={`${queryResult.rowCount} rows (${queryResult.executionTime}ms)`}
@@ -447,26 +443,26 @@ export default function PowerOperationsPage() {
                 <Typography variant="subtitle2" gutterBottom>
                   Download Backup
                 </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<DownloadIcon />}
+                <UnifiedButton
+                  variant="primary"
+                  leftIcon={<DownloadIcon />}
                   onClick={() => executeOperation(operations[0])}
                   disabled={loading}
                   fullWidth
                 >
                   Download Latest Backup
-                </Button>
+                </UnifiedButton>
               </Box>
               <Box sx={{ flex: "1 1 300px" }}>
                 <Typography variant="subtitle2" gutterBottom>
                   Upload Backup for Restore
                 </Typography>
                 <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                  <Button
-                    variant="outlined"
-                    component="label"
-                    startIcon={<UploadIcon />}
+                  <UnifiedButton
+                    variant="outline"
+                    leftIcon={<UploadIcon />}
                     disabled={loading}
+                    className="relative"
                   >
                     Select Backup File
                     <input
@@ -474,8 +470,9 @@ export default function PowerOperationsPage() {
                       accept=".sql,.backup,.dump"
                       hidden
                       onChange={handleFileUpload}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
                     />
-                  </Button>
+                  </UnifiedButton>
                   {backupFile && (
                     <>
                       <Chip
@@ -483,14 +480,13 @@ export default function PowerOperationsPage() {
                         size="small"
                         onDelete={() => setBackupFile(null)}
                       />
-                      <Button
-                        variant="contained"
-                        color="error"
+                      <UnifiedButton
+                        variant="destructive"
                         onClick={() => executeOperation(operations[1])}
                         disabled={loading}
                       >
                         Restore
-                      </Button>
+                      </UnifiedButton>
                     </>
                   )}
                 </Box>
@@ -507,7 +503,7 @@ export default function PowerOperationsPage() {
       >
         <DialogTitle>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <WarningIcon color="error" />
+            <WarningIcon variant="destructive" />
             Confirm Dangerous Operation
           </Box>
         </DialogTitle>
@@ -526,14 +522,14 @@ export default function PowerOperationsPage() {
           </Alert>
         </DialogContent>
         <DialogActions>
-          <Button
+          <UnifiedButton
             onClick={() => setConfirmDialog({ open: false, operation: null })}
+            variant="outline"
           >
             Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
+          </UnifiedButton>
+          <UnifiedButton
+            variant="destructive"
             onClick={() =>
               confirmDialog.operation &&
               performOperation(confirmDialog.operation)
@@ -541,7 +537,7 @@ export default function PowerOperationsPage() {
             disabled={loading}
           >
             Proceed
-          </Button>
+          </UnifiedButton>
         </DialogActions>
       </Dialog>
 

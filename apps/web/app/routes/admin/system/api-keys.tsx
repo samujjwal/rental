@@ -17,7 +17,7 @@ import {
   Shield,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 // Local type for API key from the server
 interface ServerApiKey {
@@ -194,10 +194,10 @@ export default function ApiKeysPage() {
             Manage API keys for external integrations and services
           </p>
         </div>
-        <Button onClick={() => setShowCreateForm(true)}>
+        <UnifiedButton onClick={() => setShowCreateForm(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Create API Key
-        </Button>
+        </UnifiedButton>
       </div>
 
       {/* Action Messages */}
@@ -320,12 +320,12 @@ export default function ApiKeysPage() {
             <div className="flex justify-end gap-3">
               <Button
                 type="button"
-                variant="outlined"
+                variant="outline"
                 onClick={() => setShowCreateForm(false)}
               >
                 Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting && formIntent === "create"}>
+              </UnifiedButton>
+              <UnifiedButton type="submit" disabled={isSubmitting && formIntent === "create"}>
                 {isSubmitting && formIntent === "create" ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -337,7 +337,7 @@ export default function ApiKeysPage() {
                     Create Key
                   </>
                 )}
-              </Button>
+              </UnifiedButton>
             </div>
           </Form>
         </div>
@@ -429,13 +429,13 @@ export default function ApiKeysPage() {
                         <input type="hidden" name="keyId" value={key.id} />
                         <Button
                           type="submit"
-                          variant="outlined"
+                          variant="outline"
                           size="small"
                           disabled={isSubmitting}
                         >
                           <RefreshCw className="w-4 h-4 mr-1" />
                           Regenerate
-                        </Button>
+                        </UnifiedButton>
                       </Form>
 
                       {confirmRevoke === key.id ? (
@@ -446,30 +446,28 @@ export default function ApiKeysPage() {
                             <Button
                               type="submit"
                               size="small"
-                              color="error"
+                              variant="destructive"
                               disabled={isSubmitting}
                             >
                               Confirm
-                            </Button>
+                            </UnifiedButton>
                           </Form>
                           <Button
-                            variant="outlined"
+                            variant="outline"
                             size="small"
                             onClick={() => setConfirmRevoke(null)}
                           >
                             Cancel
-                          </Button>
+                          </UnifiedButton>
                         </div>
                       ) : (
                         <Button
-                          variant="outlined"
-                          size="small"
-                          color="error"
+                          variant="destructive"
                           onClick={() => setConfirmRevoke(key.id)}
                         >
                           <Trash2 className="w-4 h-4 mr-1" />
                           Revoke
-                        </Button>
+                        </UnifiedButton>
                       )}
                     </div>
                   )}

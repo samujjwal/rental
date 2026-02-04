@@ -201,3 +201,113 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Touch target utilities - ensure minimum 44x44px for accessibility */
+.touch-target {
+  @apply min-h-[44px] min-w-[44px];
+}
+
+.touch-target-sm {
+  @apply min-h-[36px] min-w-[36px];
+}
+
+/* Typography scale utilities */
+.text-h1 {
+  @apply text-4xl font-bold leading-tight tracking-tight;
+}
+
+.text-h2 {
+  @apply text-3xl font-bold leading-tight;
+}
+
+.text-h3 {
+  @apply text-2xl font-semibold leading-snug;
+}
+
+.text-h4 {
+  @apply text-xl font-semibold leading-snug;
+}
+
+.text-body {
+  @apply text-base leading-relaxed;
+}
+
+.text-body-sm {
+  @apply text-sm leading-relaxed;
+}
+
+.text-caption {
+  @apply text-xs leading-normal text-muted-foreground;
+}
+
+/* Interactive element hover states */
+.hover-lift {
+  @apply transition-all duration-200 ease-out;
+}
+
+.hover-lift:hover {
+  @apply -translate-y-1 shadow-lg;
+}
+
+.hover-lift:active {
+  @apply translate-y-0 shadow-md;
+}
+
+/* Card hover enhancement */
+.card-interactive {
+  @apply transition-all duration-200 ease-out;
+}
+
+.card-interactive:hover {
+  @apply -translate-y-2 shadow-xl;
+}
+
+/* Focus ring utilities */
+.focus-ring {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+}
+
+/* Screen reader only (but focusable) */
+.sr-only-focusable:not(:focus):not(:focus-within) {
+  @apply sr-only;
+}
+
+/* Smooth scrolling */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-smooth {
+    scroll-behavior: auto;
+  }
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Glass morphism effect */
+.glass {
+  @apply bg-background/80 backdrop-blur-md;
+}
+
+.glass-dark {
+  @apply bg-background/60 backdrop-blur-lg;
+}
+
+/* Gradient text */
+.text-gradient {
+  @apply bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent;
+}
+
+/* Loading pulse for skeleton states */
+.skeleton-pulse {
+  @apply animate-pulse bg-muted;
+}

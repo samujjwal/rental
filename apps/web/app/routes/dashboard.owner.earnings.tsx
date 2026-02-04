@@ -15,7 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { paymentsApi } from "~/lib/api/payments";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -181,7 +181,7 @@ export default function OwnerEarningsPage() {
             >
               <CreditCard className="w-4 h-4 mr-2" />
               Request Payout
-            </Button>
+            </UnifiedButton>
           </div>
           <div className="bg-card border rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
@@ -230,14 +230,14 @@ export default function OwnerEarningsPage() {
           <div className="p-4 border-b flex items-center justify-between">
             <h3 className="text-lg font-semibold text-foreground">Transaction History</h3>
             <div className="flex items-center gap-2">
-              <Button variant="outlined" size="small">
+              <UnifiedButton variant="outline" size="small">
                 <Download className="w-4 h-4 mr-2" />
                 Export CSV
-              </Button>
-              <Button variant="outlined" size="small">
+              </UnifiedButton>
+              <UnifiedButton variant="outline" size="small">
                 <FileText className="w-4 h-4 mr-2" />
                 Tax Documents
-              </Button>
+              </UnifiedButton>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -355,13 +355,13 @@ export default function OwnerEarningsPage() {
               <div className="flex gap-3">
                 <Button
                   type="button"
-                  variant="outlined"
+                  variant="outline"
                   className="flex-1"
                   onClick={() => setShowPayoutModal(false)}
                 >
                   Cancel
-                </Button>
-                <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                </UnifiedButton>
+                <UnifiedButton type="submit" className="flex-1" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -370,7 +370,7 @@ export default function OwnerEarningsPage() {
                   ) : (
                     "Request Payout"
                   )}
-                </Button>
+                </UnifiedButton>
               </div>
             </Form>
           </div>

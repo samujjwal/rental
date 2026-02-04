@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { bookingsApi } from "~/lib/api/bookings";
 import { listingsApi } from "~/lib/api/listings";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -172,15 +172,15 @@ export default function OwnerCalendarPage() {
               <h1 className="text-2xl font-bold text-foreground">Booking Calendar</h1>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outlined" size="small">
+              <UnifiedButton variant="outline" size="small">
                 <Download className="w-4 h-4 mr-2" />
                 Sync to iCal
-              </Button>
+              </UnifiedButton>
               <Link to="/listings/new">
-                <Button size="small">
+                <UnifiedButton size="small">
                   <Plus className="w-4 h-4 mr-2" />
                   New Listing
-                </Button>
+                </UnifiedButton>
               </Link>
             </div>
           </div>
@@ -209,9 +209,9 @@ export default function OwnerCalendarPage() {
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
-            <Button variant="outlined" size="small" onClick={goToToday}>
+            <UnifiedButton variant="outline" size="small" onClick={goToToday}>
               Today
-            </Button>
+            </UnifiedButton>
           </div>
 
           <div className="flex items-center gap-4">

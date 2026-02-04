@@ -363,62 +363,56 @@ export default function BookingsPage() {
                     {/* Action Buttons */}
                     <div className="flex items-center gap-3 pt-4 border-t border-border">
                       <Link to={`/messages?booking=${booking.id}`}>
-                        <Button
-                          variant="outlined"
-                          className="flex items-center gap-2"
+                        <UnifiedButton
+                          variant="outline"
+                          leftIcon={<MessageSquare className="w-4 h-4" />}
                         >
-                          <MessageSquare className="w-4 h-4" />
                           Message
-                        </Button>
+                        </UnifiedButton>
                       </Link>
 
                       {isRenter && booking.status === "pending" && (
-                        <Button
-                          variant="contained"
-                          color="error"
+                        <UnifiedButton
+                          variant="destructive"
                           onClick={() => {
                             setSelectedBooking(booking);
                             setShowCancelModal(true);
                           }}
-                          className="flex items-center gap-2"
+                          leftIcon={<X className="w-4 h-4" />}
                         >
-                          <X className="w-4 h-4" />
                           Cancel
-                        </Button>
+                        </UnifiedButton>
                       )}
 
                       {!isRenter && booking.status === "pending" && (
                         <>
-                          <Button
+                          <UnifiedButton
                             onClick={() => handleConfirmBooking(booking.id)}
-                            className="flex items-center gap-2 bg-success hover:bg-success/90 text-success-foreground"
+                            variant="success"
+                            leftIcon={<CheckCircle className="w-4 h-4" />}
                           >
-                            <CheckCircle className="w-4 h-4" />
                             Confirm
-                          </Button>
-                          <Button
-                            variant="contained"
-                            color="error"
+                          </UnifiedButton>
+                          <UnifiedButton
+                            variant="destructive"
                             onClick={() => {
                               setSelectedBooking(booking);
                               setShowCancelModal(true);
                             }}
-                            className="flex items-center gap-2"
+                            leftIcon={<X className="w-4 h-4" />}
                           >
-                            <X className="w-4 h-4" />
                             Decline
-                          </Button>
+                          </UnifiedButton>
                         </>
                       )}
 
                       {booking.status === "active" && (
-                        <Button
+                        <UnifiedButton
                           onClick={() => handleCompleteBooking(booking.id)}
-                          className="flex items-center gap-2"
+                          leftIcon={<CheckCircle className="w-4 h-4" />}
                         >
-                          <CheckCircle className="w-4 h-4" />
                           Mark as Completed
-                        </Button>
+                        </UnifiedButton>
                       )}
 
                       <Link
@@ -461,8 +455,8 @@ export default function BookingsPage() {
                 />
               </div>
               <div className="flex items-center gap-3">
-                <Button
-                  variant="outlined"
+                <UnifiedButton
+                  variant="outline"
                   onClick={() => {
                     setShowCancelModal(false);
                     setCancelReason("");
@@ -470,16 +464,15 @@ export default function BookingsPage() {
                   className="flex-1"
                 >
                   Keep Booking
-                </Button>
-                <Button
-                  variant="contained"
-                  color="error"
+                </UnifiedButton>
+                <UnifiedButton
+                  variant="destructive"
                   onClick={handleCancelBooking}
                   disabled={!cancelReason}
                   className="flex-1"
                 >
                   Cancel Booking
-                </Button>
+                </UnifiedButton>
               </div>
             </CardContent>
           </Card>

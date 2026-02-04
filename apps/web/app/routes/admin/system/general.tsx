@@ -12,7 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { adminApi, type SystemSettings } from "~/lib/api/admin";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -377,7 +377,7 @@ export default function GeneralSettingsPage() {
 
         {/* Submit Button */}
         <div className="flex justify-end">
-          <Button type="submit" disabled={isSubmitting}>
+          <UnifiedButton type="submit" disabled={isSubmitting}>
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -389,7 +389,7 @@ export default function GeneralSettingsPage() {
                 Save Settings
               </>
             )}
-          </Button>
+          </UnifiedButton>
         </div>
       </Form>
     </div>

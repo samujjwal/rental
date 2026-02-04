@@ -76,7 +76,7 @@ export function ConfirmDialog({
                             color={confirmColor}
                             variant="contained"
                             disabled={isLoading}
-                            startIcon={isLoading ? <CircularProgress size={16} /> : undefined}
+                            leftIcon={isLoading ? <CircularProgress size={16} /> : undefined}
                         >
                             {confirmText}
                         </Button>

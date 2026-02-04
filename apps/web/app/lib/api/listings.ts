@@ -1,4 +1,5 @@
 import { api } from "~/lib/api-client";
+import { withRetry, parseApiError, ApiError } from "~/lib/api-error";
 import type {
   Listing,
   CreateListingRequest,
@@ -8,23 +9,36 @@ import type {
   Category,
 } from "~/types/listing";
 
+// Circuit breaker for search requests
+import { CircuitBreaker } from "~/lib/api-error";
+const searchCircuitBreaker = new CircuitBreaker(5, 30000);
+
 export const listingsApi = {
   async searchListings(
     params: ListingSearchParams
   ): Promise<ListingSearchResponse> {
-    const queryParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, String(value));
-      }
+    return searchCircuitBreaker.execute(async () => {
+      const queryParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, String(value));
+        }
+      });
+
+      return withRetry(
+        () =>
+          api.get<ListingSearchResponse>(
+            `/listings/search?${queryParams.toString()}`
+          ),
+        { maxRetries: 2, delayMs: 500 }
+      );
     });
-    return api.get<ListingSearchResponse>(
-      `/listings/search?${queryParams.toString()}`
-    );
   },
 
   async getListingById(id: string): Promise<Listing> {
-    return api.get<Listing>(`/listings/${id}`);
+    return withRetry(() => api.get<Listing>(`/listings/${id}`), {
+      maxRetries: 2,
+    });
   },
 
   async getListingsByOwnerId(ownerId: string): Promise<ListingSearchResponse> {
@@ -111,3 +125,6 @@ export const listingsApi = {
     });
   },
 };
+
+// Re-export error utilities for convenience
+export { parseApiError, type ApiError };

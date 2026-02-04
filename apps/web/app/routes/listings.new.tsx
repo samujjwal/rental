@@ -9,7 +9,7 @@ import { uploadApi } from "~/lib/api/upload";
 import { listingSchema, type ListingInput } from "~/lib/validation/listing";
 import { redirect } from "react-router";
 import { cn } from "~/lib/utils";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 import { Card, CardContent } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
@@ -129,20 +129,20 @@ export default function CreateListing() {
     setIsSubmitting(true);
     try {
       let finalImages: string[] = [];
-      
+
       // Upload images if any
       if (imageFiles.length > 0) {
         // Upload images first
         const results = await uploadApi.uploadImages(imageFiles);
         finalImages = results.map(r => r.url);
       }
-      
+
       // Update data with real image URLs
       data.images = finalImages;
-      
+
       const formData = new FormData();
       formData.append("data", JSON.stringify(data));
-      
+
       submit(formData, { method: "post" });
     } catch (error) {
       console.error("Failed to create listing:", error);
@@ -742,41 +742,36 @@ export default function CreateListing() {
               {/* Navigation Buttons */}
               <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
                 {currentStep > 1 ? (
-                  <Button
+                  <UnifiedButton
                     type="button"
-                    variant="outlined"
+                    variant="outline"
                     onClick={prevStep}
-                    className="flex items-center gap-2"
+                    leftIcon={<ArrowLeft className="w-5 h-5" />}
                   >
-                    <ArrowLeft className="w-5 h-5" />
                     Previous
-                  </Button>
+                  </UnifiedButton>
                 ) : (
                   <div />
                 )}
 
                 {currentStep < STEPS.length ? (
-                  <Button
+                  <UnifiedButton
                     type="button"
                     onClick={nextStep}
-                    className="flex items-center gap-2"
+                    rightIcon={<ArrowRight className="w-5 h-5" />}
                   >
                     Next
-                    <ArrowRight className="w-5 h-5" />
-                  </Button>
+                  </UnifiedButton>
                 ) : (
-                  <Button
+                  <UnifiedButton
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex items-center gap-2 bg-success hover:bg-success/90 text-success-foreground"
+                    loading={isSubmitting}
+                    leftIcon={!isSubmitting ? <CheckCircle className="w-5 h-5" /> : undefined}
+                    variant="success"
                   >
-                    {isSubmitting ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-5 h-5" />
-                    )}
                     {isSubmitting ? "Creating..." : "Create Listing"}
-                  </Button>
+                  </UnifiedButton>
                 )}
               </div>
             </CardContent>

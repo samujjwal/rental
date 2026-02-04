@@ -69,7 +69,7 @@ export default function SearchPage() {
   const [urlSearchParams, setSearchParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
   const [showMap, setShowMap] = useState(false);
-  
+
   // Initialize view mode from localStorage or default to grid
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
 
@@ -102,7 +102,7 @@ export default function SearchPage() {
     if (debouncedQuery !== (searchParams.query || "")) {
       const formData = new FormData();
       if (debouncedQuery) formData.set("query", debouncedQuery);
-      
+
       // Preserve other filters
       Array.from(urlSearchParams.entries()).forEach(([key, value]) => {
         if (key !== "query" && key !== "page") {
@@ -110,7 +110,7 @@ export default function SearchPage() {
         }
       });
       formData.set("page", "1"); // Reset page on new search
-      
+
       submit(formData, { replace: true });
     }
   }, [debouncedQuery, submit]);
@@ -204,19 +204,18 @@ export default function SearchPage() {
         {/* Filter Bar */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button
-              variant="outlined"
+            <UnifiedButton
+              variant="outline"
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2"
+              leftIcon={<SlidersHorizontal className="w-5 h-5" />}
             >
-              <SlidersHorizontal className="w-5 h-5" />
               Filters
               {activeFiltersCount > 0 && (
                 <Badge variant="default" className="ml-1">
                   {activeFiltersCount}
                 </Badge>
               )}
-            </Button>
+            </UnifiedButton>
 
             {activeFiltersCount > 0 && (
               <button
@@ -233,7 +232,7 @@ export default function SearchPage() {
             <span className="text-sm text-muted-foreground">
               {results.total} results found
             </span>
-            
+
             {/* View Mode Toggle */}
             <div className="flex items-center border rounded-lg overflow-hidden">
               <button
@@ -261,7 +260,7 @@ export default function SearchPage() {
                 <List className="w-4 h-4" />
               </button>
               <button
-                onClick={() => { setShowMap(!showMap); if(!showMap) handleViewModeChange("map"); }}
+                onClick={() => { setShowMap(!showMap); if (!showMap) handleViewModeChange("map"); }}
                 className={cn(
                   "p-2 transition-colors",
                   showMap
@@ -273,7 +272,7 @@ export default function SearchPage() {
                 <Map className="w-4 h-4" />
               </button>
             </div>
-            
+
             <select
               value={searchParams.sortBy || ""}
               onChange={(e) => handleFilterChange("sortBy", e.target.value)}
@@ -416,17 +415,17 @@ export default function SearchPage() {
                 className="mb-6"
               />
             )}
-            
+
             {/* Listings */}
             <div className={cn(showMap ? "w-1/2 overflow-y-auto max-h-[calc(100vh-200px)]" : "w-full")}>
               {/* Loading State */}
               {isLoading && (
-                <CardGridSkeleton 
-                  count={viewMode === "list" ? 6 : 9} 
-                  className={viewMode === "list" ? "grid-cols-1" : ""} 
+                <CardGridSkeleton
+                  count={viewMode === "list" ? 6 : 9}
+                  className={viewMode === "list" ? "grid-cols-1" : ""}
                 />
               )}
-              
+
               {/* Empty State */}
               {!isLoading && results.listings.length === 0 && (
                 <div className="bg-card rounded-lg shadow-sm border p-12">
@@ -436,7 +435,7 @@ export default function SearchPage() {
                   />
                 </div>
               )}
-              
+
               {/* Results */}
               {!isLoading && results.listings.length > 0 && (
                 <>
@@ -448,7 +447,7 @@ export default function SearchPage() {
                       ))}
                     </div>
                   )}
-                  
+
                   {/* List View */}
                   {viewMode === "list" && !showMap && (
                     <div className="space-y-4">
@@ -457,7 +456,7 @@ export default function SearchPage() {
                       ))}
                     </div>
                   )}
-                  
+
                   {/* Map Split View - Show compact list */}
                   {showMap && (
                     <div className="space-y-3">
@@ -471,14 +470,14 @@ export default function SearchPage() {
                   {results.totalPages > 1 && (
                     <div className="mt-8 flex justify-center gap-2">
                       {results.page > 1 && (
-                        <Button
-                          variant="outlined"
+                        <UnifiedButton
+                          variant="outline"
                           onClick={() =>
                             handleFilterChange("page", String(results.page - 1))
                           }
                         >
                           Previous
-                        </Button>
+                        </UnifiedButton>
                       )}
                       {Array.from({ length: results.totalPages }, (_, i) => i + 1)
                         .filter(
@@ -494,34 +493,34 @@ export default function SearchPage() {
                                 ...
                               </span>
                             )}
-                            <Button
+                            <UnifiedButton
                               variant={
-                                page === results.page ? "contained" : "outlined"
+                                page === results.page ? "primary" : "outline"
                               }
                               onClick={() =>
                                 handleFilterChange("page", String(page))
                               }
                             >
                               {page}
-                            </Button>
+                            </UnifiedButton>
                           </div>
                         ))}
                       {results.page < results.totalPages && (
-                        <Button
-                          variant="outlined"
+                        <UnifiedButton
+                          variant="outline"
                           onClick={() =>
                             handleFilterChange("page", String(results.page + 1))
                           }
                         >
                           Next
-                        </Button>
+                        </UnifiedButton>
                       )}
                     </div>
                   )}
                 </>
               )}
             </div>
-            
+
             {/* Map View */}
             {showMap && (
               <div className="w-1/2 sticky top-24 h-[calc(100vh-200px)]">
@@ -531,11 +530,11 @@ export default function SearchPage() {
                     <span className="text-sm font-medium text-foreground">
                       {results.listings.length} items on map
                     </span>
-                    <Button variant="outlined" size="small">
+                    <UnifiedButton variant="outline" size="sm">
                       Search this area
-                    </Button>
+                    </UnifiedButton>
                   </div>
-                  
+
                   {/* Map Placeholder */}
                   <div className="flex-1 bg-muted relative">
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -547,7 +546,7 @@ export default function SearchPage() {
                         </p>
                       </div>
                     </div>
-                    
+
                     {/* Simulated Map Pins */}
                     <div className="absolute inset-0 p-8">
                       {results.listings.slice(0, 6).map((listing, index) => (
@@ -565,7 +564,7 @@ export default function SearchPage() {
                       ))}
                     </div>
                   </div>
-                  
+
                   {/* Map Controls */}
                   <div className="absolute bottom-20 right-4 flex flex-col gap-1">
                     <button className="bg-card border rounded p-2 shadow hover:bg-accent transition-colors">

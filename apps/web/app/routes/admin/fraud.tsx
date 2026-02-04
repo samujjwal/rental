@@ -2,7 +2,7 @@ import type { MetaFunction } from "react-router";
 import { useLoaderData, Link } from "react-router";
 import { AlertTriangle, ShieldAlert, CheckCircle, XCircle } from "lucide-react";
 import { fraudApi } from "~/lib/api/fraud";
-import { Badge, Button } from "~/components/ui";
+import { Badge, UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -101,9 +101,9 @@ export default function FraudDashboard() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button variant="outlined" size="small" asChild>
+                        <UnifiedButton variant="outline" size="small" asChild>
                            <Link to={`/admin/users/${item.user.id}`}>Review</Link>
-                        </Button>
+                        </UnifiedButton>
                       </td>
                     </tr>
                   ))

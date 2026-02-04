@@ -8,7 +8,7 @@ import {
   forgotPasswordSchema,
   type ForgotPasswordInput,
 } from "~/lib/validation/auth";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
@@ -123,7 +123,7 @@ export default function ForgotPassword() {
               </div>
 
               {/* Submit Button */}
-              <Button type="submit" disabled={isSubmitting} className="w-full">
+              <UnifiedButton type="submit" disabled={isSubmitting} className="w-full">
                 {isSubmitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
@@ -135,7 +135,7 @@ export default function ForgotPassword() {
                     Send Reset Link
                   </>
                 )}
-              </Button>
+              </UnifiedButton>
 
               {/* Back to Login */}
               <div className="mt-6 text-center">

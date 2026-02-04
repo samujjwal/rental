@@ -5,7 +5,7 @@ import React, {
   useState,
   useEffect,
 } from "react";
-import { Button } from "~/components/ui/button";
+import { UnifiedButton } from "~/components/ui";
 import { AlertTriangle, RefreshCw, Home, Bug } from "lucide-react";
 import { requestNavigation, requestRevalidate } from "~/lib/navigation";
 
@@ -300,41 +300,39 @@ export class ErrorBoundary extends Component<
 
             <div className="flex flex-col sm:flex-row gap-3">
               {error.retryable && (
-                <Button
+                <UnifiedButton
                   onClick={this.handleRetry}
                   disabled={
                     this.state.retryCount >= (this.props.maxRetries || 3)
                   }
-                  className="flex items-center justify-center"
+                  leftIcon={<RefreshCw className="w-4 h-4" />}
+                  variant="primary"
                 >
-                  <RefreshCw className="w-4 h-4 mr-2" />
                   {this.state.retryCount > 0
                     ? `Retry (${this.state.retryCount}/${this.props.maxRetries || 3})`
                     : "Retry"}
-                </Button>
+                </UnifiedButton>
               )}
 
-              <Button
-                variant="outlined"
+              <UnifiedButton
+                variant="outline"
                 onClick={this.handleGoHome}
-                className="flex items-center justify-center"
+                leftIcon={<Home className="w-4 h-4" />}
               >
-                <Home className="w-4 h-4 mr-2" />
                 Go Home
-              </Button>
+              </UnifiedButton>
 
               {import.meta.env.MODE === "development" && (
-                <Button
-                  variant="text"
+                <UnifiedButton
+                  variant="ghost"
                   onClick={() => {
                     console.log("Error details:", error);
                     console.log("Error info:", this.state.errorInfo);
                   }}
-                  className="flex items-center justify-center"
+                  leftIcon={<Bug className="w-4 h-4" />}
                 >
-                  <Bug className="w-4 h-4 mr-2" />
                   Debug
-                </Button>
+                </UnifiedButton>
               )}
             </div>
 
@@ -618,9 +616,9 @@ export function DevErrorOverlay() {
       );
       const normalized = Array.isArray(storedErrors)
         ? storedErrors.map((err) => ({
-            ...err,
-            timestamp: err?.timestamp ? new Date(err.timestamp) : new Date(),
-          }))
+          ...err,
+          timestamp: err?.timestamp ? new Date(err.timestamp) : new Date(),
+        }))
         : [];
       setErrors(normalized.slice(-10)); // Show last 10 errors
     } catch (e) {
@@ -635,9 +633,9 @@ export function DevErrorOverlay() {
         );
         const normalized = Array.isArray(storedErrors)
           ? storedErrors.map((err) => ({
-              ...err,
-              timestamp: err?.timestamp ? new Date(err.timestamp) : new Date(),
-            }))
+            ...err,
+            timestamp: err?.timestamp ? new Date(err.timestamp) : new Date(),
+          }))
           : [];
         setErrors(normalized.slice(-10));
       } catch (e) {

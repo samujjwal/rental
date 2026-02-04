@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { BusinessType, CreateOrganizationDto } from "~/lib/api/organizations";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -224,7 +224,7 @@ export default function NewOrganizationPage() {
                   disabled={!selectedType}
                 >
                   Continue
-                </Button>
+                </UnifiedButton>
               </div>
             </>
           )}
@@ -302,12 +302,12 @@ export default function NewOrganizationPage() {
               </div>
 
               <div className="flex justify-between">
-                <Button type="button" variant="outlined" onClick={() => setStep(1)}>
+                <UnifiedButton type="button" variant="outline" onClick={() => setStep(1)}>
                   Back
-                </Button>
-                <Button type="button" onClick={() => setStep(3)}>
+                </UnifiedButton>
+                <UnifiedButton type="button" onClick={() => setStep(3)}>
                   Continue
-                </Button>
+                </UnifiedButton>
               </div>
             </>
           )}
@@ -395,10 +395,10 @@ export default function NewOrganizationPage() {
               </div>
 
               <div className="flex justify-between">
-                <Button type="button" variant="outlined" onClick={() => setStep(2)}>
+                <UnifiedButton type="button" variant="outline" onClick={() => setStep(2)}>
                   Back
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                </UnifiedButton>
+                <UnifiedButton type="submit" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -407,7 +407,7 @@ export default function NewOrganizationPage() {
                   ) : (
                     "Create Organization"
                   )}
-                </Button>
+                </UnifiedButton>
               </div>
             </>
           )}

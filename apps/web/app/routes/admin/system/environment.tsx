@@ -16,7 +16,7 @@ import {
   Info,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -175,13 +175,13 @@ export default function EnvironmentPage() {
           </p>
         </div>
         <Button
-          variant="outlined"
+          variant="outline"
           onClick={() => revalidator.revalidate()}
           disabled={revalidator.state === "loading"}
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${revalidator.state === "loading" ? "animate-spin" : ""}`} />
           Refresh
-        </Button>
+        </UnifiedButton>
       </div>
 
       {/* Warning Notice */}

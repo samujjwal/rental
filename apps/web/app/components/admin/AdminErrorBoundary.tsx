@@ -76,7 +76,7 @@ function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
           {resetErrorBoundary && (
             <Button
               variant="outlined"
-              startIcon={<RefreshIcon />}
+              leftIcon={<RefreshIcon />}
               onClick={resetErrorBoundary}
             >
               Try Again
@@ -84,7 +84,7 @@ function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
           )}
           <Button
             variant="contained"
-            startIcon={<HomeIcon />}
+            leftIcon={<HomeIcon />}
             component={Link}
             to="/admin"
           >
@@ -176,14 +176,14 @@ export function AdminErrorBoundary() {
         <Box sx={{ display: "flex", gap: 2, justifyContent: "center" }}>
           <Button
             variant="outlined"
-            startIcon={<RefreshIcon />}
+            leftIcon={<RefreshIcon />}
             onClick={() => revalidator.revalidate()}
           >
             Refresh Page
           </Button>
           <Button
             variant="contained"
-            startIcon={<HomeIcon />}
+            leftIcon={<HomeIcon />}
             component={Link}
             to="/admin"
           >

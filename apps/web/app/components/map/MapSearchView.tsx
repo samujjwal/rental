@@ -70,7 +70,7 @@ export function MapSearchView({
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
                     <Button
                         variant="contained"
-                        startIcon={<RefreshCw size={18} />}
+                        leftIcon={<RefreshCw size={18} />}
                         onClick={handleSearchThisArea}
                         sx={{
                             backgroundColor: 'white',

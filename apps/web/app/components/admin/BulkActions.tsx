@@ -86,7 +86,7 @@ export function BulkActionsToolbar({
                             color="inherit"
                             onClick={handleMenuOpen}
                             disabled={isLoading}
-                            startIcon={<Clock size={16} />}
+                            leftIcon={<Clock size={16} />}
                         >
                             Change Status
                         </Button>

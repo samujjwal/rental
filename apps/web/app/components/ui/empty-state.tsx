@@ -3,7 +3,7 @@
 import React from "react";
 import { Link } from "react-router";
 import { cn } from "~/lib/utils";
-import { Button } from "./button";
+import { UnifiedButton } from "./unified-button";
 
 interface EmptyStateProps {
   /**
@@ -110,14 +110,14 @@ export function EmptyState({
             <>
               {action.href ? (
                 <Link to={action.href}>
-                  <Button variant="contained" color="primary" component="span">
+                  <UnifiedButton variant="primary">
                     {action.label}
-                  </Button>
+                  </UnifiedButton>
                 </Link>
               ) : (
-                <Button variant="contained" color="primary" onClick={action.onClick}>
+                <UnifiedButton variant="primary" onClick={action.onClick}>
                   {action.label}
-                </Button>
+                </UnifiedButton>
               )}
             </>
           )}
@@ -125,14 +125,14 @@ export function EmptyState({
             <>
               {secondaryAction.href ? (
                 <Link to={secondaryAction.href}>
-                  <Button variant="outlined" component="span">
+                  <UnifiedButton variant="outline">
                     {secondaryAction.label}
-                  </Button>
+                  </UnifiedButton>
                 </Link>
               ) : (
-                <Button variant="outlined" onClick={secondaryAction.onClick}>
+                <UnifiedButton variant="outline" onClick={secondaryAction.onClick}>
                   {secondaryAction.label}
-                </Button>
+                </UnifiedButton>
               )}
             </>
           )}

@@ -20,7 +20,7 @@ import {
   type ResetPasswordInput,
 } from "~/lib/validation/auth";
 import { redirect } from "react-router";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
@@ -263,7 +263,7 @@ export default function ResetPassword() {
               </div>
 
               {/* Submit Button */}
-              <Button type="submit" disabled={isSubmitting} className="w-full">
+              <UnifiedButton type="submit" disabled={isSubmitting} className="w-full">
                 {isSubmitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
@@ -272,7 +272,7 @@ export default function ResetPassword() {
                 ) : (
                   "Reset Password"
                 )}
-              </Button>
+              </UnifiedButton>
             </Form>
           )}
         </div>

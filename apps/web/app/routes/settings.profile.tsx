@@ -18,7 +18,7 @@ import {
 import { useAuthStore } from "~/lib/store/auth";
 import { api } from "~/lib/api-client";
 import { cn } from "~/lib/utils";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 import {
   Card,
   CardContent,
@@ -184,7 +184,7 @@ export default function ProfileSettings() {
                     </button>
                   </div>
                   <div>
-                    <Button variant="outlined">Change Photo</Button>
+                    <UnifiedButton variant="outline">Change Photo</UnifiedButton>
                     <p className="text-sm text-muted-foreground mt-2">
                       JPG, PNG or GIF. Max size 5MB
                     </p>
@@ -279,10 +279,10 @@ export default function ProfileSettings() {
                     </div>
 
                     <div className="flex items-center justify-end pt-4 border-t border-border">
-                      <Button type="submit" className="flex items-center gap-2">
+                      <UnifiedButton type="submit" className="flex items-center gap-2">
                         <Save className="w-5 h-5" />
                         Save Changes
-                      </Button>
+                      </UnifiedButton>
                     </div>
                   </div>
                 </CardContent>
@@ -359,14 +359,12 @@ export default function ProfileSettings() {
                     />
                   </div>
                   <div className="flex items-center justify-end pt-4 border-t border-border">
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      className="flex items-center gap-2"
+                    <UnifiedButton
+                      variant="primary"
+                      leftIcon={<Key className="w-5 h-5" />}
                     >
-                      <Key className="w-5 h-5" />
                       Update Password
-                    </Button>
+                    </UnifiedButton>
                   </div>
                 </div>
               </CardContent>
@@ -382,7 +380,7 @@ export default function ProfileSettings() {
                   Once you delete your account, there is no going back. Please
                   be certain.
                 </p>
-                <Button variant="contained" color="error">Delete Account</Button>
+                <UnifiedButton variant="destructive">Delete Account</UnifiedButton>
               </CardContent>
             </Card>
           </div>

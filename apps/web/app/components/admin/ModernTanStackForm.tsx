@@ -530,7 +530,7 @@ export function ModernTanStackForm<T extends Record<string, any>>({
             >
               <Button
                 variant="outlined"
-                startIcon={<CancelIcon />}
+                leftIcon={<CancelIcon />}
                 onClick={onCancel}
                 disabled={loading}
               >
@@ -539,7 +539,7 @@ export function ModernTanStackForm<T extends Record<string, any>>({
               <Button
                 type="submit"
                 variant="contained"
-                startIcon={<SaveIcon />}
+                leftIcon={<SaveIcon />}
                 disabled={loading}
               >
                 {loading

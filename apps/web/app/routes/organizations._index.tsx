@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 
 import { useLoaderData, Link } from "react-router";
-import { Button, Badge, Card, CardContent } from "~/components/ui";
+import { UnifiedButton, Badge, Card, CardContent } from "~/components/ui";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { Organization } from "~/lib/api/organizations";
 
@@ -55,7 +55,7 @@ export default function OrganizationsIndex() {
             </p>
           </div>
           <Link to="/organizations/create">
-            <Button>Create Organization</Button>
+            <UnifiedButton>Create Organization</UnifiedButton>
           </Link>
         </div>
 
@@ -82,7 +82,7 @@ export default function OrganizationsIndex() {
               Create an organization to start managing listings as a team
             </p>
             <Link to="/organizations/create" className="mt-6 inline-block">
-              <Button>Create Your First Organization</Button>
+              <UnifiedButton>Create Your First Organization</UnifiedButton>
             </Link>
           </Card>
         ) : (
@@ -152,15 +152,15 @@ export default function OrganizationsIndex() {
                   {/* Actions */}
                   <div className="flex space-x-2">
                     <Link to={`/organizations/${org.id}`} className="flex-1">
-                      <Button className="w-full">Manage</Button>
+                      <UnifiedButton className="w-full">Manage</UnifiedButton>
                     </Link>
                     <Link
                       to={`/organizations/${org.id}/listings`}
                       className="flex-1"
                     >
-                      <Button variant="outlined" className="w-full">
+                      <UnifiedButton variant="outline" className="w-full">
                         Listings
-                      </Button>
+                      </UnifiedButton>
                     </Link>
                   </div>
                 </CardContent>

@@ -13,7 +13,7 @@ export function MapViewToggle({ view, onViewChange, className = '' }: MapViewTog
             <Button
                 onClick={() => onViewChange('list')}
                 variant={view === 'list' ? 'contained' : 'text'}
-                startIcon={<List size={18} />}
+                leftIcon={<List size={18} />}
                 sx={{
                     borderRadius: '0.5rem 0 0 0.5rem',
                     textTransform: 'none',
@@ -33,7 +33,7 @@ export function MapViewToggle({ view, onViewChange, className = '' }: MapViewTog
             <Button
                 onClick={() => onViewChange('map')}
                 variant={view === 'map' ? 'contained' : 'text'}
-                startIcon={<Map size={18} />}
+                leftIcon={<Map size={18} />}
                 sx={{
                     borderRadius: '0 0.5rem 0.5rem 0',
                     textTransform: 'none',

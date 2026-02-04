@@ -15,7 +15,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -458,7 +458,7 @@ export default function NotificationsSettingsPage() {
 
         {/* Submit Button */}
         <div className="flex justify-end">
-          <Button type="submit" disabled={isSubmitting}>
+          <UnifiedButton type="submit" disabled={isSubmitting}>
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -470,7 +470,7 @@ export default function NotificationsSettingsPage() {
                 Save Settings
               </>
             )}
-          </Button>
+          </UnifiedButton>
         </div>
       </Form>
     </div>

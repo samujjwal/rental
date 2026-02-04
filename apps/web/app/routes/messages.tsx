@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "~/lib/utils";
-import { Button, Badge } from "~/components/ui";
+import { UnifiedButton, Badge } from "~/components/ui";
 import { messagingApi, type Conversation as ApiConversation, type Message as ApiMessage } from "~/lib/api/messaging";
 import { useAuthStore } from "~/lib/store/auth";
 import { useSocket } from "~/hooks/use-socket";
@@ -142,7 +142,7 @@ export default function Messages() {
   const { rawConversations, rawMessages, error } = useLoaderData<typeof clientLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
-  
+
   // Get current user from auth store
   const { user } = useAuthStore();
   const currentUserId = user?.id || "";
@@ -176,12 +176,12 @@ export default function Messages() {
       if (selectedConversation && message.conversationId === selectedConversation) {
         // Prevent duplicates (especially from self if we use optimistic updates)
         if (message.senderId !== currentUserId) {
-             setMessages((prev) => {
-                if (prev.some(m => m.id === message.id)) return prev;
-                return [...prev, transformedMsg];
-             });
-             // Mark as read immediately
-             socket.emit('mark_read', { conversationId: message.conversationId, messageId: message.id });
+          setMessages((prev) => {
+            if (prev.some(m => m.id === message.id)) return prev;
+            return [...prev, transformedMsg];
+          });
+          // Mark as read immediately
+          socket.emit('mark_read', { conversationId: message.conversationId, messageId: message.id });
         }
       }
 
@@ -192,24 +192,24 @@ export default function Messages() {
         let updatedConv;
 
         if (existingIdx !== -1) {
-            updatedConv = { ...prev[existingIdx] };
-            newList.splice(existingIdx, 1); // remove from current pos
+          updatedConv = { ...prev[existingIdx] };
+          newList.splice(existingIdx, 1); // remove from current pos
         } else {
-            // New conversation found? We need to fetch details or construct partial
-            // For now, ignore if not in list or handle partially
-             return prev;
+          // New conversation found? We need to fetch details or construct partial
+          // For now, ignore if not in list or handle partially
+          return prev;
         }
 
         updatedConv.lastMessage = {
-            content: transformedMsg.content,
-            createdAt: transformedMsg.createdAt,
-            // If we are sending it or viewing it, it is read? 
-            read: message.senderId === currentUserId || (selectedConversation === message.conversationId),
-            senderId: transformedMsg.senderId,
+          content: transformedMsg.content,
+          createdAt: transformedMsg.createdAt,
+          // If we are sending it or viewing it, it is read? 
+          read: message.senderId === currentUserId || (selectedConversation === message.conversationId),
+          senderId: transformedMsg.senderId,
         };
 
         if (message.senderId !== currentUserId && selectedConversation !== message.conversationId) {
-            updatedConv.unreadCount = (updatedConv.unreadCount || 0) + 1;
+          updatedConv.unreadCount = (updatedConv.unreadCount || 0) + 1;
         }
 
         return [updatedConv, ...newList];
@@ -249,7 +249,7 @@ export default function Messages() {
         limit: 100,
       });
       setMessages(apiMessages.map(m => transformMessage(m, currentUserId)));
-      
+
       // Mark messages as read
       await messagingApi.markAsRead(conversationId);
     } catch (error) {
@@ -271,7 +271,7 @@ export default function Messages() {
     if (!newMessage.trim() || !selectedConversation || isSending) return;
 
     setIsSending(true);
-    
+
     // Optimistic update
     const optimisticMessage: TransformedMessage = {
       id: `temp-${Date.now()}`,
@@ -281,7 +281,7 @@ export default function Messages() {
       createdAt: new Date().toISOString(),
       read: false,
     };
-    
+
     setMessages(prev => [...prev, optimisticMessage]);
     const messageContent = newMessage;
     setNewMessage("");
@@ -290,16 +290,16 @@ export default function Messages() {
       const sentMessage = await messagingApi.sendMessage(selectedConversation, {
         content: messageContent,
       });
-      
+
       // Replace optimistic message with real one
-      setMessages(prev => 
-        prev.map(m => 
-          m.id === optimisticMessage.id 
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === optimisticMessage.id
             ? transformMessage(sentMessage, currentUserId)
             : m
         )
       );
-      
+
       // Revalidate to update conversation list
       revalidator.revalidate();
     } catch (error) {
@@ -325,7 +325,7 @@ export default function Messages() {
       <div className="h-screen flex flex-col items-center justify-center bg-background">
         <MessageCircle className="w-16 h-16 mb-4 text-muted-foreground" />
         <p className="text-lg text-muted-foreground mb-4">{error}</p>
-        <Button onClick={() => revalidator.revalidate()}>Retry</Button>
+        <UnifiedButton onClick={() => revalidator.revalidate()}>Retry</UnifiedButton>
       </div>
     );
   }
@@ -604,17 +604,14 @@ export default function Messages() {
                     rows={1}
                     className="flex-1 px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors resize-none"
                   />
-                  <Button
+                  <UnifiedButton
                     type="submit"
                     disabled={!newMessage.trim() || isSending}
+                    loading={isSending}
                     className="p-2"
                   >
-                    {isSending ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Send className="w-5 h-5" />
-                    )}
-                  </Button>
+                    {!isSending && <Send className="w-5 h-5" />}
+                  </UnifiedButton>
                 </form>
               </div>
             </>

@@ -28,7 +28,7 @@ import {
   CardTitle,
   Badge,
 } from "~/components/ui";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
 
 import type { Review } from "~/types/review";
@@ -265,12 +265,12 @@ function ReviewCard({ review, isOwner }: { review: Review; isOwner: boolean }) {
                   required
                 />
                 <div className="flex justify-end gap-2 mt-3">
-                  <Button type="button" variant="outlined" size="small" onClick={() => setShowResponseForm(false)}>
+                  <UnifiedButton type="button" variant="outline" size="small" onClick={() => setShowResponseForm(false)}>
                     Cancel
-                  </Button>
-                  <Button type="submit" size="small">
+                  </UnifiedButton>
+                  <UnifiedButton type="submit" size="small">
                     Submit Response
-                  </Button>
+                  </UnifiedButton>
                 </div>
               </Form>
             )}
@@ -294,12 +294,12 @@ function ReviewCard({ review, isOwner }: { review: Review; isOwner: boolean }) {
                   <option value="other">Other</option>
                 </select>
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outlined" size="small" onClick={() => setShowReportForm(false)}>
+                  <UnifiedButton type="button" variant="outline" size="small" onClick={() => setShowReportForm(false)}>
                     Cancel
-                  </Button>
-                  <Button type="submit" size="small" variant="outlined" color="error">
+                  </UnifiedButton>
+                  <UnifiedButton type="submit" size="small" variant="outline" variant="destructive">
                     Report
-                  </Button>
+                  </UnifiedButton>
                 </div>
               </Form>
             )}
@@ -464,7 +464,7 @@ export default function ReviewsPage() {
                     : "You haven't left any reviews yet. Share your experience after your next rental!"}
                 </p>
                 <Link to="/bookings">
-                  <Button>View Bookings</Button>
+                  <UnifiedButton>View Bookings</UnifiedButton>
                 </Link>
               </CardContent>
             </Card>

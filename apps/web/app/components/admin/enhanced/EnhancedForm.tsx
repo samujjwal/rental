@@ -531,7 +531,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
           <Box sx={{ display: "flex", gap: 1 }}>
             {canGoBack && (
               <Button
-                startIcon={<BackIcon />}
+                leftIcon={<BackIcon />}
                 onClick={handleBack}
                 disabled={loading}
               >
@@ -543,7 +543,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
           <Box sx={{ display: "flex", gap: 1 }}>
             {onCancel && (
               <Button
-                startIcon={<CancelIcon />}
+                leftIcon={<CancelIcon />}
                 onClick={onCancel}
                 disabled={loading}
               >
@@ -554,7 +554,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
             {canGoNext ? (
               <Button
                 variant="contained"
-                endIcon={<NextIcon />}
+                rightIcon={<NextIcon />}
                 onClick={handleNext}
                 disabled={loading}
               >
@@ -564,7 +564,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
               <Button
                 type="submit"
                 variant="contained"
-                startIcon={
+                leftIcon={
                   loading ? <CircularProgress size={20} /> : <SaveIcon />
                 }
                 disabled={loading || isViewMode}

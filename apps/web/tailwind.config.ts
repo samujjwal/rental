@@ -110,12 +110,34 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "pulse-subtle": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.5s ease-in-out",
         "slide-up": "slide-up 0.5s ease-out",
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        shimmer: "shimmer 2s linear infinite",
+        "pulse-subtle": "pulse-subtle 2s ease-in-out infinite",
+      },
+      spacing: {
+        touch: "44px",
+        "touch-sm": "36px",
+      },
+      minHeight: {
+        touch: "44px",
+        "touch-sm": "36px",
+      },
+      minWidth: {
+        touch: "44px",
+        "touch-sm": "36px",
       },
     },
   },

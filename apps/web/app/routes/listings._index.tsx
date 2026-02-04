@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { listingsApi } from "~/lib/api/listings";
-import { Button, Badge } from "~/components/ui";
+import { UnifiedButton, Badge } from "~/components/ui";
 import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
@@ -170,7 +170,7 @@ export default function OwnerListingsPage() {
             <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
             <h1 className="text-2xl font-bold text-foreground mb-2">Unable to load listings</h1>
             <p className="text-muted-foreground mb-6">{error}</p>
-            <Button onClick={() => revalidator.revalidate()}>Try Again</Button>
+            <UnifiedButton onClick={() => revalidator.revalidate()}>Try Again</UnifiedButton>
           </div>
         </div>
       </div>
@@ -190,10 +190,10 @@ export default function OwnerListingsPage() {
               </p>
             </div>
             <Link to="/listings/new">
-              <Button>
+              <UnifiedButton>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Listing
-              </Button>
+              </UnifiedButton>
             </Link>
           </div>
         </div>
@@ -237,28 +237,28 @@ export default function OwnerListingsPage() {
               onClick={() => handleStatusFilter(null)}
             >
               All ({stats.total})
-            </Button>
+            </UnifiedButton>
             <Button
               variant={currentStatus === "AVAILABLE" ? "contained" : "outlined"}
               size="small"
               onClick={() => handleStatusFilter("AVAILABLE")}
             >
               Available ({stats.active})
-            </Button>
+            </UnifiedButton>
             <Button
               variant={currentStatus === "RENTED" ? "contained" : "outlined"}
               size="small"
               onClick={() => handleStatusFilter("RENTED")}
             >
               Rented ({stats.rented})
-            </Button>
+            </UnifiedButton>
             <Button
               variant={currentStatus === "DRAFT" ? "contained" : "outlined"}
               size="small"
               onClick={() => handleStatusFilter("DRAFT")}
             >
               Drafts ({stats.draft})
-            </Button>
+            </UnifiedButton>
           </div>
           
           <div className="flex items-center gap-4 w-full md:w-auto">
@@ -279,14 +279,14 @@ export default function OwnerListingsPage() {
                 onClick={() => setViewMode("grid")}
               >
                 <Grid className="w-4 h-4" />
-              </Button>
+              </UnifiedButton>
               <Button
                 variant={viewMode === "list" ? "contained" : "text"}
                 size="small"
                 onClick={() => setViewMode("list")}
               >
                 <List className="w-4 h-4" />
-              </Button>
+              </UnifiedButton>
             </div>
           </div>
         </div>
@@ -305,10 +305,10 @@ export default function OwnerListingsPage() {
             </p>
             {!currentStatus && !currentSearch && (
               <Link to="/listings/new">
-                <Button>
+                <UnifiedButton>
                   <Plus className="w-4 h-4 mr-2" />
                   Create Your First Listing
-                </Button>
+                </UnifiedButton>
               </Link>
             )}
           </div>
@@ -465,18 +465,18 @@ export default function OwnerListingsPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <Link to={`/listings/${listing.id}`}>
-                            <Button variant="text" size="small">
+                            <UnifiedButton variant="ghost" size="small">
                               <Eye className="w-4 h-4" />
-                            </Button>
+                            </UnifiedButton>
                           </Link>
                           <Link to={`/listings/${listing.id}/edit`}>
-                            <Button variant="text" size="small">
+                            <UnifiedButton variant="ghost" size="small">
                               <Edit className="w-4 h-4" />
-                            </Button>
+                            </UnifiedButton>
                           </Link>
-                          <Button variant="text" size="small" className="text-red-600 hover:text-red-700">
+                          <UnifiedButton variant="ghost" size="small" className="text-red-600 hover:text-red-700">
                             <Trash2 className="w-4 h-4" />
-                          </Button>
+                          </UnifiedButton>
                         </div>
                       </td>
                     </tr>

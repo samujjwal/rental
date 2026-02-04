@@ -14,7 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { adminApi, type SystemBackup } from "~/lib/api/admin";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -179,7 +179,7 @@ export default function BackupsPage() {
                 <HardDrive className="w-4 h-4 mr-2" />
               )}
               Full Backup
-            </Button>
+            </UnifiedButton>
             <p className="text-sm text-gray-500 mt-2">
               Complete backup of all database tables and files
             </p>
@@ -190,7 +190,7 @@ export default function BackupsPage() {
             <input type="hidden" name="type" value="incremental" />
             <Button
               type="submit"
-              variant="outlined"
+              variant="outline"
               disabled={isSubmitting && formIntent === "create"}
               className="w-full"
             >
@@ -200,7 +200,7 @@ export default function BackupsPage() {
                 <RefreshCw className="w-4 h-4 mr-2" />
               )}
               Incremental Backup
-            </Button>
+            </UnifiedButton>
             <p className="text-sm text-gray-500 mt-2">
               Backup only changes since last full backup
             </p>
@@ -294,7 +294,7 @@ export default function BackupsPage() {
                             <Button
                               type="submit"
                               size="small"
-                              color="error"
+                              variant="destructive"
                               disabled={isSubmitting}
                             >
                               {isSubmitting ? (
@@ -302,25 +302,25 @@ export default function BackupsPage() {
                               ) : (
                                 "Confirm"
                               )}
-                            </Button>
+                            </UnifiedButton>
                           </Form>
                           <Button
-                            variant="outlined"
+                            variant="outline"
                             size="small"
                             onClick={() => setShowConfirmRestore(null)}
                           >
                             Cancel
-                          </Button>
+                          </UnifiedButton>
                         </div>
                       ) : (
                         <Button
-                          variant="outlined"
+                          variant="outline"
                           size="small"
                           onClick={() => setShowConfirmRestore(backup.id)}
                         >
                           <Upload className="w-4 h-4 mr-1" />
                           Restore
-                        </Button>
+                        </UnifiedButton>
                       )}
                     </div>
                   )}

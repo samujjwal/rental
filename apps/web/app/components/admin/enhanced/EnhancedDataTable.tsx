@@ -330,7 +330,7 @@ export function EnhancedDataTable<T = any>({
             {onAdd && (
               <Button
                 variant="contained"
-                startIcon={<AddIcon />}
+                leftIcon={<AddIcon />}
                 onClick={onAdd}
                 size="medium"
               >
@@ -375,7 +375,7 @@ export function EnhancedDataTable<T = any>({
           <Box>
             <Button
               size="small"
-              startIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              leftIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
               onClick={() => setShowAdvanced(!showAdvanced)}
               sx={{ alignSelf: "flex-start" }}
             >

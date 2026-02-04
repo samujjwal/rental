@@ -195,7 +195,7 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
       {filters.length > 0 && (
         <Button
           size="small"
-          startIcon={<CloseIcon fontSize="small" />}
+          leftIcon={<CloseIcon fontSize="small" />}
           onClick={() => filters.forEach((f) => onFilterRemove(f.id))}
           sx={{ ml: 1 }}
         >

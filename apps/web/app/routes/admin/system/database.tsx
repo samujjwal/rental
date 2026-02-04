@@ -15,7 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { Button } from "~/components/ui";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -276,7 +276,7 @@ export default function DatabasePage() {
                   <Button
                     type="submit"
                     size="small"
-                    color="primary"
+                    variant="primary"
                     disabled={isSubmitting}
                   >
                     {isSubmitting && formIntent === "vacuum" ? (
@@ -284,25 +284,25 @@ export default function DatabasePage() {
                     ) : (
                       "Confirm"
                     )}
-                  </Button>
+                  </UnifiedButton>
                 </Form>
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   size="small"
                   onClick={() => setShowConfirm(null)}
                 >
                   Cancel
-                </Button>
+                </UnifiedButton>
               </div>
             ) : (
               <Button
-                variant="outlined"
+                variant="outline"
                 onClick={() => setShowConfirm("vacuum")}
                 className="w-full"
               >
                 <Zap className="w-4 h-4 mr-2" />
                 Run Vacuum
-              </Button>
+              </UnifiedButton>
             )}
           </div>
 
@@ -322,7 +322,7 @@ export default function DatabasePage() {
                   <Button
                     type="submit"
                     size="small"
-                    color="primary"
+                    variant="primary"
                     disabled={isSubmitting}
                   >
                     {isSubmitting && formIntent === "analyze" ? (
@@ -330,25 +330,25 @@ export default function DatabasePage() {
                     ) : (
                       "Confirm"
                     )}
-                  </Button>
+                  </UnifiedButton>
                 </Form>
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   size="small"
                   onClick={() => setShowConfirm(null)}
                 >
                   Cancel
-                </Button>
+                </UnifiedButton>
               </div>
             ) : (
               <Button
-                variant="outlined"
+                variant="outline"
                 onClick={() => setShowConfirm("analyze")}
                 className="w-full"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Run Analyze
-              </Button>
+              </UnifiedButton>
             )}
           </div>
 
@@ -368,7 +368,7 @@ export default function DatabasePage() {
                   <Button
                     type="submit"
                     size="small"
-                    color="error"
+                    variant="destructive"
                     disabled={isSubmitting}
                   >
                     {isSubmitting && formIntent === "clearCache" ? (
@@ -376,26 +376,25 @@ export default function DatabasePage() {
                     ) : (
                       "Confirm"
                     )}
-                  </Button>
+                  </UnifiedButton>
                 </Form>
                 <Button
-                  variant="outlined"
+                  variant="outline"
                   size="small"
                   onClick={() => setShowConfirm(null)}
                 >
                   Cancel
-                </Button>
+                </UnifiedButton>
               </div>
             ) : (
               <Button
-                variant="outlined"
-                color="error"
+                variant="destructive"
                 onClick={() => setShowConfirm("clearCache")}
                 className="w-full"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Clear Cache
-              </Button>
+              </UnifiedButton>
             )}
           </div>
         </div>

@@ -204,7 +204,7 @@ export default function AdminDashboard() {
               variant="contained"
               component={Link}
               to="/admin/analytics"
-              endIcon={<ArrowRightIcon />}
+              rightIcon={<ArrowRightIcon />}
               sx={{ borderRadius: 2 }}
             >
               Full Analytics
@@ -374,7 +374,7 @@ export default function AdminDashboard() {
             variant="text"
             component={Link}
             to="/admin/system/audit"
-            endIcon={<ArrowRightIcon />}
+            rightIcon={<ArrowRightIcon />}
           >
             View All
           </Button>
