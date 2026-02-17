@@ -1,12 +1,9 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
 import { useState, useEffect } from "react";
 import {
-  Shield,
-  Lock,
   Key,
   Eye,
-  EyeOff,
   CheckCircle,
   XCircle,
   Loader2,
@@ -17,7 +14,8 @@ import {
   Globe,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -74,59 +72,149 @@ const defaultSettings: SecuritySettings = {
   enableAuditLog: true,
   auditLogRetentionDays: 90,
 };
+const MAX_IP_WHITELIST_ENTRIES = 200;
+const IPV4_WITH_OPTIONAL_CIDR =
+  /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\/(?:[0-9]|[12]\d|3[0-2]))?$/;
 
-export async function clientLoader() {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const settingsRes = await adminApi.getSettings();
     return {
       settings: (settingsRes.security as unknown as SecuritySettings) || defaultSettings,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       settings: defaultSettings,
-      error: error?.message || "Failed to load security settings",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load security settings",
     };
   }
 }
 
-export async function clientAction({ request }: { request: Request }) {
+export async function clientAction({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+
   const formData = await request.formData();
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "save") {
+    return { success: false, error: "Invalid action" };
+  }
+  const parseNonNegativeInt = (
+    value: FormDataEntryValue | null,
+    fallback: number
+  ) => {
+    const num = Number(value);
+    return Number.isFinite(num) && num >= 0 ? Math.floor(num) : fallback;
+  };
   
   const ipWhitelistRaw = formData.get("ipWhitelist") as string;
   const ipWhitelist = ipWhitelistRaw
     ? ipWhitelistRaw.split("\n").map((ip) => ip.trim()).filter(Boolean)
     : [];
+  if (ipWhitelist.length > MAX_IP_WHITELIST_ENTRIES) {
+    return { success: false, error: "IP whitelist exceeds maximum allowed entries." };
+  }
+  const invalidIp = ipWhitelist.find((ip) => !IPV4_WITH_OPTIONAL_CIDR.test(ip));
+  if (invalidIp) {
+    return { success: false, error: `Invalid IP/CIDR entry: ${invalidIp}` };
+  }
+
+  const minPasswordLength = parseNonNegativeInt(
+    formData.get("minPasswordLength"),
+    defaultSettings.minPasswordLength
+  );
+  const sessionTimeoutMinutes = parseNonNegativeInt(
+    formData.get("sessionTimeoutMinutes"),
+    defaultSettings.sessionTimeoutMinutes
+  );
+  const maxConcurrentSessions = parseNonNegativeInt(
+    formData.get("maxConcurrentSessions"),
+    defaultSettings.maxConcurrentSessions
+  );
+  const maxLoginAttempts = parseNonNegativeInt(
+    formData.get("maxLoginAttempts"),
+    defaultSettings.maxLoginAttempts
+  );
+  const lockoutDurationMinutes = parseNonNegativeInt(
+    formData.get("lockoutDurationMinutes"),
+    defaultSettings.lockoutDurationMinutes
+  );
+  const rateLimitRequestsPerMinute = parseNonNegativeInt(
+    formData.get("rateLimitRequestsPerMinute"),
+    defaultSettings.rateLimitRequestsPerMinute
+  );
+  const auditLogRetentionDays = parseNonNegativeInt(
+    formData.get("auditLogRetentionDays"),
+    defaultSettings.auditLogRetentionDays
+  );
+  if (minPasswordLength < 6 || minPasswordLength > 128) {
+    return { success: false, error: "Minimum password length must be between 6 and 128." };
+  }
+  if (sessionTimeoutMinutes < 5 || sessionTimeoutMinutes > 1440) {
+    return { success: false, error: "Session timeout must be between 5 and 1440 minutes." };
+  }
+  if (maxConcurrentSessions < 1 || maxConcurrentSessions > 100) {
+    return { success: false, error: "Max concurrent sessions must be between 1 and 100." };
+  }
+  if (maxLoginAttempts < 1 || maxLoginAttempts > 20) {
+    return { success: false, error: "Max login attempts must be between 1 and 20." };
+  }
+  if (lockoutDurationMinutes > 1440) {
+    return { success: false, error: "Lockout duration cannot exceed 1440 minutes." };
+  }
+  if (rateLimitRequestsPerMinute < 1 || rateLimitRequestsPerMinute > 10000) {
+    return { success: false, error: "Rate limit must be between 1 and 10000 requests/min." };
+  }
+  if (auditLogRetentionDays < 1 || auditLogRetentionDays > 3650) {
+    return { success: false, error: "Audit log retention must be between 1 and 3650 days." };
+  }
 
   const settings: Partial<SecuritySettings> = {
-    minPasswordLength: parseInt(formData.get("minPasswordLength") as string, 10),
+    minPasswordLength,
     requireUppercase: formData.get("requireUppercase") === "true",
     requireLowercase: formData.get("requireLowercase") === "true",
     requireNumbers: formData.get("requireNumbers") === "true",
     requireSpecialChars: formData.get("requireSpecialChars") === "true",
-    passwordExpiryDays: parseInt(formData.get("passwordExpiryDays") as string, 10),
-    sessionTimeoutMinutes: parseInt(formData.get("sessionTimeoutMinutes") as string, 10),
-    maxConcurrentSessions: parseInt(formData.get("maxConcurrentSessions") as string, 10),
-    rememberMeDays: parseInt(formData.get("rememberMeDays") as string, 10),
-    maxLoginAttempts: parseInt(formData.get("maxLoginAttempts") as string, 10),
-    lockoutDurationMinutes: parseInt(formData.get("lockoutDurationMinutes") as string, 10),
+    passwordExpiryDays: parseNonNegativeInt(
+      formData.get("passwordExpiryDays"),
+      defaultSettings.passwordExpiryDays
+    ),
+    sessionTimeoutMinutes,
+    maxConcurrentSessions,
+    rememberMeDays: parseNonNegativeInt(
+      formData.get("rememberMeDays"),
+      defaultSettings.rememberMeDays
+    ),
+    maxLoginAttempts,
+    lockoutDurationMinutes,
     enableCaptcha: formData.get("enableCaptcha") === "true",
     enableTwoFactor: formData.get("enableTwoFactor") === "true",
     enableIpWhitelist: formData.get("enableIpWhitelist") === "true",
     ipWhitelist,
     enableRateLimiting: formData.get("enableRateLimiting") === "true",
-    rateLimitRequestsPerMinute: parseInt(formData.get("rateLimitRequestsPerMinute") as string, 10),
+    rateLimitRequestsPerMinute,
     enableAuditLog: formData.get("enableAuditLog") === "true",
-    auditLogRetentionDays: parseInt(formData.get("auditLogRetentionDays") as string, 10),
+    auditLogRetentionDays,
   };
 
   try {
     await adminApi.updateSettings({ security: settings });
     return { success: true, message: "Security settings updated successfully" };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      error: error?.response?.data?.message || "Failed to update settings",
+      error:
+        (error &&
+          typeof error === "object" &&
+          "response" in error &&
+          (error as { response?: { data?: { message?: string } } }).response
+            ?.data?.message) ||
+        "Failed to update settings",
     };
   }
 }
@@ -136,6 +224,10 @@ export default function SecuritySettingsPage() {
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const actionMessage =
+    typeof actionData?.message === "string" ? actionData.message : null;
+  const actionError =
+    typeof actionData?.error === "string" ? actionData.error : null;
 
   const [formValues, setFormValues] = useState<SecuritySettings>(settings);
 
@@ -185,16 +277,16 @@ export default function SecuritySettingsPage() {
       </div>
 
       {/* Action Messages */}
-      {actionData?.success && (
+      {actionData?.success && actionMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
           <CheckCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.message}
+          {actionMessage}
         </div>
       )}
-      {actionData?.error && (
+      {actionError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <XCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.error}
+          {actionError}
         </div>
       )}
       {error && (
@@ -205,6 +297,7 @@ export default function SecuritySettingsPage() {
       )}
 
       <Form method="post">
+        <input type="hidden" name="intent" value="save" />
         {/* Password Policy */}
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
@@ -552,3 +645,5 @@ export default function SecuritySettingsPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

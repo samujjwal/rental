@@ -303,14 +303,16 @@ export class NotificationsService {
     userId: string,
     options: {
       type?: NotificationType;
+      unreadOnly?: boolean;
       page?: number;
       limit?: number;
     } = {},
   ): Promise<{ notifications: Notification[]; total: number }> {
-    const { type, page = 1, limit = 20 } = options;
+    const { type, unreadOnly, page = 1, limit = 20 } = options;
 
     const where: any = { userId };
     if (type) where.type = type;
+    if (unreadOnly) where.read = false;
 
     const [notifications, total] = await Promise.all([
       this.prisma.notification.findMany({
@@ -408,20 +410,20 @@ export class NotificationsService {
       await this.prisma.userPreferences.create({
         data: {
           userId,
-          preferences: preferences as any,
+          preferences: JSON.stringify(preferences || {}),
         },
       });
       return;
     }
 
     // Merge preferences
-    const currentPreferences = (existing.preferences as any) || {};
+    const currentPreferences = this.parsePreferences(existing.preferences);
     const updatedPreferences = { ...currentPreferences, ...preferences };
 
     await this.prisma.userPreferences.update({
       where: { userId },
       data: {
-        preferences: updatedPreferences,
+        preferences: JSON.stringify(updatedPreferences),
       },
     });
   }
@@ -434,7 +436,7 @@ export class NotificationsService {
       where: { userId },
     });
 
-    const preferences = (prefs?.preferences as any) || {};
+    const preferences = this.parsePreferences(prefs?.preferences);
 
     return {
       email: preferences.email !== false,
@@ -447,5 +449,17 @@ export class NotificationsService {
       messageAlerts: preferences.messageAlerts !== false,
       marketingEmails: preferences.marketingEmails === true,
     };
+  }
+
+  private parsePreferences(raw: string | null | undefined): Record<string, any> {
+    if (!raw) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
   }
 }

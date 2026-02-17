@@ -37,6 +37,15 @@ export interface UpdateCategoryDto {
   minimumInsuranceAmount?: number;
 }
 
+export interface CategoryStatsResult {
+  category: Category;
+  stats: {
+    totalListings: number;
+    activeListings: number;
+    averagePrice: number;
+  };
+}
+
 @Injectable()
 export class CategoriesService {
   constructor(
@@ -45,6 +54,10 @@ export class CategoriesService {
   ) {}
 
   async create(dto: CreateCategoryDto): Promise<Category> {
+    if (!dto?.name?.trim() || !dto?.slug?.trim() || dto.templateSchema === undefined) {
+      throw new BadRequestException('name, slug, and templateSchema are required');
+    }
+
     // Check if slug already exists
     const existing = await this.prisma.category.findUnique({
       where: { slug: dto.slug },
@@ -176,7 +189,7 @@ export class CategoriesService {
     await this.cacheService.del(`category:${id}`);
   }
 
-  async getCategoryStats(id: string) {
+  async getCategoryStats(id: string): Promise<CategoryStatsResult> {
     const [category, listingCount, activeListings, avgPrice] = await Promise.all([
       this.findById(id),
       this.prisma.listing.count({ where: { categoryId: id } }),
@@ -202,7 +215,7 @@ export class CategoriesService {
       stats: {
         totalListings: listingCount,
         activeListings,
-        averagePrice: avgPrice._avg.basePrice || 0,
+        averagePrice: Number(avgPrice._avg.basePrice || 0),
       },
     };
   }

@@ -127,7 +127,7 @@ export class PayoutsService {
     };
   }
 
-  async getOwnerPayouts(ownerId: string) {
+  async getOwnerPayouts(ownerId: string): Promise<unknown[]> {
     return this.prisma.payout.findMany({
       where: { ownerId },
       orderBy: { createdAt: 'desc' },

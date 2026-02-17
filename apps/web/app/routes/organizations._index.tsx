@@ -1,20 +1,45 @@
-/* eslint-disable react-refresh/only-export-components */
 
-import { useLoaderData, Link } from "react-router";
-import { UnifiedButton, Badge, Card, CardContent } from "~/components/ui";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData, Link, redirect } from "react-router";
+import { UnifiedButton, Badge, Card, CardContent, PageSkeleton } from "~/components/ui";
+import { RouteErrorBoundary } from "~/components/ui/error-state";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { Organization } from "~/lib/api/organizations";
+import { getUser } from "~/utils/auth";
 
-export async function clientLoader() {
-  const { organizations } = await organizationsApi.getMyOrganizations();
-  return { organizations };
+const ORG_CREATE_PATH = "/organizations/create";
+
+export const ErrorBoundary = RouteErrorBoundary;
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
+  try {
+    const result = await organizationsApi.getMyOrganizations();
+    const organizations = Array.isArray(result.organizations)
+      ? result.organizations
+      : [];
+    return { organizations, error: null };
+  } catch (error: unknown) {
+    return {
+      organizations: [],
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load organizations",
+    };
+  }
 }
 
 export default function OrganizationsIndex() {
-  const { organizations } = useLoaderData<typeof clientLoader>();
+  const { organizations, error } = useLoaderData<typeof clientLoader>();
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
+  const getStatusVariant = (status: unknown) => {
+    const normalized = String(status || "PENDING").toUpperCase();
+    switch (normalized) {
       case "VERIFIED":
         return "success";
       case "PENDING":
@@ -44,6 +69,11 @@ export default function OrganizationsIndex() {
   return (
     <div className="min-h-screen bg-background py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {error ? (
+          <div className="mb-6 bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
+            {error}
+          </div>
+        ) : null}
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -54,7 +84,7 @@ export default function OrganizationsIndex() {
               Manage your organization accounts and team members
             </p>
           </div>
-          <Link to="/organizations/create">
+          <Link to={ORG_CREATE_PATH}>
             <UnifiedButton>Create Organization</UnifiedButton>
           </Link>
         </div>
@@ -81,7 +111,7 @@ export default function OrganizationsIndex() {
             <p className="mt-2 text-sm text-muted-foreground">
               Create an organization to start managing listings as a team
             </p>
-            <Link to="/organizations/create" className="mt-6 inline-block">
+            <Link to={ORG_CREATE_PATH} className="mt-6 inline-block">
               <UnifiedButton>Create Your First Organization</UnifiedButton>
             </Link>
           </Card>
@@ -143,7 +173,7 @@ export default function OrganizationsIndex() {
                     </div>
                     <div className="text-center p-3 bg-muted rounded">
                       <p className="text-2xl font-bold text-foreground">
-                        {org._count?.properties ?? 0}
+                        {org._count?.listings ?? 0}
                       </p>
                       <p className="text-xs text-muted-foreground">Listings</p>
                     </div>
@@ -151,13 +181,15 @@ export default function OrganizationsIndex() {
 
                   {/* Actions */}
                   <div className="flex space-x-2">
-                    <Link to={`/organizations/${org.id}`} className="flex-1">
+                    <Link to={`/organizations/${org.id}/settings`} className="flex-1">
                       <UnifiedButton className="w-full">Manage</UnifiedButton>
                     </Link>
-                    <Link
-                      to={`/organizations/${org.id}/listings`}
-                      className="flex-1"
-                    >
+                    <Link to={`/organizations/${org.id}/members`} className="flex-1">
+                      <UnifiedButton variant="outline" className="w-full">
+                        Members
+                      </UnifiedButton>
+                    </Link>
+                    <Link to={`/organizations/${org.id}/listings`} className="flex-1">
                       <UnifiedButton variant="outline" className="w-full">
                         Listings
                       </UnifiedButton>

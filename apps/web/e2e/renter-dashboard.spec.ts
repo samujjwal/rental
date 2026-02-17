@@ -1,23 +1,11 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { loginAs, testUsers } from "./helpers/test-utils";
 
-// Test user credentials
-const TEST_RENTER = {
-  email: "renter@test.com",
-  password: "Test123!@#",
-};
-
-// Helper to login as renter
-async function loginAsRenter(page: Page) {
-  await page.goto("/auth/login");
-  await page.fill('input[type="email"]', TEST_RENTER.email);
-  await page.fill('input[type="password"]', TEST_RENTER.password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/.*dashboard/);
-}
+const TEST_RENTER = testUsers.renter;
 
 test.describe("Renter Dashboard", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsRenter(page);
+    await loginAs(page, testUsers.renter);
   });
 
   test.describe("Dashboard Overview", () => {
@@ -198,7 +186,7 @@ test.describe("Renter Dashboard", () => {
 
 test.describe("Favorites", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsRenter(page);
+    await loginAs(page, testUsers.renter);
     await page.goto("/favorites");
   });
 
@@ -250,7 +238,7 @@ test.describe("Favorites", () => {
 
 test.describe("Messages", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsRenter(page);
+    await loginAs(page, testUsers.renter);
     await page.goto("/messages");
   });
 
@@ -360,7 +348,7 @@ test.describe("Messages", () => {
 
 test.describe("Settings - Profile", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsRenter(page);
+    await loginAs(page, testUsers.renter);
     await page.goto("/settings/profile");
   });
 
@@ -463,7 +451,7 @@ test.describe("Settings - Profile", () => {
 
 test.describe("Settings - Notifications", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsRenter(page);
+    await loginAs(page, testUsers.renter);
     await page.goto("/settings/notifications");
   });
 
@@ -521,7 +509,7 @@ test.describe("Settings - Notifications", () => {
 
 test.describe("Public Profile View", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsRenter(page);
+    await loginAs(page, testUsers.renter);
   });
 
   test("should view own public profile", async ({ page }) => {

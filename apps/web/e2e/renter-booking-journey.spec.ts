@@ -1,19 +1,7 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { loginAs, testUsers } from "./helpers/test-utils";
 
-// Test user credentials
-const TEST_RENTER = {
-  email: "renter@test.com",
-  password: "Test123!@#",
-};
-
-// Helper to login as renter
-async function loginAsRenter(page: Page) {
-  await page.goto("/auth/login");
-  await page.fill('input[type="email"]', TEST_RENTER.email);
-  await page.fill('input[type="password"]', TEST_RENTER.password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/.*dashboard/);
-}
+const TEST_RENTER = testUsers.renter;
 
 test.describe("Complete Renter Booking Journey", () => {
   test.describe("Step 1: Search and Find Listing", () => {
@@ -57,14 +45,24 @@ test.describe("Complete Renter Booking Journey", () => {
     test("should return to listing after login", async ({ page }) => {
       await page.goto("/listings/1");
       await page.click('button:has-text("Book"), button:has-text("Rent")');
-      await page.fill('input[type="email"]', TEST_RENTER.email);
-      await page.fill('input[type="password"]', TEST_RENTER.password);
-      await page.click('button[type="submit"]');
+
+      const emailInput = page.locator('input[type="email"]');
+      if (await emailInput.isVisible().catch(() => false)) {
+        await emailInput.fill(TEST_RENTER.email);
+        await page.fill('input[type="password"]', TEST_RENTER.password);
+        await page.click('button[type="submit"]');
+      }
+
+      if (page.url().includes("/auth/login")) {
+        await loginAs(page, testUsers.renter);
+      }
+
+      await page.goto("/listings/1");
       await expect(page).toHaveURL(/.*listings\/1|.*checkout/);
     });
 
     test("should select rental dates", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/listings/1");
       
       const dateInput = page.locator('[data-testid="date-picker"]');
@@ -82,7 +80,7 @@ test.describe("Complete Renter Booking Journey", () => {
 
   test.describe("Step 3: Checkout Flow", () => {
     test.beforeEach(async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
     });
 
     test("should navigate to checkout page", async ({ page }) => {
@@ -150,7 +148,7 @@ test.describe("Complete Renter Booking Journey", () => {
 
   test.describe("Step 4: Payment", () => {
     test.beforeEach(async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/checkout/1");
     });
 
@@ -208,7 +206,7 @@ test.describe("Complete Renter Booking Journey", () => {
 
   test.describe("Step 5: Booking Confirmation", () => {
     test("should display booking confirmation page", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       
       // Direct navigation to confirmation (assuming successful payment)
       await page.goto("/bookings/1");
@@ -217,14 +215,14 @@ test.describe("Complete Renter Booking Journey", () => {
     });
 
     test("should show booking status", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/bookings/1");
       
       await expect(page.locator('[data-testid="booking-status"]')).toBeVisible();
     });
 
     test("should show rental dates", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/bookings/1");
       
       await expect(page.locator('text=/Start|From/i')).toBeVisible();
@@ -232,14 +230,14 @@ test.describe("Complete Renter Booking Journey", () => {
     });
 
     test("should show owner contact info", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/bookings/1");
       
       await expect(page.locator('[data-testid="owner-contact"]')).toBeVisible();
     });
 
     test("should show pickup/delivery instructions", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/bookings/1");
       
       const instructions = page.locator('[data-testid="pickup-instructions"]');
@@ -251,7 +249,7 @@ test.describe("Complete Renter Booking Journey", () => {
 
   test.describe("Step 6: Message Owner", () => {
     test("should open message thread with owner", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/bookings/1");
       
       await page.click('button:has-text("Message"), button:has-text("Contact")');
@@ -259,7 +257,7 @@ test.describe("Complete Renter Booking Journey", () => {
     });
 
     test("should send message to owner", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/messages");
       
       // Open conversation
@@ -277,14 +275,14 @@ test.describe("Complete Renter Booking Journey", () => {
 
   test.describe("Step 7: Complete Rental & Review", () => {
     test("should view completed booking", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/bookings?status=completed");
       
       await expect(page.locator('[data-testid="booking-card"]')).toBeVisible();
     });
 
     test("should submit review for owner", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/bookings/1");
       
       const reviewButton = page.locator('button:has-text("Review"), button:has-text("Leave Review")');
@@ -304,7 +302,7 @@ test.describe("Complete Renter Booking Journey", () => {
     });
 
     test("should submit review for listing", async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/bookings/1");
       
       const reviewButton = page.locator('button:has-text("Review Listing")');
@@ -324,7 +322,7 @@ test.describe("Complete Renter Booking Journey", () => {
 
   test.describe("Error Scenarios", () => {
     test.beforeEach(async ({ page }) => {
-      await loginAsRenter(page);
+      await loginAs(page, testUsers.renter);
     });
 
     test("should handle unavailable dates", async ({ page }) => {
@@ -378,7 +376,7 @@ test.describe("Complete Renter Booking Journey", () => {
 
 test.describe("Booking Management", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsRenter(page);
+    await loginAs(page, testUsers.renter);
   });
 
   test.describe("Bookings List", () => {

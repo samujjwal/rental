@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
-import { Organization, OrganizationRole, OrganizationStatus } from '@rental-portal/database';
+import { Organization, OrganizationRole, OrganizationStatus, PropertyStatus } from '@rental-portal/database';
 
 export interface CreateOrganizationDto {
   name: string;
@@ -73,19 +73,30 @@ export class OrganizationsService {
       throw new BadRequestException('User already owns an organization');
     }
 
+    const slugBase = dto.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    const slug = await this.ensureUniqueSlug(slugBase || 'organization');
+
+    const address = [dto.addressLine1, dto.addressLine2].filter(Boolean).join(', ') || undefined;
+
     // Create organization
     const organization = await this.prisma.organization.create({
       data: {
         name: dto.name,
-        slug: dto.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        slug,
         description: dto.description,
         email: dto.email,
         phone: dto.phoneNumber,
-        address: dto.addressLine1,
+        address,
         city: dto.city,
         state: dto.state,
         zipCode: dto.postalCode,
         country: dto.country,
+        businessType: dto.businessType,
+        ownerId: userId,
         status: OrganizationStatus.ACTIVE,
         members: {
           create: {
@@ -143,6 +154,8 @@ export class OrganizationsService {
             basePrice: true,
             currency: true,
             photos: true,
+            city: true,
+            state: true,
           },
         },
         _count: {
@@ -177,9 +190,25 @@ export class OrganizationsService {
   ): Promise<Organization> {
     await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
 
+    const address = [dto.addressLine1, dto.addressLine2].filter(Boolean).join(', ') || undefined;
+
+    const mapped: Record<string, any> = {
+      name: dto.name,
+      description: dto.description,
+      email: dto.email,
+      phone: dto.phoneNumber,
+      website: (dto as any).website,
+      address,
+      city: dto.city,
+      state: dto.state,
+      zipCode: dto.postalCode,
+      country: dto.country,
+      settings: dto.settings,
+    };
+
     return this.prisma.organization.update({
       where: { id: orgId },
-      data: dto,
+      data: mapped,
     });
   }
 
@@ -392,7 +421,7 @@ export class OrganizationsService {
         where: { organizationId: orgId },
       }),
       this.prisma.listing.count({
-        where: { organizationId: orgId, status: 'ACTIVE' as any },
+        where: { organizationId: orgId, status: PropertyStatus.AVAILABLE },
       }),
       this.prisma.booking.count({
         where: { listing: { organizationId: orgId } },
@@ -414,5 +443,24 @@ export class OrganizationsService {
       totalBookings,
       totalRevenue: revenue._sum.totalPrice || 0,
     };
+  }
+
+  private async ensureUniqueSlug(baseSlug: string): Promise<string> {
+    let slug = baseSlug;
+    let suffix = 1;
+
+    while (true) {
+      const existing = await this.prisma.organization.findUnique({
+        where: { slug },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return slug;
+      }
+
+      slug = `${baseSlug}-${suffix}`;
+      suffix += 1;
+    }
   }
 }

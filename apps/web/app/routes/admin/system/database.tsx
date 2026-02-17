@@ -1,4 +1,4 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
 import { useState } from "react";
 import {
@@ -15,7 +15,8 @@ import {
   Zap,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -24,7 +25,19 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const humanizeWord = (value: unknown, fallback = "Unknown"): string => {
+  const text = typeof value === "string" ? value.trim() : "";
+  const safe = text || fallback;
+  return safe.charAt(0).toUpperCase() + safe.slice(1);
+};
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const [healthRes, dbInfoRes] = await Promise.all([
       adminApi.getSystemHealth(),
@@ -35,27 +48,46 @@ export async function clientLoader() {
       dbInfo: dbInfoRes,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       health: null,
       dbInfo: null,
-      error: error?.message || "Failed to load database info",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load database info",
     };
   }
 }
 
-export async function clientAction({ request }: { request: Request }) {
+export async function clientAction({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const intent = String(formData.get("intent") || "");
+  const allowedIntents = new Set(["vacuum", "analyze", "clearCache"]);
+  if (!allowedIntents.has(intent)) {
+    return { success: false, error: "Unknown action" };
+  }
+  const confirmed = String(formData.get("confirmed") || "") === "true";
+  if (!confirmed) {
+    return { success: false, error: "Confirmation is required for database operations." };
+  }
 
   if (intent === "vacuum") {
     try {
       await adminApi.runDatabaseVacuum();
       return { success: true, message: "Database vacuum completed successfully" };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to run vacuum",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to run vacuum",
       };
     }
   }
@@ -64,10 +96,16 @@ export async function clientAction({ request }: { request: Request }) {
     try {
       await adminApi.runDatabaseAnalyze();
       return { success: true, message: "Database analysis completed successfully" };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to run analysis",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to run analysis",
       };
     }
   }
@@ -76,10 +114,16 @@ export async function clientAction({ request }: { request: Request }) {
     try {
       await adminApi.clearCache("database");
       return { success: true, message: "Database cache cleared successfully" };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to clear cache",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to clear cache",
       };
     }
   }
@@ -88,11 +132,13 @@ export async function clientAction({ request }: { request: Request }) {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
+  const safeBytes = Math.max(0, safeNumber(bytes));
+  if (safeBytes === 0) return "0 Bytes";
   const k = 1024;
   const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  const i = Math.floor(Math.log(safeBytes) / Math.log(k));
+  const sizeIndex = Math.min(i, sizes.length - 1);
+  return `${safeNumber(safeBytes / Math.pow(k, sizeIndex)).toFixed(2)} ${sizes[sizeIndex]}`;
 }
 
 export default function DatabasePage() {
@@ -103,6 +149,10 @@ export default function DatabasePage() {
 
   const isSubmitting = navigation.state === "submitting";
   const formIntent = navigation.formData?.get("intent");
+  const actionMessage =
+    typeof actionData?.message === "string" ? actionData.message : null;
+  const actionError =
+    typeof actionData?.error === "string" ? actionData.error : null;
 
   if (error) {
     return (
@@ -115,8 +165,8 @@ export default function DatabasePage() {
     );
   }
 
-  const dbStatus = health?.services?.database?.status || "unknown";
-  const dbResponseTime = health?.services?.database?.latency || 0;
+  const dbStatus = String(health?.services?.database?.status || "unknown");
+  const dbResponseTime = safeNumber(health?.services?.database?.latency);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -135,16 +185,16 @@ export default function DatabasePage() {
       </div>
 
       {/* Action Messages */}
-      {actionData?.success && (
+      {actionData?.success && actionMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
           <CheckCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.message}
+          {actionMessage}
         </div>
       )}
-      {actionData?.error && (
+      {actionError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <XCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.error}
+          {actionError}
         </div>
       )}
 
@@ -158,7 +208,7 @@ export default function DatabasePage() {
             <div>
               <p className="text-sm text-gray-500">Status</p>
               <p className={`font-semibold ${dbStatus === "healthy" ? "text-green-600" : "text-red-600"}`}>
-                {dbStatus.charAt(0).toUpperCase() + dbStatus.slice(1)}
+                {humanizeWord(dbStatus)}
               </p>
             </div>
           </div>
@@ -183,7 +233,7 @@ export default function DatabasePage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">Active Connections</p>
-              <p className="font-semibold text-gray-900">{dbInfo?.connections || 0}</p>
+              <p className="font-semibold text-gray-900">{safeNumber(dbInfo?.connections)}</p>
             </div>
           </div>
         </div>
@@ -195,7 +245,7 @@ export default function DatabasePage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">Database Size</p>
-              <p className="font-semibold text-gray-900">{formatBytes(dbInfo?.size || 0)}</p>
+              <p className="font-semibold text-gray-900">{formatBytes(safeNumber(dbInfo?.size))}</p>
             </div>
           </div>
         </div>
@@ -229,10 +279,10 @@ export default function DatabasePage() {
                       {table.name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                      {table.rows.toLocaleString()}
+                      {safeNumber(table.rows).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                      {formatBytes(table.size)}
+                      {formatBytes(safeNumber(table.size))}
                     </td>
                   </tr>
                 ))}
@@ -273,9 +323,10 @@ export default function DatabasePage() {
               <div className="flex items-center gap-2">
                 <Form method="post">
                   <input type="hidden" name="intent" value="vacuum" />
-                  <Button
+                  <input type="hidden" name="confirmed" value="true" />
+                  <UnifiedButton
                     type="submit"
-                    size="small"
+                    size="sm"
                     variant="primary"
                     disabled={isSubmitting}
                   >
@@ -286,16 +337,16 @@ export default function DatabasePage() {
                     )}
                   </UnifiedButton>
                 </Form>
-                <Button
+                <UnifiedButton
                   variant="outline"
-                  size="small"
+                  size="sm"
                   onClick={() => setShowConfirm(null)}
                 >
                   Cancel
                 </UnifiedButton>
               </div>
             ) : (
-              <Button
+              <UnifiedButton
                 variant="outline"
                 onClick={() => setShowConfirm("vacuum")}
                 className="w-full"
@@ -319,9 +370,10 @@ export default function DatabasePage() {
               <div className="flex items-center gap-2">
                 <Form method="post">
                   <input type="hidden" name="intent" value="analyze" />
-                  <Button
+                  <input type="hidden" name="confirmed" value="true" />
+                  <UnifiedButton
                     type="submit"
-                    size="small"
+                    size="sm"
                     variant="primary"
                     disabled={isSubmitting}
                   >
@@ -332,16 +384,16 @@ export default function DatabasePage() {
                     )}
                   </UnifiedButton>
                 </Form>
-                <Button
+                <UnifiedButton
                   variant="outline"
-                  size="small"
+                  size="sm"
                   onClick={() => setShowConfirm(null)}
                 >
                   Cancel
                 </UnifiedButton>
               </div>
             ) : (
-              <Button
+              <UnifiedButton
                 variant="outline"
                 onClick={() => setShowConfirm("analyze")}
                 className="w-full"
@@ -365,9 +417,10 @@ export default function DatabasePage() {
               <div className="flex items-center gap-2">
                 <Form method="post">
                   <input type="hidden" name="intent" value="clearCache" />
-                  <Button
+                  <input type="hidden" name="confirmed" value="true" />
+                  <UnifiedButton
                     type="submit"
-                    size="small"
+                    size="sm"
                     variant="destructive"
                     disabled={isSubmitting}
                   >
@@ -378,16 +431,16 @@ export default function DatabasePage() {
                     )}
                   </UnifiedButton>
                 </Form>
-                <Button
+                <UnifiedButton
                   variant="outline"
-                  size="small"
+                  size="sm"
                   onClick={() => setShowConfirm(null)}
                 >
                   Cancel
                 </UnifiedButton>
               </div>
             ) : (
-              <Button
+              <UnifiedButton
                 variant="destructive"
                 onClick={() => setShowConfirm("clearCache")}
                 className="w-full"
@@ -407,11 +460,11 @@ export default function DatabasePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-500">Database Size</p>
-              <p className="font-mono text-gray-900">{formatBytes(dbInfo.size)}</p>
+              <p className="font-mono text-gray-900">{formatBytes(safeNumber(dbInfo.size))}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-500">Active Connections</p>
-              <p className="font-mono text-gray-900">{dbInfo.connections || "N/A"}</p>
+              <p className="font-mono text-gray-900">{safeNumber(dbInfo.connections)}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-500">Total Tables</p>
@@ -420,7 +473,9 @@ export default function DatabasePage() {
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-500">Total Rows</p>
               <p className="font-mono text-gray-900">
-                {dbInfo.tables?.reduce((sum, t) => sum + t.rows, 0).toLocaleString() || "N/A"}
+                {safeNumber(
+                  dbInfo.tables?.reduce((sum, t) => sum + safeNumber(t.rows), 0)
+                ).toLocaleString()}
               </p>
             </div>
           </div>
@@ -429,3 +484,5 @@ export default function DatabasePage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

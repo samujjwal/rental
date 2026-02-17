@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { useAnimation as useFramerAnimation } from "framer-motion";
+import {
+  useAnimation as useFramerAnimation,
+  type AnimationDefinition,
+} from "framer-motion";
 import { prefersReducedMotion } from "~/lib/accessibility";
 
 /**
@@ -9,7 +12,7 @@ export function useAnimation() {
   const controls = useFramerAnimation();
   const shouldReduceMotion = prefersReducedMotion();
 
-  const animate = async (animation: any) => {
+  const animate = async (animation: AnimationDefinition) => {
     if (shouldReduceMotion) return;
     return controls.start(animation);
   };
@@ -20,7 +23,7 @@ export function useAnimation() {
 /**
  * Hook for scroll-triggered animations
  */
-export function useScrollAnimation(threshold = 0.1) {
+export function useScrollAnimation(_threshold = 0.1) {
   const [isVisible, setIsVisible] = useState(false);
   const controls = useFramerAnimation();
   const shouldReduceMotion = prefersReducedMotion();
@@ -52,7 +55,10 @@ export function useHoverAnimation() {
 /**
  * Hook for sequential animations
  */
-export function useSequentialAnimation(steps: any[], delay = 0.5) {
+export function useSequentialAnimation(
+  steps: AnimationDefinition[],
+  delay = 0.5
+) {
   const controls = useFramerAnimation();
   const shouldReduceMotion = prefersReducedMotion();
 

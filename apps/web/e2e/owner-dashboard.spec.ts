@@ -1,23 +1,9 @@
-import { test, expect, Page } from "@playwright/test";
-
-// Test owner credentials
-const TEST_OWNER = {
-  email: "owner@test.com",
-  password: "Test123!@#",
-};
-
-// Helper to login as owner
-async function loginAsOwner(page: Page) {
-  await page.goto("/auth/login");
-  await page.fill('input[type="email"]', TEST_OWNER.email);
-  await page.fill('input[type="password"]', TEST_OWNER.password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/.*dashboard/);
-}
+import { test, expect } from "@playwright/test";
+import { loginAs, testUsers } from "./helpers/test-utils";
 
 test.describe("Owner Dashboard", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsOwner(page);
+    await loginAs(page, testUsers.owner);
     await page.goto("/dashboard/owner");
   });
 
@@ -109,7 +95,7 @@ test.describe("Owner Dashboard", () => {
 
 test.describe("Owner Booking Management", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsOwner(page);
+    await loginAs(page, testUsers.owner);
   });
 
   test.describe("Pending Bookings", () => {
@@ -265,7 +251,7 @@ test.describe("Owner Booking Management", () => {
 
 test.describe("Owner Earnings & Payments", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsOwner(page);
+    await loginAs(page, testUsers.owner);
     await page.goto("/dashboard/owner/earnings");
   });
 
@@ -455,7 +441,7 @@ test.describe("Owner Earnings & Payments", () => {
 
 test.describe("Owner Analytics", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsOwner(page);
+    await loginAs(page, testUsers.owner);
     await page.goto("/dashboard/owner");
   });
 

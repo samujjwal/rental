@@ -6,66 +6,106 @@ import type {
 import {
   useLoaderData,
   useNavigate,
-  Form,
   redirect,
   useActionData,
 } from "react-router";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { RouteErrorBoundary } from "~/components/ui";
 import {
   ArrowLeft,
   CreditCard,
   Lock,
   Calendar,
-  DollarSign,
   Package,
   User,
   CheckCircle,
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { cn } from "~/lib/utils";
 import { bookingsApi } from "~/lib/api/bookings";
 import { paymentsApi } from "~/lib/api/payments";
 import type { Booking } from "~/types/booking";
 import { format } from "date-fns";
-import { loadStripe, Stripe, StripeElements } from "@stripe/stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
   PaymentElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Checkout | GharBatai Rentals" }];
 };
 
-// Load Stripe outside component to avoid recreating on every render
-const stripePromise = loadStripe(
-  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ""
-);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string | undefined): value is string =>
+  Boolean(value && UUID_PATTERN.test(value));
+const MIN_STRIPE_CLIENT_SECRET_LENGTH = 20;
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeDateLabel = (value: unknown, pattern: string): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : format(date, pattern);
+};
+const safeStatus = (value: unknown): string =>
+  String(value || "").toUpperCase();
+const safeText = (value: unknown): string =>
+  typeof value === "string" ? value : "";
+const safeTime = (value: unknown): number => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? Number.NaN : date.getTime();
+};
 
-export async function clientLoader({ params }: LoaderFunctionArgs) {
+// Load Stripe outside component to avoid recreating on every render
+const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
+const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
+
+export async function clientLoader({ params, request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const bookingId = params.bookingId;
-  if (!bookingId) {
+  if (!isUuid(bookingId)) {
     throw redirect("/bookings");
   }
 
   try {
+    if (!stripePublishableKey) {
+      throw redirect(`/bookings/${bookingId}`);
+    }
+
     const booking = await bookingsApi.getBookingById(bookingId);
+    const canAccessCheckout =
+      booking.renterId === user.id || user.role === "admin";
+    if (!canAccessCheckout) {
+      throw redirect(`/bookings/${bookingId}`);
+    }
+    const normalizedStatus = safeStatus(booking.status);
 
     // Check if booking is in correct status for payment
-    if (booking.status !== "pending") {
+    if (!["PENDING_PAYMENT", "PENDING", "PAYMENT_FAILED"].includes(normalizedStatus)) {
       throw redirect(`/bookings/${bookingId}`);
     }
 
     // Create payment intent
     const { clientSecret } = await paymentsApi.createPaymentIntent(bookingId);
+    if (
+      typeof clientSecret !== "string" ||
+      clientSecret.trim().length < MIN_STRIPE_CLIENT_SECRET_LENGTH
+    ) {
+      throw redirect(`/bookings/${bookingId}`);
+    }
 
     return {
       booking,
-      clientSecret,
-      stripePublishableKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY,
+      clientSecret: clientSecret.trim(),
+      stripePublishableKey,
     };
   } catch (error) {
     console.error("Failed to load checkout:", error);
@@ -74,15 +114,38 @@ export async function clientLoader({ params }: LoaderFunctionArgs) {
 }
 
 export async function clientAction({ request, params }: ActionFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const bookingId = params.bookingId;
-  if (!bookingId) {
+  if (!isUuid(bookingId)) {
     return { error: "Booking ID is required" };
   }
 
   const formData = await request.formData();
-  const intent = formData.get("intent") as string;
+  const intent = String(formData.get("intent") || "");
+  const allowedIntents = new Set(["confirm-payment", "cancel"]);
+  if (!allowedIntents.has(intent)) {
+    return { error: "Invalid action" };
+  }
 
   try {
+    const booking = await bookingsApi.getBookingById(bookingId);
+    const canAccessCheckout =
+      booking.renterId === user.id || user.role === "admin";
+    if (!canAccessCheckout) {
+      return { error: "You are not authorized to update this checkout." };
+    }
+    const normalizedStatus = safeStatus(booking.status);
+    if (
+      intent === "confirm-payment" &&
+      !["PENDING_PAYMENT", "PENDING"].includes(normalizedStatus)
+    ) {
+      return { error: "This booking is no longer awaiting payment." };
+    }
+
     if (intent === "confirm-payment") {
       // Payment confirmation is handled by Stripe on client-side
       // This action can be used for additional server-side validation
@@ -107,6 +170,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
   const actionData = useActionData<typeof clientAction>();
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const bookingId = safeText(booking.id);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,7 +186,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
       const { error } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/bookings/${booking.id}?payment=success`,
+          return_url: `${window.location.origin}${bookingId ? `/bookings/${bookingId}?payment=success` : "/bookings"}`,
         },
       });
 
@@ -171,7 +235,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
       <div className="flex gap-4">
         <button
           type="button"
-          onClick={() => navigate(`/bookings/${booking.id}`)}
+          onClick={() => navigate(bookingId ? `/bookings/${bookingId}` : "/bookings")}
           className="flex-1 px-6 py-3 border border-input rounded-md text-foreground hover:bg-muted transition-colors"
           disabled={isProcessing}
         >
@@ -190,7 +254,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
           ) : (
             <>
               <CreditCard className="w-5 h-5 mr-2" />
-              Pay ${booking.totalAmount.toFixed(2)}
+              Pay ${safeNumber(booking.totalAmount).toFixed(2)}
             </>
           )}
         </button>
@@ -202,9 +266,21 @@ function CheckoutForm({ booking }: { booking: Booking }) {
 export default function CheckoutRoute() {
   const { booking, clientSecret } = useLoaderData<typeof clientLoader>();
   const navigate = useNavigate();
+  const bookingId = safeText(booking.id);
 
-  const startDate = new Date(booking.startDate);
-  const endDate = new Date(booking.endDate);
+  const startAt = safeTime(booking.startDate);
+  const endAt = safeTime(booking.endDate);
+  const bookingDaysRaw = (endAt - startAt) / (1000 * 60 * 60 * 24);
+  const bookingDays = Number.isFinite(bookingDaysRaw)
+    ? Math.max(0, Math.ceil(bookingDaysRaw))
+    : 0;
+  const pricing = booking.pricing || {
+    subtotal: safeNumber(booking.subtotal),
+    serviceFee: safeNumber(booking.serviceFee),
+    deliveryFee: safeNumber(booking.deliveryFee),
+    securityDeposit: safeNumber(booking.securityDeposit),
+    totalAmount: safeNumber(booking.totalAmount),
+  };
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -212,7 +288,7 @@ export default function CheckoutRoute() {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate(`/bookings/${booking.id}`)}
+            onClick={() => navigate(bookingId ? `/bookings/${bookingId}` : "/bookings")}
             className="flex items-center text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
@@ -241,7 +317,7 @@ export default function CheckoutRoute() {
                       {booking.listing?.title || "Item"}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {(booking.listing as any)?.category || "Category"}
+                      {booking.listing?.location?.city || "Category"}
                     </p>
                   </div>
                 </div>
@@ -252,7 +328,13 @@ export default function CheckoutRoute() {
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground">Owner</p>
                     <p className="font-medium text-foreground">
-                      {(booking.listing as any)?.owner?.fullName || "Owner"}
+                      {booking.owner
+                        ? `${booking.owner.firstName}${
+                            booking.owner.lastName
+                              ? ` ${booking.owner.lastName}`
+                              : ""
+                          }`
+                        : "Owner"}
                     </p>
                   </div>
                 </div>
@@ -265,15 +347,11 @@ export default function CheckoutRoute() {
                       Rental Period
                     </p>
                     <p className="font-medium text-foreground">
-                      {format(startDate, "MMM d, yyyy")} -{" "}
-                      {format(endDate, "MMM d, yyyy")}
+                      {safeDateLabel(startAt, "MMM d, yyyy")} -{" "}
+                      {safeDateLabel(endAt, "MMM d, yyyy")}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {Math.ceil(
-                        (endDate.getTime() - startDate.getTime()) /
-                          (1000 * 60 * 60 * 24)
-                      )}{" "}
-                      days
+                      {bookingDays} days
                     </p>
                   </div>
                 </div>
@@ -283,39 +361,39 @@ export default function CheckoutRoute() {
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span className="text-foreground">
-                      ${booking.totalAmount.toFixed(2)}
+                      ${safeNumber(pricing.subtotal).toFixed(2)}
                     </span>
                   </div>
-                  {(booking as any).taxAmount > 0 && (
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Tax</span>
-                      <span className="text-foreground">
-                        ${(booking as any).taxAmount.toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                  {(booking as any).serviceFeeAmount > 0 && (
+                  {safeNumber(pricing.serviceFee) > 0 && (
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-muted-foreground">Service Fee</span>
                       <span className="text-foreground">
-                        ${(booking as any).serviceFeeAmount.toFixed(2)}
+                        ${safeNumber(pricing.serviceFee).toFixed(2)}
                       </span>
                     </div>
                   )}
-                  {(booking as any).securityDepositAmount > 0 && (
+                  {safeNumber(pricing.deliveryFee) > 0 && (
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-muted-foreground">Delivery Fee</span>
+                      <span className="text-foreground">
+                        ${safeNumber(pricing.deliveryFee).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  {safeNumber(pricing.securityDeposit) > 0 && (
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-muted-foreground">
                         Security Deposit
                       </span>
                       <span className="text-foreground">
-                        ${(booking as any).securityDepositAmount.toFixed(2)}
+                        ${safeNumber(pricing.securityDeposit).toFixed(2)}
                       </span>
                     </div>
                   )}
                   <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
                     <span className="text-foreground">Total</span>
                     <span className="text-primary">
-                      ${booking.totalAmount.toFixed(2)}
+                      ${safeNumber(pricing.totalAmount).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -341,10 +419,19 @@ export default function CheckoutRoute() {
 
           {/* Payment Form */}
           <div className="lg:col-span-2">
-            {clientSecret && (
+            {clientSecret ? (
               <Elements stripe={stripePromise} options={{ clientSecret }}>
                 <CheckoutForm booking={booking} />
               </Elements>
+            ) : (
+              <div className="bg-card rounded-lg shadow-md p-6">
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-start">
+                  <AlertCircle className="w-5 h-5 text-destructive mr-2 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive">
+                    Payment setup failed. Please return to bookings and try again.
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -352,3 +439,5 @@ export default function CheckoutRoute() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

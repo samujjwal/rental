@@ -23,8 +23,15 @@ export interface Listing {
     };
   };
   images: string[];
-  availability: "available" | "rented" | "maintenance";
-  status?: "AVAILABLE" | "RENTED" | "MAINTENANCE" | "DRAFT" | "PENDING" | "INACTIVE"; // Alternative status field
+  availability: "available" | "rented" | "maintenance" | "unavailable";
+  status?:
+    | "AVAILABLE"
+    | "RENTED"
+    | "MAINTENANCE"
+    | "UNAVAILABLE"
+    | "DRAFT"
+    | "SUSPENDED"
+    | "ARCHIVED"; // Alternative status field
   availabilitySchedule: {
     startDate: string | null;
     endDate: string | null;

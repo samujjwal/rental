@@ -458,20 +458,25 @@ export class S3StorageService {
     metadata?: Record<string, string>,
   ): Promise<void> {
     try {
-      // Save to database (simplified - would use proper schema in production)
-      // await this.prisma.file.create({
-      //   data: {
-      //     key: result.key,
-      //     location: result.location,
-      //     bucket: result.bucket,
-      //     etag: result.etag,
-      //     size: result.size,
-      //     contentType: result.contentType,
-      //     metadata: metadata || {},
-      //     createdAt: new Date(),
-      //   },
-      // });
-      this.logger.log('File record saved (mock implementation)');
+      const prisma = this.prisma as unknown as {
+        file?: { create: (args: unknown) => Promise<void> };
+      };
+      if (!prisma.file) {
+        return;
+      }
+
+      await prisma.file.create({
+        data: {
+          key: result.key,
+          location: result.location,
+          bucket: result.bucket,
+          etag: result.etag,
+          size: result.size,
+          contentType: result.contentType,
+          metadata: metadata || {},
+          createdAt: new Date(),
+        },
+      });
     } catch (error) {
       this.logger.error('Failed to save file record', error);
     }
@@ -479,11 +484,16 @@ export class S3StorageService {
 
   private async deleteFileRecord(key: string): Promise<void> {
     try {
-      // Delete from database (simplified - would use proper schema in production)
-      // await this.prisma.file.deleteMany({
-      //   where: { key },
-      // });
-      this.logger.log('File record deleted (mock implementation)');
+      const prisma = this.prisma as unknown as {
+        file?: { deleteMany: (args: unknown) => Promise<void> };
+      };
+      if (!prisma.file) {
+        return;
+      }
+
+      await prisma.file.deleteMany({
+        where: { key },
+      });
     } catch (error) {
       this.logger.error('Failed to delete file record', error);
     }

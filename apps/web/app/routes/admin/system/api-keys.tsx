@@ -1,4 +1,4 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
 import { useState } from "react";
 import {
@@ -17,7 +17,8 @@ import {
   Shield,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 // Local type for API key from the server
 interface ServerApiKey {
@@ -39,29 +40,59 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+const safeDateLabel = (value: unknown): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleDateString();
+};
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const apiKeysRes = await adminApi.getApiKeys();
     return {
       apiKeys: apiKeysRes.keys || [],
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       apiKeys: [],
-      error: error?.message || "Failed to load API keys",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load API keys",
     };
   }
 }
 
-export async function clientAction({ request }: { request: Request }) {
+export async function clientAction({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const intent = String(formData.get("intent") || "");
+  const validScopes = new Set(availableScopes.map((scope) => scope.id));
+  const allowedIntents = new Set(["create", "revoke", "regenerate"]);
+  if (!allowedIntents.has(intent)) {
+    return { success: false, error: "Unknown action" };
+  }
+  const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   if (intent === "create") {
-    const name = formData.get("name") as string;
-    const scopes = formData.getAll("scopes") as string[];
-    const expiresInDays = parseInt(formData.get("expiresInDays") as string, 10);
+    const name = String(formData.get("name") ?? "").trim().slice(0, 100);
+    const scopes = [...new Set((formData.getAll("scopes") as string[]))].filter((scope) =>
+      validScopes.has(scope)
+    );
+    const expiresInDays = Number(formData.get("expiresInDays"));
+    if (!name) {
+      return { success: false, error: "API key name is required" };
+    }
+    if (scopes.length === 0) {
+      return { success: false, error: "Select at least one scope" };
+    }
+    if (!Number.isFinite(expiresInDays) || expiresInDays < 0 || expiresInDays > 3650) {
+      return { success: false, error: "Expiration days must be between 0 and 3650" };
+    }
 
     try {
       const response = await adminApi.createApiKey({ name, scopes, expiresInDays });
@@ -70,29 +101,47 @@ export async function clientAction({ request }: { request: Request }) {
         message: "API key created successfully",
         newKey: response.key, // The newly generated key to show to user
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to create API key",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to create API key",
       };
     }
   }
 
   if (intent === "revoke") {
-    const keyId = formData.get("keyId") as string;
+    const keyId = String(formData.get("keyId") ?? "").trim();
+    if (!UUID_PATTERN.test(keyId)) {
+      return { success: false, error: "API key ID is required" };
+    }
     try {
       await adminApi.revokeApiKey(keyId);
       return { success: true, message: "API key revoked successfully" };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to revoke API key",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to revoke API key",
       };
     }
   }
 
   if (intent === "regenerate") {
-    const keyId = formData.get("keyId") as string;
+    const keyId = String(formData.get("keyId") ?? "").trim();
+    if (!UUID_PATTERN.test(keyId)) {
+      return { success: false, error: "API key ID is required" };
+    }
     try {
       const response = await adminApi.regenerateApiKey(keyId);
       return { 
@@ -100,10 +149,16 @@ export async function clientAction({ request }: { request: Request }) {
         message: "API key regenerated successfully",
         newKey: response.key,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to regenerate API key",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to regenerate API key",
       };
     }
   }
@@ -135,6 +190,12 @@ export default function ApiKeysPage() {
 
   const isSubmitting = navigation.state === "submitting";
   const formIntent = navigation.formData?.get("intent");
+  const actionMessage =
+    typeof actionData?.message === "string" ? actionData.message : null;
+  const actionError =
+    typeof actionData?.error === "string" ? actionData.error : null;
+  const newKey =
+    typeof actionData?.newKey === "string" ? actionData.newKey : null;
 
   const copyToClipboard = async (text: string, keyId: string) => {
     await navigator.clipboard.writeText(text);
@@ -201,11 +262,11 @@ export default function ApiKeysPage() {
       </div>
 
       {/* Action Messages */}
-      {actionData?.success && (
+      {actionData?.success && actionMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
           <CheckCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.message}
-          {actionData.newKey && (
+          {actionMessage}
+          {newKey && (
             <div className="mt-3 p-3 bg-white rounded border border-green-200">
               <p className="text-sm text-gray-700 mb-2">
                 <AlertTriangle className="w-4 h-4 inline-block mr-1 text-yellow-500" />
@@ -213,10 +274,10 @@ export default function ApiKeysPage() {
               </p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono break-all">
-                  {actionData.newKey}
+                  {newKey}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(actionData.newKey!, "new")}
+                  onClick={() => copyToClipboard(newKey, "new")}
                   className="p-2 hover:bg-gray-100 rounded"
                 >
                   {copiedKey === "new" ? (
@@ -230,10 +291,10 @@ export default function ApiKeysPage() {
           )}
         </div>
       )}
-      {actionData?.error && (
+      {actionError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <XCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.error}
+          {actionError}
         </div>
       )}
 
@@ -262,6 +323,7 @@ export default function ApiKeysPage() {
                 id="name"
                 name="name"
                 required
+                maxLength={100}
                 placeholder="e.g., Mobile App Production"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -318,7 +380,7 @@ export default function ApiKeysPage() {
             </div>
 
             <div className="flex justify-end gap-3">
-              <Button
+              <UnifiedButton
                 type="button"
                 variant="outline"
                 onClick={() => setShowCreateForm(false)}
@@ -391,19 +453,19 @@ export default function ApiKeysPage() {
                       {key.createdAt && (
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
-                          Created: {new Date(key.createdAt).toLocaleDateString()}
+                          Created: {safeDateLabel(key.createdAt)}
                         </div>
                       )}
                       {key.expiresAt && (
                         <div className="flex items-center gap-1">
                           <AlertTriangle className="w-4 h-4" />
-                          Expires: {new Date(key.expiresAt).toLocaleDateString()}
+                          Expires: {safeDateLabel(key.expiresAt)}
                         </div>
                       )}
                       {key.lastUsed && (
                         <div className="flex items-center gap-1">
                           <RefreshCw className="w-4 h-4" />
-                          Last used: {new Date(key.lastUsed).toLocaleDateString()}
+                          Last used: {safeDateLabel(key.lastUsed)}
                         </div>
                       )}
                     </div>
@@ -427,10 +489,10 @@ export default function ApiKeysPage() {
                       <Form method="post">
                         <input type="hidden" name="intent" value="regenerate" />
                         <input type="hidden" name="keyId" value={key.id} />
-                        <Button
+                        <UnifiedButton
                           type="submit"
                           variant="outline"
-                          size="small"
+                          size="sm"
                           disabled={isSubmitting}
                         >
                           <RefreshCw className="w-4 h-4 mr-1" />
@@ -443,25 +505,25 @@ export default function ApiKeysPage() {
                           <Form method="post">
                             <input type="hidden" name="intent" value="revoke" />
                             <input type="hidden" name="keyId" value={key.id} />
-                            <Button
+                            <UnifiedButton
                               type="submit"
-                              size="small"
+                              size="sm"
                               variant="destructive"
                               disabled={isSubmitting}
                             >
                               Confirm
                             </UnifiedButton>
                           </Form>
-                          <Button
+                          <UnifiedButton
                             variant="outline"
-                            size="small"
+                            size="sm"
                             onClick={() => setConfirmRevoke(null)}
                           >
                             Cancel
                           </UnifiedButton>
                         </div>
                       ) : (
-                        <Button
+                        <UnifiedButton
                           variant="destructive"
                           onClick={() => setConfirmRevoke(key.id)}
                         >
@@ -496,3 +558,5 @@ export default function ApiKeysPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

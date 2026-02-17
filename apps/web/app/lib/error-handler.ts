@@ -49,9 +49,14 @@ export function getErrorMessage(error: unknown): string {
 /**
  * Get user-friendly error message from HTTP response
  */
-export function getHttpErrorMessage(status: number, errorData?: any): string {
-  if (errorData?.message) {
-    return errorData.message;
+export function getHttpErrorMessage(status: number, errorData?: unknown): string {
+  if (
+    errorData &&
+    typeof errorData === "object" &&
+    "message" in errorData &&
+    typeof (errorData as { message?: unknown }).message === "string"
+  ) {
+    return (errorData as { message: string }).message;
   }
 
   return (
@@ -162,11 +167,11 @@ export function handlePaymentError(error: unknown, onRetry?: () => void) {
 /**
  * Wrap async function with error handling
  */
-export function withErrorHandler<T extends (...args: any[]) => Promise<any>>(
+export function withErrorHandler<T extends (...args: unknown[]) => Promise<unknown>>(
   fn: T,
   options: ErrorHandlerOptions = {}
 ): T {
-  return (async (...args: any[]) => {
+  return (async (...args: unknown[]) => {
     try {
       return await fn(...args);
     } catch (error) {

@@ -296,19 +296,19 @@ export function setAriaLabel(element: HTMLElement, label: string): void {
  * Reduced motion detection
  */
 export function prefersReducedMotion(): boolean {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return typeof window !== 'undefined' && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /**
  * High contrast detection
  */
 export function prefersHighContrast(): boolean {
-  return window.matchMedia("(prefers-contrast: high)").matches;
+  return typeof window !== 'undefined' && window.matchMedia("(prefers-contrast: high)").matches;
 }
 
 /**
  * Color scheme detection
  */
 export function prefersDarkMode(): boolean {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return typeof window !== 'undefined' && window.matchMedia("(prefers-color-scheme: dark)").matches;
 }

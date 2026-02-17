@@ -63,4 +63,16 @@ export default () => ({
     ttl: parseInt(process.env.RATE_LIMIT_TTL || '60', 10),
     limit: parseInt(process.env.RATE_LIMIT || '100', 10),
   },
+
+  // Geocoding
+  geo: {
+    providerUrl: process.env.GEO_PROVIDER_URL || 'https://photon.komoot.io',
+    fallbackUrl:
+      process.env.GEO_PROVIDER_FALLBACK_URL ||
+      'https://nominatim.openstreetmap.org',
+    userAgent:
+      process.env.GEO_USER_AGENT ||
+      'GharBatai Rentals (support@gharbatai.com)',
+    defaultLimit: parseInt(process.env.GEO_DEFAULT_LIMIT || '8', 10),
+  },
 });

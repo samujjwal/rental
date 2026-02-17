@@ -1,8 +1,9 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link } from "react-router";
-import { AlertTriangle, ShieldAlert, CheckCircle, XCircle } from "lucide-react";
+import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { fraudApi } from "~/lib/api/fraud";
-import { Badge, UnifiedButton } from "~/components/ui";
+import { Badge, UnifiedButton, RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -11,11 +12,33 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+interface RiskFlag {
+  type: string;
+}
+
+interface RiskCheck {
+  riskScore: number;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  flags: RiskFlag[];
+}
+
+interface RiskUser {
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string | null;
+    email: string;
+  };
+  check: RiskCheck;
+}
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
-    const riskUsers = await fraudApi.getHighRiskUsers(50);
+    const riskUsers = (await fraudApi.getHighRiskUsers(50)) as RiskUser[];
     return { riskUsers, error: null };
-  } catch (error) {
+  } catch {
     return { riskUsers: [], error: "Failed to load fraud data" };
   }
 }
@@ -69,7 +92,7 @@ export default function FraudDashboard() {
                     </td>
                   </tr>
                 ) : (
-                  riskUsers.map((item: any) => (
+                  riskUsers.map((item) => (
                     <tr key={item.user.id} className="border-b last:border-0 hover:bg-muted/10">
                       <td className="px-4 py-3">
                         <div className="font-medium">
@@ -89,7 +112,7 @@ export default function FraudDashboard() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1">
-                          {item.check.flags.slice(0, 3).map((flag: any, i: number) => (
+                          {item.check.flags.slice(0, 3).map((flag, i: number) => (
                             <span key={i} className="text-xs text-muted-foreground flex items-center gap-1">
                               <AlertTriangle className="w-3 h-3" />
                               {flag.type}
@@ -101,8 +124,8 @@ export default function FraudDashboard() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <UnifiedButton variant="outline" size="small" asChild>
-                           <Link to={`/admin/users/${item.user.id}`}>Review</Link>
+                        <UnifiedButton variant="outline" size="sm" asChild>
+                           <Link to="/admin/entities/users">Review</Link>
                         </UnifiedButton>
                       </td>
                     </tr>
@@ -116,3 +139,5 @@ export default function FraudDashboard() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

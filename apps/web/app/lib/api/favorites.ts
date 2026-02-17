@@ -64,8 +64,12 @@ export async function getFavoriteByListingId(
 ): Promise<Favorite | null> {
   try {
     return await apiClient.get<Favorite>(`/favorites/listing/${listingId}`);
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+  } catch (error: unknown) {
+    const status =
+      error && typeof error === "object" && "response" in error
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined;
+    if (status === 404) {
       return null;
     }
     throw error;
@@ -79,7 +83,7 @@ export async function isFavorited(listingId: string): Promise<boolean> {
   try {
     const favorite = await getFavoriteByListingId(listingId);
     return favorite !== null;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -99,7 +103,7 @@ export async function addFavorite(
 export async function removeFavorite(
   request: RemoveFavoriteRequest
 ): Promise<void> {
-  await apiClient.delete(`/favorites/listing/${request.listingId}`);
+  await apiClient.delete(`/favorites/${request.listingId}`);
 }
 
 /**

@@ -194,23 +194,20 @@ export class LedgerService {
     currency: string,
     payoutId: string,
   ): Promise<void> {
-    // Payout needs a bookingId? LedgerEntry requires it.
-    // If payout is aggregated, we might not have a single BookingId.
-    // But this function signature doesn't take bookingId.
-    // Schema says bookingId is required.
-    // This is a problem. Payouts might span multiple bookings.
-    // I will assume for now we must provide a bookingId or this logic is flawed for the current schema.
-    // Checking schema: bookingId String. Not optional.
-    // I cannot implement recordPayout without a bookingId unless I create a dummy booking or the schema changes.
-    // OR, maybe the Payout relates to a specific booking?
-    // In `payouts.service.ts`: `const payouts = await ...`
-    // It seems payouts are done per booking or aggregated?
-    // If I can't find a bookingId, I might have to skip this or use a placeholder if allowed (but it's UUID).
-    // I'll add `bookingId` to the params here.
-    // Attempting to stay faithful to the interface provided by user, but strictly constrained by schema.
-    // I will leave it broken? No. I'll add bookingId parameter.
-    // For now, I'll comment out the implementation inside recordPayout or throw error if called without bookingId?
-    // I'll add bookingId as a parameter.
+    const latestBooking = await this.prisma.booking.findFirst({
+      where: {
+        listing: { ownerId },
+        status: { in: ['COMPLETED', 'SETTLED'] },
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (!latestBooking) {
+      throw new Error('No completed booking found to attach payout ledger entry');
+    }
+
+    await this.recordPayoutWithBooking(latestBooking.id, ownerId, amount, currency, payoutId);
   }
 
   async recordPayoutWithBooking(
@@ -355,7 +352,7 @@ export class LedgerService {
     }, 0);
   }
 
-  async getBookingLedger(bookingId: string) {
+  async getBookingLedger(bookingId: string): Promise<unknown[]> {
     return this.prisma.ledgerEntry.findMany({
       where: { bookingId },
       orderBy: { createdAt: 'asc' },
@@ -421,21 +418,60 @@ export class LedgerService {
     const skip = (page - 1) * limit;
 
     // Get user's bookings (both as owner and renter)
-    const bookings = await this.prisma.booking.findMany({
-      where: {
-        OR: [{ ownerId: userId }, { renterId: userId }],
+    const ownerBookings = await this.prisma.booking.findMany({
+      where: { ownerId: userId },
+      select: {
+        id: true,
+        ownerId: true,
+        renterId: true,
+        totalPrice: true,
+        currency: true,
+        createdAt: true,
+        listing: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
       },
-      select: { id: true, ownerId: true, renterId: true, totalPrice: true, currency: true, createdAt: true },
     });
-    const bookingIds = bookings.map((b) => b.id);
 
-    if (bookingIds.length === 0) {
+    const renterBookings = await this.prisma.booking.findMany({
+      where: { renterId: userId },
+      select: {
+        id: true,
+        ownerId: true,
+        renterId: true,
+        totalPrice: true,
+        currency: true,
+        createdAt: true,
+        listing: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    const bookings = [...ownerBookings, ...renterBookings];
+    const ownerBookingIds = ownerBookings.map((b) => b.id);
+    const renterBookingIds = renterBookings.map((b) => b.id);
+
+    if (ownerBookingIds.length === 0 && renterBookingIds.length === 0) {
       return { transactions: [], total: 0, page, limit };
     }
 
-    // Build where clause for ledger entries
+    // Build where clause for ledger entries, scoped by role-specific account types
     const where: any = {
-      bookingId: { in: bookingIds },
+      OR: [
+        ownerBookingIds.length
+          ? { bookingId: { in: ownerBookingIds }, accountType: AccountType.RECEIVABLE }
+          : undefined,
+        renterBookingIds.length
+          ? { bookingId: { in: renterBookingIds }, accountType: AccountType.CASH }
+          : undefined,
+      ].filter(Boolean),
     };
 
     if (options.type) {
@@ -467,21 +503,96 @@ export class LedgerService {
     const transactions = entries.map((entry) => {
       const booking = bookings.find((b) => b.id === entry.bookingId);
       const isOwner = booking?.ownerId === userId;
+      const isRenter = booking?.renterId === userId;
+      const isReceivable = entry.accountType === AccountType.RECEIVABLE;
+      const isCash = entry.accountType === AccountType.CASH;
+      const isCredit = entry.side === LedgerSide.CREDIT;
+      const amount = toNumber(entry.amount);
+      let amountSigned = amount;
+
+      if (isOwner && isReceivable) {
+        amountSigned = isCredit ? amount : -amount;
+      } else if (isRenter && isCash) {
+        amountSigned = isCredit ? amount : -amount;
+      } else {
+        amountSigned = isCredit ? amount : -amount;
+      }
 
       return {
         id: entry.id,
         bookingId: entry.bookingId,
         type: entry.transactionType,
-        amount: toNumber(entry.amount),
+        amount: amount,
+        amountSigned,
         currency: entry.currency,
         status: entry.status,
         description: entry.description,
-        timestamp: entry.createdAt,
+        createdAt: entry.createdAt,
         side: entry.side,
         accountType: entry.accountType,
+        booking: booking?.listing
+          ? {
+              id: booking.id,
+              listing: {
+                id: booking.listing.id,
+                title: booking.listing.title,
+              },
+            }
+          : undefined,
       };
     });
 
     return { transactions, total, page, limit };
+  }
+
+  async getOwnerEarningsSummary(
+    ownerId: string,
+    currency: string = 'USD',
+  ): Promise<{ thisMonth: number; lastMonth: number; total: number; currency: string }> {
+    const bookings = await this.prisma.booking.findMany({
+      where: { ownerId },
+      select: { id: true },
+    });
+    const bookingIds = bookings.map((b) => b.id);
+
+    if (bookingIds.length === 0) {
+      return { thisMonth: 0, lastMonth: 0, total: 0, currency };
+    }
+
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const baseWhere = {
+      bookingId: { in: bookingIds },
+      transactionType: TransactionType.OWNER_EARNING,
+      accountType: AccountType.RECEIVABLE,
+      side: LedgerSide.CREDIT,
+      currency,
+      status: LedgerEntryStatus.SETTLED,
+    };
+
+    const [thisMonthAgg, lastMonthAgg, totalAgg] = await Promise.all([
+      this.prisma.ledgerEntry.aggregate({
+        where: { ...baseWhere, createdAt: { gte: thisMonthStart, lt: nextMonthStart } },
+        _sum: { amount: true },
+      }),
+      this.prisma.ledgerEntry.aggregate({
+        where: { ...baseWhere, createdAt: { gte: lastMonthStart, lt: thisMonthStart } },
+        _sum: { amount: true },
+      }),
+      this.prisma.ledgerEntry.aggregate({
+        where: { ...baseWhere },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return {
+      thisMonth: toNumber(thisMonthAgg._sum.amount || 0),
+      lastMonth: toNumber(lastMonthAgg._sum.amount || 0),
+      total: toNumber(totalAgg._sum.amount || 0),
+      currency,
+    };
   }
 }

@@ -6,18 +6,50 @@ import { getErrorMessage } from '../../common/utils/error.utils';
 
 @Injectable()
 export class EmailService {
-  private transporter: nodemailer.Transporter;
+  private transporter?: nodemailer.Transporter;
+  private readonly emailEnabled: boolean;
+  private readonly smtpConfigured: boolean;
   private readonly logger = new Logger(EmailService.name);
 
   constructor(private readonly configService: ConfigService) {
+    const nodeEnv = this.configService.get<string>('NODE_ENV') || process.env.NODE_ENV || 'development';
+    this.emailEnabled = this.parseBoolean(
+      this.configService.get<boolean | string>('EMAIL_ENABLED'),
+      nodeEnv !== 'test',
+    );
+
+    const smtpHost = this.configService.get<string>('SMTP_HOST');
+    const smtpPort = Number(this.configService.get<number | string>('SMTP_PORT') || 587);
+    const smtpSecure = this.parseBoolean(
+      this.configService.get<boolean | string>('SMTP_SECURE'),
+      false,
+    );
+    const smtpUser = this.configService.get<string>('SMTP_USER');
+    const smtpPassword = this.configService.get<string>('SMTP_PASSWORD');
+    const hasAuth = Boolean(smtpUser && smtpPassword);
+
+    this.smtpConfigured = Boolean(smtpHost);
+
+    if (!this.emailEnabled) {
+      this.logger.log('Email delivery disabled via EMAIL_ENABLED=false');
+      return;
+    }
+
+    if (!this.smtpConfigured) {
+      this.logger.warn('SMTP is not configured; email delivery will be skipped');
+      return;
+    }
+
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get('SMTP_HOST'),
-      port: this.configService.get('SMTP_PORT'),
-      secure: this.configService.get('SMTP_SECURE') === 'true',
-      auth: {
-        user: this.configService.get('SMTP_USER'),
-        pass: this.configService.get('SMTP_PASSWORD'),
-      },
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: hasAuth
+        ? {
+            user: smtpUser,
+            pass: smtpPassword,
+          }
+        : undefined,
     });
   }
 
@@ -42,15 +74,25 @@ export class EmailService {
   }
 
   async sendEmail(to: string, subject: string, html: string): Promise<void> {
+    if (!this.emailEnabled) {
+      return;
+    }
+
+    if (!this.smtpConfigured || !this.transporter) {
+      return;
+    }
+
+    if (!to) {
+      this.logger.warn('Skipping email send: recipient is missing');
+      return;
+    }
+
+    if (!this.isValidEmail(to)) {
+      this.logger.warn(`Skipping email send: invalid recipient format (${to})`);
+      return;
+    }
+
     try {
-      if (!to) {
-        throw new Error('Email recipient is required');
-      }
-
-      if (!this.isValidEmail(to)) {
-        throw new Error('Invalid email format');
-      }
-
       const from = this.configService.get('SMTP_FROM') || 'noreply@rentals.com';
 
       await this.transporter.sendMail({
@@ -62,9 +104,27 @@ export class EmailService {
 
       this.logger.log(`Email sent to ${to} with subject: ${subject}`);
     } catch (error) {
-      this.logger.error(`Failed to send email to ${to}: ${error.message}`, error.stack);
-      throw error;
+      const message = getErrorMessage(error);
+      this.logger.error(`Failed to send email to ${to}: ${message}`);
     }
+  }
+
+  private parseBoolean(value: boolean | string | undefined, defaultValue: boolean): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+        return true;
+      }
+      if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+        return false;
+      }
+    }
+
+    return defaultValue;
   }
 
   async sendPasswordResetEmail(to: string, resetToken: string): Promise<void> {

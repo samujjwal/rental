@@ -1,19 +1,12 @@
 import type { MetaFunction } from "react-router";
-import { useLoaderData, Link, useSearchParams, Form, useActionData, useNavigation } from "react-router";
-import { useState } from "react";
+import { useLoaderData, Link, useSearchParams, redirect } from "react-router";
 import {
   AlertTriangle,
   Clock,
   MessageCircle,
-  FileText,
-  Plus,
-  Search,
-  Filter,
   CheckCircle,
   XCircle,
-  User,
   Calendar,
-  DollarSign,
   Package,
   ChevronRight,
 } from "lucide-react";
@@ -22,12 +15,14 @@ import { format } from "date-fns";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Badge,
+  RouteErrorBoundary,
+  Pagination,
 } from "~/components/ui";
 import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
+import { StatCardSkeleton, Skeleton } from "~/components/ui/skeleton";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -40,113 +35,129 @@ export const meta: MetaFunction = () => {
 interface DisputeExtended {
   id: string;
   bookingId: string;
+  title?: string | null;
   description: string;
-  amount?: number;
-  evidence?: any[];
+  amount?: number | null;
   createdAt: string;
   updatedAt: string;
-  type: "DAMAGE" | "LATE_RETURN" | "CANCELLATION" | "QUALITY" | "PAYMENT" | "OTHER";
-  status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
-  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-  title: string;
+  type: "PROPERTY_DAMAGE" | "MISSING_ITEMS" | "CONDITION_MISMATCH" | "REFUND_REQUEST" | "PAYMENT_ISSUE" | "OTHER";
+  status: "OPEN" | "UNDER_REVIEW" | "INVESTIGATING" | "RESOLVED" | "CLOSED";
   booking: {
     id: string;
     listing: {
       id: string;
       title: string;
-      image: string;
     };
-    startDate: string;
-    endDate: string;
-    totalAmount: number;
+    renter?: {
+      id: string;
+      email?: string;
+    };
   };
   initiator: {
     id: string;
-    firstName: string;
-    lastName: string | null;
+    email?: string;
   };
-  respondent: {
+  defendant: {
     id: string;
-    firstName: string;
-    lastName: string | null;
+    email?: string;
   };
-  messages: number;
-  resolution?: {
-    type: string;
-    amount?: number;
+  _count?: {
+    responses?: number;
   };
 }
 
 export async function clientLoader({ request }: { request: Request }) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const url = new URL(request.url);
-  const status = url.searchParams.get("status") || undefined;
+  const rawStatus = url.searchParams.get("status");
+  const allowedStatuses = new Set(["OPEN", "UNDER_REVIEW", "INVESTIGATING", "RESOLVED", "CLOSED"]);
+  const status = rawStatus && allowedStatuses.has(rawStatus) ? rawStatus : undefined;
+  const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+  const limit = 10;
 
   try {
-    const disputes = await disputesApi.getMyDisputes({ status }) as DisputeExtended[];
+    const response = await disputesApi.getMyDisputes({ status, page, limit });
+    const disputes = (Array.isArray(response.disputes) ? response.disputes : []) as DisputeExtended[];
+    const total = typeof response.total === "number" ? response.total : disputes.length;
+    const totalPages = Math.ceil(total / limit);
     
     // Calculate stats
     const stats = {
-      total: disputes.length,
+      total,
       open: disputes.filter((d) => d.status === "OPEN").length,
-      inProgress: disputes.filter((d) => d.status === "IN_PROGRESS").length,
+      inProgress: disputes.filter((d) => d.status === "UNDER_REVIEW" || d.status === "INVESTIGATING").length,
       resolved: disputes.filter((d) => d.status === "RESOLVED" || d.status === "CLOSED").length,
     };
 
-    return { disputes, stats, error: null };
-  } catch (error: any) {
+    return { disputes, stats, page, totalPages, error: null };
+  } catch (error: unknown) {
     return {
       disputes: [],
       stats: { total: 0, open: 0, inProgress: 0, resolved: 0 },
-      error: error?.message || "Failed to load disputes",
+      page: 1,
+      totalPages: 1,
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load disputes",
     };
   }
 }
 
-const STATUS_CONFIG: Record<string, { label: string; variant: string; icon: typeof Clock }> = {
+const STATUS_CONFIG: Record<
+  string,
+  {
+    label: string;
+    variant: "secondary" | "destructive" | "success" | "warning" | "default";
+    icon: typeof Clock;
+  }
+> = {
   OPEN: { label: "Open", variant: "warning", icon: AlertTriangle },
-  IN_PROGRESS: { label: "In Progress", variant: "default", icon: Clock },
+  UNDER_REVIEW: { label: "Under Review", variant: "default", icon: Clock },
+  INVESTIGATING: { label: "Investigating", variant: "default", icon: Clock },
   RESOLVED: { label: "Resolved", variant: "success", icon: CheckCircle },
   CLOSED: { label: "Closed", variant: "secondary", icon: XCircle },
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  DAMAGE: "Item Damage",
-  LATE_RETURN: "Late Return",
-  CANCELLATION: "Cancellation",
-  QUALITY: "Quality Issue",
-  PAYMENT: "Payment Issue",
+  PROPERTY_DAMAGE: "Property Damage",
+  MISSING_ITEMS: "Missing Items",
+  CONDITION_MISMATCH: "Condition Mismatch",
+  REFUND_REQUEST: "Refund Request",
+  PAYMENT_ISSUE: "Payment Issue",
   OTHER: "Other",
 };
-
-const PRIORITY_COLORS: Record<string, string> = {
-  LOW: "bg-gray-100 text-gray-800",
-  MEDIUM: "bg-yellow-100 text-yellow-800",
-  HIGH: "bg-orange-100 text-orange-800",
-  URGENT: "bg-red-100 text-red-800",
+const safeDateLabel = (value: unknown): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Unknown date" : format(date, "MMM d, yyyy");
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
 };
 
 function DisputeCard({ dispute }: { dispute: DisputeExtended }) {
   const statusConfig = STATUS_CONFIG[dispute.status] || STATUS_CONFIG.OPEN;
   const StatusIcon = statusConfig.icon;
+  const disputeId = safeText(dispute.id);
+  const disputeTitle = safeText(dispute.title) || TYPE_LABELS[dispute.type] || "Dispute";
+  const listingTitle = safeText(dispute.booking?.listing?.title, "Listing");
+  const disputeDescription = safeText(dispute.description, "No description provided.");
 
   return (
-    <Link to={`/disputes/${dispute.id}`}>
+    <Link to={disputeId ? `/disputes/${disputeId}` : "/disputes"}>
       <Card className="hover:shadow-md transition-shadow cursor-pointer">
         <CardContent className="p-6">
           <div className="flex gap-4">
             {/* Listing Image */}
             <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-              {dispute.booking.listing.image ? (
-                <img
-                  src={dispute.booking.listing.image}
-                  alt={dispute.booking.listing.title}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Package className="w-8 h-8 text-muted-foreground" />
-                </div>
-              )}
+              <div className="w-full h-full flex items-center justify-center">
+                <Package className="w-8 h-8 text-muted-foreground" />
+              </div>
             </div>
 
             {/* Content */}
@@ -154,31 +165,28 @@ function DisputeCard({ dispute }: { dispute: DisputeExtended }) {
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div>
                   <h3 className="font-semibold text-foreground line-clamp-1">
-                    {dispute.title}
+                    {disputeTitle}
                   </h3>
-                  <p className="text-sm text-muted-foreground line-clamp-1">
-                    {dispute.booking.listing.title}
-                  </p>
+              <p className="text-sm text-muted-foreground line-clamp-1">
+                {listingTitle}
+              </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Badge variant={statusConfig.variant as any}>
+                  <Badge variant={statusConfig.variant}>
                     <StatusIcon className="w-3 h-3 mr-1" />
                     {statusConfig.label}
                   </Badge>
-                  <span className={cn("px-2 py-0.5 rounded text-xs font-medium", PRIORITY_COLORS[dispute.priority])}>
-                    {dispute.priority}
-                  </span>
                 </div>
               </div>
 
               <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
-                  {format(new Date(dispute.createdAt), "MMM d, yyyy")}
+                  {safeDateLabel(dispute.createdAt)}
                 </span>
                 <span className="flex items-center gap-1">
                   <MessageCircle className="w-4 h-4" />
-                  {dispute.messages} messages
+                  {dispute._count?.responses ?? 0} messages
                 </span>
                 <span className="px-2 py-0.5 bg-muted rounded text-xs">
                   {TYPE_LABELS[dispute.type] || dispute.type}
@@ -186,15 +194,9 @@ function DisputeCard({ dispute }: { dispute: DisputeExtended }) {
               </div>
 
               <p className="text-sm text-muted-foreground line-clamp-2">
-                {dispute.description}
+                {disputeDescription}
               </p>
 
-              {dispute.resolution && (
-                <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-800">
-                  <span className="font-medium">Resolution:</span> {dispute.resolution.type}
-                  {dispute.resolution.amount && ` - $${dispute.resolution.amount.toFixed(2)}`}
-                </div>
-              )}
             </div>
 
             <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 self-center" />
@@ -206,7 +208,7 @@ function DisputeCard({ dispute }: { dispute: DisputeExtended }) {
 }
 
 export default function DisputesPage() {
-  const { disputes, stats, error } = useLoaderData<typeof clientLoader>();
+  const { disputes, stats, page, totalPages, error } = useLoaderData<typeof clientLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const currentStatus = searchParams.get("status");
@@ -218,6 +220,13 @@ export default function DisputesPage() {
     } else {
       params.delete("status");
     }
+    params.delete("page"); // reset page when filtering
+    setSearchParams(params);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("page", String(newPage));
     setSearchParams(params);
   };
 
@@ -270,7 +279,7 @@ export default function DisputesPage() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-green-600">{stats.resolved}</p>
+              <p className="text-2xl font-bold text-success">{stats.resolved}</p>
               <p className="text-sm text-muted-foreground">Resolved</p>
             </CardContent>
           </Card>
@@ -314,11 +323,11 @@ export default function DisputesPage() {
           ) : (
             <Card>
               <CardContent className="p-12 text-center">
-                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                <CheckCircle className="w-12 h-12 text-success mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">No Disputes</h3>
                 <p className="text-muted-foreground mb-4">
                   {currentStatus
-                    ? `No ${STATUS_CONFIG[currentStatus]?.label.toLowerCase() || ""} disputes found.`
+                    ? `No ${STATUS_CONFIG[currentStatus]?.label?.toLowerCase?.() || ""} disputes found.`
                     : "You don't have any disputes. Great job maintaining good rental relationships!"}
                 </p>
                 <Link to="/bookings">
@@ -328,6 +337,14 @@ export default function DisputesPage() {
             </Card>
           )}
         </div>
+
+        {/* Pagination */}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          className="mt-6"
+        />
 
         {/* Help Section */}
         <Card className="mt-8">
@@ -351,3 +368,5 @@ export default function DisputesPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

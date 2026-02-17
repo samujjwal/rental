@@ -1,5 +1,5 @@
 import { AlertCircle, RefreshCw } from 'lucide-react';
-import { Button } from './button';
+import { UnifiedButton } from './unified-button';
 
 /**
  * Enhanced error message component
@@ -32,15 +32,15 @@ export function ErrorMessage({
             <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">{message}</p>
             <div className="flex gap-3">
                 {onRetry && (
-                    <Button onClick={onRetry} variant="outlined">
+                    <UnifiedButton onClick={onRetry} variant="outline">
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Try Again
-                    </Button>
+                    </UnifiedButton>
                 )}
                 {action && (
-                    <Button onClick={action.onClick}>
+                    <UnifiedButton onClick={action.onClick}>
                         {action.label}
-                    </Button>
+                    </UnifiedButton>
                 )}
             </div>
         </div>

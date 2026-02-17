@@ -162,6 +162,13 @@ export class ConversationsService {
               },
             },
           },
+          listing: {
+            select: {
+              id: true,
+              title: true,
+              photos: true,
+            },
+          },
           messages: {
             orderBy: { createdAt: 'desc' },
             take: 1,
@@ -189,10 +196,10 @@ export class ConversationsService {
     ]);
 
     // Format conversations with unread count
-    const formattedConversations = conversations.map((conv) => ({
+    const formattedConversations = conversations.map((conv: any) => ({
       ...conv,
-      unreadCount: (conv._count as any).messages,
-      lastMessage: conv.messages[0] || null,
+      unreadCount: conv._count?.messages || 0,
+      lastMessage: conv.messages?.[0] || null,
       messages: undefined,
       _count: undefined,
     }));
@@ -223,6 +230,13 @@ export class ConversationsService {
             },
           },
         },
+        listing: {
+          select: {
+            id: true,
+            title: true,
+            photos: true,
+          },
+        },
         _count: {
           select: {
             messages: {
@@ -243,7 +257,7 @@ export class ConversationsService {
     }
 
     // Verify user is participant
-    const isParticipant = conversation.participants.some((p) => p.userId === userId);
+    const isParticipant = (conversation as any).participants.some((p: any) => p.userId === userId);
 
     if (!isParticipant) {
       throw new ForbiddenException('Not a participant in this conversation');
@@ -251,7 +265,7 @@ export class ConversationsService {
 
     return {
       ...conversation,
-      unreadCount: (conversation._count as any).messages,
+      unreadCount: ((conversation as any)._count)?.messages || 0,
       _count: undefined,
     };
   }
@@ -309,7 +323,7 @@ export class ConversationsService {
       },
     });
 
-    return conversations.reduce((total, conv) => total + (conv._count as any).messages, 0);
+    return conversations.reduce((total, conv: any) => total + (conv._count?.messages || 0), 0);
   }
 
   /**

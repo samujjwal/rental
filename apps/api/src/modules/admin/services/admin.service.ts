@@ -50,7 +50,7 @@ export class AdminService {
       where: { id: userId },
     });
 
-    if (user?.role !== UserRole.ADMIN) {
+    if (user?.role !== UserRole.ADMIN && user?.role !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Admin access required');
     }
   }
@@ -259,8 +259,8 @@ export class AdminService {
     if (search) {
       where.OR = [
         { email: { contains: search, mode: 'insensitive' } },
-        { profile: { firstName: { contains: search, mode: 'insensitive' } } },
-        { profile: { lastName: { contains: search, mode: 'insensitive' } } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -311,6 +311,10 @@ export class AdminService {
 
     if (!user) {
       throw new Error('User not found');
+    }
+
+    if (suspend && [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role as UserRole)) {
+      throw new BadRequestException('Cannot suspend admin users');
     }
 
     if (suspend) {
@@ -1513,9 +1517,9 @@ export class AdminService {
     });
   }
 
-  async getMessages(adminId: string, params: { page?: number; limit?: number; flagged?: boolean }) {
+  async getMessages(adminId: string, params: { page?: number; limit?: number }) {
     await this.verifyAdmin(adminId);
-    const { page = 1, limit = 10, flagged } = params;
+    const { page = 1, limit = 10 } = params;
     const skip = (page - 1) * limit;
 
     // TODO: Add 'flagged' logic if Conversation or Message has a flag. Schema doesn't have conversation flag, but Review has.
@@ -1546,7 +1550,6 @@ export class AdminService {
         participants: c.participants.map((p) => `${p.user.firstName} ${p.user.lastName}`),
         lastMessage: c.messages[0]?.content || '',
         sentAt: c.lastMessageAt || c.createdAt,
-        flagged: false, // Placeholder
         listing: c.booking?.listing?.title || 'General Inquiry',
       })),
       pagination: {
@@ -1703,8 +1706,18 @@ export class AdminService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          initiator: { select: { firstName: true, lastName: true } },
-          booking: { select: { id: true } },
+          booking: {
+            select: {
+              id: true,
+              listing: { select: { title: true } },
+            },
+          },
+          initiator: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+          defendant: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
         },
       }),
       this.prisma.dispute.count({ where }),
@@ -1713,20 +1726,21 @@ export class AdminService {
     return {
       disputes: disputes.map((d) => ({
         id: d.id,
-        ticketId: d.id.substring(0, 5), // Mock
-        bookingRef: d.booking.id.substring(0, 8).toUpperCase(),
-        reporter: `${d.initiator.firstName} ${d.initiator.lastName}`,
-        type: d.type.toLowerCase(),
-        priority: d.priority.toLowerCase(),
-        status: d.status.toLowerCase(),
-        created: d.createdAt,
+        type: d.type,
+        status: d.status,
+        priority: d.priority,
+        reason: d.title || d.description,
+        amount: d.amount ? Number(d.amount) : null,
+        description: d.description,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+        booking: d.booking,
+        initiator: d.initiator,
+        defendant: d.defendant,
       })),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      total,
+      page,
+      limit,
     };
   }
 
@@ -2100,6 +2114,12 @@ export class AdminService {
           { name: 'listingId', type: 'text', label: 'Listing ID' },
           { name: 'reviewerId', type: 'text', label: 'Reviewer ID' },
           { name: 'rating', type: 'number', label: 'Rating', min: 1, max: 5 },
+          {
+            name: 'status',
+            type: 'select',
+            label: 'Status',
+            options: ['DRAFT', 'PUBLISHED', 'HIDDEN', 'FLAGGED'],
+          },
           { name: 'comment', type: 'textarea', label: 'Comment' },
           { name: 'createdAt', type: 'datetime', label: 'Created At', readOnly: true },
         ],
@@ -2108,10 +2128,11 @@ export class AdminService {
           { accessorKey: 'listingId', header: 'Listing', width: '150px' },
           { accessorKey: 'reviewerId', header: 'Reviewer', width: '150px' },
           { accessorKey: 'rating', header: 'Rating', width: '80px' },
+          { accessorKey: 'status', header: 'Status', width: '120px' },
           { accessorKey: 'comment', header: 'Comment', width: '250px' },
           { accessorKey: 'createdAt', header: 'Created', width: '150px' },
         ],
-        actions: ['view', 'delete'],
+        actions: ['view', 'edit', 'delete'],
       },
       messages: {
         name: 'Message',
@@ -2163,26 +2184,35 @@ export class AdminService {
         description: 'Manage insurance policies',
         fields: [
           { name: 'id', type: 'text', label: 'ID', readOnly: true },
+          { name: 'policyNumber', type: 'text', label: 'Policy Number', required: true },
+          { name: 'propertyId', type: 'text', label: 'Listing ID', required: true },
+          { name: 'userId', type: 'text', label: 'User ID', required: true },
           { name: 'bookingId', type: 'text', label: 'Booking ID' },
+          { name: 'provider', type: 'text', label: 'Provider' },
+          { name: 'type', type: 'select', label: 'Type', options: ['LIABILITY', 'COMPREHENSIVE', 'COLLISION', 'DAMAGE'] },
           { name: 'coverageAmount', type: 'number', label: 'Coverage Amount' },
           { name: 'premium', type: 'number', label: 'Premium' },
           {
             name: 'status',
             type: 'select',
             label: 'Status',
-            options: ['ACTIVE', 'CANCELLED', 'CLAIMED'],
+            options: ['PENDING', 'ACTIVE', 'EXPIRED', 'CANCELLED'],
           },
+          { name: 'startDate', type: 'datetime', label: 'Start Date' },
+          { name: 'endDate', type: 'datetime', label: 'End Date' },
           { name: 'createdAt', type: 'datetime', label: 'Created At', readOnly: true },
         ],
         columns: [
           { accessorKey: 'id', header: 'ID', width: '80px' },
-          { accessorKey: 'bookingId', header: 'Booking', width: '150px' },
+          { accessorKey: 'policyNumber', header: 'Policy #', width: '140px' },
+          { accessorKey: 'propertyId', header: 'Listing', width: '140px' },
+          { accessorKey: 'userId', header: 'User', width: '140px' },
           { accessorKey: 'coverageAmount', header: 'Coverage', width: '120px' },
           { accessorKey: 'premium', header: 'Premium', width: '100px' },
           { accessorKey: 'status', header: 'Status', width: '100px' },
-          { accessorKey: 'createdAt', header: 'Created', width: '150px' },
+          { accessorKey: 'endDate', header: 'Expires', width: '150px' },
         ],
-        actions: ['view'],
+        actions: ['view', 'edit'],
       },
       analytics: {
         name: 'Analytics',

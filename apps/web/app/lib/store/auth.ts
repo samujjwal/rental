@@ -8,6 +8,13 @@ const ACCESS_TOKEN_KEY = "accessToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
 const USER_KEY = "user";
 
+const normalizeRole = (role?: string | null): User["role"] => {
+  const normalized = String(role || "").toUpperCase();
+  if (normalized === "HOST") return "owner";
+  if (normalized === "ADMIN" || normalized === "SUPER_ADMIN") return "admin";
+  return "renter";
+};
+
 interface AuthState {
   user: User | null;
   accessToken: string | null;
@@ -37,11 +44,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setAuth: (user, accessToken, refreshToken) => {
-        set({ user, accessToken, refreshToken, isInitialized: true });
+        const normalizedUser = { ...user, role: normalizeRole(user.role) };
+        set({ user: normalizedUser, accessToken, refreshToken, isInitialized: true });
         if (typeof window !== "undefined") {
           localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
           localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-          localStorage.setItem(USER_KEY, JSON.stringify(user));
+          localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
         }
       },
 
@@ -62,7 +70,13 @@ export const useAuthStore = create<AuthState>()(
       updateUser: (userData) => {
         set((state) => {
           const updatedUser = state.user
-            ? { ...state.user, ...userData }
+            ? {
+                ...state.user,
+                ...userData,
+                role: normalizeRole(
+                  (userData as Partial<User>).role ?? state.user?.role
+                ),
+              }
             : null;
           if (typeof window !== "undefined" && updatedUser) {
             localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
@@ -107,7 +121,7 @@ export const useAuthStore = create<AuthState>()(
                 localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
 
                 set({
-                  user: data.user,
+                  user: { ...data.user, role: normalizeRole(data.user.role) },
                   accessToken: data.accessToken,
                   refreshToken: data.refreshToken,
                   isInitialized: true,
@@ -123,8 +137,9 @@ export const useAuthStore = create<AuthState>()(
             }
 
             // Access token is still valid, restore session
+            const parsedUser = JSON.parse(storedUser);
             set({
-              user: JSON.parse(storedUser),
+              user: { ...parsedUser, role: normalizeRole(parsedUser.role) },
               accessToken: storedAccessToken,
               refreshToken: storedRefreshToken,
               isInitialized: true,

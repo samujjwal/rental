@@ -143,9 +143,12 @@ export interface AdminDispute {
   id: string;
   type: string;
   status: string;
+  priority?: string;
   reason: string;
   amount: number | null;
+  description?: string;
   createdAt: string;
+  updatedAt?: string;
   booking: {
     id: string;
     listing: { title: string };
@@ -154,6 +157,13 @@ export interface AdminDispute {
     id: string;
     email: string;
     firstName: string;
+    lastName?: string;
+  };
+  defendant?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName?: string;
   };
 }
 

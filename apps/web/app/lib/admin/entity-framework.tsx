@@ -8,7 +8,7 @@
 
 import type { MRT_ColumnDef } from "material-react-table";
 import type { ReactNode } from "react";
-import { Chip } from "@mui/material";
+import { StatusBadge } from "~/components/ui/StatusBadge";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -385,7 +385,7 @@ export function createStatusColumn<T extends object>(
       const displayValue =
         typeof rawValue === "string" ? rawValue : String(rawValue ?? "");
       const color = colorMap[displayValue] || "default";
-      return <Chip label={displayValue} color={color} size="small" />;
+      return <StatusBadge label={displayValue} color={color} size="small" />;
     },
   } as MRT_ColumnDef<T>;
 }

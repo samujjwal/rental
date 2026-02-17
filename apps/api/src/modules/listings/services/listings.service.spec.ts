@@ -4,6 +4,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
 import { ListingValidationService } from './listing-validation.service';
+import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('ListingsService', () => {
@@ -21,6 +22,7 @@ describe('ListingsService', () => {
           provide: PrismaService,
           useValue: {
             category: {
+              findFirst: jest.fn(),
               findUnique: jest.fn(),
             },
             listing: {
@@ -52,6 +54,13 @@ describe('ListingsService', () => {
             validateCategoryData: jest.fn(),
           },
         },
+        {
+          provide: ContentModerationService,
+          useValue: {
+            moderateText: jest.fn().mockResolvedValue({ isApproved: true, flags: [] }),
+            moderateImage: jest.fn().mockResolvedValue({ isApproved: true, flags: [] }),
+          },
+        },
       ],
     }).compile();
 
@@ -79,7 +88,7 @@ describe('ListingsService', () => {
     };
 
     it('should create a listing successfully', async () => {
-      prismaService.category.findUnique.mockResolvedValue({ id: 'cat-123', name: 'Test' });
+      prismaService.category.findFirst.mockResolvedValue({ id: 'cat-123', name: 'Test' });
       validationService.validateCategoryData.mockResolvedValue({ isValid: true });
       prismaService.listing.create.mockResolvedValue({ id: 'listing-123', ...mockDto });
 
@@ -91,7 +100,7 @@ describe('ListingsService', () => {
     });
 
     it('should throw BadRequestException if category is invalid', async () => {
-      prismaService.category.findUnique.mockResolvedValue(null);
+      prismaService.category.findFirst.mockResolvedValue(null);
 
       await expect(service.create(mockOwnerId, mockDto)).rejects.toThrow(BadRequestException);
     });

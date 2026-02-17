@@ -13,13 +13,20 @@ export interface Booking {
   securityDeposit: number;
   totalAmount: number;
   status:
-    | "pending"
-    | "confirmed"
-    | "active"
-    | "completed"
-    | "cancelled"
-    | "disputed";
-  paymentStatus: "pending" | "paid" | "refunded" | "failed";
+    | "DRAFT"
+    | "PENDING"
+    | "PENDING_PAYMENT"
+    | "PENDING_OWNER_APPROVAL"
+    | "CONFIRMED"
+    | "IN_PROGRESS"
+    | "CANCELLED"
+    | "PAYMENT_FAILED"
+    | "DISPUTED"
+    | "COMPLETED"
+    | "AWAITING_RETURN_INSPECTION"
+    | "REFUNDED"
+    | "SETTLED";
+  paymentStatus: "PENDING" | "PAID" | "REFUNDED" | "FAILED";
   deliveryMethod: "pickup" | "delivery" | "shipping";
   deliveryAddress: string | null;
   specialRequests: string | null;
@@ -71,9 +78,11 @@ export interface CreateBookingRequest {
   listingId: string;
   startDate: string;
   endDate: string;
-  deliveryMethod: "pickup" | "delivery" | "shipping";
+  guestCount?: number;
+  message?: string;
+  promoCode?: string;
+  deliveryMethod?: "pickup" | "delivery" | "shipping";
   deliveryAddress?: string;
-  specialRequests?: string;
 }
 
 export interface BookingCalculation {

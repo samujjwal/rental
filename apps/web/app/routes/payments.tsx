@@ -1,5 +1,6 @@
+
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useSearchParams, Link, useRevalidator } from "react-router";
+import { useLoaderData, useSearchParams, Link, useRevalidator, redirect } from "react-router";
 import { useState } from "react";
 import {
   DollarSign,
@@ -12,16 +13,17 @@ import {
   Wallet,
   CreditCard,
   Clock,
-  CheckCircle,
   AlertCircle,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { paymentsApi } from "~/lib/api/payments";
 import type { Transaction as PaymentTransaction } from "~/lib/api/payments";
-import { UnifiedButton, Badge } from "~/components/ui";
+import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
+import { StatCardSkeleton, TableSkeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -49,17 +51,62 @@ interface PaymentsData {
   error?: string | null;
 }
 
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeRelativeTime = (value: unknown): string => {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown time";
+  }
+  return formatDistanceToNow(date, { addSuffix: true });
+};
+const humanizeStatus = (value: unknown): string => {
+  const status = String(value || "").trim().toLowerCase();
+  return status || "unknown";
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+  if (user.role !== "owner" && user.role !== "admin") {
+    return redirect("/dashboard");
+  }
+
   const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const type = url.searchParams.get("type") || undefined;
-  const status = url.searchParams.get("status") || undefined;
+  const rawPage = Number(url.searchParams.get("page") ?? "1");
+  const page =
+    Number.isFinite(rawPage) && rawPage > 0
+      ? Math.min(Math.floor(rawPage), 10_000)
+      : 1;
+  const rawType = url.searchParams.get("type");
+  const rawStatus = url.searchParams.get("status");
+  const allowedTypes = new Set([
+    "PAYMENT",
+    "PAYOUT",
+    "REFUND",
+    "PLATFORM_FEE",
+    "DEPOSIT_HOLD",
+    "DEPOSIT_RELEASE",
+    "OWNER_EARNING",
+  ]);
+  const allowedStatuses = new Set(["PENDING", "POSTED", "SETTLED", "CANCELLED"]);
+  const type = rawType && allowedTypes.has(rawType) ? rawType : undefined;
+  const status = rawStatus && allowedStatuses.has(rawStatus) ? rawStatus : undefined;
 
   try {
     // Fetch all payment data from real API
-    const [balanceData, earningsData, transactionsData] = await Promise.all([
+    const [balanceData, earningsData, summaryData, transactionsData] = await Promise.all([
       paymentsApi.getBalance(),
-      paymentsApi.getEarningsSummary({ period: "month" }),
+      paymentsApi.getEarnings(),
+      paymentsApi.getEarningsSummary(),
       paymentsApi.getTransactions({
         page,
         limit: 20,
@@ -69,17 +116,23 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     ]);
 
     const data: PaymentsData = {
-      balance: balanceData,
-      earnings: {
-        thisMonth: earningsData.thisMonth,
-        lastMonth: earningsData.lastMonth,
-        total: earningsData.total,
-        currency: earningsData.currency,
+      balance: {
+        available: safeNumber(balanceData.balance),
+        pending: safeNumber(earningsData.amount),
+        currency: balanceData.currency || earningsData.currency,
       },
-      transactions: transactionsData.transactions,
-      totalTransactions: transactionsData.total,
-      page: transactionsData.page,
-      limit: transactionsData.limit,
+      earnings: {
+        thisMonth: safeNumber(summaryData.thisMonth),
+        lastMonth: safeNumber(summaryData.lastMonth),
+        total: safeNumber(summaryData.total),
+        currency: summaryData.currency || "USD",
+      },
+      transactions: Array.isArray(transactionsData.transactions)
+        ? transactionsData.transactions
+        : [],
+      totalTransactions: safeNumber(transactionsData.total),
+      page: Math.max(1, safeNumber(transactionsData.page || 1)),
+      limit: Math.max(1, safeNumber(transactionsData.limit || 20)),
       error: null,
     };
 
@@ -101,19 +154,20 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 }
 
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
-  BOOKING_PAYMENT: "Booking Payment",
+  PAYMENT: "Booking Payment",
   PAYOUT: "Payout",
   REFUND: "Refund",
   PLATFORM_FEE: "Platform Fee",
   DEPOSIT_HOLD: "Deposit Hold",
   DEPOSIT_RELEASE: "Deposit Release",
+  OWNER_EARNING: "Owner Earning",
 };
 
 const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
-  pending: { bg: "bg-yellow-100", text: "text-yellow-800" },
-  processing: { bg: "bg-blue-100", text: "text-blue-800" },
-  completed: { bg: "bg-green-100", text: "text-green-800" },
-  failed: { bg: "bg-red-100", text: "text-red-800" },
+  PENDING: { bg: "bg-yellow-100", text: "text-yellow-800" },
+  POSTED: { bg: "bg-blue-100", text: "text-blue-800" },
+  SETTLED: { bg: "bg-green-100", text: "text-green-800" },
+  CANCELLED: { bg: "bg-red-100", text: "text-red-800" },
 };
 
 export default function PaymentsPage() {
@@ -124,7 +178,11 @@ export default function PaymentsPage() {
 
   const currentType = searchParams.get("type");
   const currentStatus = searchParams.get("status");
-  const currentPage = parseInt(searchParams.get("page") || "1");
+  const rawCurrentPage = Number(searchParams.get("page") ?? "1");
+  const currentPage =
+    Number.isFinite(rawCurrentPage) && rawCurrentPage > 0
+      ? Math.floor(rawCurrentPage)
+      : 1;
 
   const handleFilterChange = (key: string, value: string | null) => {
     const params = new URLSearchParams(searchParams);
@@ -138,15 +196,58 @@ export default function PaymentsPage() {
   };
 
   const handlePageChange = (newPage: number) => {
+    const maxPage = Math.max(1, Math.ceil(data.totalTransactions / 20));
+    const safePage = Math.min(maxPage, Math.max(1, Math.floor(newPage)));
     const params = new URLSearchParams(searchParams);
-    params.set("page", newPage.toString());
+    params.set("page", safePage.toString());
     setSearchParams(params);
   };
 
-  const totalPages = Math.ceil(data.totalTransactions / 20);
+  const totalPages = Math.max(1, Math.ceil(data.totalTransactions / 20));
   const earningsGrowth = data.earnings.lastMonth > 0
     ? ((data.earnings.thisMonth - data.earnings.lastMonth) / data.earnings.lastMonth) * 100
     : 0;
+  const safeEarningsGrowth = Math.min(Math.max(safeNumber(earningsGrowth), -9999), 9999);
+
+  const handleExport = () => {
+    if (!data.transactions.length) return;
+    const headers = [
+      "Date",
+      "Type",
+      "Status",
+      "Amount",
+      "Currency",
+      "Description",
+      "Booking ID",
+      "Listing",
+    ];
+    const rows = data.transactions.map((transaction) => [
+      new Date(transaction.createdAt).toISOString(),
+      transaction.type,
+      transaction.status,
+      String(transaction.amountSigned ?? transaction.amount),
+      transaction.currency,
+      transaction.description || "",
+      transaction.booking?.id || "",
+      transaction.booking?.listing?.title || "",
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   if (data.error) {
     return (
@@ -176,13 +277,20 @@ export default function PaymentsPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <UnifiedButton variant="outline">
+              <UnifiedButton
+                variant="outline"
+                onClick={handleExport}
+                disabled={data.transactions.length === 0}
+                title={data.transactions.length === 0 ? "No transactions to export" : "Export transactions"}
+              >
                 <Download className="w-4 h-4 mr-2" />
                 Export
               </UnifiedButton>
-              <UnifiedButton>
-                <Wallet className="w-4 h-4 mr-2" />
-                Request Payout
+              <UnifiedButton asChild>
+                <Link to="/dashboard/owner/earnings">
+                  <Wallet className="w-4 h-4 mr-2" />
+                  Request Payout
+                </Link>
               </UnifiedButton>
             </div>
           </div>
@@ -246,14 +354,14 @@ export default function PaymentsPage() {
                 <>
                   <ArrowUpRight className="w-4 h-4 text-green-600" />
                   <span className="text-xs text-green-600">
-                    +{earningsGrowth.toFixed(1)}%
+                    +{safeEarningsGrowth.toFixed(1)}%
                   </span>
                 </>
               ) : (
                 <>
                   <ArrowDownRight className="w-4 h-4 text-red-600" />
                   <span className="text-xs text-red-600">
-                    {earningsGrowth.toFixed(1)}%
+                    {safeEarningsGrowth.toFixed(1)}%
                   </span>
                 </>
               )}
@@ -285,9 +393,9 @@ export default function PaymentsPage() {
           <div className="p-6 border-b">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-foreground">Transaction History</h2>
-              <Button
+              <UnifiedButton
                 variant="outline"
-                size="small"
+                size="sm"
                 onClick={() => setShowFilters(!showFilters)}
               >
                 <Filter className="w-4 h-4 mr-2" />
@@ -306,10 +414,13 @@ export default function PaymentsPage() {
                     className="border border-input rounded-md px-3 py-1.5 text-sm bg-background"
                   >
                     <option value="">All Types</option>
-                    <option value="BOOKING_PAYMENT">Booking Payment</option>
+                    <option value="PAYMENT">Booking Payment</option>
                     <option value="PAYOUT">Payout</option>
                     <option value="REFUND">Refund</option>
                     <option value="PLATFORM_FEE">Platform Fee</option>
+                    <option value="DEPOSIT_HOLD">Deposit Hold</option>
+                    <option value="DEPOSIT_RELEASE">Deposit Release</option>
+                    <option value="OWNER_EARNING">Owner Earning</option>
                   </select>
                 </div>
                 <div>
@@ -320,16 +431,16 @@ export default function PaymentsPage() {
                     className="border border-input rounded-md px-3 py-1.5 text-sm bg-background"
                   >
                     <option value="">All Statuses</option>
-                    <option value="pending">Pending</option>
-                    <option value="processing">Processing</option>
-                    <option value="completed">Completed</option>
-                    <option value="failed">Failed</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="POSTED">Posted</option>
+                    <option value="SETTLED">Settled</option>
+                    <option value="CANCELLED">Cancelled</option>
                   </select>
                 </div>
                 {(currentType || currentStatus) && (
-                  <Button
+                  <UnifiedButton
                     variant="ghost"
-                    size="small"
+                    size="sm"
                     onClick={() => {
                       const params = new URLSearchParams();
                       setSearchParams(params);
@@ -348,7 +459,7 @@ export default function PaymentsPage() {
               <CreditCard className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground">No transactions found</p>
               {(currentType || currentStatus) && (
-                <Button
+                <UnifiedButton
                   variant="ghost"
                   className="mt-2"
                   onClick={() => setSearchParams(new URLSearchParams())}
@@ -359,7 +470,19 @@ export default function PaymentsPage() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {data.transactions.map((transaction) => (
+              {data.transactions.map((transaction) => {
+                const amountSigned = safeNumber(
+                  transaction.amountSigned ?? transaction.amount
+                );
+                const bookingId = safeText(transaction.booking?.id);
+                const isNegative = amountSigned < 0;
+                const statusKey = String(transaction.status || "").toUpperCase();
+                const statusStyle = STATUS_STYLES[statusKey] ?? {
+                  bg: "bg-muted",
+                  text: "text-muted-foreground",
+                };
+
+                return (
                 <div
                   key={transaction.id}
                   className="p-4 hover:bg-muted/50 transition-colors"
@@ -389,10 +512,10 @@ export default function PaymentsPage() {
                         </p>
                         {transaction.booking && (
                           <Link
-                            to={`/bookings/${transaction.booking.id}`}
+                            to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
                             className="text-sm text-primary hover:underline"
                           >
-                            {transaction.booking.listing.title}
+                            {safeText(transaction.booking.listing?.title, "Booking")}
                           </Link>
                         )}
                       </div>
@@ -401,40 +524,29 @@ export default function PaymentsPage() {
                       <p
                         className={cn(
                           "font-semibold",
-                          transaction.type === "PAYOUT" ||
-                            transaction.type === "REFUND" ||
-                            transaction.type === "PLATFORM_FEE"
-                            ? "text-red-600"
-                            : "text-green-600"
+                          isNegative ? "text-red-600" : "text-green-600"
                         )}
                       >
-                        {transaction.type === "PAYOUT" ||
-                        transaction.type === "REFUND" ||
-                        transaction.type === "PLATFORM_FEE"
-                          ? "-"
-                          : "+"}
-                        ${transaction.amount.toLocaleString()}
+                        {isNegative ? "-" : "+"}${Math.abs(amountSigned).toLocaleString()}
                       </p>
                       <div className="flex items-center justify-end gap-2 mt-1">
                         <span
                           className={cn(
                             "text-xs px-2 py-0.5 rounded-full",
-                            STATUS_STYLES[transaction.status]?.bg,
-                            STATUS_STYLES[transaction.status]?.text
+                            statusStyle.bg,
+                            statusStyle.text
                           )}
                         >
-                          {transaction.status}
+                          {humanizeStatus(statusKey)}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(transaction.createdAt), {
-                            addSuffix: true,
-                          })}
+                          {safeRelativeTime(transaction.createdAt)}
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
 
@@ -445,17 +557,17 @@ export default function PaymentsPage() {
                 Showing page {currentPage} of {totalPages}
               </p>
               <div className="flex items-center gap-2">
-                <Button
+                <UnifiedButton
                   variant="outline"
-                  size="small"
+                  size="sm"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage <= 1}
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </UnifiedButton>
-                <Button
+                <UnifiedButton
                   variant="outline"
-                  size="small"
+                  size="sm"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage >= totalPages}
                 >
@@ -488,8 +600,8 @@ export default function PaymentsPage() {
               View detailed analytics and insights
             </p>
           </Link>
-          <a
-            href="/help/payments"
+          <Link
+            to="/help"
             className="bg-card border rounded-lg p-6 hover:border-primary/50 transition-colors"
           >
             <AlertCircle className="w-8 h-8 text-primary mb-3" />
@@ -497,9 +609,11 @@ export default function PaymentsPage() {
             <p className="text-sm text-muted-foreground mt-1">
               Get help with payment issues
             </p>
-          </a>
+          </Link>
         </div>
       </div>
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

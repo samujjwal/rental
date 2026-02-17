@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { InsuranceStatus, InsurancePolicy } from './insurance.service';
+import { InsuranceStatus } from '@rental-portal/database';
+import { $Enums } from '@rental-portal/database';
+import { InsurancePolicy } from './insurance.service';
 
 @Injectable()
 export class InsurancePolicyService {
@@ -10,71 +12,57 @@ export class InsurancePolicyService {
    * Create insurance policy record
    */
   async createPolicy(data: Partial<InsurancePolicy>): Promise<InsurancePolicy> {
-    // In production: Store in insurance_policies table
-    // const policy = await this.prisma.insurancePolicy.create({ data });
-
-    // For now, create audit log entry
-    const auditLog = await this.prisma.auditLog.create({
+    const policy = await this.prisma.insurancePolicy.create({
       data: {
-        action: 'INSURANCE_POLICY_CREATED',
-        entityType: 'INSURANCE_POLICY',
-        entityId: data.listingId || data.userId || '',
-        userId: data.userId,
-        newValues: JSON.stringify(data),
+        policyNumber: data.policyNumber,
+        bookingId: data.bookingId ?? null,
+        propertyId: data.listingId as string,
+        userId: data.userId as string,
+        type: data.type as any,
+        provider: data.provider as string,
+        coverage: data.coverageAmount ?? 0,
+        coverageAmount: data.coverageAmount ?? 0,
+        premium: 0,
+        currency: 'USD',
+        status: (data.status as $Enums.InsuranceStatus) ?? $Enums.InsuranceStatus.ACTIVE,
+        startDate: data.effectiveDate as Date,
+        endDate: data.expirationDate as Date,
+        documents: data.documentUrl ? [data.documentUrl] : [],
       },
     });
 
-    return {
-      id: auditLog.id,
-      ...data,
-    } as InsurancePolicy;
+    return this.mapPolicy(policy);
   }
 
   /**
    * Get policy by ID
    */
   async getPolicy(policyId: string): Promise<InsurancePolicy | null> {
-    const auditLog = await this.prisma.auditLog.findFirst({
-      where: {
-        id: policyId,
-        action: 'INSURANCE_POLICY_CREATED',
-      },
+    const policy = await this.prisma.insurancePolicy.findUnique({
+      where: { id: policyId },
     });
 
-    if (!auditLog) return null;
+    if (!policy) return null;
 
-    return {
-      id: auditLog.id,
-      ...(auditLog.metadata as any),
-    } as InsurancePolicy;
+    return this.mapPolicy(policy);
   }
 
   /**
    * Get active policy for listing
    */
   async getActivePolicy(listingId: string): Promise<InsurancePolicy | null> {
-    const auditLogs = await this.prisma.auditLog.findMany({
+    const policy = await this.prisma.insurancePolicy.findFirst({
       where: {
-        action: 'INSURANCE_POLICY_CREATED',
-        entityId: listingId,
+        propertyId: listingId,
+        status: $Enums.InsuranceStatus.ACTIVE,
+        endDate: { gt: new Date() },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { endDate: 'desc' },
     });
 
-    for (const log of auditLogs) {
-      const metadata = log.metadata as any;
-      if (
-        metadata.status === InsuranceStatus.VERIFIED &&
-        new Date(metadata.expirationDate) > new Date()
-      ) {
-        return {
-          id: log.id,
-          ...metadata,
-        } as InsurancePolicy;
-      }
-    }
+    if (!policy) return null;
 
-    return null;
+    return this.mapPolicy(policy);
   }
 
   /**
@@ -82,71 +70,73 @@ export class InsurancePolicyService {
    */
   async updatePolicyStatus(
     policyId: string,
-    status: InsuranceStatus,
+    status: $Enums.InsuranceStatus,
     metadata?: Record<string, any>,
   ): Promise<void> {
-    await this.prisma.auditLog.create({
-      data: {
-        action: 'INSURANCE_POLICY_STATUS_UPDATED',
-        entityType: 'INSURANCE_POLICY',
-        entityId: policyId,
-        newValues: JSON.stringify({
-          status,
-          ...metadata,
-        }),
-      },
+    await this.prisma.insurancePolicy.update({
+      where: { id: policyId },
+      data: { status },
     });
+
+    if (metadata && Object.keys(metadata).length > 0) {
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'INSURANCE_POLICY_STATUS_UPDATED',
+          entityType: 'INSURANCE_POLICY',
+          entityId: policyId,
+          newValues: JSON.stringify({
+            status,
+            ...metadata,
+          }),
+        },
+      });
+    }
   }
 
   /**
    * Get policies expiring soon
    */
   async getExpiringPolicies(expirationDate: Date): Promise<InsurancePolicy[]> {
-    const logs = await this.prisma.auditLog.findMany({
+    const policies = await this.prisma.insurancePolicy.findMany({
       where: {
-        action: 'INSURANCE_POLICY_CREATED',
+        status: $Enums.InsuranceStatus.ACTIVE,
+        endDate: {
+          gt: new Date(),
+          lte: expirationDate,
+        },
       },
+      orderBy: { endDate: 'asc' },
     });
 
-    const expiring: InsurancePolicy[] = [];
-
-    for (const log of logs) {
-      const metadata = log.metadata as any;
-      const expiry = new Date(metadata.expirationDate);
-
-      if (
-        metadata.status === InsuranceStatus.VERIFIED &&
-        expiry > new Date() &&
-        expiry <= expirationDate
-      ) {
-        expiring.push({
-          id: log.id,
-          ...metadata,
-        } as InsurancePolicy);
-      }
-    }
-
-    return expiring;
+    return policies.map((policy) => this.mapPolicy(policy));
   }
 
   /**
    * Get user's insurance policies
    */
   async getUserPolicies(userId: string): Promise<InsurancePolicy[]> {
-    const logs = await this.prisma.auditLog.findMany({
-      where: {
-        action: 'INSURANCE_POLICY_CREATED',
-        userId,
-      },
+    const policies = await this.prisma.insurancePolicy.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     });
 
-    return logs.map(
-      (log) =>
-        ({
-          id: log.id,
-          ...(log.metadata as any),
-        }) as InsurancePolicy,
-    );
+    return policies.map((policy) => this.mapPolicy(policy));
+  }
+
+  private mapPolicy(policy: any): InsurancePolicy {
+    return {
+      id: policy.id,
+      userId: policy.userId,
+      bookingId: policy.bookingId || undefined,
+      listingId: policy.propertyId,
+      policyNumber: policy.policyNumber,
+      provider: policy.provider,
+      type: policy.type,
+      coverageAmount: Number(policy.coverageAmount ?? policy.coverage ?? 0),
+      effectiveDate: policy.startDate,
+      expirationDate: policy.endDate,
+      documentUrl: Array.isArray(policy.documents) ? policy.documents[0] : '',
+      status: policy.status,
+    };
   }
 }

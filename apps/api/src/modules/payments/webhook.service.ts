@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EventsService } from '@/common/events/events.service';
 import { BookingStatus, PayoutStatus } from '@rental-portal/database';
+import { LedgerService } from './services/ledger.service';
 
 @Injectable()
 export class WebhookService {
@@ -15,6 +16,7 @@ export class WebhookService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private eventsService: EventsService,
+    private ledger: LedgerService,
   ) {
     this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY'), {
       apiVersion: '2026-01-28.clover',
@@ -134,6 +136,56 @@ export class WebhookService {
         data: { status: BookingStatus.CONFIRMED },
       });
 
+      // Record ledger entries (idempotent)
+      const existingLedger = await this.prisma.ledgerEntry.findFirst({
+        where: {
+          bookingId: payment.bookingId,
+          transactionType: 'PAYMENT',
+        },
+        select: { id: true },
+      });
+
+      const total = Number(payment.booking.totalPrice || payment.booking.totalAmount || 0);
+      const serviceFee = Number(payment.booking.serviceFee || 0);
+      const depositAmount = Number(payment.booking.depositAmount || 0);
+      const platformFee = Number(payment.booking.platformFee || 0);
+      const subtotal = Math.max(0, total - serviceFee - depositAmount);
+      const currencyCode = payment.booking.currency || 'USD';
+
+      if (!existingLedger) {
+        await this.ledger.recordBookingPayment(
+          payment.bookingId,
+          payment.booking.renterId,
+          payment.booking.ownerId,
+          {
+            total,
+            subtotal,
+            platformFee,
+            serviceFee,
+            currency: currencyCode,
+          },
+        );
+      }
+
+      if (depositAmount > 0) {
+        const existingDeposit = await this.prisma.ledgerEntry.findFirst({
+          where: {
+            bookingId: payment.bookingId,
+            transactionType: 'DEPOSIT_HOLD',
+          },
+          select: { id: true },
+        });
+
+        if (!existingDeposit) {
+          await this.ledger.recordDepositHold(
+            payment.bookingId,
+            payment.booking.renterId,
+            depositAmount,
+            currencyCode,
+          );
+        }
+      }
+
       // Emit payment succeeded event
       this.eventsService.emitPaymentSucceeded({
         paymentId: payment.id,
@@ -177,10 +229,10 @@ export class WebhookService {
         },
       });
 
-      // Cancel booking
+      // Mark booking as payment failed (allows retry)
       await this.prisma.booking.update({
         where: { id: payment.bookingId },
-        data: { status: BookingStatus.CANCELLED },
+        data: { status: BookingStatus.PAYMENT_FAILED },
       });
 
       // Emit payment failed event
@@ -271,6 +323,20 @@ export class WebhookService {
         },
       });
 
+      // Record refund in double-entry ledger
+      await this.ledger.recordRefund(
+        payment.bookingId,
+        payment.booking.renterId,
+        amount_refunded / 100,
+        charge.currency,
+      );
+
+      // Update booking status to REFUNDED
+      await this.prisma.booking.update({
+        where: { id: payment.bookingId },
+        data: { status: BookingStatus.REFUNDED },
+      });
+
       // Emit refund event
       this.eventsService.emitPaymentRefunded({
         paymentId: payment.id,
@@ -311,7 +377,18 @@ export class WebhookService {
 
     this.logger.log(`Payout successful: ${id}, amount: ${amount / 100}`);
 
-    // Update payout records if you're tracking them
+    // Update payout status in DB
+    try {
+      await this.prisma.payout.updateMany({
+        where: { stripeId: id },
+        data: {
+          status: PayoutStatus.PAID,
+          paidAt: new Date(),
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error updating payout ${id}: ${error.message}`);
+    }
   }
 
   /**
@@ -322,7 +399,17 @@ export class WebhookService {
 
     this.logger.error(`Payout failed: ${id}, reason: ${failure_message}`);
 
-    // Alert admins or handle payout failure
+    // Update payout status in DB
+    try {
+      await this.prisma.payout.updateMany({
+        where: { stripeId: id },
+        data: {
+          status: PayoutStatus.FAILED,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error updating failed payout ${id}: ${error.message}`);
+    }
   }
 
   /**

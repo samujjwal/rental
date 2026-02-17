@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { FraudDetectionService } from '../services/fraud-detection.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
@@ -17,7 +17,9 @@ export class FraudDetectionController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get users with high risk scores' })
   @ApiResponse({ status: 200, description: 'List of high risk users' })
-  async getHighRiskUsers(@Query('limit', ParseIntPipe) limit = 20) {
-    return this.fraudService.getHighRiskUsers(limit);
+  async getHighRiskUsers(@Query('limit') limit?: string) {
+    const parsed = limit ? parseInt(limit, 10) : 20;
+    const safeLimit = Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
+    return this.fraudService.getHighRiskUsers(safeLimit);
   }
 }

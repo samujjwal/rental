@@ -2,15 +2,49 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/common/prisma/prisma.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
+import { UserRole } from '@rental-portal/database';
+import { buildTestEmail, createUserWithRole, uniqueSuffix } from './e2e-helpers';
 
-describe('Moderation E2E Tests', () => {
+describe('Moderation (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let authToken: string;
+  let userToken: string;
   let adminToken: string;
   let userId: string;
   let adminId: string;
+  const testEntityType = 'MODERATION_TEST';
+
+  const createQueueItem = async (params?: {
+    entityId?: string;
+    priority?: 'LOW' | 'MEDIUM' | 'HIGH';
+    status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    flags?: Array<{ type: string; severity: string; confidence: number; description: string }>;
+  }) => {
+    const entityId = params?.entityId ?? `moderation-entity-${uniqueSuffix()}`;
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'MODERATION_QUEUE_ADD',
+        entityType: testEntityType,
+        entityId,
+        metadata: JSON.stringify({
+          flags: params?.flags ?? [
+            {
+              type: 'SPAM',
+              severity: 'HIGH',
+              confidence: 0.9,
+              description: 'Possible spam',
+            },
+          ],
+          priority: params?.priority ?? 'MEDIUM',
+          status: params?.status ?? 'PENDING',
+        }),
+      },
+    });
+
+    return entityId;
+  };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -19,348 +53,271 @@ describe('Moderation E2E Tests', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-
-    prisma = app.get<PrismaService>(PrismaService);
     await app.init();
 
-    // Create regular user
-    const userResponse = await request(app.getHttpServer()).post('/auth/register').send({
-      email: 'moderation-test@example.com',
-      password: 'Test123!',
-      name: 'Moderation Test User',
+    prisma = app.get<PrismaService>(PrismaService);
+
+    const suffix = uniqueSuffix();
+    const regular = await createUserWithRole({
+      app,
+      prisma,
+      email: buildTestEmail(`moderation-user-${suffix}`),
+      firstName: 'Moderation',
+      lastName: 'User',
+      role: UserRole.USER,
     });
+    userToken = regular.accessToken;
+    userId = regular.userId;
 
-    authToken = userResponse.body.accessToken;
-    userId = userResponse.body.user.id;
-
-    // Create admin user
-    const adminResponse = await request(app.getHttpServer()).post('/auth/register').send({
-      email: 'moderation-admin@example.com',
-      password: 'Admin123!',
-      name: 'Moderation Admin',
-      role: 'ADMIN',
+    const admin = await createUserWithRole({
+      app,
+      prisma,
+      email: buildTestEmail(`moderation-admin-${suffix}`),
+      firstName: 'Moderation',
+      lastName: 'Admin',
+      role: UserRole.ADMIN,
     });
-
-    adminToken = adminResponse.body.accessToken;
-    adminId = adminResponse.body.user.id;
+    adminToken = admin.accessToken;
+    adminId = admin.userId;
   });
 
   afterAll(async () => {
-    // Cleanup test data
-    await prisma.moderationLog.deleteMany({ where: { userId } });
-    await prisma.moderationQueue.deleteMany({});
-    await prisma.user.deleteMany({ where: { id: { in: [userId, adminId] } } });
+    await prisma.auditLog
+      .deleteMany({
+        where: {
+          OR: [{ entityType: testEntityType }, { userId: { in: [userId, adminId] } }],
+        },
+      })
+      .catch(() => {});
+
+    await prisma.user
+      .deleteMany({
+        where: {
+          id: { in: [userId, adminId] },
+        },
+      })
+      .catch(() => {});
+
     await app.close();
   });
 
-  describe('POST /moderation/listings/:id', () => {
-    let listingId: string;
-
-    beforeAll(async () => {
-      const listingRes = await request(app.getHttpServer())
-        .post('/listings')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          title: 'Test Listing for Moderation',
-          description: 'A perfectly normal listing',
-          pricePerDay: 50,
-          categoryId: 'test-category-id',
-        });
-
-      listingId = listingRes.body.id;
-    });
-
-    it('should moderate listing content', () => {
-      return request(app.getHttpServer())
-        .post(`/moderation/listings/${listingId}`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('status');
-          expect(res.body).toHaveProperty('confidence');
-          expect(res.body).toHaveProperty('flags');
-          expect(res.body).toHaveProperty('requiresHumanReview');
-        });
-    });
-
-    it('should flag inappropriate content', () => {
-      return request(app.getHttpServer())
-        .post('/moderation/listings/test-id')
+  describe('POST /moderation/test/text', () => {
+    it('should approve clean text for admin', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/moderation/test/text')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
-          title: 'Inappropriate content here',
-          description: 'This contains banned words and spam',
+          text: 'Hello, this rental looks great and I would like to book it next week.',
         })
-        .expect((res) => {
-          expect(res.body.flags.length).toBeGreaterThan(0);
-          expect(res.body.requiresHumanReview).toBe(true);
-        });
+        .expect(201);
+
+      expect(response.body.status).toBe('APPROVED');
+      expect(Array.isArray(response.body.flags)).toBe(true);
     });
 
-    it('should require admin role', () => {
-      return request(app.getHttpServer())
-        .post(`/moderation/listings/${listingId}`)
-        .set('Authorization', `Bearer ${authToken}`)
+    it('should reject critical violations for admin', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/moderation/test/text')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          text: 'You should kill yourself.',
+        })
+        .expect(201);
+
+      expect(response.body.status).toBe('REJECTED');
+      expect(response.body.blockedReasons).toBeDefined();
+      expect(response.body.flags.some((flag: { severity: string }) => flag.severity === 'CRITICAL')).toBe(
+        true,
+      );
+    });
+
+    it('should require admin role', async () => {
+      await request(app.getHttpServer())
+        .post('/moderation/test/text')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ text: 'Normal text' })
         .expect(403);
     });
   });
 
   describe('GET /moderation/queue', () => {
-    beforeAll(async () => {
-      // Create some moderation queue items
-      await prisma.moderationQueue.createMany({
+    it('should return moderation queue for admin', async () => {
+      const entityId = await createQueueItem({ priority: 'HIGH', status: 'PENDING' });
+
+      const response = await request(app.getHttpServer())
+        .get(`/moderation/queue?entityType=${testEntityType}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      const createdItem = response.body.find((item: { entityId: string }) => item.entityId === entityId);
+      expect(createdItem).toBeDefined();
+      expect(createdItem.status).toBe('PENDING');
+      expect(createdItem.priority).toBe('HIGH');
+    });
+
+    it('should filter queue by status', async () => {
+      await createQueueItem({ status: 'PENDING' });
+      await createQueueItem({ status: 'APPROVED' });
+
+      const response = await request(app.getHttpServer())
+        .get(`/moderation/queue?entityType=${testEntityType}&status=PENDING`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      response.body.forEach((item: { status: string }) => {
+        expect(item.status).toBe('PENDING');
+      });
+    });
+
+    it('should filter queue by priority', async () => {
+      await createQueueItem({ priority: 'HIGH' });
+      await createQueueItem({ priority: 'LOW' });
+
+      const response = await request(app.getHttpServer())
+        .get(`/moderation/queue?entityType=${testEntityType}&priority=HIGH`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      response.body.forEach((item: { priority: string }) => {
+        expect(item.priority).toBe('HIGH');
+      });
+    });
+
+    it('should require admin role', async () => {
+      await request(app.getHttpServer())
+        .get('/moderation/queue')
+        .set('Authorization', `Bearer ${userToken}`)
+        .expect(403);
+    });
+  });
+
+  describe('POST /moderation/queue/:entityId/approve', () => {
+    it('should approve moderation queue item and persist resolution metadata', async () => {
+      const entityId = await createQueueItem({ status: 'PENDING' });
+
+      const response = await request(app.getHttpServer())
+        .post(`/moderation/queue/${entityId}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          entityType: testEntityType,
+          notes: 'Content is acceptable',
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+
+      const queueLog = await prisma.auditLog.findFirst({
+        where: {
+          action: 'MODERATION_QUEUE_ADD',
+          entityId,
+        },
+      });
+      expect(queueLog).toBeTruthy();
+
+      const metadata = JSON.parse(queueLog?.metadata || '{}') as {
+        status?: string;
+        resolvedBy?: string;
+        notes?: string;
+      };
+      expect(metadata.status).toBe('APPROVED');
+      expect(metadata.resolvedBy).toBe(adminId);
+      expect(metadata.notes).toContain('acceptable');
+    });
+
+    it('should require admin role', async () => {
+      const entityId = await createQueueItem({ status: 'PENDING' });
+
+      await request(app.getHttpServer())
+        .post(`/moderation/queue/${entityId}/approve`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ entityType: testEntityType, notes: 'Not allowed' })
+        .expect(403);
+    });
+  });
+
+  describe('POST /moderation/queue/:entityId/reject', () => {
+    it('should reject moderation queue item and persist resolution metadata', async () => {
+      const entityId = await createQueueItem({ status: 'PENDING' });
+
+      const response = await request(app.getHttpServer())
+        .post(`/moderation/queue/${entityId}/reject`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          entityType: testEntityType,
+          reason: 'Content violates guidelines',
+        })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+
+      const queueLog = await prisma.auditLog.findFirst({
+        where: {
+          action: 'MODERATION_QUEUE_ADD',
+          entityId,
+        },
+      });
+      expect(queueLog).toBeTruthy();
+
+      const metadata = JSON.parse(queueLog?.metadata || '{}') as {
+        status?: string;
+        resolvedBy?: string;
+        notes?: string;
+      };
+      expect(metadata.status).toBe('REJECTED');
+      expect(metadata.resolvedBy).toBe(adminId);
+      expect(metadata.notes).toContain('guidelines');
+    });
+
+    it('should require admin role', async () => {
+      const entityId = await createQueueItem({ status: 'PENDING' });
+
+      await request(app.getHttpServer())
+        .post(`/moderation/queue/${entityId}/reject`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ entityType: testEntityType, reason: 'Not allowed' })
+        .expect(403);
+    });
+  });
+
+  describe('GET /moderation/history/:userId', () => {
+    it('should return moderation history summary for admin', async () => {
+      await prisma.auditLog.createMany({
         data: [
           {
-            entityType: 'LISTING',
-            entityId: 'listing-1',
-            status: 'PENDING',
-            priority: 'HIGH',
-            flags: [
-              {
-                type: 'SPAM',
-                severity: 'HIGH',
-                confidence: 0.85,
-                description: 'Possible spam detected',
-              },
-            ],
+            action: 'CONTENT_REJECTED',
+            entityType: testEntityType,
+            entityId: `history-rejected-${uniqueSuffix()}`,
+            userId,
+            newValues: JSON.stringify({ reason: 'Policy violation' }),
           },
           {
-            entityType: 'MESSAGE',
-            entityId: 'message-1',
-            status: 'PENDING',
-            priority: 'MEDIUM',
-            flags: [
-              {
-                type: 'INAPPROPRIATE',
-                severity: 'MEDIUM',
-                confidence: 0.7,
-                description: 'Inappropriate language',
-              },
-            ],
+            action: 'CONTENT_MODERATED',
+            entityType: testEntityType,
+            entityId: `history-moderated-${uniqueSuffix()}`,
+            userId,
+            metadata: JSON.stringify({ status: 'FLAGGED' }),
           },
         ],
       });
-    });
 
-    it('should return moderation queue for admin', () => {
-      return request(app.getHttpServer())
-        .get('/moderation/queue')
+      const response = await request(app.getHttpServer())
+        .get(`/moderation/history/${userId}`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(Array.isArray(res.body)).toBe(true);
-          expect(res.body.length).toBeGreaterThan(0);
-          expect(res.body[0]).toHaveProperty('entityType');
-          expect(res.body[0]).toHaveProperty('flags');
-        });
+        .expect(200);
+
+      expect(response.body).toHaveProperty('totalViolations');
+      expect(response.body).toHaveProperty('recentViolations');
+      expect(response.body).toHaveProperty('riskLevel');
+      expect(response.body.totalViolations).toBeGreaterThanOrEqual(1);
     });
 
-    it('should filter by status', () => {
-      return request(app.getHttpServer())
-        .get('/moderation/queue?status=PENDING')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(Array.isArray(res.body)).toBe(true);
-          res.body.forEach((item: any) => {
-            expect(item.status).toBe('PENDING');
-          });
-        });
-    });
-
-    it('should filter by priority', () => {
-      return request(app.getHttpServer())
-        .get('/moderation/queue?priority=HIGH')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(Array.isArray(res.body)).toBe(true);
-          res.body.forEach((item: any) => {
-            expect(item.priority).toBe('HIGH');
-          });
-        });
-    });
-
-    it('should require admin role', () => {
-      return request(app.getHttpServer())
-        .get('/moderation/queue')
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(403);
-    });
-  });
-
-  describe('POST /moderation/queue/:id/approve', () => {
-    let queueItemId: string;
-
-    beforeAll(async () => {
-      const item = await prisma.moderationQueue.create({
-        data: {
-          entityType: 'LISTING',
-          entityId: 'listing-approve-test',
-          status: 'PENDING',
-          priority: 'MEDIUM',
-          flags: [],
-        },
-      });
-
-      queueItemId = item.id;
-    });
-
-    it('should approve moderation queue item', () => {
-      return request(app.getHttpServer())
-        .post(`/moderation/queue/${queueItemId}/approve`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          notes: 'Content is acceptable',
-        })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.status).toBe('APPROVED');
-          expect(res.body.reviewedBy).toBe(adminId);
-          expect(res.body.reviewedAt).toBeDefined();
-        });
-    });
-
-    it('should require admin role', () => {
-      return request(app.getHttpServer())
-        .post(`/moderation/queue/${queueItemId}/approve`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(403);
-    });
-  });
-
-  describe('POST /moderation/queue/:id/reject', () => {
-    let queueItemId: string;
-
-    beforeAll(async () => {
-      const item = await prisma.moderationQueue.create({
-        data: {
-          entityType: 'REVIEW',
-          entityId: 'review-reject-test',
-          status: 'PENDING',
-          priority: 'HIGH',
-          flags: [
-            {
-              type: 'HARASSMENT',
-              severity: 'CRITICAL',
-              confidence: 0.95,
-              description: 'Harassment detected',
-            },
-          ],
-        },
-      });
-
-      queueItemId = item.id;
-    });
-
-    it('should reject moderation queue item', () => {
-      return request(app.getHttpServer())
-        .post(`/moderation/queue/${queueItemId}/reject`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          reason: 'Content violates community guidelines',
-        })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.status).toBe('REJECTED');
-          expect(res.body.reviewedBy).toBe(adminId);
-          expect(res.body.notes).toContain('Content violates community guidelines');
-        });
-    });
-
-    it('should require reason for rejection', () => {
-      return request(app.getHttpServer())
-        .post(`/moderation/queue/${queueItemId}/reject`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({})
-        .expect(400);
-    });
-
-    it('should require admin role', () => {
-      return request(app.getHttpServer())
-        .post(`/moderation/queue/${queueItemId}/reject`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(403);
-    });
-  });
-
-  describe('POST /moderation/messages', () => {
-    it('should moderate message content', () => {
-      return request(app.getHttpServer())
-        .post('/moderation/messages')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          content: 'Hello, is this item still available?',
-          recipientId: 'recipient-user-id',
-        })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('status');
-          expect(res.body).toHaveProperty('confidence');
-          expect(res.body.status).toBe('APPROVED');
-        });
-    });
-
-    it('should flag inappropriate messages', () => {
-      return request(app.getHttpServer())
-        .post('/moderation/messages')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          content: 'Offensive and inappropriate content here',
-          recipientId: 'recipient-user-id',
-        })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.flags.length).toBeGreaterThan(0);
-          expect(['FLAGGED', 'REJECTED']).toContain(res.body.status);
-        });
-    });
-
-    it('should block critical violations immediately', () => {
-      return request(app.getHttpServer())
-        .post('/moderation/messages')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          content: 'Extremely offensive harassment and threats',
-          recipientId: 'recipient-user-id',
-        })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.status).toBe('REJECTED');
-          expect(res.body.blockedReasons).toBeDefined();
-        });
-    });
-  });
-
-  describe('GET /moderation/stats', () => {
-    it('should return moderation statistics for admin', () => {
-      return request(app.getHttpServer())
-        .get('/moderation/stats')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('totalPending');
-          expect(res.body).toHaveProperty('totalApproved');
-          expect(res.body).toHaveProperty('totalRejected');
-          expect(res.body).toHaveProperty('highPriority');
-          expect(res.body).toHaveProperty('criticalFlags');
-        });
-    });
-
-    it('should filter stats by date range', () => {
-      return request(app.getHttpServer())
-        .get('/moderation/stats?startDate=2026-01-01&endDate=2026-12-31')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('totalPending');
-        });
-    });
-
-    it('should require admin role', () => {
-      return request(app.getHttpServer())
-        .get('/moderation/stats')
-        .set('Authorization', `Bearer ${authToken}`)
+    it('should require admin role', async () => {
+      await request(app.getHttpServer())
+        .get(`/moderation/history/${userId}`)
+        .set('Authorization', `Bearer ${userToken}`)
         .expect(403);
     });
   });

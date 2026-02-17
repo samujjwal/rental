@@ -7,9 +7,10 @@ import {
   Query,
   UseGuards,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { S3StorageService } from './s3.service';
@@ -91,8 +92,11 @@ export class StorageController {
   @ApiOperation({ summary: 'Upload listing photos' })
   @ApiResponse({ status: 200, description: 'Listing photos uploaded successfully' })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('files'))
-  async uploadListingPhotos(@UploadedFile() files: any[], @Body('listingId') listingId: string) {
+  @UseInterceptors(FilesInterceptor('files', 10))
+  async uploadListingPhotos(
+    @UploadedFiles() files: any[],
+    @Body('listingId') listingId: string,
+  ) {
     if (!files || files.length === 0) {
       throw new Error('No files provided');
     }

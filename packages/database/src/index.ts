@@ -10,6 +10,9 @@ declare const process: {
 
 export { PrismaClient, PrismaWrapper, toNumber, decimalAdd, decimalSubtract, decimalCompare };
 
+// Export Prisma enums directly for type compatibility
+export { $Enums } from '@prisma/client';
+
 // Export all types for API usage
 export type {
   User,
@@ -89,6 +92,7 @@ export enum BookingStatus {
   PENDING = 'PENDING',
   PENDING_PAYMENT = 'PENDING_PAYMENT',
   PENDING_OWNER_APPROVAL = 'PENDING_OWNER_APPROVAL',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
   CONFIRMED = 'CONFIRMED',
   IN_PROGRESS = 'IN_PROGRESS',
   CANCELLED = 'CANCELLED',
@@ -125,6 +129,7 @@ export enum DisputeStatus {
   INVESTIGATING = 'INVESTIGATING',
   RESOLVED = 'RESOLVED',
   CLOSED = 'CLOSED',
+  WITHDRAWN = 'WITHDRAWN',
 }
 
 export enum DisputeType {
@@ -252,6 +257,19 @@ export enum ClaimStatus {
   PROCESSING = 'PROCESSING',
   PAID = 'PAID',
   CANCELLED = 'CANCELLED',
+}
+
+export enum InsuranceStatus {
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum PropertyCondition {
+  EXCELLENT = 'EXCELLENT',
+  GOOD = 'GOOD',
+  FAIR = 'FAIR',
+  POOR = 'POOR',
 }
 
 export enum EmailTemplateType {

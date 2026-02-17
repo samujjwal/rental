@@ -6,8 +6,6 @@ import {
   DollarSign,
   AlertTriangle,
   Star,
-  CheckCircle,
-  XCircle,
   MessageSquare,
   Shield,
   type LucideIcon,
@@ -98,6 +96,10 @@ function ActivityItemCard({ activity }: { activity: ActivityItem }) {
   const severityColor = activity.severity
     ? severityColors[activity.severity]
     : "";
+  const userName =
+    typeof activity.user?.name === "string" && activity.user.name.trim()
+      ? activity.user.name.trim()
+      : "System";
 
   const content = (
     <div
@@ -123,12 +125,12 @@ function ActivityItemCard({ activity }: { activity: ActivityItem }) {
           {activity.user?.avatar ? (
             <img
               src={activity.user.avatar}
-              alt={activity.user.name}
+              alt={userName}
               className="w-8 h-8 rounded-full"
             />
           ) : activity.user ? (
             <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-              {activity.user.name.charAt(0)}
+              {userName.charAt(0)}
             </div>
           ) : null}
         </div>
@@ -143,7 +145,7 @@ function ActivityItemCard({ activity }: { activity: ActivityItem }) {
             <>
               <span className="text-xs text-muted-foreground">•</span>
               <span className="text-xs text-muted-foreground">
-                {activity.user.name}
+                {userName}
               </span>
             </>
           )}

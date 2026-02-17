@@ -1,10 +1,10 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link, useNavigation } from "react-router";
+import type { ComponentType } from "react";
+import { useLoaderData, Link, redirect } from "react-router";
 import {
   Package,
   Calendar,
   Heart,
-  MessageCircle,
   Star,
   Clock,
   CheckCircle,
@@ -12,10 +12,11 @@ import {
   MapPin,
   Search,
   TrendingUp,
-  DollarSign,
 } from "lucide-react";
-import { requireUserId, getUserToken } from "~/utils/auth";
-import { apiClient } from "~/lib/api-client";
+import { requireUser } from "~/utils/auth";
+import { bookingsApi } from "~/lib/api/bookings";
+import { getFavorites } from "~/lib/api/favorites";
+import { listingsApi } from "~/lib/api/listings";
 import type { Booking } from "~/types/booking";
 import type { Listing } from "~/types/listing";
 import { format } from "date-fns";
@@ -25,75 +26,99 @@ import {
   CardHeader,
   CardTitle,
   Badge,
-  StatCardSkeleton,
-  BookingCardSkeleton,
   RouteErrorBoundary,
-  Alert,
 } from "~/components/ui";
 import { PageContainer, PageHeader, DashboardSidebar } from "~/components/layout";
 import type { SidebarSection } from "~/components/layout";
 import { cn } from "~/lib/utils";
-
-// Define renter navigation items
-import {
-  LayoutDashboard,
-  Calendar as CalendarIcon,
-  Heart as HeartIcon,
-  MessageCircle as MessageIcon,
-  Star as StarIcon,
-  Settings,
-  Plus,
-} from "lucide-react";
-
-const renterNavSections: SidebarSection[] = [
-  {
-    items: [
-      { href: "/dashboard/renter", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/bookings", label: "My Bookings", icon: CalendarIcon },
-      { href: "/favorites", label: "Favorites", icon: HeartIcon },
-      { href: "/messages", label: "Messages", icon: MessageIcon },
-      { href: "/reviews", label: "Reviews", icon: StarIcon },
-      { href: "/settings", label: "Settings", icon: Settings },
-    ],
-  },
-  {
-    items: [
-      { href: "/become-owner", label: "Become an Owner", icon: Plus },
-    ],
-  },
-];
+import { PageSkeleton } from "~/components/ui/skeleton";
+import { renterNavSections } from "~/config/navigation";
+import { notificationsApi } from "~/lib/api/notifications";
+import { messagingApi } from "~/lib/api/messaging";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Renter Dashboard | GharBatai Rentals" }];
 };
 
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeStatusKey = (value: unknown, fallback = "PENDING"): string => {
+  const status = typeof value === "string" ? value.trim() : "";
+  return (status || fallback).toUpperCase();
+};
+const safeLocationLabel = (location: unknown): string => {
+  if (typeof location === "string") {
+    return location.trim() || "Location";
+  }
+  if (location && typeof location === "object" && "city" in location) {
+    const city = String((location as { city?: unknown }).city || "").trim();
+    return city || "Location";
+  }
+  return "Location";
+};
+const safeDateLabel = (value: unknown, pattern: string): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : format(date, pattern);
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
-  const token = await getUserToken(request);
-  const headers = { Authorization: `Bearer ${token}` };
+  const user = await requireUser(request);
+  if (user.role === "admin") {
+    return redirect("/admin");
+  }
+  if (user.role !== "renter") {
+    return redirect("/dashboard/owner");
+  }
 
   try {
-    const [bookings, favorites, recommendations] = await Promise.all([
-      apiClient.get<Booking[]>(`/bookings/renter/${userId}`, { headers }),
-      apiClient.get<Listing[]>(`/listings/favorites?userId=${userId}`, {
-        headers,
-      }),
-      apiClient.get<Listing[]>(`/listings/recommendations?userId=${userId}`, {
-        headers,
-      }),
+    const [bookingsResponse, favoritesResponse, recommendationsResponse, unreadNotifs, unreadMsgs] = await Promise.all([
+      bookingsApi.getMyBookings(),
+      getFavorites(),
+      listingsApi.searchListings({ limit: 4 }),
+      notificationsApi.getUnreadCount().catch(() => ({ count: 0 })),
+      messagingApi.getUnreadCount().catch(() => ({ count: 0 })),
     ]);
+    const bookings = Array.isArray(bookingsResponse) ? bookingsResponse : [];
+    const favoritesRaw = Array.isArray(favoritesResponse.favorites)
+      ? favoritesResponse.favorites
+      : [];
+    const recommendationsRaw = Array.isArray(recommendationsResponse.listings)
+      ? recommendationsResponse.listings
+      : [];
+
+    const favorites = favoritesRaw.map((favorite) => ({
+      ...favorite.listing,
+      savedAt: favorite.createdAt,
+    }));
+    const recommendations = recommendationsRaw;
+
+    const normalizeStatus = (status: unknown) => safeStatusKey(status);
 
     // Calculate statistics
-    const upcomingBookings = bookings.filter(
-      (b) => b.status === "confirmed" && new Date(b.startDate) > new Date()
-    ).length;
-    const activeBookings = bookings.filter((b) => b.status === "active").length;
-    const completedBookings = bookings.filter(
-      (b) => b.status === "completed"
-    ).length;
+    const upcomingBookings = bookings.filter((b) => {
+      const status = normalizeStatus(b.status);
+      return status === "CONFIRMED" && new Date(String(b.startDate || "")).getTime() > Date.now();
+    }).length;
+    const activeBookings = bookings.filter((b) => {
+      const status = normalizeStatus(b.status);
+      return status === "IN_PROGRESS" || status === "AWAITING_RETURN_INSPECTION";
+    }).length;
+    const completedBookings = bookings.filter((b) => {
+      const status = normalizeStatus(b.status);
+      return status === "COMPLETED" || status === "SETTLED";
+    }).length;
     const totalSpent = bookings
-      .filter((b) => b.status === "completed")
-      .reduce((sum, b) => sum + b.totalAmount, 0);
+      .filter((b) => {
+        const status = normalizeStatus(b.status);
+        return status === "COMPLETED" || status === "SETTLED";
+      })
+      .reduce((sum, b) => sum + safeNumber(b.totalAmount ?? b.totalPrice), 0);
 
     const stats = {
       upcomingBookings,
@@ -116,10 +141,24 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       recentBookings,
       favorites: favorites.slice(0, 3),
       recommendations: recommendations.slice(0, 4),
+      unreadNotifications: typeof unreadNotifs?.count === "number" ? unreadNotifs.count : 0,
+      unreadMessages: typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
     };
   } catch (error) {
     console.error("Failed to load renter dashboard:", error);
-    throw error;
+    return {
+      stats: {
+        upcomingBookings: 0,
+        activeBookings: 0,
+        completedBookings: 0,
+        totalSpent: 0,
+        favoriteCount: 0,
+      },
+      recentBookings: [],
+      favorites: [],
+      recommendations: [],
+      error: "Failed to load renter dashboard data",
+    };
   }
 }
 
@@ -129,7 +168,7 @@ function StatCard({
   value,
   variant = "default",
 }: {
-  icon: any;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   variant?: "default" | "success" | "warning" | "info";
@@ -158,44 +197,58 @@ function StatCard({
 
 function BookingCard({ booking }: { booking: Booking }) {
   const statusConfig = {
-    pending: { variant: "warning" as const, icon: Clock, label: "Pending" },
-    confirmed: {
+    PENDING: { variant: "warning" as const, icon: Clock, label: "Pending" },
+    PENDING_PAYMENT: { variant: "warning" as const, icon: Clock, label: "Pending Payment" },
+    PENDING_OWNER_APPROVAL: { variant: "warning" as const, icon: Clock, label: "Pending Approval" },
+    CONFIRMED: {
       variant: "success" as const,
       icon: CheckCircle,
       label: "Confirmed",
     },
-    active: { variant: "default" as const, icon: Package, label: "Active" },
-    completed: {
+    IN_PROGRESS: { variant: "default" as const, icon: Package, label: "In Progress" },
+    COMPLETED: {
       variant: "success" as const,
       icon: CheckCircle,
       label: "Completed",
     },
-    cancelled: {
+    CANCELLED: {
       variant: "destructive" as const,
       icon: XCircle,
       label: "Cancelled",
     },
-    disputed: {
+    DISPUTED: {
       variant: "destructive" as const,
       icon: XCircle,
       label: "Disputed",
     },
+    REFUNDED: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Refunded",
+    },
+    PAYMENT_FAILED: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Payment Failed",
+    },
+    SETTLED: { variant: "success" as const, icon: CheckCircle, label: "Settled" },
   };
 
-  const config = statusConfig[booking.status] || statusConfig.pending;
+  const normalizedStatus = safeStatusKey(booking.status);
+  const config =
+    statusConfig[normalizedStatus as keyof typeof statusConfig] || statusConfig.PENDING;
   const StateIcon = config.icon;
-  const isUpcoming = new Date(booking.startDate) > new Date();
-  const isActive = booking.status === "active";
+  const bookingStartAt = new Date(String(booking.startDate || "")).getTime();
+  const isUpcoming = Number.isFinite(bookingStartAt) && bookingStartAt > Date.now();
+  const isActive = normalizedStatus === "IN_PROGRESS";
 
-  const locationStr = booking.listing?.location
-    ? typeof booking.listing.location === "string"
-      ? booking.listing.location
-      : booking.listing.location.city
-    : "Location";
+  const locationStr = safeLocationLabel(booking.listing?.location);
+  const listingTitle = safeText(booking.listing?.title, "Listing");
+  const bookingId = safeText(booking.id);
 
   return (
     <Link
-      to={`/bookings/${booking.id}`}
+      to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
       className="block bg-card border rounded-lg p-4 hover:shadow-md transition-shadow"
     >
       <div className="flex gap-4">
@@ -204,7 +257,7 @@ function BookingCard({ booking }: { booking: Booking }) {
           {booking.listing?.images?.[0] ? (
             <img
               src={booking.listing.images[0]}
-              alt={booking.listing.title}
+              alt={listingTitle}
               className="w-full h-full object-cover"
             />
           ) : (
@@ -218,7 +271,7 @@ function BookingCard({ booking }: { booking: Booking }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between mb-2">
             <h3 className="font-semibold text-foreground line-clamp-1">
-              {booking.listing?.title || "Listing"}
+              {listingTitle}
             </h3>
             <Badge variant={config.variant} className="whitespace-nowrap ml-2">
               <StateIcon className="w-3 h-3 mr-1" />
@@ -229,8 +282,8 @@ function BookingCard({ booking }: { booking: Booking }) {
           <div className="space-y-1">
             <div className="flex items-center text-sm text-muted-foreground">
               <Calendar className="w-4 h-4 mr-2" />
-              {format(new Date(booking.startDate), "MMM d")} -{" "}
-              {format(new Date(booking.endDate), "MMM d, yyyy")}
+              {safeDateLabel(booking.startDate, "MMM d")} -{" "}
+              {safeDateLabel(booking.endDate, "MMM d, yyyy")}
             </div>
             <div className="flex items-center text-sm text-muted-foreground">
               <MapPin className="w-4 h-4 mr-2" />
@@ -240,14 +293,14 @@ function BookingCard({ booking }: { booking: Booking }) {
 
           <div className="mt-2 flex items-center justify-between">
             <span className="font-semibold text-primary">
-              ${booking.totalAmount.toFixed(2)}
+              ${safeNumber(booking.totalAmount ?? booking.totalPrice).toFixed(2)}
             </span>
             {isActive && (
               <span className="text-xs text-primary font-medium">
                 Active Now
               </span>
             )}
-            {isUpcoming && booking.status === "confirmed" && (
+            {isUpcoming && normalizedStatus === "CONFIRMED" && (
               <span className="text-xs text-success font-medium">Upcoming</span>
             )}
           </div>
@@ -264,21 +317,20 @@ function ListingCard({
   listing: Listing;
   showFavorite?: boolean;
 }) {
-  const locationStr =
-    typeof listing.location === "string"
-      ? listing.location
-      : listing.location.city;
+  const listingTitle = safeText(listing.title, "Listing");
+  const locationStr = safeLocationLabel(listing.location);
+  const listingId = safeText(listing.id);
 
   return (
     <Link
-      to={`/listings/${listing.id}`}
+      to={listingId ? `/listings/${listingId}` : "/listings"}
       className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow block"
     >
       <div className="aspect-video bg-muted relative">
         {listing.images?.[0] ? (
           <img
             src={listing.images[0]}
-            alt={listing.title}
+            alt={listingTitle}
             className="w-full h-full object-cover"
           />
         ) : (
@@ -294,7 +346,7 @@ function ListingCard({
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-foreground mb-1 line-clamp-1">
-          {listing.title}
+          {listingTitle}
         </h3>
         <p className="text-sm text-muted-foreground mb-2 flex items-center">
           <MapPin className="w-4 h-4 mr-1" />
@@ -308,7 +360,7 @@ function ListingCard({
             <div className="flex items-center">
               <Star className="w-4 h-4 text-warning fill-current" />
               <span className="ml-1 text-sm text-muted-foreground">
-                {listing.rating.toFixed(1)}
+                {safeNumber(listing.rating).toFixed(1)}
               </span>
             </div>
           )}
@@ -319,12 +371,32 @@ function ListingCard({
 }
 
 export default function RenterDashboardRoute() {
-  const { stats, recentBookings, favorites, recommendations } =
+  const { stats, recentBookings, favorites, recommendations, unreadNotifications, unreadMessages, error } =
     useLoaderData<typeof clientLoader>();
+  const totalSpent = safeNumber(stats.totalSpent);
+
+  // Enrich nav items with unread badges
+  const navWithBadges = renterNavSections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => {
+      if (item.href === "/messages" && unreadMessages > 0) {
+        return { ...item, badge: unreadMessages };
+      }
+      if (item.href === "/notifications" && unreadNotifications > 0) {
+        return { ...item, badge: unreadNotifications };
+      }
+      return item;
+    }),
+  }));
 
   return (
     <div className="min-h-screen bg-background py-8">
       <PageContainer>
+        {error ? (
+          <div className="mb-6 bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
+            {error}
+          </div>
+        ) : null}
         {/* Header */}
         <PageHeader
           title="Renter Dashboard"
@@ -334,7 +406,7 @@ export default function RenterDashboardRoute() {
 
         <div className="flex gap-8">
           {/* Sidebar Navigation */}
-          <DashboardSidebar sections={renterNavSections} />
+          <DashboardSidebar sections={navWithBadges} />
 
           {/* Main Content */}
           <div className="flex-1 space-y-8">
@@ -449,7 +521,7 @@ export default function RenterDashboardRoute() {
                       <div className="flex justify-between items-center pb-3 border-b">
                         <span className="text-muted-foreground">Total Spent</span>
                         <span className="text-xl font-bold text-primary">
-                          ${stats.totalSpent.toFixed(2)}
+                          ${totalSpent.toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center pb-3 border-b">
@@ -487,33 +559,39 @@ export default function RenterDashboardRoute() {
                     <div className="space-y-3">
                       {favorites.length > 0 ? (
                         favorites.map((listing) => (
-                          <Link
-                            key={listing.id}
-                            to={`/listings/${listing.id}`}
-                            className="flex gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
-                          >
-                            <div className="w-16 h-16 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-                              {listing.images?.[0] ? (
-                                <img
-                                  src={listing.images[0]}
-                                  alt={listing.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <Package className="w-6 h-6 text-muted-foreground" />
+                          (() => {
+                            const listingId = safeText(listing.id);
+                            const listingTitle = safeText(listing.title, "Listing");
+                            return (
+                              <Link
+                                key={listing.id}
+                                to={listingId ? `/listings/${listingId}` : "/listings"}
+                                className="flex gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
+                              >
+                                <div className="w-16 h-16 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+                                  {listing.images?.[0] ? (
+                                    <img
+                                      src={listing.images[0]}
+                                      alt={listingTitle}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <Package className="w-6 h-6 text-muted-foreground" />
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-medium text-foreground line-clamp-1 text-sm">
-                                {listing.title}
-                              </h4>
-                              <p className="text-sm text-muted-foreground">
-                                ${listing.pricePerDay}/day
-                              </p>
-                            </div>
-                          </Link>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-medium text-foreground line-clamp-1 text-sm">
+                                    {listingTitle}
+                                  </h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    ${listing.pricePerDay}/day
+                                  </p>
+                                </div>
+                              </Link>
+                            );
+                          })()
                         ))
                       ) : (
                         <div className="text-center py-6">

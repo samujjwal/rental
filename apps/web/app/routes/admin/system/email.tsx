@@ -1,10 +1,9 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
 import { useState, useEffect } from "react";
 import {
   Mail,
   Server,
-  Lock,
   CheckCircle,
   XCircle,
   Loader2,
@@ -15,7 +14,8 @@ import {
   EyeOff,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -60,62 +60,142 @@ const defaultSettings: EmailSettings = {
   templateEngine: "handlebars",
   testEmailRecipient: "",
 };
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_FIELD_LENGTH = 254;
+const MAX_NAME_FIELD_LENGTH = 120;
+const MAX_HOST_LENGTH = 255;
+const MIN_SMTP_PORT = 1;
+const MAX_SMTP_PORT = 65535;
 
-export async function clientLoader() {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const settingsRes = await adminApi.getSettings();
     return {
       settings: (settingsRes.email as unknown as EmailSettings) || defaultSettings,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       settings: defaultSettings,
-      error: error?.message || "Failed to load email settings",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load email settings",
     };
   }
 }
 
-export async function clientAction({ request }: { request: Request }) {
+export async function clientAction({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const intent = String(formData.get("intent") || "");
+  const parsePositiveInt = (value: FormDataEntryValue | null, fallback: number) => {
+    const num = Number(value);
+    return Number.isFinite(num) && num > 0 ? Math.floor(num) : fallback;
+  };
+  if (intent !== "save" && intent !== "test") {
+    return { success: false, error: "Invalid action" };
+  }
 
   if (intent === "test") {
-    const testEmail = formData.get("testEmailRecipient") as string;
+    const testEmail = String(formData.get("testEmailRecipient") ?? "")
+      .trim()
+      .slice(0, MAX_EMAIL_FIELD_LENGTH);
+    if (!EMAIL_PATTERN.test(testEmail)) {
+      return { success: false, error: "Please enter a valid test recipient email" };
+    }
     try {
       await adminApi.sendTestEmail(testEmail);
       return { success: true, message: `Test email sent to ${testEmail}` };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to send test email",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to send test email",
       };
     }
   }
 
+  const provider = String(formData.get("provider") ?? "");
+  const validProviders = new Set(["smtp", "sendgrid", "ses", "mailgun"]);
+  if (!validProviders.has(provider)) {
+    return { success: false, error: "Invalid email provider" };
+  }
+
+  const fromEmail = String(formData.get("fromEmail") ?? "")
+    .trim()
+    .slice(0, MAX_EMAIL_FIELD_LENGTH);
+  if (!EMAIL_PATTERN.test(fromEmail)) {
+    return { success: false, error: "Please provide a valid from email" };
+  }
+  const replyToEmail = String(formData.get("replyToEmail") ?? "")
+    .trim()
+    .slice(0, MAX_EMAIL_FIELD_LENGTH);
+  if (replyToEmail && !EMAIL_PATTERN.test(replyToEmail)) {
+    return { success: false, error: "Please provide a valid reply-to email" };
+  }
+  const fromName = String(formData.get("fromName") ?? "")
+    .trim()
+    .slice(0, MAX_NAME_FIELD_LENGTH);
+  if (!fromName) {
+    return { success: false, error: "From name is required" };
+  }
+  const smtpPort = parsePositiveInt(formData.get("smtpPort"), defaultSettings.smtpPort);
+  if (smtpPort < MIN_SMTP_PORT || smtpPort > MAX_SMTP_PORT) {
+    return { success: false, error: "SMTP port must be between 1 and 65535" };
+  }
+  const templateEngine = String(formData.get("templateEngine") ?? "");
+  if (!["handlebars", "ejs", "mjml"].includes(templateEngine)) {
+    return { success: false, error: "Invalid template engine" };
+  }
+  const smtpHost = String(formData.get("smtpHost") ?? "")
+    .trim()
+    .slice(0, MAX_HOST_LENGTH);
+  if (provider === "smtp" && !smtpHost) {
+    return { success: false, error: "SMTP host is required" };
+  }
+  const apiKey = String(formData.get("apiKey") ?? "").trim();
+  if (provider !== "smtp" && apiKey.length < 10) {
+    return { success: false, error: "API key is required for selected provider" };
+  }
+
   // Save settings
   const settings: Partial<EmailSettings> = {
-    provider: formData.get("provider") as EmailSettings["provider"],
-    smtpHost: formData.get("smtpHost") as string,
-    smtpPort: parseInt(formData.get("smtpPort") as string, 10),
+    provider: provider as EmailSettings["provider"],
+    smtpHost,
+    smtpPort,
     smtpSecure: formData.get("smtpSecure") === "true",
-    smtpUser: formData.get("smtpUser") as string,
-    smtpPassword: formData.get("smtpPassword") as string,
-    apiKey: formData.get("apiKey") as string,
-    apiRegion: formData.get("apiRegion") as string,
-    fromEmail: formData.get("fromEmail") as string,
-    fromName: formData.get("fromName") as string,
-    replyToEmail: formData.get("replyToEmail") as string,
-    templateEngine: formData.get("templateEngine") as EmailSettings["templateEngine"],
+    smtpUser: String(formData.get("smtpUser") ?? "").trim().slice(0, MAX_NAME_FIELD_LENGTH),
+    smtpPassword: String(formData.get("smtpPassword") ?? ""),
+    apiKey,
+    apiRegion: String(formData.get("apiRegion") ?? "").trim().slice(0, 64),
+    fromEmail,
+    fromName,
+    replyToEmail,
+    templateEngine: templateEngine as EmailSettings["templateEngine"],
   };
 
   try {
     await adminApi.updateSettings({ email: settings });
     return { success: true, message: "Email settings updated successfully" };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      error: error?.response?.data?.message || "Failed to update settings",
+      error:
+        (error &&
+          typeof error === "object" &&
+          "response" in error &&
+          (error as { response?: { data?: { message?: string } } }).response
+            ?.data?.message) ||
+        "Failed to update settings",
     };
   }
 }
@@ -126,6 +206,10 @@ export default function EmailSettingsPage() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const formIntent = navigation.formData?.get("intent");
+  const actionMessage =
+    typeof actionData?.message === "string" ? actionData.message : null;
+  const actionError =
+    typeof actionData?.error === "string" ? actionData.error : null;
 
   const [formValues, setFormValues] = useState<EmailSettings>(settings);
   const [showPassword, setShowPassword] = useState(false);
@@ -177,16 +261,16 @@ export default function EmailSettingsPage() {
       </div>
 
       {/* Action Messages */}
-      {actionData?.success && (
+      {actionData?.success && actionMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
           <CheckCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.message}
+          {actionMessage}
         </div>
       )}
-      {actionData?.error && (
+      {actionError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <XCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.error}
+          {actionError}
         </div>
       )}
       {error && (
@@ -496,3 +580,5 @@ export default function EmailSettingsPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

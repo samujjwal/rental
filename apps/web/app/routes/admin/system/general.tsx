@@ -1,4 +1,4 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
 import { useState, useEffect } from "react";
 import {
@@ -12,7 +12,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { adminApi, type SystemSettings } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -34,45 +35,129 @@ const defaultSettings: SystemSettings = {
   minRentalDays: 1,
   maxRentalDays: 30,
 };
+const MAX_SITE_NAME_LENGTH = 100;
+const MAX_SUPPORT_EMAIL_LENGTH = 254;
+const MAX_LISTINGS_PER_USER = 1000;
+const MAX_RENTAL_DAYS = 365;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export async function clientLoader() {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const settingsRes = await adminApi.getSettings();
     return {
       settings: settingsRes.settings || defaultSettings,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       settings: defaultSettings,
-      error: error?.message || "Failed to load settings",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load settings",
     };
   }
 }
 
-export async function clientAction({ request }: { request: Request }) {
+export async function clientAction({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+
   const formData = await request.formData();
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "save") {
+    return { success: false, error: "Invalid action" };
+  }
+  const parseBoundedInt = (
+    value: FormDataEntryValue | null,
+    fallback: number,
+    min: number,
+    max: number
+  ) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, Math.floor(parsed)));
+  };
+  const parseBoundedFloat = (
+    value: FormDataEntryValue | null,
+    fallback: number,
+    min: number,
+    max: number
+  ) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+  };
+  const siteName = String(formData.get("siteName") || "")
+    .trim()
+    .slice(0, MAX_SITE_NAME_LENGTH);
+  const supportEmail = String(formData.get("supportEmail") || "")
+    .trim()
+    .slice(0, MAX_SUPPORT_EMAIL_LENGTH);
+  const defaultCurrency = String(formData.get("defaultCurrency") || "");
+  const timezone = String(formData.get("timezone") || "");
+  if (siteName.length < 2) {
+    return { success: false, error: "Site name must be at least 2 characters." };
+  }
+  if (!EMAIL_PATTERN.test(supportEmail)) {
+    return { success: false, error: "Support email must be valid." };
+  }
+  if (!currencies.includes(defaultCurrency)) {
+    return { success: false, error: "Invalid default currency." };
+  }
+  if (!timezones.includes(timezone)) {
+    return { success: false, error: "Invalid timezone." };
+  }
+  const minRentalDays = parseBoundedInt(
+    formData.get("minRentalDays"),
+    defaultSettings.minRentalDays,
+    1,
+    MAX_RENTAL_DAYS
+  );
+  const maxRentalDays = parseBoundedInt(
+    formData.get("maxRentalDays"),
+    defaultSettings.maxRentalDays,
+    minRentalDays,
+    MAX_RENTAL_DAYS
+  );
   const data: Partial<SystemSettings> = {
-    siteName: formData.get("siteName") as string,
-    supportEmail: formData.get("supportEmail") as string,
-    defaultCurrency: formData.get("defaultCurrency") as string,
-    timezone: formData.get("timezone") as string,
+    siteName,
+    supportEmail,
+    defaultCurrency,
+    timezone,
     maintenanceMode: formData.get("maintenanceMode") === "true",
     allowRegistration: formData.get("allowRegistration") === "true",
     requireEmailVerification: formData.get("requireEmailVerification") === "true",
-    maxListingsPerUser: parseInt(formData.get("maxListingsPerUser") as string, 10),
-    commissionRate: parseFloat(formData.get("commissionRate") as string),
-    minRentalDays: parseInt(formData.get("minRentalDays") as string, 10),
-    maxRentalDays: parseInt(formData.get("maxRentalDays") as string, 10),
+    maxListingsPerUser: parseBoundedInt(
+      formData.get("maxListingsPerUser"),
+      defaultSettings.maxListingsPerUser,
+      1,
+      MAX_LISTINGS_PER_USER
+    ),
+    commissionRate: parseBoundedFloat(
+      formData.get("commissionRate"),
+      defaultSettings.commissionRate,
+      0,
+      100
+    ),
+    minRentalDays,
+    maxRentalDays,
   };
 
   try {
     await adminApi.updateSettings(data);
     return { success: true, message: "Settings updated successfully" };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      error: error?.response?.data?.message || "Failed to update settings",
+      error:
+        (error &&
+          typeof error === "object" &&
+          "response" in error &&
+          (error as { response?: { data?: { message?: string } } }).response
+            ?.data?.message) ||
+        "Failed to update settings",
     };
   }
 }
@@ -95,6 +180,10 @@ export default function GeneralSettingsPage() {
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const actionMessage =
+    typeof actionData?.message === "string" ? actionData.message : null;
+  const actionError =
+    typeof actionData?.error === "string" ? actionData.error : null;
 
   const [formValues, setFormValues] = useState<SystemSettings>(settings);
 
@@ -132,20 +221,21 @@ export default function GeneralSettingsPage() {
       </div>
 
       {/* Action Messages */}
-      {actionData?.success && (
+      {actionData?.success && actionMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
           <CheckCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.message}
+          {actionMessage}
         </div>
       )}
-      {actionData?.error && (
+      {actionError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <XCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.error}
+          {actionError}
         </div>
       )}
 
       <Form method="post">
+        <input type="hidden" name="intent" value="save" />
         {/* Site Information */}
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
@@ -395,3 +485,5 @@ export default function GeneralSettingsPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

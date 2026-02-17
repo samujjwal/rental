@@ -207,7 +207,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('should set default role as CUSTOMER', async () => {
+    it('should set default role as USER', async () => {
       (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
       (passwordService.hash as jest.Mock).mockResolvedValue('hashedPassword');
       (prismaService.user.create as jest.Mock).mockResolvedValue(mockUser);
@@ -219,7 +219,7 @@ describe('AuthService', () => {
       expect(prismaService.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            role: UserRole.CUSTOMER,
+            role: UserRole.USER,
             status: UserStatus.ACTIVE,
           }),
         }),
@@ -412,6 +412,38 @@ describe('AuthService', () => {
       const result = await service.login(loginDto);
 
       expect(result).toHaveProperty('accessToken');
+    });
+  });
+
+  describe('validateSessionToken', () => {
+    it('should return false when access token is missing', async () => {
+      const result = await service.validateSessionToken(mockUser.id, null);
+      expect(result).toBe(false);
+      expect(prismaService.session.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should return true when active session exists for token', async () => {
+      (prismaService.session.findFirst as jest.Mock).mockResolvedValue({ id: 'session-1' });
+
+      const result = await service.validateSessionToken(mockUser.id, 'active-access-token');
+
+      expect(result).toBe(true);
+      expect(prismaService.session.findFirst).toHaveBeenCalledWith({
+        where: {
+          userId: mockUser.id,
+          token: 'active-access-token',
+          expiresAt: { gt: expect.any(Date) },
+        },
+        select: { id: true },
+      });
+    });
+
+    it('should return false when no active session exists for token', async () => {
+      (prismaService.session.findFirst as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.validateSessionToken(mockUser.id, 'stale-access-token');
+
+      expect(result).toBe(false);
     });
   });
 });

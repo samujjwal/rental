@@ -1,40 +1,33 @@
 import { api } from "~/lib/api-client";
+import type {
+  PaymentIntentResponse,
+  BalanceResponse,
+  PayoutRecord,
+} from "~/lib/shared-types";
 
-export interface CreatePaymentIntentRequest {
-  bookingId: string;
-}
-
-export interface CreatePaymentIntentResponse {
-  clientSecret: string;
-  paymentIntentId: string;
-}
+export type CreatePaymentIntentResponse = PaymentIntentResponse;
 
 export interface OwnerEarnings {
-  totalAmount: number;
-  pendingAmount: number;
-  availableAmount: number;
-  earnings: Array<{
-    id: string;
-    amount: number;
-    status: string;
-    createdAt: string;
-  }>;
+  amount: number;
+  currency: string;
 }
 
 export type TransactionType =
-  | "BOOKING_PAYMENT"
+  | "PAYMENT"
   | "PAYOUT"
   | "REFUND"
   | "PLATFORM_FEE"
   | "DEPOSIT_HOLD"
-  | "DEPOSIT_RELEASE";
+  | "DEPOSIT_RELEASE"
+  | "OWNER_EARNING";
 
-export type TransactionStatus = "pending" | "processing" | "completed" | "failed";
+export type TransactionStatus = "PENDING" | "POSTED" | "SETTLED" | "CANCELLED";
 
 export interface Transaction {
   id: string;
   type: TransactionType;
   amount: number;
+  amountSigned?: number;
   currency: string;
   status: TransactionStatus;
   description: string;
@@ -42,11 +35,8 @@ export interface Transaction {
   booking?: {
     id: string;
     listing: {
+      id?: string;
       title: string;
-    };
-    renter: {
-      firstName: string;
-      lastName: string | null;
     };
   };
 }
@@ -68,33 +58,37 @@ export interface PayoutResponse {
   amount: number;
   status: string;
   estimatedArrival: string;
+  createdAt?: string;
+  accountLast4?: string;
 }
 
 export const paymentsApi = {
   async createPaymentIntent(
     bookingId: string
   ): Promise<CreatePaymentIntentResponse> {
-    return api.post<CreatePaymentIntentResponse>("/payments/create-intent", {
-      bookingId,
-    });
-  },
-
-  async confirmPayment(paymentIntentId: string): Promise<{ success: boolean }> {
-    return api.post<{ success: boolean }>(
-      `/payments/${paymentIntentId}/confirm`
-    );
+    return api.post<CreatePaymentIntentResponse>(`/payments/intents/${bookingId}`);
   },
 
   async getPaymentHistory(userId: string): Promise<Transaction[]> {
-    return api.get<Transaction[]>(`/payments/history?userId=${userId}`);
+    const response = await api.get<TransactionsResponse>(`/payments/transactions`);
+    return response.transactions || [];
   },
 
   async getOwnerEarnings(userId: string): Promise<OwnerEarnings> {
-    return api.get<OwnerEarnings>(`/payments/earnings?userId=${userId}`);
+    return api.get<OwnerEarnings>("/payments/earnings");
   },
 
   async getEarnings(): Promise<OwnerEarnings> {
     return api.get<OwnerEarnings>("/payments/earnings");
+  },
+
+  async getEarningsSummary(): Promise<{
+    thisMonth: number;
+    lastMonth: number;
+    total: number;
+    currency: string;
+  }> {
+    return api.get("/payments/earnings/summary");
   },
 
   async getTransactions(params?: {
@@ -117,15 +111,14 @@ export const paymentsApi = {
   },
 
   async getBalance(): Promise<{
-    available: number;
-    pending: number;
+    balance: number;
     currency: string;
   }> {
     return api.get("/payments/balance");
   },
 
   async requestPayout(data: PayoutRequest): Promise<PayoutResponse> {
-    return api.post<PayoutResponse>("/payments/payout", data);
+    return api.post<PayoutResponse>("/payments/payouts", data);
   },
 
   async getPayouts(params?: {
@@ -134,28 +127,12 @@ export const paymentsApi = {
     status?: string;
   }): Promise<{
     payouts: PayoutResponse[];
-    total: number;
   }> {
     const queryParams = new URLSearchParams();
-    if (params?.page) queryParams.append("page", params.page.toString());
-    if (params?.limit) queryParams.append("limit", params.limit.toString());
     if (params?.status) queryParams.append("status", params.status);
     const query = queryParams.toString();
-    return api.get(`/payments/payouts${query ? `?${query}` : ""}`);
-  },
-
-  async getEarningsSummary(params?: {
-    period?: "week" | "month" | "year";
-  }): Promise<{
-    thisMonth: number;
-    lastMonth: number;
-    total: number;
-    currency: string;
-    breakdown: { date: string; amount: number }[];
-  }> {
-    const queryParams = new URLSearchParams();
-    if (params?.period) queryParams.append("period", params.period);
-    const query = queryParams.toString();
-    return api.get(`/payments/earnings/summary${query ? `?${query}` : ""}`);
+    return api.get(`/payments/payouts${query ? `?${query}` : ""}`).then((payouts) => ({
+      payouts: Array.isArray(payouts) ? payouts : [],
+    }));
   },
 };

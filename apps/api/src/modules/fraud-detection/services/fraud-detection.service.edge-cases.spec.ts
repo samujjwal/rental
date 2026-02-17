@@ -65,6 +65,9 @@ describe('FraudDetectionService - Edge Cases & Comprehensive Tests', () => {
         idVerificationStatus: 'VERIFIED',
         averageRating: 0,
         totalReviews: 0,
+        bookings: [],
+        disputesInitiated: [],
+        reviewsReceived: [],
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(user);
@@ -83,6 +86,9 @@ describe('FraudDetectionService - Edge Cases & Comprehensive Tests', () => {
         idVerificationStatus: 'VERIFIED',
         averageRating: 0,
         totalReviews: 0,
+        bookings: [],
+        disputesInitiated: [],
+        reviewsReceived: [],
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(user);
@@ -100,6 +106,9 @@ describe('FraudDetectionService - Edge Cases & Comprehensive Tests', () => {
         idVerificationStatus: 'VERIFIED',
         averageRating: 0,
         totalReviews: 0,
+        bookings: [],
+        disputesInitiated: [],
+        reviewsReceived: [],
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(user);
@@ -119,6 +128,9 @@ describe('FraudDetectionService - Edge Cases & Comprehensive Tests', () => {
         idVerificationStatus: 'VERIFIED',
         averageRating: 0,
         totalReviews: 0,
+        bookings: [],
+        disputesInitiated: [],
+        reviewsReceived: [],
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(user);
@@ -141,6 +153,9 @@ describe('FraudDetectionService - Edge Cases & Comprehensive Tests', () => {
         idVerificationStatus: 'PENDING',
         averageRating: 0,
         totalReviews: 0,
+        bookings: [],
+        disputesInitiated: [],
+        reviewsReceived: [],
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(user);
@@ -158,6 +173,9 @@ describe('FraudDetectionService - Edge Cases & Comprehensive Tests', () => {
         idVerificationStatus: 'VERIFIED',
         averageRating: 5.0,
         totalReviews: 10,
+        bookings: [],
+        disputesInitiated: [],
+        reviewsReceived: [],
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(user);

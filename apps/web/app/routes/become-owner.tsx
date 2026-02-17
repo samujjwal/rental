@@ -1,5 +1,5 @@
 import type { MetaFunction } from "react-router";
-import { Link, Form, useActionData, useNavigation } from "react-router";
+import { Link, Form, useActionData, useNavigation, redirect } from "react-router";
 import { useState } from "react";
 import {
   DollarSign,
@@ -10,12 +10,12 @@ import {
   Star,
   Package,
   Calendar,
-  MessageCircle,
   ArrowRight,
   Loader2,
 } from "lucide-react";
 import { useAuthStore } from "~/lib/store/auth";
 import { usersApi } from "~/lib/api/users";
+import { RouteErrorBoundary } from "~/components/ui";
 import {
   Card,
   CardContent,
@@ -25,6 +25,7 @@ import {
 } from "~/components/ui";
 import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -34,8 +35,21 @@ export const meta: MetaFunction = () => {
 };
 
 export async function clientAction({ request }: { request: Request }) {
+  const currentUser = await getUser(request);
+  if (!currentUser) {
+    return redirect("/auth/login");
+  }
+  if (currentUser.role === "owner" || currentUser.role === "admin") {
+    return { success: true, message: "You already have owner access." };
+  }
+
   const formData = await request.formData();
-  const agreement = formData.get("agreement") === "true";
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "upgrade-owner") {
+    return { success: false, message: "Invalid request." };
+  }
+  const agreementValue = String(formData.get("agreement") || "").toLowerCase();
+  const agreement = agreementValue === "true" || agreementValue === "on";
 
   if (!agreement) {
     return { success: false, message: "Please accept the terms and conditions" };
@@ -43,10 +57,17 @@ export async function clientAction({ request }: { request: Request }) {
 
   try {
     // Upgrade user to owner role
-    await usersApi.upgradeToOwner();
+    const updated = await usersApi.upgradeToOwner();
+    useAuthStore.getState().updateUser(updated);
     return { success: true, message: "Congratulations! You are now an owner." };
-  } catch (error: any) {
-    return { success: false, message: error?.message || "Failed to become an owner" };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to become an owner",
+    };
   }
 }
 
@@ -138,7 +159,7 @@ export default function BecomeOwnerPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <Card>
             <CardContent className="p-12 text-center">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
               <h1 className="text-2xl font-bold text-foreground mb-2">You're Already an Owner!</h1>
               <p className="text-muted-foreground mb-6">
                 You can start listing your items right away.
@@ -265,7 +286,7 @@ export default function BecomeOwnerPage() {
                       <p className="text-sm text-muted-foreground">{testimonial.items}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-green-600">{testimonial.earnings}</p>
+                      <p className="font-bold text-success">{testimonial.earnings}</p>
                       <p className="text-xs text-muted-foreground">earned</p>
                     </div>
                   </div>
@@ -289,11 +310,11 @@ export default function BecomeOwnerPage() {
             <CardContent>
               {actionData?.success ? (
                 <div className="text-center py-8">
-                  <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                  <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
                   <h3 className="text-xl font-bold text-foreground mb-2">Welcome, Owner!</h3>
                   <p className="text-muted-foreground mb-6">{actionData.message}</p>
                   <Link to="/listings/new">
-                    <UnifiedButton size="large">
+                    <UnifiedButton size="lg">
                       <Package className="w-5 h-5 mr-2" />
                       Create Your First Listing
                     </UnifiedButton>
@@ -301,6 +322,7 @@ export default function BecomeOwnerPage() {
                 </div>
               ) : (
                 <Form method="post">
+                  <input type="hidden" name="intent" value="upgrade-owner" />
                   {actionData?.success === false && (
                     <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
                       {actionData.message}
@@ -308,8 +330,8 @@ export default function BecomeOwnerPage() {
                   )}
 
                   {!user && (
-                    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-sm text-yellow-800">
+                    <div className="mb-6 p-4 bg-warning/10 border border-warning/30 rounded-lg">
+                      <p className="text-sm text-warning">
                         Please <Link to="/auth/login" className="font-medium underline">log in</Link> or{" "}
                         <Link to="/auth/signup" className="font-medium underline">create an account</Link>{" "}
                         first to become an owner.
@@ -344,10 +366,10 @@ export default function BecomeOwnerPage() {
                       </span>
                     </label>
 
-                    <Button
+                    <UnifiedButton
                       type="submit"
                       className="w-full"
-                      size="large"
+                      size="lg"
                       disabled={!agreed || !user || isSubmitting}
                     >
                       {isSubmitting ? (
@@ -408,3 +430,5 @@ export default function BecomeOwnerPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

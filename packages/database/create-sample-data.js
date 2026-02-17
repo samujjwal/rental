@@ -2,9 +2,8 @@ const {
   PrismaClient,
   UserRole,
   PropertyStatus,
-  ListingStatus,
   BookingStatus,
-  PayoutStatus,
+  PaymentStatus,
 } = require('@prisma/client');
 
 const prisma = new PrismaClient();
@@ -16,7 +15,6 @@ async function createSampleData() {
       data: {
         email: 'alice.wilson@example.com',
         username: 'alice.wilson@example.com',
-        password: 'Password123!',
         passwordHash: '$2b$10$l0ZXMCI3qlklig9D5opvs.KD8UJ4Bt2blulM4WZUKjBLZGmpPRzmW',
         firstName: 'Alice',
         lastName: 'Wilson',
@@ -30,7 +28,6 @@ async function createSampleData() {
       data: {
         email: 'bob.johnson@example.com',
         username: 'bob.johnson@example.com',
-        password: 'Password123!',
         passwordHash: '$2b$10$l0ZXMCI3qlklig9D5opvs.KD8UJ4Bt2blulM4WZUKjBLZGmpPRzmW',
         firstName: 'Bob',
         lastName: 'Johnson',
@@ -60,7 +57,7 @@ async function createSampleData() {
     });
 
     // Create listings (properties)
-    const property1 = await prisma.property.create({
+    const listing1 = await prisma.listing.create({
       data: {
         title: 'Modern Downtown Apartment',
         description: 'Beautiful 2-bedroom apartment in the heart of downtown',
@@ -81,7 +78,7 @@ async function createSampleData() {
       },
     });
 
-    const property2 = await prisma.property.create({
+    const listing2 = await prisma.listing.create({
       data: {
         title: 'Cozy Suburban House',
         description: 'Perfect family home with garden',
@@ -105,7 +102,7 @@ async function createSampleData() {
     // Create bookings
     const booking1 = await prisma.booking.create({
       data: {
-        listingId: property1.id,
+        listingId: listing1.id,
         renterId: user1.id,
         startDate: new Date('2026-02-01'),
         endDate: new Date('2026-02-07'),
@@ -116,7 +113,7 @@ async function createSampleData() {
 
     const booking2 = await prisma.booking.create({
       data: {
-        listingId: property2.id,
+        listingId: listing2.id,
         renterId: user1.id,
         startDate: new Date('2026-03-15'),
         endDate: new Date('2026-03-22'),
@@ -130,7 +127,7 @@ async function createSampleData() {
       data: {
         bookingId: booking1.id,
         amount: 9000,
-        status: PayoutStatus.COMPLETED,
+        status: PaymentStatus.COMPLETED,
         method: 'credit_card',
         stripePaymentIntentId: 'pi_test_123',
       },
@@ -140,7 +137,7 @@ async function createSampleData() {
       data: {
         bookingId: booking2.id,
         amount: 17500,
-        status: PayoutStatus.PENDING,
+        status: PaymentStatus.PENDING,
         method: 'credit_card',
         stripePaymentIntentId: 'pi_test_456',
       },

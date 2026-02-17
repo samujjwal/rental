@@ -8,15 +8,10 @@ import {
   TextField,
   Autocomplete,
   Box,
-  Chip,
   InputAdornment,
   IconButton,
   Paper,
   Typography,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
   Divider,
 } from "@mui/material";
 import {
@@ -109,20 +104,6 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
     onChange("");
   }, [onChange]);
 
-  // Handle recent search click
-  const handleRecentClick = useCallback(
-    (search: string) => {
-      setInputValue(search);
-      onChange(search);
-      setShowRecent(false);
-
-      if (onRecentSearchClick) {
-        onRecentSearchClick(search);
-      }
-    },
-    [onChange, onRecentSearchClick]
-  );
-
   // Combine suggestions with recent searches
   const options = useMemo(() => {
     const combined = [...new Set([...recentSearches, ...suggestions])];
@@ -140,6 +121,9 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
       onChange={(_, newValue) => {
         if (typeof newValue === "string") {
           handleSearchChange(newValue);
+          if (recentSearches.includes(newValue)) {
+            onRecentSearchClick?.(newValue);
+          }
         }
       }}
       onFocus={() => setShowRecent(true)}
@@ -147,6 +131,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
       renderInput={(params) => (
         <TextField
           {...params}
+          name="search"
           placeholder={placeholder}
           size={size}
           autoFocus={autoFocus}

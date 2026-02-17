@@ -120,6 +120,30 @@ export interface InsuranceClaimsResponse {
 
 // API Client
 export const insuranceApi = {
+  // Get insurance requirement for a listing
+  getListingRequirement: async (listingId: string): Promise<{
+    required: boolean;
+    reason?: string;
+    type?: string;
+    minimumCoverage?: number;
+  }> => {
+    return api.get(`/insurance/listings/${listingId}/requirement`);
+  },
+
+  // Upload/create an insurance policy (owner flow)
+  uploadPolicy: async (data: {
+    listingId: string;
+    policyNumber: string;
+    provider: string;
+    type: string;
+    coverageAmount: number;
+    effectiveDate: string;
+    expirationDate: string;
+    documentUrl: string;
+  }): Promise<InsurancePolicy> => {
+    return api.post<InsurancePolicy>("/insurance/policies", data);
+  },
+
   // Get all insurance policies for the current user
   getMyPolicies: async (params?: {
     page?: number;
@@ -143,8 +167,12 @@ export const insuranceApi = {
     try {
       const response = await api.get<InsurancePolicy>(`/insurance/policies/booking/${bookingId}`);
       return response;
-    } catch (error: any) {
-      if (error?.response?.status === 404) {
+    } catch (error: unknown) {
+      const status =
+        error && typeof error === "object" && "response" in error
+          ? (error as { response?: { status?: number } }).response?.status
+          : undefined;
+      if (status === 404) {
         return null;
       }
       throw error;

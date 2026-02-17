@@ -29,7 +29,8 @@ export interface SignupRequest {
   firstName: string;
   lastName?: string;
   phone?: string;
-  role: "renter" | "owner";
+  // Note: role is not sent to API - all users start as 'renter'
+  // Users can upgrade to 'owner' via /become-owner route
 }
 
 export interface AuthResponse {

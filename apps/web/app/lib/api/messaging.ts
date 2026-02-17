@@ -35,6 +35,7 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string;
+  attachments?: string[];
   createdAt: string;
   updatedAt: string;
   readReceipts?: {
@@ -50,6 +51,7 @@ export interface CreateConversationDto {
 
 export interface SendMessageDto {
   content: string;
+  attachments?: string[];
 }
 
 export interface ConversationsResponse {

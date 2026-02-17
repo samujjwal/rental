@@ -28,6 +28,7 @@ export class TokenService {
 
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: this.configService.get('jwt.accessTokenExpiry'),
+      jwtid: randomBytes(8).toString('hex'),
     });
 
     const refreshToken = this.generateRefreshToken();

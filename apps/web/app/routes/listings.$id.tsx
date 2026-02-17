@@ -1,32 +1,30 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link, useNavigate } from "react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   MapPin,
-  Calendar,
-  Package,
   Shield,
   Star,
-  ChevronLeft,
-  ChevronRight,
   Truck,
   CheckCircle,
-  X,
+  ChevronLeft,
 } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
 import { bookingsApi } from "~/lib/api/bookings";
-import type { Listing } from "~/types/listing";
+import { reviewsApi } from "~/lib/api/reviews";
 import type { BookingCalculation } from "~/types/booking";
+import type { Review } from "~/types/review";
 import { useAuthStore } from "~/lib/store/auth";
 import { cn } from "~/lib/utils";
-import { UnifiedButton, Badge } from "~/components/ui";
+import { UnifiedButton, Badge, RouteErrorBoundary } from "~/components/ui";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "~/components/ui";
+import { Skeleton, CardSkeleton } from "~/components/ui/skeleton";
+import { ListingGallery } from "~/components/ui/ListingGallery";
 
 export const meta: MetaFunction<typeof clientLoader> = ({ data }) => {
   if (!data?.listing) {
@@ -38,20 +36,35 @@ export const meta: MetaFunction<typeof clientLoader> = ({ data }) => {
   ];
 };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{5,127}$/;
+const isValidListingId = (value: string | undefined): value is string =>
+  Boolean(value && (UUID_PATTERN.test(value) || SAFE_ID_PATTERN.test(value)));
+const MAX_BOOKING_MESSAGE_LENGTH = 1000;
+const MAX_BOOKING_GUESTS = 50;
+const MAX_BOOKING_DAYS = 90;
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeDateLabel = (value: unknown): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleDateString();
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+
 export async function clientLoader({ params }: LoaderFunctionArgs) {
   const { id } = params;
-  if (!id) throw new Error("Listing ID is required");
+  if (!isValidListingId(id)) {
+    throw new Response("Listing not found", { status: 404 });
+  }
 
   try {
     const listing = await listingsApi.getListingById(id);
-    let blockedDates: string[] = [];
-    try {
-      blockedDates = await bookingsApi.getBlockedDates(id);
-    } catch (blockError) {
-      // Blocked dates are optional, continue without them
-      console.warn("Failed to load blocked dates:", blockError);
-    }
-    return { listing, blockedDates };
+    return { listing };
   } catch (error) {
     console.error("Failed to load listing:", error, "ID:", id);
     throw new Response("Listing not found", { status: 404 });
@@ -59,13 +72,13 @@ export async function clientLoader({ params }: LoaderFunctionArgs) {
 }
 
 export default function ListingDetail() {
-  const { listing, blockedDates } = useLoaderData<typeof clientLoader>();
+  const { listing } = useLoaderData<typeof clientLoader>();
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showBookingModal, setShowBookingModal] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [guestCount, setGuestCount] = useState(1);
+  const [renterMessage, setRenterMessage] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState<
     "pickup" | "delivery" | "shipping"
   >("pickup");
@@ -73,18 +86,40 @@ export default function ListingDetail() {
     null
   );
   const [loading, setLoading] = useState(false);
-
-  const nextImage = () => {
-    setCurrentImageIndex((prev) =>
-      prev === listing.images.length - 1 ? 0 : prev + 1
-    );
+  const [bookingError, setBookingError] = useState("");
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsTotal, setReviewsTotal] = useState(0);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [availabilityStatus, setAvailabilityStatus] = useState<
+    "idle" | "checking" | "available" | "unavailable"
+  >("idle");
+  const [availabilityMessage, setAvailabilityMessage] = useState("");
+  const deliveryOptions = listing.deliveryOptions || {
+    pickup: false,
+    delivery: false,
+    shipping: false,
   };
+  const galleryImages = Array.isArray(listing.images) ? listing.images : [];
+  const locationCity = safeText(listing.location?.city, "Location");
+  const locationState = safeText(listing.location?.state);
+  const conditionLabel = safeText(listing.condition).replace("-", " ");
+  const availabilityLabel = safeText(listing.availability).toLowerCase();
 
-  const prevImage = () => {
-    setCurrentImageIndex((prev) =>
-      prev === 0 ? listing.images.length - 1 : prev - 1
-    );
-  };
+  useEffect(() => {
+    if (deliveryOptions.pickup) {
+      setDeliveryMethod("pickup");
+      return;
+    }
+    if (deliveryOptions.delivery) {
+      setDeliveryMethod("delivery");
+      return;
+    }
+    if (deliveryOptions.shipping) {
+      setDeliveryMethod("shipping");
+    }
+  }, [deliveryOptions.delivery, deliveryOptions.pickup, deliveryOptions.shipping]);
 
   const handleCalculatePrice = async () => {
     if (!startDate || !endDate) return;
@@ -105,12 +140,128 @@ export default function ListingDetail() {
     }
   };
 
-  const handleBooking = () => {
-    if (!user) {
-      navigate("/auth/login");
+  const handleCheckAvailability = async () => {
+    if (!startDate || !endDate) return;
+    if (availabilityLabel !== "available") {
+      setAvailabilityStatus("unavailable");
+      setAvailabilityMessage("This listing is not currently available.");
+      setCalculation(null);
       return;
     }
-    setShowBookingModal(true);
+    if (endDate < startDate) {
+      setAvailabilityStatus("unavailable");
+      setAvailabilityMessage("End date must be after start date.");
+      setCalculation(null);
+      return;
+    }
+    setAvailabilityStatus("checking");
+    setAvailabilityMessage("");
+    setBookingError("");
+    try {
+      const availability = await bookingsApi.checkAvailability(
+        listing.id,
+        startDate,
+        endDate
+      );
+      if (availability.available) {
+        setAvailabilityStatus("available");
+        setAvailabilityMessage("Dates are available.");
+        await handleCalculatePrice();
+      } else {
+        setAvailabilityStatus("unavailable");
+        setAvailabilityMessage(
+          availability.message || "Selected dates are not available."
+        );
+        setCalculation(null);
+      }
+    } catch (error) {
+      console.error("Availability check failed:", error);
+      setAvailabilityStatus("unavailable");
+      setAvailabilityMessage("Unable to check availability. Try again.");
+      setCalculation(null);
+    }
+  };
+
+  const handleBooking = async () => {
+    const today = getTodayDate();
+    const sanitizedMessage = renterMessage.trim().slice(0, MAX_BOOKING_MESSAGE_LENGTH);
+    const normalizedGuestCount = Math.max(
+      1,
+      Math.min(MAX_BOOKING_GUESTS, Math.floor(guestCount))
+    );
+    const selectedDeliveryMethod = deliveryMethod;
+    if (!deliveryOptions[selectedDeliveryMethod]) {
+      setBookingError("Please select a valid delivery method.");
+      return;
+    }
+    if (availabilityLabel !== "available") {
+      setBookingError("This listing is not currently available.");
+      return;
+    }
+    if (!startDate || !endDate) {
+      setBookingError("Please select start and end dates.");
+      return;
+    }
+    if (startDate < today) {
+      setBookingError("Start date cannot be in the past.");
+      return;
+    }
+    if (endDate < startDate) {
+      setBookingError("End date must be after start date.");
+      return;
+    }
+    const startAt = new Date(startDate);
+    const endAt = new Date(endDate);
+    if (
+      Number.isNaN(startAt.getTime()) ||
+      Number.isNaN(endAt.getTime())
+    ) {
+      setBookingError("Please select valid booking dates.");
+      return;
+    }
+    const totalDays = Math.ceil(
+      (endAt.getTime() - startAt.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    if (totalDays > MAX_BOOKING_DAYS) {
+      setBookingError(`Bookings cannot exceed ${MAX_BOOKING_DAYS} days.`);
+      return;
+    }
+    if (availabilityStatus !== "available") {
+      setBookingError("Please check availability before booking.");
+      return;
+    }
+    if (!user) {
+      navigate(`/auth/login?redirectTo=/listings/${listing.id}`);
+      return;
+    }
+    setBookingSubmitting(true);
+    setBookingError("");
+    try {
+      const booking = await bookingsApi.createBooking({
+        listingId: listing.id,
+        startDate,
+        endDate,
+        guestCount: normalizedGuestCount,
+        message: sanitizedMessage || undefined,
+        deliveryMethod: selectedDeliveryMethod,
+      });
+
+      const status =
+        typeof booking.status === "string"
+          ? booking.status.toUpperCase()
+          : "";
+
+      if (status === "PENDING_PAYMENT" || status === "PENDING") {
+        navigate(`/checkout/${booking.id}`);
+      } else {
+        navigate(`/bookings/${booking.id}`);
+      }
+    } catch (error) {
+      console.error("Booking creation failed:", error);
+      setBookingError("Unable to create booking. Please try again.");
+    } finally {
+      setBookingSubmitting(false);
+    }
   };
 
   const getTodayDate = () => {
@@ -119,6 +270,26 @@ export default function ListingDetail() {
   };
 
   const isOwner = user?.id === listing.ownerId;
+
+  const fetchReviews = async (page: number) => {
+    setLoadingReviews(true);
+    try {
+      const response = await reviewsApi.getReviewsForListing(listing.id, page, 5);
+      setReviews((prevReviews) =>
+        page === 1 ? response.reviews : [...prevReviews, ...response.reviews]
+      );
+      setReviewsTotal(response.total || response.reviews.length);
+      setReviewsPage(page);
+    } catch (error) {
+      console.error("Failed to load reviews:", error);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReviews(1);
+  }, [listing.id]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -151,52 +322,8 @@ export default function ListingDetail() {
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Image Gallery */}
-            <Card className="overflow-hidden mb-6">
-              <div className="relative aspect-[16/10] bg-muted">
-                {listing.images.length > 0 ? (
-                  <>
-                    <img
-                      src={listing.images[currentImageIndex]}
-                      alt={listing.title}
-                      className="w-full h-full object-cover"
-                    />
-                    {listing.images.length > 1 && (
-                      <>
-                        <button
-                          onClick={prevImage}
-                          className="absolute left-4 top-1/2 -translate-y-1/2 bg-background/90 hover:bg-background p-2 rounded-full shadow-lg transition-colors"
-                        >
-                          <ChevronLeft className="w-6 h-6" />
-                        </button>
-                        <button
-                          onClick={nextImage}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-background/90 hover:bg-background p-2 rounded-full shadow-lg transition-colors"
-                        >
-                          <ChevronRight className="w-6 h-6" />
-                        </button>
-                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                          {listing.images.map((_, index) => (
-                            <button
-                              key={index}
-                              onClick={() => setCurrentImageIndex(index)}
-                              className={cn(
-                                "w-2 h-2 rounded-full transition-colors",
-                                index === currentImageIndex
-                                  ? "bg-background"
-                                  : "bg-background/50"
-                              )}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    No images available
-                  </div>
-                )}
-              </div>
+            <Card className="overflow-hidden mb-6 group">
+              <ListingGallery images={galleryImages} title={listing.title} />
             </Card>
 
             {/* Title and Details */}
@@ -210,17 +337,17 @@ export default function ListingDetail() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <MapPin className="w-4 h-4" />
-                        {listing.location.city}, {listing.location.state}
+                        {locationState ? `${locationCity}, ${locationState}` : locationCity}
                       </span>
                       {listing.rating && (
                         <span className="flex items-center gap-1">
                           <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                          {listing.rating.toFixed(1)} ({listing.totalReviews}{" "}
+                          {safeNumber(listing.rating).toFixed(1)} ({listing.totalReviews}{" "}
                           reviews)
                         </span>
                       )}
                       <span className="capitalize">
-                        {listing.condition.replace("-", " ")}
+                        {conditionLabel || "N/A"}
                       </span>
                     </div>
                   </div>
@@ -257,7 +384,7 @@ export default function ListingDetail() {
                       Verified
                     </Badge>
                   )}
-                  {listing.deliveryOptions.delivery && (
+                  {deliveryOptions.delivery && (
                     <Badge
                       variant="default"
                       className="inline-flex items-center gap-1"
@@ -330,14 +457,80 @@ export default function ListingDetail() {
                     </div>
                     <div className="font-semibold text-foreground">
                       {[
-                        listing.deliveryOptions.pickup && "Pickup",
-                        listing.deliveryOptions.delivery && "Delivery",
-                        listing.deliveryOptions.shipping && "Shipping",
+                        deliveryOptions.pickup && "Pickup",
+                        deliveryOptions.delivery && "Delivery",
+                        deliveryOptions.shipping && "Shipping",
                       ]
                         .filter(Boolean)
                         .join(", ")}
                     </div>
                   </div>
+                </div>
+
+                {/* Reviews */}
+                <div className="mt-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold text-foreground">
+                      Reviews
+                    </h2>
+                    {listing.totalReviews > 0 && (
+                      <span className="text-sm text-muted-foreground">
+                        {listing.totalReviews} total
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingReviews ? (
+                    <p className="text-sm text-muted-foreground">Loading reviews...</p>
+                  ) : reviews.length === 0 ? (
+                    <div className="p-4 bg-muted rounded-lg text-sm text-muted-foreground">
+                      No reviews yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {reviews.map((review) => {
+                        const ratingValue = review.overallRating ?? review.rating ?? 0;
+                        const reviewerFirstName = safeText(review.reviewer?.firstName, "User");
+                        const reviewerLastName = safeText(review.reviewer?.lastName);
+                        return (
+                          <div key={review.id} className="border border-border rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
+                                  {reviewerFirstName[0] || "U"}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {reviewerFirstName}{reviewerLastName ? ` ${reviewerLastName}` : ""}
+                                  </p>
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                                    {safeNumber(ratingValue).toFixed(1)}
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {safeDateLabel(review.createdAt)}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{review.comment}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {reviews.length < reviewsTotal && (
+                    <div className="mt-4">
+                      <UnifiedButton
+                        variant="outline"
+                        onClick={() => fetchReviews(reviewsPage + 1)}
+                        disabled={loadingReviews}
+                      >
+                        Load more reviews
+                      </UnifiedButton>
+                    </div>
+                  )}
                 </div>
 
                 {/* Rules */}
@@ -362,29 +555,29 @@ export default function ListingDetail() {
               <CardContent>
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
-                    {listing.owner.avatar ? (
+                    {listing.owner?.avatar ? (
                       <img
                         src={listing.owner.avatar}
-                        alt={listing.owner.firstName}
+                        alt={listing.owner.firstName || "Owner"}
                         className="w-full h-full rounded-full object-cover"
                       />
                     ) : (
                       <span className="text-2xl font-bold text-muted-foreground">
-                        {listing.owner.firstName[0]}
+                        {(listing.owner?.firstName || "O")[0]}
                       </span>
                     )}
                   </div>
                   <div>
                     <div className="font-semibold text-foreground">
-                      {listing.owner.firstName} {listing.owner.lastName}
+                      {listing.owner?.firstName || "Owner"} {listing.owner?.lastName || ""}
                     </div>
-                    {listing.owner.rating && (
+                    {listing.owner?.rating != null && listing.owner.rating > 0 && (
                       <div className="text-sm text-muted-foreground flex items-center gap-1">
                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        {listing.owner.rating.toFixed(1)}
+                        {safeNumber(listing.owner.rating).toFixed(1)}
                       </div>
                     )}
-                    {listing.owner.verified && (
+                    {listing.owner?.verified && (
                       <span className="text-sm text-info">Verified</span>
                     )}
                   </div>
@@ -405,7 +598,7 @@ export default function ListingDetail() {
                       / day
                     </span>
                   </div>
-                  {listing.availability === "available" ? (
+                  {availabilityLabel === "available" ? (
                     <span className="text-sm text-success">Available</span>
                   ) : (
                     <span className="text-sm text-destructive">
@@ -425,8 +618,14 @@ export default function ListingDetail() {
                         type="date"
                         value={startDate}
                         onChange={(e) => {
-                          setStartDate(e.target.value);
+                          const nextStartDate = e.target.value;
+                          setStartDate(nextStartDate);
+                          if (endDate && nextStartDate && endDate < nextStartDate) {
+                            setEndDate("");
+                          }
                           setCalculation(null);
+                          setAvailabilityStatus("idle");
+                          setAvailabilityMessage("");
                         }}
                         min={getTodayDate()}
                         className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
@@ -443,6 +642,8 @@ export default function ListingDetail() {
                         onChange={(e) => {
                           setEndDate(e.target.value);
                           setCalculation(null);
+                          setAvailabilityStatus("idle");
+                          setAvailabilityMessage("");
                         }}
                         min={startDate || getTodayDate()}
                         className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
@@ -464,28 +665,83 @@ export default function ListingDetail() {
                         }}
                         className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                       >
-                        {listing.deliveryOptions.pickup && (
+                        {deliveryOptions.pickup && (
                           <option value="pickup">Pickup</option>
                         )}
-                        {listing.deliveryOptions.delivery && (
+                        {deliveryOptions.delivery && (
                           <option value="delivery">Delivery</option>
                         )}
-                        {listing.deliveryOptions.shipping && (
+                        {deliveryOptions.shipping && (
                           <option value="shipping">Shipping</option>
                         )}
                       </select>
                     </div>
 
+                    {/* Guest Count */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Guests
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={MAX_BOOKING_GUESTS}
+                        value={guestCount}
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          setGuestCount(
+                            Number.isNaN(value)
+                              ? 1
+                              : Math.max(1, Math.min(MAX_BOOKING_GUESTS, value))
+                          );
+                        }}
+                        className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                      />
+                    </div>
+
+                    {/* Message to Owner */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Message to Owner (optional)
+                      </label>
+                      <textarea
+                        value={renterMessage}
+                        onChange={(e) =>
+                          setRenterMessage(
+                            e.target.value.slice(0, MAX_BOOKING_MESSAGE_LENGTH)
+                          )
+                        }
+                        rows={3}
+                        className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
+                        placeholder="Tell the owner about your needs..."
+                      />
+                    </div>
+
                     {/* Calculate Button */}
                     <UnifiedButton
                       variant="secondary"
-                      onClick={handleCalculatePrice}
+                      onClick={handleCheckAvailability}
                       disabled={!startDate || !endDate || loading}
                       fullWidth
-                      className="mb-4"
+                      className="mb-3"
                     >
-                      {loading ? "Calculating..." : "Calculate Price"}
+                      {availabilityStatus === "checking"
+                        ? "Checking..."
+                        : "Check Availability"}
                     </UnifiedButton>
+
+                    {availabilityMessage && (
+                      <div
+                        className={cn(
+                          "mb-4 rounded-lg px-3 py-2 text-sm",
+                          availabilityStatus === "available"
+                            ? "bg-success/10 text-success"
+                            : "bg-destructive/10 text-destructive"
+                        )}
+                      >
+                        {availabilityMessage}
+                      </div>
+                    )}
 
                     {/* Price Breakdown */}
                     {calculation && (
@@ -521,20 +777,29 @@ export default function ListingDetail() {
                       </div>
                     )}
 
+                    {bookingError && (
+                      <div className="mb-4 rounded-lg px-3 py-2 text-sm bg-destructive/10 text-destructive">
+                        {bookingError}
+                      </div>
+                    )}
+
                     {/* Book Button */}
                     <UnifiedButton
                       onClick={handleBooking}
                       disabled={
-                        !calculation ||
-                        listing.availability !== "available" ||
-                        loading
+                        availabilityStatus !== "available" ||
+                        availabilityLabel !== "available" ||
+                        loading ||
+                        bookingSubmitting
                       }
                       fullWidth
                       variant="primary"
                     >
-                      {listing.instantBooking
-                        ? "Book Instantly"
-                        : "Request to Book"}
+                      {bookingSubmitting
+                        ? "Submitting..."
+                        : listing.instantBooking
+                          ? "Book Instantly"
+                          : "Request to Book"}
                     </UnifiedButton>
                   </>
                 )}
@@ -560,3 +825,5 @@ export default function ListingDetail() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

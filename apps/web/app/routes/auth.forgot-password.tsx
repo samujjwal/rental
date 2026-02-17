@@ -1,5 +1,5 @@
-import type { MetaFunction, ActionFunctionArgs } from "react-router";
-import { Form, Link, useActionData, useNavigation } from "react-router";
+import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { Form, Link, redirect, useActionData, useNavigation, useSubmit } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, ArrowLeft } from "lucide-react";
@@ -8,8 +8,9 @@ import {
   forgotPasswordSchema,
   type ForgotPasswordInput,
 } from "~/lib/validation/auth";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { cn } from "~/lib/utils";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -18,19 +19,50 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (user) {
+    return redirect("/dashboard");
+  }
+  return null;
+}
+
 export async function clientAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
-  const email = formData.get("email") as string;
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "forgot-password") {
+    return {
+      success: false,
+      error: "Invalid request.",
+    };
+  }
+  const email = String(formData.get("email") ?? "").trim();
+  if (email.length > 320) {
+    return {
+      success: false,
+      error: "Please enter a valid email address.",
+    };
+  }
+  const validation = forgotPasswordSchema.safeParse({ email });
+  if (!validation.success) {
+    return {
+      success: false,
+      error: validation.error.issues[0]?.message || "Please enter a valid email address.",
+    };
+  }
 
   try {
-    const response = await authApi.forgotPassword({ email });
+    const response = await authApi.forgotPassword({ email: validation.data.email });
     return { success: true, message: response.message };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       error:
-        error.response?.data?.message ||
-        "Failed to send reset email. Please try again.",
+        error && typeof error === "object" && "response" in error
+          ? (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message ||
+            "Failed to send reset email. Please try again."
+          : "Failed to send reset email. Please try again.",
     };
   }
 }
@@ -47,6 +79,7 @@ export default function ForgotPassword() {
   } = useForm<ForgotPasswordInput>({
     resolver: zodResolver(forgotPasswordSchema),
   });
+  const submit = useSubmit();
 
   const inputClasses = cn(
     "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
@@ -61,7 +94,7 @@ export default function ForgotPassword() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-3xl font-bold text-primary">Rental Portal</h1>
+            <h1 className="text-3xl font-bold text-primary">Reset Password</h1>
           </Link>
           <p className="text-muted-foreground mt-2">
             Enter your email to reset your password
@@ -91,7 +124,15 @@ export default function ForgotPassword() {
               </Link>
             </div>
           ) : (
-            <Form method="post" onSubmit={handleSubmit(() => {})}>
+            <Form
+              method="post"
+              onSubmit={handleSubmit((_, event) => {
+                if (event?.target) {
+                  submit(event.target as HTMLFormElement);
+                }
+              })}
+            >
+              <input type="hidden" name="intent" value="forgot-password" />
               {/* Error Message */}
               {actionData?.error && (
                 <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -112,6 +153,7 @@ export default function ForgotPassword() {
                   type="email"
                   id="email"
                   name="email"
+                  maxLength={320}
                   className={inputClasses}
                   placeholder="you@example.com"
                 />
@@ -154,3 +196,5 @@ export default function ForgotPassword() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

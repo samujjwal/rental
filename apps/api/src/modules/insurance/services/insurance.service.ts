@@ -2,16 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceVerificationService } from './insurance-verification.service';
 import { InsurancePolicyService } from './insurance-policy.service';
-import { toNumber } from '@rental-portal/database';
-
-export enum InsuranceStatus {
-  NOT_REQUIRED = 'NOT_REQUIRED',
-  REQUIRED = 'REQUIRED',
-  PENDING = 'PENDING',
-  VERIFIED = 'VERIFIED',
-  EXPIRED = 'EXPIRED',
-  REJECTED = 'REJECTED',
-}
+import { InsuranceStatus, toNumber } from '@rental-portal/database';
 
 export interface InsuranceRequirement {
   required: boolean;
@@ -23,6 +14,7 @@ export interface InsuranceRequirement {
 export interface InsurancePolicy {
   id: string;
   userId: string;
+  bookingId?: string;
   listingId?: string;
   policyNumber: string;
   provider: string;
@@ -31,7 +23,7 @@ export interface InsurancePolicy {
   effectiveDate: Date;
   expirationDate: Date;
   documentUrl: string;
-  status: InsuranceStatus;
+  status: string;
   verificationDate?: Date;
   notes?: string;
 }
@@ -117,7 +109,7 @@ export class InsuranceService {
     // Create policy record
     const policy = await this.policyService.createPolicy({
       ...data,
-      status: InsuranceStatus.PENDING,
+      status: InsuranceStatus.ACTIVE,
     });
 
     // Queue for verification
@@ -143,7 +135,7 @@ export class InsuranceService {
       throw new BadRequestException('Insurance policy not found');
     }
 
-    const newStatus = approved ? InsuranceStatus.VERIFIED : InsuranceStatus.REJECTED;
+    const newStatus = approved ? InsuranceStatus.ACTIVE : InsuranceStatus.CANCELLED;
 
     await this.policyService.updatePolicyStatus(policyId, newStatus, {
       verificationDate: new Date(),
@@ -176,9 +168,7 @@ export class InsuranceService {
     if (!policy) return false;
 
     // Check if policy is verified and not expired
-    return (
-      policy.status === InsuranceStatus.VERIFIED && new Date(policy.expirationDate) > new Date()
-    );
+    return policy.status === InsuranceStatus.ACTIVE && new Date(policy.expirationDate) > new Date();
   }
 
   /**
@@ -197,7 +187,7 @@ export class InsuranceService {
   async generateCertificate(policyId: string): Promise<{ url: string }> {
     const policy = await this.policyService.getPolicy(policyId);
 
-    if (!policy || policy.status !== InsuranceStatus.VERIFIED) {
+    if (!policy || policy.status !== InsuranceStatus.ACTIVE) {
       throw new BadRequestException('Valid insurance policy not found');
     }
 

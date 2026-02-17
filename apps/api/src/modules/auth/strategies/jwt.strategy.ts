@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../services/auth.service';
 import { TokenPayload } from '../services/token.service';
 import { User } from '@rental-portal/database';
+import type { Request } from 'express';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -25,14 +26,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ]),
       ignoreExpiration: false,
       secretOrKey: configService.get('jwt.secret'),
+      passReqToCallback: true,
     });
   }
 
-  async validate(payload: TokenPayload): Promise<User> {
+  async validate(req: Request, payload: TokenPayload): Promise<User> {
     const user = await this.authService.validateUser(payload.sub);
 
     if (!user) {
       throw new UnauthorizedException('User not found or inactive');
+    }
+
+    const accessToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+    const hasActiveSession = await this.authService.validateSessionToken(payload.sub, accessToken);
+
+    if (!hasActiveSession) {
+      throw new UnauthorizedException('Session expired or invalidated');
     }
 
     return user;

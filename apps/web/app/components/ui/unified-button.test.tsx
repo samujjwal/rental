@@ -17,10 +17,11 @@ describe('UnifiedButton', () => {
     const variants = ['primary', 'secondary', 'outline', 'ghost', 'destructive', 'success', 'link'] as const;
 
     variants.forEach((variant) => {
-      render(
+      const { unmount } = render(
         <UnifiedButton variant={variant}>Button</UnifiedButton>
       );
       expect(screen.getByText('Button')).toBeInTheDocument();
+      unmount();
     });
   });
 
@@ -28,10 +29,11 @@ describe('UnifiedButton', () => {
     const sizes = ['xs', 'sm', 'md', 'lg', 'xl', 'icon', 'icon-sm', 'icon-lg'] as const;
 
     sizes.forEach((size) => {
-      render(
+      const { unmount } = render(
         <UnifiedButton size={size}>Button</UnifiedButton>
       );
       expect(screen.getByText('Button')).toBeInTheDocument();
+      unmount();
     });
   });
 

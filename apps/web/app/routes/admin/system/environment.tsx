@@ -1,6 +1,6 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link, useRevalidator } from "react-router";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Terminal,
   RefreshCw,
@@ -16,7 +16,8 @@ import {
   Info,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -33,7 +34,9 @@ interface EnvVariable {
   description?: string;
 }
 
-export async function clientLoader() {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const envRes = await adminApi.getEnvironmentVariables();
     return {
@@ -41,11 +44,14 @@ export async function clientLoader() {
       environment: envRes.environment || "development",
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       variables: [],
       environment: "unknown",
-      error: error?.message || "Failed to load environment variables",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load environment variables",
     };
   }
 }
@@ -67,6 +73,13 @@ const categoryColors: Record<string, string> = {
   api: "bg-yellow-100 text-yellow-800",
   other: "bg-gray-100 text-gray-800",
 };
+const humanizeWord = (value: unknown, fallback = "Other"): string => {
+  const text = typeof value === "string" ? value.trim() : "";
+  const safe = text || fallback;
+  return safe.charAt(0).toUpperCase() + safe.slice(1);
+};
+const safeLower = (value: unknown): string =>
+  (typeof value === "string" ? value : "").toLowerCase();
 
 export default function EnvironmentPage() {
   const { variables, environment, error } = useLoaderData<typeof clientLoader>();
@@ -76,6 +89,7 @@ export default function EnvironmentPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const query = safeLower(searchQuery);
 
   const copyToClipboard = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text);
@@ -90,9 +104,9 @@ export default function EnvironmentPage() {
   const filteredVariables = variables.filter((v: EnvVariable) => {
     const matchesFilter = filter === "all" || v.category === filter;
     const matchesSearch =
-      searchQuery === "" ||
-      v.key.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (v.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+      query === "" ||
+      safeLower(v.key).includes(query) ||
+      safeLower(v.description).includes(query);
     return matchesFilter && matchesSearch;
   });
 
@@ -174,7 +188,7 @@ export default function EnvironmentPage() {
             View current environment configuration (read-only)
           </p>
         </div>
-        <Button
+        <UnifiedButton
           variant="outline"
           onClick={() => revalidator.revalidate()}
           disabled={revalidator.state === "loading"}
@@ -233,7 +247,7 @@ export default function EnvironmentPage() {
                 }`}
               >
                 {categoryIcons[category]}
-                {category.charAt(0).toUpperCase() + category.slice(1)}
+                {humanizeWord(category)}
               </button>
             ))}
           </div>
@@ -357,3 +371,5 @@ export default function EnvironmentPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

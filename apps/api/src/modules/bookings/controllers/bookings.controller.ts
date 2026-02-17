@@ -11,12 +11,21 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { BookingsService, CreateBookingDto } from '../services/bookings.service';
+import { BookingsService } from '../services/bookings.service';
+import {
+  CreateBookingDto,
+  RejectBookingDto,
+  CancelBookingDto,
+  InitiateDisputeDto,
+  CalculatePriceDto,
+} from '../dto/booking.dto';
 import { BookingStateMachineService } from '../services/booking-state-machine.service';
 import { BookingCalculationService } from '../services/booking-calculation.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import { BookingStatus } from '@rental-portal/database';
+
+type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
 
 @ApiTags('Bookings')
 @Controller('bookings')
@@ -33,7 +42,10 @@ export class BookingsController {
   @ApiOperation({ summary: 'Create a new booking' })
   @ApiResponse({ status: 201, description: 'Booking created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid data or listing not available' })
-  async create(@CurrentUser('id') userId: string, @Body() dto: CreateBookingDto) {
+  async create(
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateBookingDto,
+  ): Promise<AsyncMethodResult<BookingsService['create']>> {
     return this.bookingsService.create(userId, dto);
   }
 
@@ -42,7 +54,10 @@ export class BookingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user bookings as renter' })
   @ApiResponse({ status: 200, description: 'Bookings retrieved successfully' })
-  async getMyBookings(@CurrentUser('id') userId: string, @Query('status') status?: BookingStatus) {
+  async getMyBookings(
+    @CurrentUser('id') userId: string,
+    @Query('status') status?: BookingStatus,
+  ): Promise<AsyncMethodResult<BookingsService['getRenterBookings']>> {
     return this.bookingsService.getRenterBookings(userId, status);
   }
 
@@ -54,7 +69,7 @@ export class BookingsController {
   async getHostBookings(
     @CurrentUser('id') userId: string,
     @Query('status') status?: BookingStatus,
-  ) {
+  ): Promise<AsyncMethodResult<BookingsService['getOwnerBookings']>> {
     return this.bookingsService.getOwnerBookings(userId, status);
   }
 
@@ -64,8 +79,11 @@ export class BookingsController {
   @ApiOperation({ summary: 'Get booking details' })
   @ApiResponse({ status: 200, description: 'Booking retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Booking not found' })
-  async findById(@Param('id') id: string) {
-    return this.bookingsService.findById(id, true);
+  async findById(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<BookingsService['findById']>> {
+    return this.bookingsService.findById(id, true, userId);
   }
 
   @Post(':id/approve')
@@ -75,7 +93,10 @@ export class BookingsController {
   @ApiOperation({ summary: 'Approve booking (owner only)' })
   @ApiResponse({ status: 200, description: 'Booking approved' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
-  async approve(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async approve(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<BookingsService['approveBooking']>> {
     return this.bookingsService.approveBooking(id, userId);
   }
 
@@ -89,9 +110,9 @@ export class BookingsController {
   async reject(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
-    @Body('reason') reason?: string,
-  ) {
-    return this.bookingsService.rejectBooking(id, userId, reason);
+    @Body() dto: RejectBookingDto,
+  ): Promise<AsyncMethodResult<BookingsService['rejectBooking']>> {
+    return this.bookingsService.rejectBooking(id, userId, dto.reason);
   }
 
   @Post(':id/cancel')
@@ -104,9 +125,9 @@ export class BookingsController {
   async cancel(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
-    @Body('reason') reason?: string,
-  ) {
-    return this.bookingsService.cancelBooking(id, userId, reason);
+    @Body() dto: CancelBookingDto,
+  ): Promise<AsyncMethodResult<BookingsService['cancelBooking']>> {
+    return this.bookingsService.cancelBooking(id, userId, dto.reason);
   }
 
   @Post(':id/start')
@@ -116,7 +137,10 @@ export class BookingsController {
   @ApiOperation({ summary: 'Start rental period' })
   @ApiResponse({ status: 200, description: 'Rental started' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
-  async startRental(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async startRental(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<BookingsService['startRental']>> {
     return this.bookingsService.startRental(id, userId);
   }
 
@@ -127,7 +151,10 @@ export class BookingsController {
   @ApiOperation({ summary: 'Request return inspection (renter)' })
   @ApiResponse({ status: 200, description: 'Return requested' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
-  async requestReturn(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async requestReturn(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<BookingsService['requestReturn']>> {
     return this.bookingsService.requestReturn(id, userId);
   }
 
@@ -138,7 +165,10 @@ export class BookingsController {
   @ApiOperation({ summary: 'Approve return (owner)' })
   @ApiResponse({ status: 200, description: 'Return approved' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
-  async approveReturn(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async approveReturn(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<BookingsService['approveReturn']>> {
     return this.bookingsService.approveReturn(id, userId);
   }
 
@@ -152,9 +182,9 @@ export class BookingsController {
   async initiateDispute(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
-    @Body('reason') reason: string,
-  ) {
-    return this.bookingsService.initiateDispute(id, userId, reason);
+    @Body() dto: InitiateDisputeDto,
+  ): Promise<AsyncMethodResult<BookingsService['initiateDispute']>> {
+    return this.bookingsService.initiateDispute(id, userId, dto.reason);
   }
 
   @Get(':id/stats')
@@ -178,11 +208,40 @@ export class BookingsController {
   @ApiOperation({ summary: 'Calculate booking price' })
   @ApiResponse({ status: 200, description: 'Price calculated' })
   async calculatePrice(
-    @Body('listingId') listingId: string,
-    @Body('startDate') startDate: string,
-    @Body('endDate') endDate: string,
+    @Body() dto: CalculatePriceDto,
   ) {
-    return this.calculation.calculatePrice(listingId, new Date(startDate), new Date(endDate));
+    const calculation = await this.calculation.calculatePrice(
+      dto.listingId,
+      new Date(dto.startDate),
+      new Date(dto.endDate),
+    );
+
+    const start = new Date(dto.startDate);
+    const end = new Date(dto.endDate);
+    const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000));
+    const pricePerDay = totalDays > 0 ? calculation.subtotal / totalDays : calculation.subtotal;
+
+    const weeklyDiscount = calculation.breakdown.discounts?.find((d) => d.type === 'weekly');
+    const monthlyDiscount = calculation.breakdown.discounts?.find((d) => d.type === 'monthly');
+
+    return {
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      totalDays,
+      pricePerDay,
+      subtotal: calculation.subtotal,
+      serviceFee: calculation.serviceFee,
+      deliveryFee: 0,
+      securityDeposit: calculation.depositAmount,
+      totalAmount: calculation.total,
+      breakdown: {
+        dailyRental: calculation.subtotal,
+        weeklyDiscount: weeklyDiscount?.amount,
+        monthlyDiscount: monthlyDiscount?.amount,
+        platformFee: calculation.platformFee,
+        taxes: 0,
+      },
+    };
   }
 
   @Get(':id/available-transitions')

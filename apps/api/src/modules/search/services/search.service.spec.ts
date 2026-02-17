@@ -1,19 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
-import { ElasticsearchService } from '@nestjs/elasticsearch';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
+import { EmbeddingService } from '../../ai/services/embedding.service';
 
 describe('SearchService', () => {
   let service: SearchService;
-  let elasticsearch: ElasticsearchService;
 
-  const mockElasticsearchService = {
-    search: jest.fn(),
-    index: jest.fn(),
-    delete: jest.fn(),
-    bulk: jest.fn(),
-    get: jest.fn(),
+  const mockEmbeddingService = {
+    generateEmbedding: jest.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+    searchSimilar: jest.fn().mockResolvedValue([]),
   };
 
   const mockPrismaService = {
@@ -34,14 +30,13 @@ describe('SearchService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SearchService,
-        { provide: ElasticsearchService, useValue: mockElasticsearchService },
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: CacheService, useValue: mockCacheService },
+        { provide: EmbeddingService, useValue: mockEmbeddingService },
       ],
     }).compile();
 
     service = module.get<SearchService>(SearchService);
-    elasticsearch = module.get<ElasticsearchService>(ElasticsearchService);
   });
 
   afterEach(() => {
@@ -50,26 +45,7 @@ describe('SearchService', () => {
 
   describe('search', () => {
     it('should return search results', async () => {
-      const mockEsResponse = {
-        hits: {
-          total: { value: 10 },
-          hits: [
-            {
-              _id: 'listing-1',
-              _source: {
-                title: 'Test Listing',
-                description: 'Test description',
-                basePrice: 100,
-              },
-              _score: 1.5,
-            },
-          ],
-        },
-        aggregations: {},
-      };
-
-            // Ensure mock match overload
-      mockElasticsearchService.search.mockResolvedValue(mockEsResponse as any);
+      mockCacheService.get.mockResolvedValue(null);
       mockPrismaService.listing.count.mockResolvedValue(10);
       mockPrismaService.listing.findMany.mockResolvedValue([
         {

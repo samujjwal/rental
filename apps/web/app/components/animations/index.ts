@@ -45,3 +45,9 @@ export type {
   RotateOnHoverProps,
   GlowOnHoverProps,
 } from "./MicroInteractions";
+
+export { ConfettiCelebration, SuccessCelebration } from "./SuccessCelebration";
+export type {
+  ConfettiCelebrationProps,
+  SuccessCelebrationProps,
+} from "./SuccessCelebration";

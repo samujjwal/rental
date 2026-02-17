@@ -1,5 +1,5 @@
-import type { MetaFunction } from "react-router";
-import { useLoaderData, Link, useSearchParams, useRevalidator } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
+import { useLoaderData, Link, useRevalidator } from "react-router";
 import { useState } from "react";
 import {
   Activity,
@@ -13,7 +13,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -22,22 +23,40 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+const safeDateTimeLabel = (value: unknown): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString();
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+const safeLogLevel = (value: unknown): string =>
+  safeText(value, "info").toLowerCase();
+const humanize = (value: unknown): string => {
+  const text = safeText(value, "Info");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const logs = await adminApi.getSystemLogs({ limit: 100 });
     return {
       logs: logs.logs || [],
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       logs: [],
-      error: error?.message || "Failed to load system logs",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load system logs",
     };
   }
 }
-
-type LogLevel = "error" | "warn" | "info" | "debug";
 
 interface LogEntry {
   timestamp: string;
@@ -49,12 +68,12 @@ interface LogEntry {
 export default function SystemLogsPage() {
   const { logs, error } = useLoaderData<typeof clientLoader>();
   const revalidator = useRevalidator();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
+  const query = searchQuery.toLowerCase();
 
   const getLevelIcon = (level: string) => {
-    switch (level.toLowerCase()) {
+    switch (safeLogLevel(level)) {
       case "error":
         return <AlertCircle className="w-4 h-4 text-red-500" />;
       case "warn":
@@ -69,7 +88,7 @@ export default function SystemLogsPage() {
   };
 
   const getLevelColor = (level: string) => {
-    switch (level.toLowerCase()) {
+    switch (safeLogLevel(level)) {
       case "error":
         return "bg-red-100 text-red-800 border-red-200";
       case "warn":
@@ -84,19 +103,19 @@ export default function SystemLogsPage() {
   };
 
   const filteredLogs = logs.filter((log: LogEntry) => {
-    const matchesLevel = selectedLevel === "all" || log.level.toLowerCase() === selectedLevel;
+    const matchesLevel = selectedLevel === "all" || safeLogLevel(log.level) === selectedLevel;
     const matchesSearch =
-      searchQuery === "" ||
-      log.message.toLowerCase().includes(searchQuery.toLowerCase());
+      query === "" ||
+      safeText(log.message).toLowerCase().includes(query);
     return matchesLevel && matchesSearch;
   });
 
   const logCounts = {
     all: logs.length,
-    error: logs.filter((l: LogEntry) => l.level.toLowerCase() === "error").length,
-    warn: logs.filter((l: LogEntry) => l.level.toLowerCase() === "warn").length,
-    info: logs.filter((l: LogEntry) => l.level.toLowerCase() === "info").length,
-    debug: logs.filter((l: LogEntry) => l.level.toLowerCase() === "debug").length,
+    error: logs.filter((l: LogEntry) => safeLogLevel(l.level) === "error").length,
+    warn: logs.filter((l: LogEntry) => safeLogLevel(l.level) === "warn").length,
+    info: logs.filter((l: LogEntry) => safeLogLevel(l.level) === "info").length,
+    debug: logs.filter((l: LogEntry) => safeLogLevel(l.level) === "debug").length,
   };
 
   if (error) {
@@ -127,11 +146,11 @@ export default function SystemLogsPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <UnifiedButton variant="outline" size="small">
+          <UnifiedButton variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Export Logs
           </UnifiedButton>
-          <UnifiedButton variant="outline" size="small" onClick={() => revalidator.revalidate()}>
+          <UnifiedButton variant="outline" size="sm" onClick={() => revalidator.revalidate()}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
           </UnifiedButton>
@@ -167,7 +186,7 @@ export default function SystemLogsPage() {
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
-                  {level.charAt(0).toUpperCase() + level.slice(1)}
+                  {humanize(level)}
                   <span className="ml-1 text-xs">({logCounts[level]})</span>
                 </button>
               ))}
@@ -201,14 +220,14 @@ export default function SystemLogsPage() {
                           log.level
                         )}`}
                       >
-                        {log.level.toUpperCase()}
+                        {safeLogLevel(log.level).toUpperCase()}
                       </span>
                       <span className="text-sm text-gray-500">
-                        {new Date(log.timestamp).toLocaleString()}
+                        {safeDateTimeLabel(log.timestamp)}
                       </span>
                     </div>
                     <p className="text-gray-900 font-mono text-sm break-all">
-                      {log.message}
+                      {safeText(log.message)}
                     </p>
                     {log.meta != null && typeof log.meta === 'object' && (
                       <details className="mt-2">
@@ -235,3 +254,5 @@ export default function SystemLogsPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

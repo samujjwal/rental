@@ -20,9 +20,12 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
-import { disputesApi } from "~/lib/api/disputes";
+import { disputesApi, type CreateDisputeRequest } from "~/lib/api/disputes";
 import { bookingsApi } from "~/lib/api/bookings";
+import { uploadApi } from "~/lib/api/upload";
 import { redirect } from "react-router";
+import { getUser } from "~/utils/auth";
+import { RouteErrorBoundary } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -31,67 +34,164 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader({ params }: LoaderFunctionArgs) {
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string | undefined): value is string =>
+  Boolean(value && UUID_PATTERN.test(value));
+const MAX_EVIDENCE_FILES = 8;
+const MAX_EVIDENCE_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_DISPUTE_TITLE_LENGTH = 120;
+const MAX_DISPUTE_DESCRIPTION_LENGTH = 3000;
+const MAX_REQUESTED_AMOUNT = 1_000_000;
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export async function clientLoader({ params, request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const bookingId = params.bookingId;
-  if (!bookingId) throw new Error("Booking ID is required");
+  if (!isUuid(bookingId)) return redirect("/bookings");
 
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
+    const isParticipant =
+      booking.ownerId === user.id || booking.renterId === user.id || user.role === "admin";
+    if (!isParticipant) {
+      return redirect("/bookings");
+    }
     return { booking };
-  } catch (error) {
-    throw new Error("Failed to load booking");
+  } catch {
+    return redirect("/bookings");
   }
 }
 
 export async function clientAction({ request, params }: ActionFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const bookingId = params.bookingId;
-  if (!bookingId) return { error: "Booking ID is required" };
+  if (!isUuid(bookingId)) return { error: "Booking ID is required" };
 
   const formData = await request.formData();
   const type = formData.get("type") as string;
+  const title = formData.get("title") as string;
   const description = formData.get("description") as string;
   const requestedAmount = formData.get("requestedAmount") as string;
+  const evidenceFiles = formData.getAll("evidence").filter((file) => {
+    return file instanceof File && file.size > 0;
+  }) as File[];
+  if (evidenceFiles.length > MAX_EVIDENCE_FILES) {
+    return { error: `You can upload up to ${MAX_EVIDENCE_FILES} evidence files.` };
+  }
+  if (evidenceFiles.some((file) => file.size > MAX_EVIDENCE_FILE_SIZE)) {
+    return { error: "Each evidence file must be 10MB or smaller." };
+  }
+
+  if (!type || !title?.trim() || !description?.trim()) {
+    return { error: "Type, title, and description are required" };
+  }
+  if (!DISPUTE_TYPES.some((item) => item.value === type)) {
+    return { error: "Invalid dispute type" };
+  }
+  const normalizedTitle = title.trim().slice(0, MAX_DISPUTE_TITLE_LENGTH);
+  const normalizedDescription = description
+    .trim()
+    .slice(0, MAX_DISPUTE_DESCRIPTION_LENGTH);
+  if (!normalizedTitle || !normalizedDescription) {
+    return { error: "Type, title, and description are required" };
+  }
+  const amount = requestedAmount ? Number(requestedAmount) : undefined;
+  if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
+    return { error: "Requested amount must be a valid positive number" };
+  }
+  if (amount !== undefined && amount > MAX_REQUESTED_AMOUNT) {
+    return { error: "Requested amount is too large" };
+  }
 
   try {
-    const dispute = await disputesApi.createDispute({
+    const booking = await bookingsApi.getBookingById(bookingId);
+    const isParticipant =
+      booking.ownerId === user.id || booking.renterId === user.id || user.role === "admin";
+    if (!isParticipant) {
+      return { error: "You are not authorized to create a dispute for this booking." };
+    }
+    if (
+      amount !== undefined &&
+      typeof booking.totalAmount === "number" &&
+      amount > booking.totalAmount
+    ) {
+      return { error: "Requested amount cannot exceed booking total." };
+    }
+
+    let evidenceUrls: string[] | undefined;
+    if (evidenceFiles.length > 0) {
+      const uploads = await Promise.all(
+        evidenceFiles.map((file) => {
+          if (file.type.startsWith("image/")) {
+            return uploadApi.uploadImage(file);
+          }
+          if (file.type === "application/pdf") {
+            return uploadApi.uploadDocument(file);
+          }
+          return Promise.reject(new Error("Unsupported evidence file type"));
+        })
+      );
+      evidenceUrls = uploads.map((file) => file.url);
+    }
+
+    await disputesApi.createDispute({
       bookingId,
-      type: type as any,
-      description,
-      requestedAmount: requestedAmount
-        ? parseFloat(requestedAmount)
-        : undefined,
+      type: type as CreateDisputeRequest["type"],
+      title: normalizedTitle,
+      description: normalizedDescription,
+      amount,
+      evidence: evidenceUrls,
     });
 
     return redirect(`/bookings/${bookingId}?disputeCreated=true`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       error:
-        error.response?.data?.message ||
-        "Failed to create dispute. Please try again.",
+        error && typeof error === "object" && "response" in error
+          ? (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message ||
+            "Failed to create dispute. Please try again."
+          : "Failed to create dispute. Please try again.",
     };
   }
 }
 
 const DISPUTE_TYPES = [
   {
-    value: "NON_DELIVERY",
-    label: "Item Not Delivered",
-    description: "You never received the item",
-  },
-  {
-    value: "DAMAGED_ITEM",
-    label: "Damaged Item",
+    value: "PROPERTY_DAMAGE",
+    label: "Property Damage",
     description: "Item was damaged before or during rental",
   },
   {
-    value: "INCORRECT_ITEM",
-    label: "Incorrect Item",
-    description: "Received wrong item or not as described",
+    value: "MISSING_ITEMS",
+    label: "Missing Items",
+    description: "Parts or accessories are missing",
   },
   {
-    value: "OVERCHARGE",
-    label: "Overcharge",
-    description: "You were charged more than agreed",
+    value: "CONDITION_MISMATCH",
+    label: "Condition Mismatch",
+    description: "Item condition does not match listing",
+  },
+  {
+    value: "REFUND_REQUEST",
+    label: "Refund Request",
+    description: "Request a refund for the booking",
+  },
+  {
+    value: "PAYMENT_ISSUE",
+    label: "Payment Issue",
+    description: "Payment or payout issue",
   },
   { value: "OTHER", label: "Other", description: "Other dispute reason" },
 ];
@@ -101,13 +201,27 @@ export default function DisputeNewRoute() {
   const actionData = useActionData<typeof clientAction>();
   const navigate = useNavigate();
   const [selectedType, setSelectedType] = useState("");
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [requestedAmount, setRequestedAmount] = useState("");
   const [evidence, setEvidence] = useState<File[]>([]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setEvidence([...evidence, ...Array.from(e.target.files)]);
+      const allowedFileTypes = new Set([
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+      ]);
+      const selectedFiles = Array.from(e.target.files).filter(
+        (file) =>
+          file.size > 0 &&
+          file.size <= MAX_EVIDENCE_FILE_SIZE &&
+          (file.type.startsWith("image/") || allowedFileTypes.has(file.type))
+      );
+      const nextFiles = [...evidence, ...selectedFiles].slice(0, MAX_EVIDENCE_FILES);
+      setEvidence(nextFiles);
     }
   };
 
@@ -155,7 +269,7 @@ export default function DisputeNewRoute() {
             <div>
               <p className="text-sm text-muted-foreground">Total Amount</p>
               <p className="text-sm font-medium text-foreground">
-                ${booking.totalAmount?.toFixed(2) || "0.00"}
+                ${safeNumber(booking.totalAmount).toFixed(2)}
               </p>
             </div>
             <div>
@@ -180,7 +294,7 @@ export default function DisputeNewRoute() {
         )}
 
         {/* Dispute Form */}
-        <Form method="post" className="bg-card rounded-lg shadow-sm p-6">
+        <Form method="post" encType="multipart/form-data" className="bg-card rounded-lg shadow-sm p-6">
           <div className="space-y-6">
             {/* Dispute Type */}
             <div>
@@ -220,6 +334,24 @@ export default function DisputeNewRoute() {
               </div>
             </div>
 
+            {/* Title */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Dispute title *
+              </label>
+              <input
+                type="text"
+                name="title"
+                value={title}
+                onChange={(e) =>
+                  setTitle(e.target.value.slice(0, MAX_DISPUTE_TITLE_LENGTH))
+                }
+                placeholder="Brief summary of the issue"
+                className="w-full border border-input rounded-lg px-3 py-2 bg-background focus:ring-2 focus:ring-ring"
+                required
+              />
+            </div>
+
             {/* Description */}
             <div>
               <label
@@ -233,7 +365,11 @@ export default function DisputeNewRoute() {
                 name="description"
                 rows={6}
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) =>
+                  setDescription(
+                    e.target.value.slice(0, MAX_DISPUTE_DESCRIPTION_LENGTH)
+                  )
+                }
                 placeholder="Please provide as much detail as possible about what went wrong..."
                 className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-primary"
                 required
@@ -262,7 +398,7 @@ export default function DisputeNewRoute() {
                   name="requestedAmount"
                   step="0.01"
                   min="0"
-                  max={booking.totalAmount}
+                  max={safeNumber(booking.totalAmount)}
                   value={requestedAmount}
                   onChange={(e) => setRequestedAmount(e.target.value)}
                   placeholder="0.00"
@@ -270,7 +406,7 @@ export default function DisputeNewRoute() {
                 />
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Maximum: ${booking.totalAmount?.toFixed(2) || "0.00"}
+                Maximum: ${safeNumber(booking.totalAmount).toFixed(2)}
               </p>
             </div>
 
@@ -283,6 +419,7 @@ export default function DisputeNewRoute() {
                 <input
                   type="file"
                   id="evidence"
+                  name="evidence"
                   multiple
                   accept="image/*,.pdf"
                   onChange={handleFileUpload}
@@ -387,3 +524,4 @@ export default function DisputeNewRoute() {
     </div>
   );
 }
+export { RouteErrorBoundary as ErrorBoundary };

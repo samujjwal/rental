@@ -1,0 +1,318 @@
+{
+  "info": {
+    "name": "Rental Portal Mobile API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "Auth Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"Alex\",\n  \"lastName\": \"Kim\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "register"]
+        }
+      }
+    },
+    {
+      "name": "Geo Autocomplete",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/geo/autocomplete?q=San&limit=6&layer=city",
+          "host": ["{{baseUrl}}"],
+          "path": ["geo", "autocomplete"],
+          "query": [
+            { "key": "q", "value": "San" },
+            { "key": "limit", "value": "6" },
+            { "key": "layer", "value": "city" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Geo Reverse",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/geo/reverse?lat=37.7793&lon=-122.4193",
+          "host": ["{{baseUrl}}"],
+          "path": ["geo", "reverse"],
+          "query": [
+            { "key": "lat", "value": "37.7793" },
+            { "key": "lon", "value": "-122.4193" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Search (Geo)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?query=camera&lat=37.7793&lon=-122.4193&radius=25&page=1&size=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [
+            { "key": "query", "value": "camera" },
+            { "key": "lat", "value": "37.7793" },
+            { "key": "lon", "value": "-122.4193" },
+            { "key": "radius", "value": "25" },
+            { "key": "page", "value": "1" },
+            { "key": "size", "value": "20" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Search (Non-Geo)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/listings/search?query=camera&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["listings", "search"],
+          "query": [
+            { "key": "query", "value": "camera" },
+            { "key": "limit", "value": "20" }
+          ]
+        }
+      }
+    }
+    ,
+    {
+      "name": "Profile (Get)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/users/me",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "me"]
+        }
+      }
+    },
+    {
+      "name": "Profile (Update)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"preferredLanguage\": \"en\",\n  \"preferredCurrency\": \"USD\",\n  \"timezone\": \"America/Los_Angeles\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users/me",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "me"]
+        }
+      }
+    },
+    {
+      "name": "Create Listing",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"categoryId\": \"category-id\",\n  \"title\": \"Listing title\",\n  \"description\": \"Listing description\",\n  \"city\": \"San Francisco\",\n  \"state\": \"CA\",\n  \"country\": \"US\",\n  \"latitude\": 37.7793,\n  \"longitude\": -122.4193,\n  \"pricingMode\": \"DAILY\",\n  \"basePrice\": 40,\n  \"bookingMode\": \"REQUEST\",\n  \"categorySpecificData\": {}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/listings",
+          "host": ["{{baseUrl}}"],
+          "path": ["listings"]
+        }
+      }
+    },
+    {
+      "name": "Update Listing",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Updated title\",\n  \"description\": \"Updated description\",\n  \"basePrice\": 45,\n  \"pricingMode\": \"DAILY\",\n  \"bookingMode\": \"REQUEST\",\n  \"categorySpecificData\": {}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/listings/{{listingId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["listings", \"{{listingId}}\"]
+        }
+      }
+    },
+    {
+      "name": "Create Payment Intent",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments/intents/{{bookingId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["payments", "intents", \"{{bookingId}}\"]
+        }
+      }
+    },
+    {
+      "name": "Create Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"listingId\": \"{{listingId}}\",\n  \"startDate\": \"2026-02-10\",\n  \"endDate\": \"2026-02-12\",\n  \"guestCount\": 1\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/bookings",
+          "host": ["{{baseUrl}}"],
+          "path": ["bookings"]
+        }
+      }
+    },
+    {
+      "name": "Conversation Messages",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations", \"{{conversationId}}\", \"messages\"]
+        }
+      }
+    },
+    {
+      "name": "Send Message",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": \"Hello there\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations", \"{{conversationId}}\", \"messages\"]
+        }
+      }
+    },
+    {
+      "name": "Listing Reviews",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/reviews/listing/{{listingId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["reviews", "listing", \"{{listingId}}\"]
+        }
+      }
+    },
+    {
+      "name": "Create Review",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{bookingId}}\",\n  \"reviewType\": \"RENTER_TO_OWNER\",\n  \"overallRating\": 5,\n  \"comment\": \"Great experience\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/reviews",
+          "host": ["{{baseUrl}}"],
+          "path": ["reviews"]
+        }
+      }
+    },
+    {
+      "name": "Owner Stats",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/users/me/stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "me", "stats"]
+        }
+      }
+    }
+    ,
+    {
+      "name": "Booking Detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/bookings/{{bookingId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["bookings", \"{{bookingId}}\"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3400/api" },
+    { "key": "accessToken", "value": "" },
+    { "key": "listingId", "value": "" },
+    { "key": "bookingId", "value": "" },
+    { "key": "conversationId", "value": "" }
+  ]
+}

@@ -1,5 +1,6 @@
 import { createCookieSessionStorage, redirect } from "react-router";
 import { api } from "~/lib/api-client";
+import type { User } from "~/types/user";
 
 // Safe access for browser environments where process might not exist
 const isServer = typeof process !== "undefined" && process.env && process.env.NODE_ENV;
@@ -39,32 +40,53 @@ export async function getUserToken(
   return session.get("accessToken");
 }
 
-export async function getUser(request: Request) {
+export async function getUser(request: Request): Promise<User | null> {
   const session = await getSession(request);
   let token: string | null = session.get("accessToken") ?? null;
   let refreshToken: string | null = session.get("refreshToken") ?? null;
 
-  if (typeof window !== "undefined") {
+  // Fall back to localStorage for client-side navigation
+  // Session cookie is primary source of truth
+  if (typeof window !== "undefined" && !token) {
     const storedAccessToken = localStorage.getItem("accessToken");
     const storedRefreshToken = localStorage.getItem("refreshToken");
-
-    token = token ?? storedAccessToken;
-    refreshToken = refreshToken ?? storedRefreshToken;
-
-    // Ensure the shared api client can refresh tokens when needed.
-    if (token && token !== storedAccessToken) {
-      localStorage.setItem("accessToken", token);
-    }
-    if (refreshToken && refreshToken !== storedRefreshToken) {
-      localStorage.setItem("refreshToken", refreshToken);
-    }
+    
+    token = storedAccessToken;
+    refreshToken = storedRefreshToken;
   }
 
   if (!token) return null;
 
   try {
-    return await api.get<any>("/auth/me");
+    const rawUser = await api.get<User>("/auth/me");
+    const normalizedRole = (() => {
+      const role = String((rawUser as { role?: unknown }).role || "").toUpperCase();
+      if (role === "ADMIN" || role === "SUPER_ADMIN") return "admin";
+      if (role === "HOST" || role === "OWNER") return "owner";
+      return "renter";
+    })();
+    return {
+      ...rawUser,
+      role: normalizedRole,
+    };
   } catch (error) {
+    const status =
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      (error as { response?: { status?: number } }).response?.status;
+
+    // 401 is expected for anonymous users or expired sessions.
+    // Normalize to "no user" and clear stale client tokens.
+    if (status === 401) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("user");
+      }
+      return null;
+    }
+
     console.error("Auth error:", error);
     return null;
   }
@@ -99,7 +121,7 @@ export async function requireUser(request: Request) {
 export async function requireAdmin(request: Request) {
   const user = await requireUser(request);
 
-  if (user.role !== "ADMIN") {
+  if (user.role !== "admin") {
     throw redirect("/dashboard"); // Better to redirect to dashboard if not admin
   }
   return user;

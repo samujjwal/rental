@@ -1,5 +1,7 @@
+
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { Link, redirect, useNavigate } from "react-router";
+import type { ReactNode } from "react";
+import { Link, redirect, useLoaderData, useNavigate } from "react-router";
 import { useAuthStore } from "~/lib/store/auth";
 import { getUser } from "~/utils/auth";
 import {
@@ -16,6 +18,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  RouteErrorBoundary,
 } from "~/components/ui";
 import { PageContainer } from "~/components/layout";
 import { cn } from "~/lib/utils";
@@ -27,6 +30,11 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
 
@@ -35,16 +43,16 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   }
 
   // Redirect admin users to admin dashboard
-  if (user.role === "ADMIN") {
+  if (user.role === "admin") {
     return redirect("/admin");
   }
 
   // Redirect owners and renters to their specific dashboards
-  if (user.role === "OWNER") {
+  if (user.role === "owner") {
     return redirect("/dashboard/owner");
   }
 
-  if (user.role === "RENTER") {
+  if (user.role === "renter") {
     return redirect("/dashboard/renter");
   }
 
@@ -54,7 +62,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 interface StatCardProps {
   title: string;
   value: string | number;
-  icon: React.ReactNode;
+  icon: ReactNode;
   iconBg: string;
 }
 
@@ -82,12 +90,14 @@ function StatCard({ title, value, icon, iconBg }: StatCardProps) {
 }
 
 export default function Dashboard() {
-  const { user, clearAuth } = useAuthStore();
+  const { user: loaderUser } = useLoaderData<typeof clientLoader>();
+  const { user: storeUser, clearAuth } = useAuthStore();
+  const user = storeUser ?? loaderUser;
   const navigate = useNavigate();
 
   const handleLogout = () => {
     clearAuth();
-    navigate("/auth/login", { replace: true });
+    navigate("/auth/logout", { replace: true });
   };
 
   return (
@@ -133,13 +143,13 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <StatCard
             title="Active Bookings"
-            value={user?.totalBookings || 0}
+            value={safeNumber(user?.totalBookings)}
             icon={<Calendar className="w-6 h-6 text-primary" />}
             iconBg="bg-primary/10"
           />
           <StatCard
             title="My Listings"
-            value={user?.totalListings || 0}
+            value={safeNumber(user?.totalListings)}
             icon={<Package className="w-6 h-6 text-success" />}
             iconBg="bg-success/10"
           />
@@ -151,7 +161,7 @@ export default function Dashboard() {
           />
           <StatCard
             title="Rating"
-            value={user?.rating ? user.rating.toFixed(1) : "N/A"}
+            value={safeNumber(user?.rating) > 0 ? safeNumber(user?.rating).toFixed(1) : "N/A"}
             icon={<DollarSign className="w-6 h-6 text-warning" />}
             iconBg="bg-warning/10"
           />
@@ -227,3 +237,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

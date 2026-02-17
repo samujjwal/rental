@@ -3,7 +3,7 @@
  * Stepped wizard form with smart validation and auto-save
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Box,
   Paper,
@@ -19,15 +19,11 @@ import {
   MenuItem,
   FormControlLabel,
   Switch,
-  Checkbox,
   Alert,
   Snackbar,
   CircularProgress,
   Chip,
   FormHelperText,
-  Divider,
-  IconButton,
-  Tooltip,
 } from "@mui/material";
 import {
   Save as SaveIcon,
@@ -35,9 +31,6 @@ import {
   ArrowBack as BackIcon,
   ArrowForward as NextIcon,
   Check as CheckIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon,
-  Autorenew as AutoSaveIcon,
 } from "@mui/icons-material";
 import { useForm } from "@tanstack/react-form";
 
@@ -65,7 +58,7 @@ export interface FieldConfig {
   multiple?: boolean;
   multiline?: boolean;
   rows?: number;
-  defaultValue?: any;
+  defaultValue?: unknown;
   disabled?: boolean;
   validation?: {
     min?: number;
@@ -73,10 +66,10 @@ export interface FieldConfig {
     minLength?: number;
     maxLength?: number;
     pattern?: RegExp;
-    custom?: (value: any) => string | null;
+    custom?: (value: unknown) => string | null;
   };
   dependencies?: string[];
-  showIf?: (formData: any) => boolean;
+  showIf?: (formData: unknown) => boolean;
 }
 
 export interface FormStep {
@@ -90,14 +83,14 @@ export interface FormStep {
 interface EnhancedFormProps {
   steps?: FormStep[];
   fields?: FieldConfig[];
-  initialData?: Record<string, any>;
+  initialData?: Record<string, unknown>;
   mode?: "create" | "edit" | "view";
   layout?: "steps" | "sections" | "single";
-  onSubmit: (data: Record<string, any>) => Promise<void> | void;
+  onSubmit: (data: Record<string, unknown>) => Promise<void> | void;
   onCancel?: () => void;
   enableAutoSave?: boolean;
   autoSaveInterval?: number;
-  onAutoSave?: (data: Record<string, any>) => Promise<void> | void;
+  onAutoSave?: (data: Record<string, unknown>) => Promise<void> | void;
   title?: string;
   submitLabel?: string;
   cancelLabel?: string;
@@ -154,7 +147,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
 
   // Validate field
   const validateField = useCallback(
-    (field: FieldConfig, value: any): string | null => {
+    (field: FieldConfig, value: unknown): string | null => {
       if (
         field.required &&
         (value === null || value === undefined || value === "")
@@ -273,7 +266,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
       return (
         <form.Field
           key={field.name}
-          name={field.name as any}
+          name={field.name as keyof typeof form.state.values}
           validators={{
             onChange: ({ value }) => validateField(field, value),
           }}
@@ -297,7 +290,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     <Select
                       value={fieldApi.state.value ?? (field.multiple ? [] : "")}
                       onChange={(e) =>
-                        fieldApi.handleChange(e.target.value as any)
+                        fieldApi.handleChange(e.target.value as unknown)
                       }
                       onBlur={() => fieldApi.handleBlur()}
                       multiple={field.multiple}
@@ -380,7 +373,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                         : ""
                     }
                     onChange={(e) =>
-                      fieldApi.handleChange(e.target.value as any)
+                      fieldApi.handleChange(e.target.value as unknown)
                     }
                     onBlur={() => fieldApi.handleBlur()}
                     InputLabelProps={{ shrink: true }}
@@ -395,7 +388,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     rows={field.rows || 4}
                     value={fieldApi.state.value ?? ""}
                     onChange={(e) =>
-                      fieldApi.handleChange(e.target.value as any)
+                      fieldApi.handleChange(e.target.value as unknown)
                     }
                     onBlur={() => fieldApi.handleBlur()}
                     placeholder={field.placeholder}
@@ -429,7 +422,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     type={field.type}
                     value={fieldApi.state.value ?? ""}
                     onChange={(e) =>
-                      fieldApi.handleChange(e.target.value as any)
+                      fieldApi.handleChange(e.target.value as unknown)
                     }
                     onBlur={() => fieldApi.handleBlur()}
                     placeholder={field.placeholder}
@@ -487,7 +480,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
       {/* Stepper */}
       {isSteppedLayout && steps && (
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-          {steps.map((step, index) => (
+          {steps.map((step) => (
             <Step key={step.id}>
               <StepLabel
                 optional={
@@ -531,7 +524,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
           <Box sx={{ display: "flex", gap: 1 }}>
             {canGoBack && (
               <Button
-                leftIcon={<BackIcon />}
+                startIcon={<BackIcon />}
                 onClick={handleBack}
                 disabled={loading}
               >
@@ -543,7 +536,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
           <Box sx={{ display: "flex", gap: 1 }}>
             {onCancel && (
               <Button
-                leftIcon={<CancelIcon />}
+                startIcon={<CancelIcon />}
                 onClick={onCancel}
                 disabled={loading}
               >
@@ -554,7 +547,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
             {canGoNext ? (
               <Button
                 variant="contained"
-                rightIcon={<NextIcon />}
+                endIcon={<NextIcon />}
                 onClick={handleNext}
                 disabled={loading}
               >
@@ -564,7 +557,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
               <Button
                 type="submit"
                 variant="contained"
-                leftIcon={
+                startIcon={
                   loading ? <CircularProgress size={20} /> : <SaveIcon />
                 }
                 disabled={loading || isViewMode}

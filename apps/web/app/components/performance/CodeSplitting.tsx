@@ -80,7 +80,7 @@ export function preloadComponent<T extends ComponentType<any>>(
  */
 export interface RouteConfig {
     path: string;
-    component: () => Promise<{ default: ComponentType<any> }>;
+    component: () => Promise<{ default: ComponentType<unknown> }>;
     preload?: boolean;
 }
 

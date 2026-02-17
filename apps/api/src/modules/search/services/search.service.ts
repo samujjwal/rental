@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { EmbeddingService } from '@/modules/ai/services/embedding.service';
 import { PROPERTY_STATUS, VERIFICATION_STATUS, toNumber } from '@rental-portal/database';
 
 export interface SearchQuery {
@@ -12,7 +13,7 @@ export interface SearchQuery {
     country?: string;
     lat?: number;
     lon?: number;
-    radius?: string; // e.g., "10km"
+    radius?: string; // e.g., "10km" or plain number in km
   };
   priceRange?: {
     min?: number;
@@ -27,10 +28,43 @@ export interface SearchQuery {
     condition?: string;
     features?: string[];
     amenities?: string[];
+    delivery?: boolean;
   };
-  sort?: 'relevance' | 'price_asc' | 'price_desc' | 'rating' | 'newest';
+  sort?: 'relevance' | 'price_asc' | 'price_desc' | 'rating' | 'newest' | 'distance';
   page?: number;
   size?: number;
+}
+
+/**
+ * Parse radius string (e.g., "10km", "5mi", "25") into kilometers.
+ * Defaults to km if no unit is specified.
+ */
+function parseRadiusKm(radius?: string): number {
+  if (!radius) return 25; // default 25km
+  const match = radius.match(/^(\d+(?:\.\d+)?)\s*(km|mi)?$/i);
+  if (!match) return 25;
+  const value = parseFloat(match[1]);
+  const unit = (match[2] || 'km').toLowerCase();
+  return unit === 'mi' ? value * 1.60934 : value;
+}
+
+/**
+ * Haversine distance between two points in kilometers.
+ */
+function haversineDistanceKm(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number,
+): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export interface SearchResult {
@@ -68,6 +102,7 @@ export class SearchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
+    private readonly embeddingService: EmbeddingService,
   ) {}
 
   async search(searchQuery: SearchQuery): Promise<{
@@ -175,6 +210,9 @@ export class SearchService {
     }
 
     // Location filtering
+    const hasGeoSearch =
+      searchQuery.location?.lat != null && searchQuery.location?.lon != null;
+
     if (searchQuery.location) {
       if (searchQuery.location.city) {
         where.city = {
@@ -192,6 +230,28 @@ export class SearchService {
         where.country = {
           contains: searchQuery.location.country,
           mode: 'insensitive',
+        };
+      }
+
+      // Geo bounding-box pre-filter (narrows results before Haversine)
+      if (hasGeoSearch) {
+        const radiusKm = parseRadiusKm(searchQuery.location.radius);
+        const lat = searchQuery.location.lat!;
+        const lon = searchQuery.location.lon!;
+
+        // Approximate bounding box (1 degree latitude ≈ 111km)
+        const latDelta = radiusKm / 111;
+        const lonDelta = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
+
+        where.latitude = {
+          not: null,
+          gte: lat - latDelta,
+          lte: lat + latDelta,
+        };
+        where.longitude = {
+          not: null,
+          gte: lon - lonDelta,
+          lte: lon + lonDelta,
         };
       }
     }
@@ -215,6 +275,11 @@ export class SearchService {
       if (searchQuery.filters.condition) {
         where.condition = searchQuery.filters.condition;
       }
+      if (searchQuery.filters.delivery) {
+        where.metadata = {
+          contains: '"delivery":true',
+        };
+      }
       if (searchQuery.filters.features && searchQuery.filters.features.length > 0) {
         where.features = {
           hasSome: searchQuery.filters.features,
@@ -223,8 +288,11 @@ export class SearchService {
     }
 
     try {
-      // Get total count
-      const total = await this.prisma.listing.count({ where });
+      // For geo-search, we fetch more results to account for bounding-box
+      // items that fall outside the actual radius circle, then filter+paginate
+      const isGeoFiltered = hasGeoSearch;
+      const fetchLimit = isGeoFiltered ? size * 5 : size;
+      const fetchSkip = isGeoFiltered ? 0 : skip;
 
       // Get listings with relations
       const listings = await this.prisma.listing.findMany({
@@ -246,13 +314,46 @@ export class SearchService {
             },
           },
         },
-        orderBy: this.buildSortOrder(searchQuery.sort),
-        take: size,
-        skip,
+        orderBy: this.buildSortOrder(isGeoFiltered ? undefined : searchQuery.sort),
+        take: fetchLimit,
+        skip: fetchSkip,
       });
 
+      // Apply precise Haversine distance filter for geo searches
+      let filteredListings = listings;
+      let distanceMap = new Map<string, number>();
+
+      if (isGeoFiltered) {
+        const lat = searchQuery.location!.lat!;
+        const lon = searchQuery.location!.lon!;
+        const radiusKm = parseRadiusKm(searchQuery.location!.radius);
+
+        filteredListings = listings.filter((listing: any) => {
+          if (listing.latitude == null || listing.longitude == null) return false;
+          const dist = haversineDistanceKm(lat, lon, listing.latitude, listing.longitude);
+          distanceMap.set(listing.id, Math.round(dist * 10) / 10);
+          return dist <= radiusKm;
+        });
+
+        // Sort by distance if sort is 'distance' or default for geo searches
+        if (!searchQuery.sort || searchQuery.sort === 'distance') {
+          filteredListings.sort((a: any, b: any) =>
+            (distanceMap.get(a.id) || 0) - (distanceMap.get(b.id) || 0)
+          );
+        }
+      }
+
+      // Calculate correct total and paginate for geo searches
+      const total = isGeoFiltered
+        ? filteredListings.length
+        : await this.prisma.listing.count({ where });
+
+      const paginatedListings = isGeoFiltered
+        ? filteredListings.slice(skip, skip + size)
+        : filteredListings;
+
       // Format results
-      const results: SearchResult[] = listings.map((listing: any) => ({
+      const results: SearchResult[] = paginatedListings.map((listing: any) => ({
         id: listing.id,
         title: listing.title,
         description: listing.description,
@@ -277,7 +378,70 @@ export class SearchService {
         condition: listing.condition,
         features: Array.isArray(listing.features) ? listing.features : [],
         score: this.calculateRelevanceScore(listing, searchQuery.query),
+        distance: distanceMap.get(listing.id),
       }));
+
+      // If text search returned few results, try semantic search for enrichment
+      if (searchQuery.query && results.length < size && !isGeoFiltered) {
+        try {
+          const semanticResults = await this.embeddingService.semanticSearch(
+            searchQuery.query,
+            size - results.length,
+            0,
+          );
+
+          if (semanticResults.length > 0) {
+            const existingIds = new Set(results.map((r) => r.id));
+            const newIds = semanticResults
+              .filter((sr) => !existingIds.has(sr.id))
+              .map((sr) => sr.id);
+
+            if (newIds.length > 0) {
+              const additionalListings = await this.prisma.listing.findMany({
+                where: { id: { in: newIds } },
+                include: {
+                  owner: {
+                    select: { id: true, firstName: true, lastName: true, averageRating: true },
+                  },
+                  category: { select: { id: true, name: true, slug: true } },
+                },
+              });
+
+              const semanticDistanceMap = new Map(
+                semanticResults.map((sr) => [sr.id, sr.distance]),
+              );
+
+              const additionalResults: SearchResult[] = additionalListings.map((listing: any) => ({
+                id: listing.id,
+                title: listing.title,
+                description: listing.description,
+                slug: listing.slug,
+                categoryName: listing.category?.name || '',
+                categorySlug: listing.category?.slug || '',
+                city: listing.city,
+                state: listing.state,
+                country: listing.country,
+                location: { lat: listing.latitude, lon: listing.longitude },
+                basePrice: listing.basePrice,
+                currency: listing.currency,
+                photos: Array.isArray(listing.photos) ? listing.photos : [],
+                ownerName: `${listing.owner.firstName} ${listing.owner.lastName}`.trim(),
+                ownerRating: listing.owner.averageRating || 0,
+                averageRating: listing.averageRating || 0,
+                totalReviews: listing.totalReviews || 0,
+                bookingMode: listing.bookingMode,
+                condition: listing.condition,
+                features: Array.isArray(listing.features) ? listing.features : [],
+                score: 1 - (semanticDistanceMap.get(listing.id) || 1), // Convert distance to score
+              }));
+
+              results.push(...additionalResults);
+            }
+          }
+        } catch (error) {
+          this.logger.debug('Semantic search enrichment failed, using text results only', error);
+        }
+      }
 
       // Get aggregations
       const aggregations = await this.getAggregations(where);
@@ -561,25 +725,48 @@ export class SearchService {
     const cached = (await this.cache.get(cacheKey)) as string[];
     if (cached) return cached;
 
-    // For now, return hardcoded popular searches
-    // In production, this would come from analytics
-    const popular = [
-      'apartment',
-      'car',
-      'camera',
-      'bike',
-      'guitar',
-      'wedding venue',
-      'tools',
-      'camping gear',
-      'party supplies',
-      'kayak',
-      'drone',
-      'sound system',
-      'laptop',
-      'vacation rental',
-      'event space',
-    ].slice(0, limit);
+    const groups = await this.prisma.listing.groupBy({
+      by: ['categoryId'],
+      where: {
+        status: PROPERTY_STATUS.AVAILABLE,
+        verificationStatus: VERIFICATION_STATUS.VERIFIED,
+      },
+      _count: {
+        categoryId: true,
+      },
+      orderBy: {
+        _count: {
+          categoryId: 'desc',
+        },
+      },
+      take: limit,
+    });
+
+    const categoryIds = groups.map((group) => group.categoryId).filter(Boolean) as string[];
+
+    if (categoryIds.length === 0) {
+      await this.cache.set(cacheKey, [], 3600);
+      return [];
+    }
+
+    const categories = await this.prisma.category.findMany({
+      where: {
+        id: { in: categoryIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+      },
+    });
+
+    const categoryById = new Map(categories.map((category) => [category.id, category]));
+    const popular = groups
+      .map((group) => {
+        const category = categoryById.get(group.categoryId);
+        return category?.name || category?.slug || null;
+      })
+      .filter((value): value is string => Boolean(value));
 
     // Cache for 1 hour
     await this.cache.set(cacheKey, popular, 3600);

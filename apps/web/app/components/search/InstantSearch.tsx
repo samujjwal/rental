@@ -16,6 +16,7 @@ export interface InstantSearchProps {
     debounceMs?: number;
     className?: string;
     onSearch?: (query: string) => void;
+    getSearchUrl?: (query: string) => string;
     autoFocus?: boolean;
 }
 
@@ -48,6 +49,7 @@ export function InstantSearch({
     debounceMs = 300,
     className,
     onSearch,
+    getSearchUrl,
     autoFocus = false,
 }: InstantSearchProps) {
     const [query, setQuery] = useState('');
@@ -63,6 +65,8 @@ export function InstantSearch({
     const shouldReduceMotion = prefersReducedMotion();
 
     const debouncedQuery = useDebounce(query, debounceMs);
+    const buildSearchUrl =
+        getSearchUrl || ((value: string) => `/search?query=${encodeURIComponent(value)}`);
 
     // Fetch results when debounced query changes
     useEffect(() => {
@@ -88,6 +92,8 @@ export function InstantSearch({
                 console.error('Search error:', err);
                 setError('Failed to search. Please try again.');
                 setResults([]);
+                setIsOpen(true);
+                setSelectedIndex(-1);
             } finally {
                 setIsLoading(false);
             }
@@ -115,7 +121,7 @@ export function InstantSearch({
                 if (event.key === Keys.ENTER && query.length >= minChars) {
                     event.preventDefault();
                     onSearch?.(query);
-                    navigate(`/search?query=${encodeURIComponent(query)}`);
+                    navigate(buildSearchUrl(query));
                 }
                 return;
             }
@@ -136,7 +142,7 @@ export function InstantSearch({
                         setIsOpen(false);
                     } else {
                         onSearch?.(query);
-                        navigate(`/search?query=${encodeURIComponent(query)}`);
+                        navigate(buildSearchUrl(query));
                     }
                     break;
                 case Keys.ESCAPE:
@@ -146,7 +152,7 @@ export function InstantSearch({
                     break;
             }
         },
-        [isOpen, results, selectedIndex, query, minChars, navigate, onSearch]
+        [isOpen, results, selectedIndex, query, minChars, navigate, onSearch, buildSearchUrl]
     );
 
     const handleClear = () => {
@@ -160,10 +166,14 @@ export function InstantSearch({
         e.preventDefault();
         if (query.length >= minChars) {
             onSearch?.(query);
-            navigate(`/search?query=${encodeURIComponent(query)}`);
+            navigate(buildSearchUrl(query));
             setIsOpen(false);
         }
     };
+    const activeDescendantId =
+        selectedIndex >= 0 && results[selectedIndex]
+            ? `search-result-${results[selectedIndex].id}`
+            : undefined;
 
     return (
         <div ref={containerRef} className={cn('relative', className)}>
@@ -196,6 +206,7 @@ export function InstantSearch({
                         aria-haspopup="listbox"
                         aria-controls="search-results"
                         aria-autocomplete="list"
+                        aria-activedescendant={activeDescendantId}
                     />
 
                     {/* Right side icons/buttons */}
@@ -244,6 +255,7 @@ export function InstantSearch({
                                 {results.map((result, index) => (
                                     <Link
                                         key={result.id}
+                                        id={`search-result-${result.id}`}
                                         to={`/listings/${result.id}`}
                                         onClick={() => setIsOpen(false)}
                                         className={cn(
@@ -287,7 +299,7 @@ export function InstantSearch({
 
                                 {/* View all results link */}
                                 <Link
-                                    to={`/search?query=${encodeURIComponent(query)}`}
+                                    to={buildSearchUrl(query)}
                                     onClick={() => setIsOpen(false)}
                                     className="flex items-center justify-center gap-2 p-3 border-t text-sm font-medium text-primary hover:bg-accent transition-colors"
                                 >

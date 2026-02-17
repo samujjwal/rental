@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Keys, isKey } from "~/lib/accessibility";
 
 export interface KeyboardNavigationOptions {

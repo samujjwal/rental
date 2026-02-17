@@ -8,6 +8,8 @@ import {
   Param,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import {
@@ -21,6 +23,9 @@ import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { UserRole } from '@rental-portal/database';
 
+type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
+type CategoryEntity = AsyncMethodResult<CategoriesService['findById']>;
+
 @ApiTags('categories')
 @Controller('categories')
 export class CategoriesController {
@@ -33,7 +38,9 @@ export class CategoriesController {
   @ApiOperation({ summary: 'Get all categories' })
   @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
   @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })
-  async findAll(@Query('activeOnly') activeOnly?: string) {
+  async findAll(
+    @Query('activeOnly') activeOnly?: string,
+  ): Promise<AsyncMethodResult<CategoriesService['findAll']>> {
     const active = activeOnly === 'false' ? false : true;
     return this.categoriesService.findAll(active);
   }
@@ -49,14 +56,19 @@ export class CategoriesController {
   @ApiOperation({ summary: 'Get category by ID' })
   @ApiResponse({ status: 200, description: 'Category retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Category not found' })
-  async findById(@Param('id') id: string) {
+  async findById(
+    @Param('id') id: string,
+  ): Promise<AsyncMethodResult<CategoriesService['findById']>> {
     return this.categoriesService.findById(id);
   }
 
   @Get(':id/template')
   @ApiOperation({ summary: 'Get category template schema' })
   @ApiResponse({ status: 200, description: 'Template retrieved successfully' })
-  async getCategoryTemplate(@Param('id') id: string) {
+  async getCategoryTemplate(@Param('id') id: string): Promise<{
+    category: CategoryEntity;
+    templateSchema: CategoryEntity['templateSchema'];
+  }> {
     const category = await this.categoriesService.findById(id);
     return {
       category,
@@ -67,7 +79,9 @@ export class CategoriesController {
   @Get(':id/stats')
   @ApiOperation({ summary: 'Get category statistics' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
-  async getCategoryStats(@Param('id') id: string) {
+  async getCategoryStats(
+    @Param('id') id: string,
+  ): Promise<AsyncMethodResult<CategoriesService['getCategoryStats']>> {
     return this.categoriesService.getCategoryStats(id);
   }
 
@@ -75,7 +89,9 @@ export class CategoriesController {
   @ApiOperation({ summary: 'Get category by slug' })
   @ApiResponse({ status: 200, description: 'Category retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Category not found' })
-  async findBySlug(@Param('slug') slug: string) {
+  async findBySlug(
+    @Param('slug') slug: string,
+  ): Promise<AsyncMethodResult<CategoriesService['findBySlug']>> {
     return this.categoriesService.findBySlug(slug);
   }
 
@@ -87,7 +103,9 @@ export class CategoriesController {
   @ApiResponse({ status: 201, description: 'Category created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid data or slug already exists' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
-  async create(@Body() dto: CreateCategoryDto) {
+  async create(
+    @Body() dto: CreateCategoryDto,
+  ): Promise<AsyncMethodResult<CategoriesService['create']>> {
     return this.categoriesService.create(dto);
   }
 
@@ -99,7 +117,10 @@ export class CategoriesController {
   @ApiResponse({ status: 200, description: 'Category updated successfully' })
   @ApiResponse({ status: 404, description: 'Category not found' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
-  async update(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateCategoryDto,
+  ): Promise<AsyncMethodResult<CategoriesService['update']>> {
     return this.categoriesService.update(id, dto);
   }
 
@@ -107,6 +128,7 @@ export class CategoriesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete category (Admin only)' })
   @ApiResponse({ status: 204, description: 'Category deleted successfully' })
   @ApiResponse({ status: 400, description: 'Category has associated listings' })

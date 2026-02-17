@@ -32,11 +32,11 @@ export type FilterState = Record<string, FilterValue>;
 // Data Table Types
 // ============================================================================
 
-export interface Column<T extends Record<string, any>> {
+export interface Column<T extends Record<string, unknown>> {
   key: keyof T | string;
   label: string;
   sortable?: boolean;
-  render?: (value: any, row: T) => React.ReactNode;
+  render?: (value: unknown, row: T) => React.ReactNode;
   width?: string;
   minWidth?: string;
   maxWidth?: string;
@@ -218,7 +218,7 @@ export interface AdminPageConfig {
 // API Types
 // ============================================================================
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T;
   message?: string;
   success: boolean;
@@ -227,15 +227,15 @@ export interface ApiResponse<T = any> {
   meta?: {
     pagination?: PaginationState;
     filters?: FilterState;
-    sort?: SortState<any>;
-    stats?: Record<string, any>;
+    sort?: SortState<unknown>;
+    stats?: Record<string, unknown>;
   };
 }
 
 export interface ApiError {
   code: string | number;
   message: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   stack?: string;
   timestamp: string;
 }
@@ -244,7 +244,7 @@ export interface ApiError {
 // Hook Types
 // ============================================================================
 
-export interface UseDataTableOptions<T extends Record<string, any>> {
+export interface UseDataTableOptions<T extends Record<string, unknown>> {
   data: T[];
   columns: Column<T>[];
   actions?: Action<T>[];
@@ -318,7 +318,7 @@ export interface UseDataTableReturn<T> {
 // Component Props Types
 // ============================================================================
 
-export interface DataTableProps<T extends Record<string, any>> extends Omit<
+export interface DataTableProps<T extends Record<string, unknown>> extends Omit<
   UseDataTableOptions<T>,
   "maxHeight"
 > {
@@ -327,7 +327,7 @@ export interface DataTableProps<T extends Record<string, any>> extends Omit<
   headerClassName?: string;
   bodyClassName?: string;
   rowClassName?: string | ((row: T, index: number) => string);
-  cellClassName?: string | ((column: Column<T>, row: T, value: any) => string);
+  cellClassName?: string | ((column: Column<T>, row: T, value: unknown) => string);
   emptyState?: EmptyState;
   loadingState?: LoadingState;
   errorState?: ErrorState;

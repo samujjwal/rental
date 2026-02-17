@@ -72,8 +72,9 @@ describe('EnhancedInput', () => {
     const sizes = ['sm', 'md', 'lg'] as const;
 
     sizes.forEach((size) => {
-      render(<EnhancedInput size={size} />);
+      const { unmount } = render(<EnhancedInput size={size} />);
       expect(screen.getByRole('textbox')).toBeInTheDocument();
+      unmount();
     });
   });
 
@@ -84,7 +85,7 @@ describe('EnhancedInput', () => {
 
   it('renders full width by default', () => {
     render(<EnhancedInput />);
-    expect(screen.getByRole('textbox').parentElement).toHaveClass('w-full');
+    expect(screen.getByRole('textbox').parentElement?.parentElement).toHaveClass('w-full');
   });
 
   it('calls onChange when input value changes', () => {

@@ -10,12 +10,13 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
 import { SearchService, SearchQuery } from '../services/search.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { UserRole } from '@rental-portal/database';
+import { SearchResponseDto } from '../dto/search.dto';
 
 @ApiTags('Search')
 @Controller('search')
@@ -31,6 +32,7 @@ export class SearchController {
   @ApiQuery({ name: 'radius', required: false, type: String })
   @ApiQuery({ name: 'minPrice', required: false, type: Number })
   @ApiQuery({ name: 'maxPrice', required: false, type: Number })
+  @ApiQuery({ name: 'delivery', required: false, type: Boolean })
   @ApiQuery({
     name: 'sort',
     required: false,
@@ -38,7 +40,7 @@ export class SearchController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'size', required: false, type: Number })
-  @ApiResponse({ status: 200, description: 'Search results retrieved' })
+  @ApiOkResponse({ type: SearchResponseDto, description: 'Search results retrieved' })
   async search(
     @Query('query') query?: string,
     @Query('categoryId') categoryId?: string,
@@ -49,6 +51,7 @@ export class SearchController {
     @Query('maxPrice') maxPrice?: number,
     @Query('bookingMode') bookingMode?: string,
     @Query('condition') condition?: string,
+    @Query('delivery') delivery?: string,
     @Query('features') features?: string,
     @Query('sort') sort?: string,
     @Query('page') page?: number,
@@ -70,10 +73,18 @@ export class SearchController {
       searchQuery.priceRange = { min: minPrice, max: maxPrice };
     }
 
-    if (bookingMode || condition || features) {
+    const deliveryEnabled = delivery === 'true' || delivery === '1';
+    const normalizedBookingMode = bookingMode
+      ? bookingMode.toUpperCase() === 'INSTANT'
+        ? 'INSTANT_BOOK'
+        : bookingMode.toUpperCase()
+      : undefined;
+
+    if (normalizedBookingMode || condition || features || deliveryEnabled) {
       searchQuery.filters = {
-        bookingMode,
+        bookingMode: normalizedBookingMode,
         condition,
+        delivery: deliveryEnabled,
         features: features ? features.split(',') : undefined,
       };
     }

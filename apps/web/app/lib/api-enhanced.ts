@@ -1,5 +1,5 @@
 import { api } from "./api-client";
-import { handleApiError, getHttpErrorMessage } from "./error-handler";
+import { handleApiError } from "./error-handler";
 import { toast } from "./toast";
 
 /**
@@ -29,12 +29,16 @@ function sleep(ms: number): Promise<void> {
 /**
  * Check if error is retryable
  */
-function isRetryableError(error: any, retryableStatuses: number[]): boolean {
-  if (!error.response) {
+function isRetryableError(error: unknown, retryableStatuses: number[]): boolean {
+  const response =
+    error && typeof error === "object" && "response" in error
+      ? (error as { response?: { status?: number } }).response
+      : undefined;
+  if (!response) {
     // Network errors are retryable
     return true;
   }
-  return retryableStatuses.includes(error.response.status);
+  return retryableStatuses.includes(response.status ?? 0);
 }
 
 /**
@@ -49,7 +53,7 @@ export async function withRetry<T>(
     ...options,
   };
 
-  let lastError: any;
+  let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries!; attempt++) {
     try {

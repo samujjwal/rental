@@ -1,13 +1,19 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { BookingStatus } from '@rental-portal/database';
+import { NotificationsService } from '@/modules/notifications/services/notifications.service';
+import { BookingCalculationService } from './booking-calculation.service';
+import { NotificationType } from '@rental-portal/database';
+import { randomUUID } from 'crypto';
 
 export type BookingTransition =
   | 'SUBMIT_REQUEST'
   | 'OWNER_APPROVE'
   | 'OWNER_REJECT'
   | 'COMPLETE_PAYMENT'
+  | 'FAIL_PAYMENT'
+  | 'RETRY_PAYMENT'
   | 'START_RENTAL'
   | 'CANCEL'
   | 'REQUEST_RETURN'
@@ -38,10 +44,13 @@ interface StateMachineResult {
 @Injectable()
 export class BookingStateMachineService {
   private readonly transitions: StateTransition[];
+  private readonly logger = new Logger(BookingStateMachineService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly notificationsService: NotificationsService,
+    private readonly calculationService: BookingCalculationService,
   ) {
     this.transitions = this.defineTransitions();
   }
@@ -78,6 +87,30 @@ export class BookingStateMachineService {
         to: BookingStatus.CONFIRMED,
         transition: 'COMPLETE_PAYMENT',
         allowedRoles: ['RENTER', 'SYSTEM'],
+      },
+
+      // PENDING_PAYMENT → PAYMENT_FAILED (payment attempt failed)
+      {
+        from: BookingStatus.PENDING_PAYMENT,
+        to: BookingStatus.PAYMENT_FAILED,
+        transition: 'FAIL_PAYMENT',
+        allowedRoles: ['SYSTEM'],
+      },
+
+      // PAYMENT_FAILED → PENDING_PAYMENT (retry payment)
+      {
+        from: BookingStatus.PAYMENT_FAILED,
+        to: BookingStatus.PENDING_PAYMENT,
+        transition: 'RETRY_PAYMENT',
+        allowedRoles: ['RENTER'],
+      },
+
+      // PAYMENT_FAILED → CANCELLED (grace period expired or user cancels)
+      {
+        from: BookingStatus.PAYMENT_FAILED,
+        to: BookingStatus.CANCELLED,
+        transition: 'EXPIRE',
+        allowedRoles: ['SYSTEM', 'RENTER'],
       },
 
       // PENDING_PAYMENT → CANCELLED (payment timeout)
@@ -240,9 +273,10 @@ export class BookingStateMachineService {
         status: authorizedTransition.to,
         stateHistory: {
           create: {
+            fromStatus: booking.status,
             toStatus: authorizedTransition.to,
             changedBy: actorId,
-            metadata: metadata as any,
+            metadata: metadata ? JSON.stringify(metadata) : undefined,
           },
         },
       },
@@ -328,6 +362,8 @@ export class BookingStateMachineService {
       case BookingStatus.CONFIRMED:
         // Schedule reminder before rental start
         await this.scheduleReminderNotification(bookingId, booking.startDate);
+        // Trigger deposit hold if the listing has a security deposit
+        await this.triggerDepositHold(bookingId);
         break;
 
       case BookingStatus.IN_PROGRESS:
@@ -338,11 +374,18 @@ export class BookingStateMachineService {
       case BookingStatus.COMPLETED:
         // Trigger settlement process
         await this.triggerSettlementProcess(bookingId);
+        // Release deposit hold if no damage claims
+        await this.releaseDepositIfClean(bookingId);
         break;
 
       case BookingStatus.CANCELLED:
         // Trigger refund process
         await this.triggerRefundProcess(bookingId);
+        break;
+
+      case BookingStatus.PAYMENT_FAILED:
+        // Schedule grace-period expiration (e.g. 24h to retry)
+        this.logger.log(`Payment failed for booking ${bookingId}, grace period started`);
         break;
 
       case BookingStatus.DISPUTED:
@@ -353,29 +396,236 @@ export class BookingStateMachineService {
   }
 
   private async scheduleReminderNotification(bookingId: string, startDate: Date): Promise<void> {
-    // Implementation: Add job to queue for reminder 24h before start
-    // This would integrate with BullMQ
-    console.log(`Scheduling reminder for booking ${bookingId} starting ${startDate}`);
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { listing: true },
+    });
+
+    if (!booking) return;
+
+    const reminderTime = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+    const scheduledFor = reminderTime > new Date() ? reminderTime : undefined;
+
+    await this.notificationsService.sendNotification({
+      userId: booking.renterId,
+      type: NotificationType.BOOKING_REMINDER,
+      title: 'Upcoming booking reminder',
+      message: `Your booking for ${booking.listing.title} starts on ${startDate.toDateString()}.`,
+      data: { bookingId },
+      channels: ['IN_APP'],
+      scheduledFor,
+    });
   }
 
   private async createInitialConditionReport(bookingId: string): Promise<void> {
-    // Implementation: Create initial condition report template
-    console.log(`Creating initial condition report for booking ${bookingId}`);
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, renterId: true, listingId: true },
+    });
+
+    if (!booking) return;
+
+    const existing = await this.prisma.conditionReport.findFirst({
+      where: {
+        bookingId: booking.id,
+        reportType: 'CHECK_IN',
+      },
+    });
+
+    if (existing) return;
+
+    await this.prisma.conditionReport.create({
+      data: {
+        bookingId: booking.id,
+        propertyId: booking.listingId,
+        createdBy: booking.renterId,
+        checkIn: true,
+        checkOut: false,
+        photos: [],
+        notes: '',
+        damages: '[]',
+        status: 'PENDING',
+        reportType: 'CHECK_IN',
+        checklistData: '[]',
+      },
+    });
   }
 
   private async triggerSettlementProcess(bookingId: string): Promise<void> {
-    // Implementation: Trigger payment settlement job
-    console.log(`Triggering settlement for booking ${bookingId}`);
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { listing: { include: { owner: true } } },
+    });
+
+    if (!booking) return;
+
+    this.logger.log(`Triggering settlement for booking ${bookingId}`);
+
+    // Publish settlement event for PaymentsModule to execute Stripe payout
+    await this.cacheService.publish('booking:settlement', {
+      bookingId: booking.id,
+      ownerId: booking.listing.ownerId,
+      ownerStripeConnectId: booking.listing.owner.stripeConnectId,
+      amount: Number(booking.ownerEarnings),
+      currency: booking.currency,
+      timestamp: new Date().toISOString(),
+    });
+
+    await this.notificationsService.sendNotification({
+      userId: booking.listing.ownerId,
+      type: NotificationType.PAYOUT_PROCESSED,
+      title: 'Earnings available',
+      message: `Your earnings for booking ${booking.id} are now available.`,
+      data: { bookingId: booking.id },
+      channels: ['IN_APP'],
+    });
   }
 
   private async triggerRefundProcess(bookingId: string): Promise<void> {
-    // Implementation: Trigger refund calculation and processing
-    console.log(`Triggering refund for booking ${bookingId}`);
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { listing: true },
+    });
+
+    if (!booking) return;
+
+    const existingRefund = await this.prisma.refund.findFirst({
+      where: { bookingId },
+    });
+    if (existingRefund) {
+      return;
+    }
+
+    const refund = await this.calculationService.calculateRefund(bookingId, new Date());
+
+    const refundRecord = await this.prisma.refund.create({
+      data: {
+        bookingId,
+        amount: refund.refundAmount,
+        currency: booking.currency,
+        status: 'PENDING',
+        refundId: randomUUID(),
+        reason: refund.reason,
+        description: 'Refund initiated after booking cancellation',
+        metadata: JSON.stringify(refund),
+      },
+    });
+
+    this.logger.log(`Triggering refund for booking ${bookingId}, amount: ${refund.refundAmount}`);
+
+    // Publish refund event for PaymentsModule to execute Stripe refund
+    if (booking.paymentIntentId && refund.refundAmount > 0) {
+      await this.cacheService.publish('booking:refund', {
+        bookingId,
+        refundRecordId: refundRecord.id,
+        paymentIntentId: booking.paymentIntentId,
+        amount: refund.refundAmount,
+        currency: booking.currency,
+        reason: refund.reason,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await this.notificationsService.sendNotification({
+      userId: booking.renterId,
+      type: NotificationType.BOOKING_CANCELLED,
+      title: 'Refund initiated',
+      message: `Your refund for booking ${booking.id} has been initiated.`,
+      data: { bookingId: booking.id },
+      channels: ['IN_APP'],
+    });
   }
 
   private async notifyAdminDispute(bookingId: string): Promise<void> {
-    // Implementation: Notify admin team about dispute
-    console.log(`Notifying admin about dispute for booking ${bookingId}`);
+    const admins = await this.prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    });
+
+    await Promise.all(
+      admins.map((admin) =>
+        this.notificationsService.sendNotification({
+          userId: admin.id,
+          type: NotificationType.DISPUTE_OPENED,
+          title: 'Dispute opened',
+          message: `A dispute was opened for booking ${bookingId}.`,
+          data: { bookingId },
+          channels: ['IN_APP'],
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Triggers a deposit hold via the payments service when a booking is confirmed.
+   * Publishes an event that the PaymentsModule listens for.
+   */
+  private async triggerDepositHold(bookingId: string): Promise<void> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        depositAmount: true,
+        currency: true,
+        renterId: true,
+        listingId: true,
+      },
+    });
+
+    if (!booking || !booking.depositAmount || Number(booking.depositAmount) <= 0) {
+      return; // No deposit required
+    }
+
+    this.logger.log(
+      `Triggering deposit hold for booking ${bookingId}: ${booking.depositAmount} ${booking.currency}`,
+    );
+
+    // Publish event for PaymentsModule to listen and execute Stripe hold
+    await this.cacheService.publish('booking:deposit-hold', {
+      bookingId: booking.id,
+      amount: Number(booking.depositAmount),
+      currency: booking.currency,
+      renterId: booking.renterId,
+      listingId: booking.listingId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Releases the deposit hold when a booking completes without damage claims.
+   */
+  private async releaseDepositIfClean(bookingId: string): Promise<void> {
+    // Check if there are any pending damage claims or disputes
+    const hasDamage = await this.prisma.conditionReport.findFirst({
+      where: {
+        bookingId,
+        reportType: 'CHECK_OUT',
+        damages: { not: '[]' },
+      },
+    });
+
+    if (hasDamage) {
+      this.logger.log(`Deposit held for booking ${bookingId} — damage reported`);
+      return;
+    }
+
+    // Check for open disputes
+    const hasDispute = await this.prisma.dispute.findFirst({
+      where: { bookingId, status: { notIn: ['RESOLVED', 'WITHDRAWN'] } },
+    });
+
+    if (hasDispute) {
+      this.logger.log(`Deposit held for booking ${bookingId} — active dispute`);
+      return;
+    }
+
+    this.logger.log(`Releasing deposit for booking ${bookingId} — no issues found`);
+
+    // Publish event for PaymentsModule to execute Stripe release
+    await this.cacheService.publish('booking:deposit-release', {
+      bookingId,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   async getStateHistory(bookingId: string) {

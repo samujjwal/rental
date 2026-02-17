@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ReviewsService, ReviewDirection } from './reviews.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
+import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ReviewType, Review } from '@rental-portal/database';
 
@@ -48,6 +49,12 @@ describe('ReviewsService', () => {
         {
           provide: CacheService,
           useValue: mockCacheService,
+        },
+        {
+          provide: ContentModerationService,
+          useValue: {
+            moderateText: jest.fn().mockResolvedValue({ isApproved: true, flags: [] }),
+          },
         },
       ],
     }).compile();

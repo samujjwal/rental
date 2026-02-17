@@ -6,9 +6,10 @@ import type {
 import {
   Form,
   Link,
+  useLoaderData,
   useActionData,
   useNavigation,
-  useSearchParams,
+  useSubmit,
 } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,8 +21,9 @@ import {
   type ResetPasswordInput,
 } from "~/lib/validation/auth";
 import { redirect } from "react-router";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { cn } from "~/lib/utils";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -30,41 +32,70 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+const isValidResetToken = (value: string | null) => {
+  if (!value) return false;
+  const token = value.trim();
+  // Allow test tokens for E2E tests (min 8 chars) and real tokens (up to 512 chars)
+  return token.length >= 8 && token.length <= 512;
+};
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (user) {
+    return redirect("/dashboard");
+  }
+
   const url = new URL(request.url);
   const token = url.searchParams.get("token");
 
-  if (!token) {
+  if (!isValidResetToken(token)) {
     return redirect("/auth/forgot-password");
   }
 
-  return { token };
+  return { token: token.trim() };
 }
 
 export async function clientAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
-  const token = formData.get("token") as string;
-  const password = formData.get("password") as string;
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "reset-password") {
+    return { success: false, error: "Invalid request." };
+  }
+  const token = String(formData.get("token") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+  if (!isValidResetToken(token)) {
+    return { success: false, error: "Reset token is missing" };
+  }
+  const validation = resetPasswordSchema.safeParse({ password, confirmPassword });
+  if (!validation.success) {
+    return {
+      success: false,
+      error: validation.error.issues[0]?.message || "Invalid password reset request",
+    };
+  }
 
   try {
     const response = await authApi.resetPassword({
       token,
-      newPassword: password,
+      newPassword: validation.data.password,
     });
     return { success: true, message: response.message };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       error:
-        error.response?.data?.message ||
-        "Failed to reset password. Please try again.",
+        error && typeof error === "object" && "response" in error
+          ? (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message ||
+            "Failed to reset password. Please try again."
+          : "Failed to reset password. Please try again.",
     };
   }
 }
 
 export default function ResetPassword() {
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get("token");
+  const { token } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const [showPassword, setShowPassword] = useState(false);
@@ -79,6 +110,7 @@ export default function ResetPassword() {
   } = useForm<ResetPasswordInput>({
     resolver: zodResolver(resetPasswordSchema),
   });
+  const submit = useSubmit();
 
   const password = watch("password", "");
 
@@ -115,7 +147,7 @@ export default function ResetPassword() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-3xl font-bold text-primary">Rental Portal</h1>
+            <h1 className="text-3xl font-bold text-primary">Reset Password</h1>
           </Link>
           <p className="text-muted-foreground mt-2">Enter your new password</p>
         </div>
@@ -142,7 +174,15 @@ export default function ResetPassword() {
               </Link>
             </div>
           ) : (
-            <Form method="post" onSubmit={handleSubmit(() => {})}>
+            <Form
+              method="post"
+              onSubmit={handleSubmit((_, event) => {
+                if (event?.target) {
+                  submit(event.target as HTMLFormElement);
+                }
+              })}
+            >
+              <input type="hidden" name="intent" value="reset-password" />
               <input type="hidden" name="token" value={token || ""} />
 
               {/* Error Message */}
@@ -166,6 +206,7 @@ export default function ResetPassword() {
                     type={showPassword ? "text" : "password"}
                     id="password"
                     name="password"
+                    maxLength={128}
                     className={cn(inputClasses, "pr-10")}
                     placeholder="••••••••"
                   />
@@ -240,6 +281,7 @@ export default function ResetPassword() {
                     type={showConfirmPassword ? "text" : "password"}
                     id="confirmPassword"
                     name="confirmPassword"
+                    maxLength={128}
                     className={cn(inputClasses, "pr-10")}
                     placeholder="••••••••"
                   />
@@ -280,3 +322,5 @@ export default function ResetPassword() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

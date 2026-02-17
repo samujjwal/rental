@@ -3,10 +3,12 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { Review, ReviewType } from '@rental-portal/database';
+import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 
 export enum ReviewDirection {
   RENTER_TO_OWNER = 'RENTER_TO_OWNER',
@@ -50,9 +52,12 @@ export interface ReviewResponse extends Review {
 
 @Injectable()
 export class ReviewsService {
+  private readonly logger = new Logger(ReviewsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly moderationService: ContentModerationService,
   ) {}
 
   async create(userId: string, dto: CreateReviewDto): Promise<ReviewResponse> {
@@ -113,11 +118,31 @@ export class ReviewsService {
       throw new BadRequestException('Review already exists for this booking');
     }
 
+    // Moderate review content before saving
+    if (dto.comment) {
+      try {
+        const modResult = await this.moderationService.moderateReview({
+          content: dto.comment,
+          rating: dto.overallRating,
+        });
+        if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
+          throw new BadRequestException({
+            message: 'Your review contains content that violates our policies',
+            flags: modResult.flags,
+          });
+        }
+      } catch (error) {
+        if (error instanceof BadRequestException) throw error;
+        this.logger.warn('Review moderation check failed, proceeding', error);
+      }
+    }
+
     this.validateRatings(dto);
 
     const review = await this.prisma.review.create({
       data: {
         bookingId: dto.bookingId,
+        listingId,
         reviewerId,
         revieweeId,
         type: dbReviewType,
@@ -128,6 +153,7 @@ export class ReviewsService {
         cleanlinessRating: dto.cleanlinessRating,
         valueRating: dto.valueRating,
         comment: dto.comment || '',
+        content: dto.comment || '',
       },
       include: {
         reviewer: {
@@ -197,6 +223,7 @@ export class ReviewsService {
       where: { id: reviewId },
       data: {
         ...ratings,
+        comment: comment,
         content: comment,
       },
       include: {
@@ -401,6 +428,7 @@ export class ReviewsService {
               id: true,
               title: true,
               slug: true,
+              photos: true,
             },
           },
         },
@@ -417,7 +445,54 @@ export class ReviewsService {
     };
   }
 
-  async getBookingReviews(bookingId: string) {
+  async getPublicUserReviews(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    reviews: ReviewResponse[];
+    total: number;
+  }> {
+    const where = {
+      revieweeId: userId,
+      status: 'PUBLISHED' as const,
+    };
+
+    const [reviews, total] = await Promise.all([
+      this.prisma.review.findMany({
+        where,
+        include: {
+          reviewer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              profilePhotoUrl: true,
+            },
+          },
+          listing: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              photos: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.review.count({ where }),
+    ]);
+
+    return {
+      reviews: reviews as any,
+      total,
+    };
+  }
+
+  async getBookingReviews(bookingId: string): Promise<any> {
     return this.prisma.review.findMany({
       where: { bookingId },
       include: {
@@ -451,7 +526,7 @@ export class ReviewsService {
       return { canReview: false, reason: 'Booking not found' };
     }
 
-    if (!['COMPLETED', 'SETTLED', 'CONFIRMED'].includes(booking.status)) {
+    if (!['COMPLETED', 'SETTLED'].includes(booking.status)) {
       // In prod: COMPLETED, SETTLED
       return { canReview: false, reason: 'Booking not completed' };
     }

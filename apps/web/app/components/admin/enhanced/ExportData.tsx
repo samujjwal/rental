@@ -25,7 +25,7 @@ import {
 export type ExportFormat = "csv" | "excel" | "json";
 
 interface ExportDataProps {
-  data: any[];
+  data: Array<Record<string, unknown>>;
   columns?: Array<{ id: string; header: string }>;
   filename?: string;
   onExport?: (format: ExportFormat) => Promise<void> | void;
@@ -85,7 +85,7 @@ export const ExportData: React.FC<ExportDataProps> = ({
       URL.revokeObjectURL(link.href);
 
       setShowSuccess(true);
-    } catch (error) {
+    } catch {
       setErrorMessage("Failed to export CSV");
       setShowError(true);
     }
@@ -103,7 +103,7 @@ export const ExportData: React.FC<ExportDataProps> = ({
       URL.revokeObjectURL(link.href);
 
       setShowSuccess(true);
-    } catch (error) {
+    } catch {
       setErrorMessage("Failed to export JSON");
       setShowError(true);
     }

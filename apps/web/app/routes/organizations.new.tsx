@@ -1,6 +1,6 @@
-/* eslint-disable react-refresh/only-export-components */
 
 import type { MetaFunction, ActionFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 import { useNavigate, useActionData, Form, useNavigation, redirect } from "react-router";
 import { useState } from "react";
 import {
@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { BusinessType, CreateOrganizationDto } from "~/lib/api/organizations";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -22,38 +23,84 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+  return null;
+}
+
 export async function clientAction({ request }: ActionFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const formData = await request.formData();
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "create-organization") {
+    return { error: "Invalid request." };
+  }
+  const rawBusinessType = String(formData.get("businessType") ?? "")
+    .trim()
+    .toUpperCase();
+  const allowedBusinessTypes: BusinessType[] = [
+    "INDIVIDUAL",
+    "LLC",
+    "CORPORATION",
+    "PARTNERSHIP",
+  ];
+  const businessType = allowedBusinessTypes.includes(rawBusinessType as BusinessType)
+    ? (rawBusinessType as BusinessType)
+    : null;
   
+  if (!businessType) {
+    return { error: "Please select a valid business type" };
+  }
+
   const data: CreateOrganizationDto = {
-    name: formData.get("name") as string,
-    description: formData.get("description") as string || undefined,
-    businessType: formData.get("businessType") as BusinessType,
-    taxId: formData.get("taxId") as string || undefined,
-    email: formData.get("email") as string,
-    phoneNumber: formData.get("phoneNumber") as string || undefined,
-    addressLine1: formData.get("addressLine1") as string || undefined,
-    addressLine2: formData.get("addressLine2") as string || undefined,
-    city: formData.get("city") as string || undefined,
-    state: formData.get("state") as string || undefined,
-    postalCode: formData.get("postalCode") as string || undefined,
-    country: formData.get("country") as string || undefined,
+    name: String(formData.get("name") ?? "").trim().slice(0, 120),
+    description:
+      String(formData.get("description") ?? "").trim().slice(0, 2000) || undefined,
+    businessType,
+    taxId: String(formData.get("taxId") ?? "").trim().slice(0, 50) || undefined,
+    email: String(formData.get("email") ?? "").trim().slice(0, 254),
+    phoneNumber:
+      String(formData.get("phoneNumber") ?? "").trim().slice(0, 20) || undefined,
+    addressLine1:
+      String(formData.get("addressLine1") ?? "").trim().slice(0, 120) || undefined,
+    addressLine2:
+      String(formData.get("addressLine2") ?? "").trim().slice(0, 120) || undefined,
+    city: String(formData.get("city") ?? "").trim().slice(0, 80) || undefined,
+    state: String(formData.get("state") ?? "").trim().slice(0, 80) || undefined,
+    postalCode:
+      String(formData.get("postalCode") ?? "").trim().slice(0, 20) || undefined,
+    country: String(formData.get("country") ?? "").trim().slice(0, 80) || undefined,
   };
 
   // Validation
   if (!data.name || data.name.trim().length < 2) {
     return { error: "Organization name must be at least 2 characters" };
   }
-  if (!data.email || !data.email.includes("@")) {
+  if (data.name.length > 120) {
+    return { error: "Organization name must be 120 characters or fewer" };
+  }
+  if (data.description && data.description.length > 2000) {
+    return { error: "Description must be 2000 characters or fewer" };
+  }
+  if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
     return { error: "Please enter a valid email address" };
   }
-  if (!data.businessType) {
-    return { error: "Please select a business type" };
+  if (data.phoneNumber && !/^\+?[0-9()\-\s]{7,20}$/.test(data.phoneNumber)) {
+    return { error: "Please enter a valid phone number" };
   }
-
+  if (data.postalCode && data.postalCode.length > 20) {
+    return { error: "Postal code must be 20 characters or fewer" };
+  }
   try {
     const organization = await organizationsApi.createOrganization(data);
-    return redirect(`/organizations/${organization.id}`);
+    return redirect(`/organizations/${organization.id}/settings`);
   } catch (error: unknown) {
     const message =
       typeof error === "object" &&
@@ -168,6 +215,7 @@ export default function NewOrganizationPage() {
         )}
 
         <Form method="post" className="bg-card border rounded-lg p-6 space-y-6">
+          <input type="hidden" name="intent" value="create-organization" />
           {step === 1 && (
             <>
               <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -218,7 +266,7 @@ export default function NewOrganizationPage() {
                 ))}
               </div>
               <div className="flex justify-end">
-                <Button
+                <UnifiedButton
                   type="button"
                   onClick={() => setStep(2)}
                   disabled={!selectedType}
@@ -246,6 +294,7 @@ export default function NewOrganizationPage() {
                     type="text"
                     name="name"
                     required
+                    maxLength={120}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="Acme Rentals Inc."
                   />
@@ -258,6 +307,7 @@ export default function NewOrganizationPage() {
                   <textarea
                     name="description"
                     rows={3}
+                    maxLength={2000}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="Tell us about your rental business..."
                   />
@@ -271,6 +321,7 @@ export default function NewOrganizationPage() {
                     type="email"
                     name="email"
                     required
+                    maxLength={254}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="contact@acmerentals.com"
                   />
@@ -283,6 +334,7 @@ export default function NewOrganizationPage() {
                   <input
                     type="tel"
                     name="phoneNumber"
+                    maxLength={20}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="+1 (555) 123-4567"
                   />
@@ -295,6 +347,7 @@ export default function NewOrganizationPage() {
                   <input
                     type="text"
                     name="taxId"
+                    maxLength={50}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="XX-XXXXXXX"
                   />
@@ -328,6 +381,7 @@ export default function NewOrganizationPage() {
                   <input
                     type="text"
                     name="addressLine1"
+                    maxLength={120}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="123 Business St"
                   />
@@ -340,6 +394,7 @@ export default function NewOrganizationPage() {
                   <input
                     type="text"
                     name="addressLine2"
+                    maxLength={120}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="Suite 100"
                   />
@@ -352,6 +407,7 @@ export default function NewOrganizationPage() {
                   <input
                     type="text"
                     name="city"
+                    maxLength={80}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="San Francisco"
                   />
@@ -364,6 +420,7 @@ export default function NewOrganizationPage() {
                   <input
                     type="text"
                     name="state"
+                    maxLength={80}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="CA"
                   />
@@ -376,6 +433,7 @@ export default function NewOrganizationPage() {
                   <input
                     type="text"
                     name="postalCode"
+                    maxLength={20}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="94105"
                   />
@@ -389,6 +447,7 @@ export default function NewOrganizationPage() {
                     type="text"
                     name="country"
                     defaultValue="United States"
+                    maxLength={80}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                   />
                 </div>
@@ -441,3 +500,5 @@ export default function NewOrganizationPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

@@ -29,4 +29,14 @@ export const uploadApi = {
       },
     });
   },
+
+  async uploadDocument(file: File): Promise<UploadResult> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post<UploadResult>("/upload/document", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  },
 };

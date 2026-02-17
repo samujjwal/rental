@@ -4,7 +4,7 @@ import type {
   ActionFunctionArgs,
 } from "react-router";
 import { Form, useNavigate, useLoaderData, useActionData } from "react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -19,22 +19,42 @@ import {
   Trash2,
 } from "lucide-react";
 import { listingSchema, type ListingInput } from "~/lib/validation/listing";
+import type { z } from "zod";
 import { listingsApi } from "~/lib/api/listings";
+import { uploadApi } from "~/lib/api/upload";
 import { redirect } from "react-router";
-import type { Listing } from "~/types/listing";
+import { toast } from "~/lib/toast";
+import type { Listing, UpdateListingRequest } from "~/types/listing";
+import { getUser } from "~/utils/auth";
+import { RouteErrorBoundary, Dialog, DialogFooter } from "~/components/ui";
+import { VoiceListingAssistant } from "~/components/listings/VoiceListingAssistant";
+const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
 
 export const meta: MetaFunction = () => {
   return [{ title: "Edit Listing | GharBatai Rentals" }];
 };
 
-export async function clientLoader({ params }: LoaderFunctionArgs) {
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{5,127}$/;
+const isValidListingId = (value: string | undefined): value is string =>
+  Boolean(value && (UUID_PATTERN.test(value) || SAFE_ID_PATTERN.test(value)));
+
+export async function clientLoader({ params, request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const listingId = params.id;
-  if (!listingId) {
-    throw redirect("/dashboard");
+  if (!isValidListingId(listingId)) {
+    return redirect("/dashboard");
   }
 
   try {
     const listing = await listingsApi.getListingById(listingId);
+    if (user.role !== "admin" && listing.ownerId !== user.id) {
+      return redirect(`/listings/${listingId}`);
+    }
     return { listing };
   } catch (error) {
     console.error("Failed to load listing:", error);
@@ -43,32 +63,83 @@ export async function clientLoader({ params }: LoaderFunctionArgs) {
 }
 
 export async function clientAction({ request, params }: ActionFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const listingId = params.id;
-  if (!listingId) {
+  if (!isValidListingId(listingId)) {
     return { error: "Listing ID is required" };
   }
 
+  try {
+    const listing = await listingsApi.getListingById(listingId);
+    if (user.role !== "admin" && listing.ownerId !== user.id) {
+      return { error: "You are not authorized to edit this listing" };
+    }
+  } catch {
+    return { error: "Listing not found" };
+  }
+
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const intent = String(formData.get("intent") || "");
+  const parseJsonField = <T,>(key: string): T | null => {
+    const value = formData.get(key);
+    if (typeof value !== "string") return null;
+    if (value.length > 100_000) return null;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
+    }
+  };
 
   if (intent === "delete") {
+    const deleteConfirmation = String(formData.get("deleteConfirmation") || "")
+      .trim()
+      .toUpperCase();
+    if (deleteConfirmation !== "DELETE") {
+      return { error: "Type DELETE to confirm listing deletion." };
+    }
     try {
       await listingsApi.deleteListing(listingId);
       return redirect("/dashboard");
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
-        error: error.response?.data?.message || "Failed to delete listing",
+        error:
+          error && typeof error === "object" && "response" in error
+            ? (error as { response?: { data?: { message?: string } } })
+                .response?.data?.message || "Failed to delete listing"
+            : "Failed to delete listing",
       };
     }
   }
 
+  if (intent && intent !== "update") {
+    return { error: "Invalid action" };
+  }
+
   // Handle update
   try {
-    const listingData = {
-      title: formData.get("title") as string,
-      description: formData.get("description") as string,
-      category: formData.get("category") as string,
-      subcategory: formData.get("subcategory") as string,
+    const location = parseJsonField<ListingInput["location"]>("location");
+    const images = parseJsonField<string[]>("images");
+    const deliveryOptions =
+      parseJsonField<ListingInput["deliveryOptions"]>("deliveryOptions");
+    const features = parseJsonField<ListingInput["features"]>("features");
+
+    if (!location || !images || !deliveryOptions || !features) {
+      return { error: "Invalid listing payload" };
+    }
+    if (images.length > 10 || features.length > 100) {
+      return { error: "Listing payload exceeds allowed size limits" };
+    }
+
+    const listingData: UpdateListingRequest = {
+      title: String(formData.get("title") ?? "").trim(),
+      description: String(formData.get("description") ?? "").trim(),
+      category: String(formData.get("category") ?? "").trim(),
+      subcategory: String(formData.get("subcategory") ?? "").trim() || undefined,
       pricePerDay: Number(formData.get("pricePerDay")),
       pricePerWeek: formData.get("pricePerWeek")
         ? Number(formData.get("pricePerWeek"))
@@ -76,11 +147,11 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
       pricePerMonth: formData.get("pricePerMonth")
         ? Number(formData.get("pricePerMonth"))
         : undefined,
-      condition: formData.get("condition") as any,
-      location: JSON.parse(formData.get("location") as string),
-      images: JSON.parse(formData.get("images") as string),
+      condition: formData.get("condition") as ListingInput["condition"],
+      location,
+      images,
       instantBooking: formData.get("instantBooking") === "true",
-      deliveryOptions: JSON.parse(formData.get("deliveryOptions") as string),
+      deliveryOptions,
       deliveryRadius: formData.get("deliveryRadius")
         ? Number(formData.get("deliveryRadius"))
         : undefined,
@@ -92,16 +163,61 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
       maximumRentalPeriod: formData.get("maximumRentalPeriod")
         ? Number(formData.get("maximumRentalPeriod"))
         : undefined,
-      cancellationPolicy: formData.get("cancellationPolicy") as any,
-      rules: formData.get("rules") as string,
-      features: JSON.parse(formData.get("features") as string),
+      cancellationPolicy:
+        formData.get("cancellationPolicy") as ListingInput["cancellationPolicy"],
+      rules: String(formData.get("rules") ?? "").trim() || undefined,
+      features,
     };
 
-    await listingsApi.updateListing(listingId, listingData);
+    if (!listingData.title || !listingData.description || !listingData.category) {
+      return { error: "Title, description, and category are required" };
+    }
+    if (!Array.isArray(listingData.images) || listingData.images.length === 0) {
+      return { error: "At least one image is required" };
+    }
+    if (
+      !Number.isFinite(listingData.pricePerDay) ||
+      !Number.isFinite(listingData.securityDeposit) ||
+      !Number.isFinite(listingData.minimumRentalPeriod)
+    ) {
+      return { error: "Invalid pricing values" };
+    }
+    if (
+      listingData.pricePerDay < 0 ||
+      listingData.securityDeposit < 0 ||
+      listingData.minimumRentalPeriod < 1
+    ) {
+      return { error: "Pricing values must be positive." };
+    }
+
+    const validation = listingSchema.safeParse({
+      ...listingData,
+      location,
+      images,
+      deliveryOptions,
+      features,
+    });
+    if (!validation.success) {
+      return {
+        error: validation.error.issues[0]?.message || "Invalid listing details",
+      };
+    }
+
+    const categories = await listingsApi.getCategories();
+    const validCategoryIds = new Set((categories || []).map((category) => category.id));
+    if (!validCategoryIds.has(validation.data.category)) {
+      return { error: "Please select a valid listing category." };
+    }
+
+    await listingsApi.updateListing(listingId, validation.data);
     return redirect(`/listings/${listingId}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      error: error.response?.data?.message || "Failed to update listing",
+      error:
+        error && typeof error === "object" && "response" in error
+          ? (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message || "Failed to update listing"
+          : "Failed to update listing",
     };
   }
 }
@@ -114,42 +230,51 @@ const STEPS = [
   { id: 5, name: "Images" },
 ];
 
-const CATEGORIES = [
-  "Electronics",
-  "Vehicles",
-  "Tools & Equipment",
-  "Sports & Outdoors",
-  "Party & Events",
-  "Home & Garden",
-  "Fashion & Accessories",
-  "Other",
+const CONDITIONS = [
+  { value: "new", label: "New" },
+  { value: "like-new", label: "Like New" },
+  { value: "good", label: "Good" },
+  { value: "fair", label: "Fair" },
+  { value: "poor", label: "Poor" },
 ];
 
-const CONDITIONS = ["New", "Like New", "Good", "Fair", "Poor"];
-
-const CANCELLATION_POLICIES = ["Flexible", "Moderate", "Strict"];
+const CANCELLATION_POLICIES = [
+  { value: "flexible", label: "Flexible" },
+  { value: "moderate", label: "Moderate" },
+  { value: "strict", label: "Strict" },
+];
 
 export default function EditListing() {
   const { listing } = useLoaderData<{ listing: Listing }>();
   const actionData = useActionData<{ error?: string }>();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
-  const [imageUrls, setImageUrls] = useState<string[]>(listing.images || []);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imageItems, setImageItems] = useState<Array<{ url: string; file?: File }>>(
+    (listing.images || []).map((url) => ({ url }))
+  );
+  const imageItemsRef = useRef(imageItems);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [categoriesError, setCategoriesError] = useState("");
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors },
-  } = useForm<ListingInput>({
-    resolver: zodResolver(listingSchema) as any,
+  } = useForm<z.input<typeof listingSchema>>({
+    resolver: zodResolver(listingSchema),
     defaultValues: {
       title: listing.title,
       description: listing.description,
-      category: (listing.category as any)?.id || listing.category,
+      category:
+        typeof listing.category === "string"
+          ? listing.category
+          : listing.category.id,
       subcategory: listing.subcategory || undefined,
       pricePerDay: listing.pricePerDay,
       pricePerWeek: listing.pricePerWeek || undefined,
@@ -173,53 +298,148 @@ export default function EditListing() {
   const deliveryOptions = watch("deliveryOptions");
 
   useEffect(() => {
-    setValue("images", imageUrls);
-  }, [imageUrls, setValue]);
+    let mounted = true;
+    const loadCategories = async () => {
+      try {
+        const data = await listingsApi.getCategories();
+        if (!mounted) return;
+        setCategories(
+          (data || []).map((category) => ({
+            id: category.id,
+            name: category.name,
+            slug: category.slug,
+          }))
+        );
+      } catch {
+        if (!mounted) return;
+        setCategories([]);
+        setCategoriesError("Unable to load categories. Please try again later.");
+      } finally {
+        if (mounted) setLoadingCategories(false);
+      }
+    };
+    loadCategories();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (categories.length === 0) return;
+    const currentCategory = getValues("category");
+    if (categories.some((category) => category.id === currentCategory)) return;
+    const match = categories.find(
+      (category) => category.name === currentCategory || category.slug === currentCategory
+    );
+    if (match) {
+      setValue("category", match.id);
+    }
+  }, [categories, getValues, setValue]);
+
+  useEffect(() => {
+    setValue(
+      "images",
+      imageItems.map((item) => item.url)
+    );
+  }, [imageItems, setValue]);
+
+  useEffect(() => {
+    imageItemsRef.current = imageItems;
+  }, [imageItems]);
+
+  useEffect(() => {
+    return () => {
+      imageItemsRef.current.forEach((item) => {
+        if (item.file) {
+          URL.revokeObjectURL(item.url);
+        }
+      });
+    };
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length + imageUrls.length > 10) {
-      alert("You can only upload up to 10 images");
+    const validFiles = files.filter(
+      (file) => file.type.startsWith("image/") && file.size <= MAX_IMAGE_FILE_SIZE
+    );
+    if (files.length + imageItems.length > 10) {
+      toast.warning("You can only upload up to 10 images");
+      return;
+    }
+    if (validFiles.length !== files.length) {
+      toast.warning("Only image files up to 10MB are allowed.");
       return;
     }
 
-    const newImageUrls = files.map((file) => URL.createObjectURL(file));
-    setImageUrls([...imageUrls, ...newImageUrls]);
-    setImageFiles([...imageFiles, ...files]);
+    const newItems = validFiles.map((file) => ({
+      url: URL.createObjectURL(file),
+      file,
+    }));
+    setImageItems((prev) => [...prev, ...newItems]);
   };
 
   const removeImage = (index: number) => {
-    const newImageUrls = imageUrls.filter((_, i) => i !== index);
-    const newImageFiles = imageFiles.filter((_, i) => i !== index);
-    setImageUrls(newImageUrls);
-    setImageFiles(newImageFiles);
+    setImageItems((prev) => {
+      const item = prev[index];
+      if (item?.file) {
+        URL.revokeObjectURL(item.url);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
-  const onSubmit = async (data: ListingInput) => {
-    const formData = new FormData();
-    Object.keys(data).forEach((key) => {
-      const value = data[key as keyof ListingInput];
-      if (value !== undefined && value !== null) {
-        if (typeof value === "object") {
-          formData.append(key, JSON.stringify(value));
-        } else {
-          formData.append(key, String(value));
-        }
-      }
-    });
-    formData.append("intent", "update");
+  const onSubmit = async (data: z.input<typeof listingSchema>) => {
+    try {
+      const parsed = listingSchema.parse(data) as ListingInput;
+      let finalImages = imageItems.map((item) => item.url);
+      const newFiles = imageItems
+        .filter((item) => item.file)
+        .map((item) => item.file) as File[];
 
-    const form = document.createElement("form");
-    form.method = "POST";
-    Array.from(formData.entries()).forEach(([key, value]) => {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = key;
-      input.value = value.toString();
-      form.appendChild(input);
-    });
-    document.body.appendChild(form);
-    form.submit();
+      if (newFiles.length > 0) {
+        const uploaded = await uploadApi.uploadImages(newFiles);
+        let uploadIndex = 0;
+        finalImages = imageItems.map((item) => {
+          if (item.file) {
+            const url = uploaded[uploadIndex]?.url;
+            uploadIndex += 1;
+            return url || item.url;
+          }
+          return item.url;
+        });
+      }
+
+      const formData = new FormData();
+      Object.keys(parsed).forEach((key) => {
+        const value = parsed[key as keyof ListingInput];
+        if (value !== undefined && value !== null) {
+          if (typeof value === "object") {
+            formData.append(
+              key,
+              JSON.stringify(key === "images" ? finalImages : value)
+            );
+          } else {
+            formData.append(key, String(value));
+          }
+        }
+      });
+      formData.append("intent", "update");
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      Array.from(formData.entries()).forEach(([key, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value.toString();
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error) {
+      console.error("Failed to update listing:", error);
+      toast.error("Failed to update listing. Please try again.");
+    }
   };
 
   const nextStep = () => {
@@ -233,6 +453,7 @@ export default function EditListing() {
   const handleDelete = () => {
     const formData = new FormData();
     formData.append("intent", "delete");
+    formData.append("deleteConfirmation", deleteConfirmation.trim());
 
     const form = document.createElement("form");
     form.method = "POST";
@@ -245,6 +466,14 @@ export default function EditListing() {
     });
     document.body.appendChild(form);
     form.submit();
+  };
+
+  const applyVoiceField = (field: string, value: unknown) => {
+    setValue(field as keyof z.input<typeof listingSchema>, value as never, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
   };
 
   return (
@@ -262,8 +491,11 @@ export default function EditListing() {
             </button>
             <h1 className="text-xl font-bold text-gray-900">Edit Listing</h1>
             <button
-              onClick={() => setShowDeleteModal(true)}
-              className="flex items-center gap-2 text-red-600 hover:text-red-700"
+              onClick={() => {
+                setDeleteConfirmation("");
+                setShowDeleteModal(true);
+              }}
+              className="flex items-center gap-2 text-destructive hover:text-destructive/80"
             >
               <Trash2 className="w-5 h-5" />
               <span>Delete</span>
@@ -274,17 +506,17 @@ export default function EditListing() {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Progress Indicator */}
-        <div className="mb-8">
+        <div className="mb-8" data-testid="step-indicator">
           <div className="flex items-center justify-between mb-2">
             {STEPS.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <div
                   className={`flex items-center justify-center w-10 h-10 rounded-full ${
                     currentStep > step.id
-                      ? "bg-green-500 text-white"
+                      ? "bg-success text-success-foreground"
                       : currentStep === step.id
-                        ? "bg-primary-600 text-white"
-                        : "bg-gray-200 text-gray-600"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {currentStep > step.id ? (
@@ -296,7 +528,7 @@ export default function EditListing() {
                 {index < STEPS.length - 1 && (
                   <div
                     className={`w-full h-1 mx-2 ${
-                      currentStep > step.id ? "bg-green-500" : "bg-gray-200"
+                      currentStep > step.id ? "bg-success" : "bg-muted"
                     }`}
                   />
                 )}
@@ -323,8 +555,16 @@ export default function EditListing() {
           </div>
         )}
 
+        <VoiceListingAssistant
+          categories={categories.map((category) => ({ id: category.id, name: category.name }))}
+          onSetField={applyVoiceField}
+          onNextStep={nextStep}
+          onPrevStep={prevStep}
+        />
+
         {/* Form */}
         <Form
+          method="post"
           onSubmit={handleSubmit(onSubmit)}
           className="bg-white rounded-lg shadow-md p-6"
         >
@@ -345,6 +585,7 @@ export default function EditListing() {
                 <input
                   type="text"
                   {...register("title")}
+                  maxLength={100}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="e.g., Professional DSLR Camera"
                 />
@@ -362,6 +603,7 @@ export default function EditListing() {
                 <textarea
                   {...register("description")}
                   rows={6}
+                  maxLength={2000}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Describe your item in detail..."
                 />
@@ -379,18 +621,26 @@ export default function EditListing() {
                   </label>
                   <select
                     {...register("category")}
+                    data-testid="category-select"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   >
-                    <option value="">Select category</option>
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
+                    <option value="">
+                      {loadingCategories ? "Loading categories..." : "Select category"}
+                    </option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
                       </option>
                     ))}
                   </select>
                   {errors.category && (
                     <p className="mt-1 text-sm text-red-600">
                       {errors.category.message}
+                    </p>
+                  )}
+                  {categoriesError && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {categoriesError}
                     </p>
                   )}
                 </div>
@@ -402,6 +652,7 @@ export default function EditListing() {
                   <input
                     type="text"
                     {...register("subcategory")}
+                    maxLength={80}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     placeholder="e.g., Cameras"
                   />
@@ -491,8 +742,8 @@ export default function EditListing() {
                   >
                     <option value="">Select condition</option>
                     {CONDITIONS.map((cond) => (
-                      <option key={cond} value={cond}>
-                        {cond}
+                      <option key={cond.value} value={cond.value}>
+                        {cond.label}
                       </option>
                     ))}
                   </select>
@@ -521,6 +772,7 @@ export default function EditListing() {
                 <input
                   type="text"
                   {...register("location.address")}
+                  maxLength={200}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
                 {errors.location?.address && (
@@ -538,6 +790,7 @@ export default function EditListing() {
                   <input
                     type="text"
                     {...register("location.city")}
+                    maxLength={80}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   {errors.location?.city && (
@@ -554,6 +807,7 @@ export default function EditListing() {
                   <input
                     type="text"
                     {...register("location.state")}
+                    maxLength={80}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   {errors.location?.state && (
@@ -572,6 +826,7 @@ export default function EditListing() {
                   <input
                     type="text"
                     {...register("location.country")}
+                    maxLength={80}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   {errors.location?.country && (
@@ -588,6 +843,7 @@ export default function EditListing() {
                   <input
                     type="text"
                     {...register("location.postalCode")}
+                    maxLength={20}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   {errors.location?.postalCode && (
@@ -687,7 +943,7 @@ export default function EditListing() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Delivery Radius (km)
+                      Delivery Radius (miles)
                     </label>
                     <input
                       type="number"
@@ -751,8 +1007,8 @@ export default function EditListing() {
                 >
                   <option value="">Select policy</option>
                   {CANCELLATION_POLICIES.map((policy) => (
-                    <option key={policy} value={policy}>
-                      {policy}
+                    <option key={policy.value} value={policy.value}>
+                      {policy.label}
                     </option>
                   ))}
                 </select>
@@ -770,6 +1026,7 @@ export default function EditListing() {
                 <textarea
                   {...register("rules")}
                   rows={4}
+                  maxLength={1000}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="List any rules or requirements..."
                 />
@@ -820,7 +1077,7 @@ export default function EditListing() {
                       Click to upload images
                     </span>
                     <span className="text-sm text-gray-500 mt-1">
-                      {imageUrls.length}/10 images uploaded
+                      {imageItems.length}/10 images uploaded
                     </span>
                   </label>
                 </div>
@@ -831,12 +1088,12 @@ export default function EditListing() {
                 )}
               </div>
 
-              {imageUrls.length > 0 && (
+              {imageItems.length > 0 && (
                 <div className="grid grid-cols-3 gap-4">
-                  {imageUrls.map((url, index) => (
+                  {imageItems.map((item, index) => (
                     <div key={index} className="relative group">
                       <img
-                        src={url}
+                        src={item.url}
                         alt={`Upload ${index + 1}`}
                         className="w-full h-32 object-cover rounded-lg"
                       />
@@ -889,33 +1146,50 @@ export default function EditListing() {
       </div>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              Delete Listing
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this listing? This action cannot
-              be undone.
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
+      <Dialog
+        open={showDeleteModal}
+        onClose={() => {
+          setDeleteConfirmation("");
+          setShowDeleteModal(false);
+        }}
+        title="Delete Listing"
+        description="Are you sure you want to delete this listing? This action cannot be undone."
+        size="md"
+      >
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Type DELETE to confirm
+          </label>
+          <input
+            type="text"
+            value={deleteConfirmation}
+            onChange={(event) => setDeleteConfirmation(event.target.value)}
+            maxLength={20}
+            className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
+            autoComplete="off"
+          />
         </div>
-      )}
+        <DialogFooter>
+          <button
+            onClick={() => {
+              setDeleteConfirmation("");
+              setShowDeleteModal(false);
+            }}
+            className="px-4 py-2 border border-border text-muted-foreground rounded-lg hover:bg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleteConfirmation.trim().toUpperCase() !== "DELETE"}
+            className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50"
+          >
+            Delete
+          </button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

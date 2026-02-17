@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { WsException } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
+import { AuthService } from '../services/auth.service';
 
 @Injectable()
 export class WsJwtAuthGuard implements CanActivate {
@@ -11,33 +12,57 @@ export class WsJwtAuthGuard implements CanActivate {
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
+    private authService: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     try {
       const client: Socket = context.switchToWs().getClient();
-      const token = this.extractToken(client);
+      const auth = await this.authenticateClient(client);
 
-      if (!token) {
-        throw new WsException('No token provided');
-      }
-
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
-      });
-
-      // Attach user to socket
       client.handshake.auth = {
         ...client.handshake.auth,
-        userId: payload.sub,
-        email: payload.email,
+        userId: auth.userId,
+        email: auth.email,
       };
+      client.data.userId = auth.userId;
 
       return true;
     } catch (error) {
       this.logger.error('WebSocket auth error:', error);
       throw new WsException('Unauthorized');
     }
+  }
+
+  async authenticateClient(client: Socket): Promise<{ userId: string; email?: string }> {
+    const token = this.extractToken(client);
+
+    if (!token) {
+      throw new WsException('No token provided');
+    }
+
+    const secret =
+      this.configService.get<string>('jwt.secret') || this.configService.get<string>('JWT_SECRET');
+
+    if (!secret) {
+      throw new WsException('Auth configuration missing');
+    }
+
+    const payload = await this.jwtService.verifyAsync<{ sub: string; email?: string }>(token, {
+      secret,
+    });
+
+    const user = await this.authService.validateUser(payload.sub);
+    if (!user) {
+      throw new WsException('User not found or inactive');
+    }
+
+    const hasActiveSession = await this.authService.validateSessionToken(payload.sub, token);
+    if (!hasActiveSession) {
+      throw new WsException('Session expired or invalidated');
+    }
+
+    return { userId: payload.sub, email: payload.email };
   }
 
   private extractToken(client: Socket): string | null {

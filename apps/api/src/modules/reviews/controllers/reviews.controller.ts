@@ -12,7 +12,8 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
-import { ReviewsService, CreateReviewDto, UpdateReviewDto } from '../services/reviews.service';
+import { ReviewsService } from '../services/reviews.service';
+import { CreateReviewDto, UpdateReviewDto } from '../dto/review.dto';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 
@@ -80,7 +81,9 @@ export class ReviewsController {
   }
 
   @Get('user/:userId')
-  @ApiOperation({ summary: 'Get user reviews' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user reviews (private)' })
   @ApiQuery({ name: 'type', required: true, enum: ['received', 'given'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -92,6 +95,19 @@ export class ReviewsController {
     @Query('limit') limit?: number,
   ) {
     return this.reviewsService.getUserReviews(userId, type, page, limit);
+  }
+
+  @Get('user/:userId/public')
+  @ApiOperation({ summary: 'Get public user reviews (received, published only)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Public reviews retrieved successfully' })
+  async getPublicUserReviews(
+    @Param('userId') userId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.reviewsService.getPublicUserReviews(userId, page, limit);
   }
 
   @Get('booking/:bookingId')

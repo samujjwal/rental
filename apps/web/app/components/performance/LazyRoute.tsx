@@ -15,7 +15,6 @@ export interface LazyRouteOptions {
  * - Optional preload on hover/focus
  * - Error boundary support
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createLazyRoute<T extends ComponentType<any>>(
     importFn: () => Promise<{ default: T }>,
     options: LazyRouteOptions = {}
@@ -49,7 +48,7 @@ export function createLazyRoute<T extends ComponentType<any>>(
 /**
  * Preload a route on mouse enter for faster navigation
  */
-export function usePreloadOnHover(preloadFn: () => Promise<any>) {
+export function usePreloadOnHover(preloadFn: () => Promise<unknown>) {
     const preloaded = React.useRef(false);
 
     const onMouseEnter = React.useCallback(() => {
@@ -67,7 +66,7 @@ export function usePreloadOnHover(preloadFn: () => Promise<any>) {
  */
 export interface PreloadLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
     to: string;
-    preload?: () => Promise<any>;
+    preload?: () => Promise<unknown>;
     children: React.ReactNode;
 }
 

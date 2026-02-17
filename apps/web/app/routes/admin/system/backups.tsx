@@ -1,4 +1,4 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
 import { useState } from "react";
 import {
@@ -11,10 +11,10 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
-  Trash2,
 } from "lucide-react";
 import { adminApi, type SystemBackup } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -23,47 +23,93 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+const safeDateTimeLabel = (value: unknown): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString();
+};
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeStatus = (value: unknown): string =>
+  String(value || "").trim().toLowerCase();
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const backupsRes = await adminApi.getBackups();
     return {
       backups: backupsRes.backups || [],
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       backups: [],
-      error: error?.message || "Failed to load backups",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load backups",
     };
   }
 }
 
-export async function clientAction({ request }: { request: Request }) {
+export async function clientAction({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const intent = String(formData.get("intent") || "");
+  const allowedIntents = new Set(["create", "restore"]);
+  if (!allowedIntents.has(intent)) {
+    return { success: false, error: "Unknown action" };
+  }
+  const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   if (intent === "create") {
-    const type = formData.get("type") as "full" | "incremental";
+    const type = String(formData.get("type") ?? "");
+    if (type !== "full" && type !== "incremental") {
+      return { success: false, error: "Invalid backup type" };
+    }
     try {
       await adminApi.createBackup(type);
       return { success: true, message: `${type} backup started successfully` };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to create backup",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to create backup",
       };
     }
   }
 
   if (intent === "restore") {
-    const backupId = formData.get("backupId") as string;
+    const backupId = String(formData.get("backupId") ?? "").trim();
+    const confirmed = String(formData.get("confirmed") || "") === "true";
+    if (!UUID_PATTERN.test(backupId)) {
+      return { success: false, error: "Backup ID is required" };
+    }
+    if (!confirmed) {
+      return { success: false, error: "Restore confirmation is required." };
+    }
     try {
       await adminApi.restoreBackup(backupId);
       return { success: true, message: "Restore initiated successfully" };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error?.response?.data?.message || "Failed to restore backup",
+        error:
+          (error &&
+            typeof error === "object" &&
+            "response" in error &&
+            (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message) ||
+          "Failed to restore backup",
       };
     }
   }
@@ -72,11 +118,15 @@ export async function clientAction({ request }: { request: Request }) {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
+  const safeBytes = Math.max(0, safeNumber(bytes));
+  if (safeBytes === 0) return "0 Bytes";
   const k = 1024;
   const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  const i = Math.min(
+    sizes.length - 1,
+    Math.floor(Math.log(safeBytes) / Math.log(k))
+  );
+  return parseFloat((safeBytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
 export default function BackupsPage() {
@@ -87,9 +137,13 @@ export default function BackupsPage() {
 
   const isSubmitting = navigation.state === "submitting";
   const formIntent = navigation.formData?.get("intent");
+  const actionMessage =
+    typeof actionData?.message === "string" ? actionData.message : null;
+  const actionError =
+    typeof actionData?.error === "string" ? actionData.error : null;
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
+  const getStatusIcon = (status: unknown) => {
+    switch (safeStatus(status)) {
       case "completed":
         return <CheckCircle className="w-5 h-5 text-green-500" />;
       case "in_progress":
@@ -103,8 +157,8 @@ export default function BackupsPage() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
+  const getStatusColor = (status: unknown) => {
+    switch (safeStatus(status)) {
       case "completed":
         return "bg-green-100 text-green-800";
       case "in_progress":
@@ -148,16 +202,16 @@ export default function BackupsPage() {
       </div>
 
       {/* Action Messages */}
-      {actionData?.success && (
+      {actionData?.success && actionMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
           <CheckCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.message}
+          {actionMessage}
         </div>
       )}
-      {actionData?.error && (
+      {actionError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <XCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.error}
+          {actionError}
         </div>
       )}
 
@@ -168,7 +222,7 @@ export default function BackupsPage() {
           <Form method="post">
             <input type="hidden" name="intent" value="create" />
             <input type="hidden" name="type" value="full" />
-            <Button
+            <UnifiedButton
               type="submit"
               disabled={isSubmitting && formIntent === "create"}
               className="w-full"
@@ -188,7 +242,7 @@ export default function BackupsPage() {
           <Form method="post">
             <input type="hidden" name="intent" value="create" />
             <input type="hidden" name="type" value="incremental" />
-            <Button
+            <UnifiedButton
               type="submit"
               variant="outline"
               disabled={isSubmitting && formIntent === "create"}
@@ -256,19 +310,19 @@ export default function BackupsPage() {
                             backup.status
                           )}`}
                         >
-                          {backup.status.replace("_", " ").toUpperCase()}
+                          {safeStatus(backup.status).replace(/_/g, " ").toUpperCase()}
                         </span>
                       </div>
                       <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
                         <span>
-                          Created: {new Date(backup.createdAt).toLocaleString()}
+                          Created: {safeDateTimeLabel(backup.createdAt)}
                         </span>
                         {backup.completedAt && (
                           <span>
-                            Completed: {new Date(backup.completedAt).toLocaleString()}
+                            Completed: {safeDateTimeLabel(backup.completedAt)}
                           </span>
                         )}
-                        <span>Size: {formatBytes(backup.size)}</span>
+                        <span>Size: {formatBytes(safeNumber(backup.size))}</span>
                       </div>
                     </div>
                   </div>
@@ -291,9 +345,10 @@ export default function BackupsPage() {
                           <Form method="post">
                             <input type="hidden" name="intent" value="restore" />
                             <input type="hidden" name="backupId" value={backup.id} />
-                            <Button
+                            <input type="hidden" name="confirmed" value="true" />
+                            <UnifiedButton
                               type="submit"
-                              size="small"
+                              size="sm"
                               variant="destructive"
                               disabled={isSubmitting}
                             >
@@ -304,18 +359,18 @@ export default function BackupsPage() {
                               )}
                             </UnifiedButton>
                           </Form>
-                          <Button
+                          <UnifiedButton
                             variant="outline"
-                            size="small"
+                            size="sm"
                             onClick={() => setShowConfirmRestore(null)}
                           >
                             Cancel
                           </UnifiedButton>
                         </div>
                       ) : (
-                        <Button
+                        <UnifiedButton
                           variant="outline"
-                          size="small"
+                          size="sm"
                           onClick={() => setShowConfirmRestore(backup.id)}
                         >
                           <Upload className="w-4 h-4 mr-1" />
@@ -333,3 +388,5 @@ export default function BackupsPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

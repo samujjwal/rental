@@ -14,6 +14,10 @@ import {
   type ColumnSizingState,
   type VisibilityState,
   type RowSelectionState,
+  type CellContext,
+  type Cell,
+  type Column,
+  type Row,
 } from "@tanstack/react-table";
 import {
   Box,
@@ -34,7 +38,6 @@ import {
   Paper,
   IconButton,
   Tooltip,
-  Chip,
   LinearProgress,
   Menu,
   MenuList,
@@ -43,12 +46,7 @@ import {
   ListItemText,
   Divider,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Badge,
-  Alert,
   Collapse,
 } from "@mui/material";
 import {
@@ -58,14 +56,10 @@ import {
   VisibilityOff as VisibilityOffIcon,
   FilterList as FilterListIcon,
   Clear as ClearIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
   OpenInNew as ViewIcon,
   MoreVert as MoreVertIcon,
   Close as CloseIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Settings as SettingsIcon,
   Refresh as RefreshIcon,
 } from "@mui/icons-material";
 
@@ -98,7 +92,7 @@ interface BulkAction {
   confirmation?: string;
   handler: (
     selectedIds: string[],
-    selectedRecords: any[]
+    selectedRecords: unknown[]
   ) => Promise<void> | void;
 }
 
@@ -107,27 +101,33 @@ interface RowAction {
   label: string;
   icon?: React.ReactNode;
   color?: "primary" | "secondary" | "success" | "error" | "warning" | "info";
-  handler: (record: any) => Promise<void> | void;
+  handler: (record: unknown) => Promise<void> | void;
 }
 
-interface EditableCellProps {
-  value: any;
-  row: any;
-  column: any;
-  onUpdate: (value: any) => void;
+type ColumnMetaOptions = {
+  options?: Array<{ value: string | number; label: string }>;
+  type?: string;
+};
+
+interface EditableCellProps<T extends Record<string, unknown>> {
+  value: unknown;
+  row: Row<T>;
+  column: Column<T, unknown>;
+  onUpdate: (value: unknown) => void;
   type: string;
 }
 
 // Editable Cell Component
-const EditableCell: React.FC<EditableCellProps> = ({
+function EditableCell<T extends Record<string, unknown>>({
   value,
   row,
   column,
   onUpdate,
   type,
-}) => {
+}: EditableCellProps<T>) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
+  const columnMeta = column.columnDef.meta as ColumnMetaOptions | undefined;
 
   const handleSave = () => {
     onUpdate(editValue);
@@ -169,7 +169,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
             sx={{ minWidth: 120 }}
             autoFocus
           >
-            {column.columnDef.meta?.options?.map((option: any) => (
+            {columnMeta?.options?.map((option) => (
               <MenuItem key={option.value} value={option.value}>
                 {option.label}
               </MenuItem>
@@ -198,18 +198,24 @@ const EditableCell: React.FC<EditableCellProps> = ({
     );
   }
 
+  const cellRenderer = column.columnDef?.cell;
+  const cellContext = {
+    getValue: () => value,
+    row,
+    column,
+  } as CellContext<T, unknown>;
+
   return (
     <Box
       sx={{ cursor: "pointer", "&:hover": { backgroundColor: "action.hover" } }}
       onClick={() => setIsEditing(true)}
     >
-      {column.columnDef.cell?.({ getValue: () => value, row, column }) ||
-        String(value || "")}
+      {cellRenderer ? flexRender(cellRenderer, cellContext) : String(value || "")}
     </Box>
   );
-};
+}
 
-interface ModernTanStackTableProps<T extends Record<string, any>> {
+interface ModernTanStackTableProps<T extends Record<string, unknown>> {
   data: T[];
   columns: ColumnDef<T>[];
   loading?: boolean;
@@ -243,7 +249,7 @@ interface ModernTanStackTableProps<T extends Record<string, any>> {
   onRowEdit?: (
     rowId: string,
     field: string,
-    value: any
+    value: unknown
   ) => Promise<void> | void;
   onRowView?: (record: T) => void;
   onRowDelete?: (record: T) => Promise<void> | void;
@@ -265,7 +271,7 @@ interface ModernTanStackTableProps<T extends Record<string, any>> {
   headerActions?: React.ReactNode;
 }
 
-export function ModernTanStackTable<T extends Record<string, any>>({
+export function ModernTanStackTable<T extends Record<string, unknown>>({
   data,
   columns,
   loading = false,
@@ -321,9 +327,6 @@ export function ModernTanStackTable<T extends Record<string, any>>({
   // UI State
   const [columnVisibilityAnchorEl, setColumnVisibilityAnchorEl] =
     useState<null | HTMLElement>(null);
-  const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(
-    null
-  );
   const [rowActionsAnchorEl, setRowActionsAnchorEl] =
     useState<null | HTMLElement>(null);
   const [selectedRow, setSelectedRow] = useState<T | null>(null);
@@ -373,7 +376,7 @@ export function ModernTanStackTable<T extends Record<string, any>>({
                 <IconButton
                   size="small"
                   onClick={() => action.handler(row.original)}
-                  color={action.color as any}
+                  color={action.color}
                 >
                   {action.icon}
                 </IconButton>
@@ -402,22 +405,25 @@ export function ModernTanStackTable<T extends Record<string, any>>({
     if (enableInlineEditing) {
       return cols.map((col) => ({
         ...col,
-        cell: ({ getValue, row, column }: any) => {
+        cell: ({ getValue, row, column }: CellContext<T, unknown>) => {
           const isEditing =
             editingCell?.rowId === row.id && editingCell?.field === column.id;
 
           if (isEditing && onRowEdit) {
             return (
-              <EditableCell
-                value={getValue()}
-                row={row}
-                column={column}
-                onUpdate={(newValue) => {
-                  onRowEdit(row.id, column.id, newValue);
-                  setEditingCell(null);
-                }}
-                type={column.columnDef.meta?.type || "text"}
-              />
+                <EditableCell
+                  value={getValue()}
+                  row={row}
+                  column={column}
+                  onUpdate={(newValue) => {
+                    onRowEdit(row.id, column.id, newValue);
+                    setEditingCell(null);
+                  }}
+                type={
+                  (column.columnDef.meta as ColumnMetaOptions | undefined)?.type ||
+                  "text"
+                }
+                />
             );
           }
 
@@ -427,10 +433,10 @@ export function ModernTanStackTable<T extends Record<string, any>>({
               getValue,
               row,
               column,
-              cell: column as any,
+              cell: column as unknown as Cell<T, unknown>,
               renderValue: getValue,
-              table: table as any,
-            });
+              table,
+            } as CellContext<T, unknown>);
           }
 
           return (
@@ -677,7 +683,7 @@ export function ModernTanStackTable<T extends Record<string, any>>({
           {filterFields.length > 0 && (
             <Button
               variant={showFilters ? "contained" : "outlined"}
-              leftIcon={<FilterListIcon />}
+              startIcon={<FilterListIcon />}
               onClick={() => setShowFilters(!showFilters)}
             >
               Filters
@@ -697,7 +703,7 @@ export function ModernTanStackTable<T extends Record<string, any>>({
           {enableColumnVisibility && (
             <Button
               variant="outlined"
-              leftIcon={<VisibilityIcon />}
+              startIcon={<VisibilityIcon />}
               onClick={(e) => setColumnVisibilityAnchorEl(e.currentTarget)}
             >
               Columns
@@ -725,13 +731,13 @@ export function ModernTanStackTable<T extends Record<string, any>>({
             <Button
               key={action.id}
               variant={action.variant || "outlined"}
-              color={action.color as any}
+              color={action.color}
               onClick={() => handleBulkAction(action)}
               disabled={
                 action.requiresSelection &&
                 Object.keys(rowSelection).length === 0
               }
-              leftIcon={action.icon}
+              startIcon={action.icon}
             >
               {action.label}
             </Button>
@@ -826,7 +832,7 @@ export function ModernTanStackTable<T extends Record<string, any>>({
               <Box sx={{ display: "flex", alignItems: "center" }}>
                 <Button
                   variant="outlined"
-                  leftIcon={<ClearIcon />}
+                  startIcon={<ClearIcon />}
                   onClick={() => handleColumnFiltersChange([])}
                   size="small"
                 >

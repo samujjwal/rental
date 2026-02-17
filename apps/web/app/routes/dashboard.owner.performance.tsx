@@ -1,5 +1,6 @@
-import type { MetaFunction } from "react-router";
-import { useLoaderData, Link } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
+import type { ComponentType } from "react";
+import { useLoaderData, Link, useSearchParams, redirect } from "react-router";
 import { useState } from "react";
 import {
   TrendingUp,
@@ -8,24 +9,23 @@ import {
   Calendar,
   DollarSign,
   Star,
-  Users,
   Eye,
-  Package,
   Clock,
   ArrowUpRight,
   ArrowDownRight,
   Info,
 } from "lucide-react";
-import { analyticsApi, type PerformanceMetrics } from "~/lib/api/analytics";
+import { analyticsApi } from "~/lib/api/analytics";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
+  RouteErrorBoundary,
 } from "~/components/ui";
-import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -34,14 +34,74 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const ALLOWED_PERIODS = new Set(["7days", "30days", "90days", "year"]);
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+  if (user.role !== "owner" && user.role !== "admin") {
+    return redirect("/dashboard");
+  }
+
+  const url = new URL(request.url);
+  const rawPeriod = url.searchParams.get("period") || "30days";
+  const period = ALLOWED_PERIODS.has(rawPeriod) ? rawPeriod : "30days";
   try {
-    const metrics = await analyticsApi.getPerformanceMetrics();
-    return { metrics, error: null };
-  } catch (error: any) {
+    const rawMetrics = await analyticsApi.getPerformanceMetrics(period);
+    const metrics = {
+      overview: {
+        totalViews: safeNumber(rawMetrics?.overview?.totalViews),
+        viewsChange: safeNumber(rawMetrics?.overview?.viewsChange),
+        totalBookings: safeNumber(rawMetrics?.overview?.totalBookings),
+        bookingsChange: safeNumber(rawMetrics?.overview?.bookingsChange),
+        conversionRate: safeNumber(rawMetrics?.overview?.conversionRate),
+        conversionChange: safeNumber(rawMetrics?.overview?.conversionChange),
+        averageRating: safeNumber(rawMetrics?.overview?.averageRating),
+        ratingChange: safeNumber(rawMetrics?.overview?.ratingChange),
+      },
+      earnings: {
+        total: safeNumber(rawMetrics?.earnings?.total),
+        thisMonth: safeNumber(rawMetrics?.earnings?.thisMonth),
+        lastMonth: safeNumber(rawMetrics?.earnings?.lastMonth),
+        change: safeNumber(rawMetrics?.earnings?.change),
+      },
+      topListings: Array.isArray(rawMetrics?.topListings)
+        ? rawMetrics.topListings.map((listing) => ({
+            ...listing,
+            views: safeNumber(listing.views),
+            bookings: safeNumber(listing.bookings),
+            revenue: safeNumber(listing.revenue),
+            rating: safeNumber(listing.rating),
+          }))
+        : [],
+      monthlyData: Array.isArray(rawMetrics?.monthlyData)
+        ? rawMetrics.monthlyData.map((item) => ({
+            ...item,
+            revenue: safeNumber(item.revenue),
+          }))
+        : [],
+      responseMetrics: {
+        averageResponseTime: safeNumber(rawMetrics?.responseMetrics?.averageResponseTime),
+        responseRate: safeNumber(rawMetrics?.responseMetrics?.responseRate),
+        acceptanceRate: safeNumber(rawMetrics?.responseMetrics?.acceptanceRate),
+      },
+    };
+    return { metrics, error: null, period };
+  } catch (error: unknown) {
     return {
       metrics: null,
-      error: error?.message || "Failed to load performance data",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load performance data",
+      period,
     };
   }
 }
@@ -56,15 +116,17 @@ function MetricCard({
   title: string;
   value: number;
   change: number;
-  icon: any;
+  icon: ComponentType<{ className?: string }>;
   format?: "number" | "currency" | "percent" | "rating";
 }) {
-  const isPositive = change >= 0;
+  const safeValue = safeNumber(value);
+  const safeChange = safeNumber(change);
+  const isPositive = safeChange >= 0;
   const formattedValue = {
-    number: value.toLocaleString(),
-    currency: `$${value.toLocaleString()}`,
-    percent: `${value.toFixed(2)}%`,
-    rating: value.toFixed(1),
+    number: safeValue.toLocaleString(),
+    currency: `$${safeValue.toLocaleString()}`,
+    percent: `${safeValue.toFixed(2)}%`,
+    rating: safeValue.toFixed(1),
   }[format];
 
   return (
@@ -76,14 +138,14 @@ function MetricCard({
           </div>
           <div className={cn(
             "flex items-center gap-1 text-sm font-medium",
-            isPositive ? "text-green-600" : "text-red-600"
+            isPositive ? "text-success" : "text-destructive"
           )}>
             {isPositive ? (
               <ArrowUpRight className="w-4 h-4" />
             ) : (
               <ArrowDownRight className="w-4 h-4" />
             )}
-            {Math.abs(change).toFixed(1)}%
+            {Math.abs(safeChange).toFixed(1)}%
           </div>
         </div>
         <p className="text-sm text-muted-foreground mb-1">{title}</p>
@@ -94,8 +156,9 @@ function MetricCard({
 }
 
 export default function OwnerPerformancePage() {
-  const { metrics, error } = useLoaderData<typeof clientLoader>();
-  const [selectedPeriod, setSelectedPeriod] = useState("30days");
+  const { metrics, error, period } = useLoaderData<typeof clientLoader>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedPeriod, setSelectedPeriod] = useState(period || "30days");
 
   if (error || !metrics) {
     return (
@@ -109,7 +172,8 @@ export default function OwnerPerformancePage() {
     );
   }
 
-  const maxRevenue = Math.max(...metrics.monthlyData.map(d => d.revenue));
+  const maxRevenue = Math.max(...metrics.monthlyData.map(d => d.revenue), 1);
+  const earningsChange = safeNumber(metrics.earnings.change);
 
   return (
     <div className="min-h-screen bg-background">
@@ -125,7 +189,16 @@ export default function OwnerPerformancePage() {
             </div>
             <select
               value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!ALLOWED_PERIODS.has(value)) {
+                  return;
+                }
+                setSelectedPeriod(value);
+                const params = new URLSearchParams(searchParams);
+                params.set("period", value);
+                setSearchParams(params);
+              }}
               className="px-3 py-2 border border-input rounded-lg bg-background text-sm"
             >
               <option value="7days">Last 7 Days</option>
@@ -186,10 +259,17 @@ export default function OwnerPerformancePage() {
                     <div key={data.month} className="flex-1 flex flex-col items-center gap-2">
                       <div
                         className="w-full bg-primary/80 hover:bg-primary rounded-t transition-colors"
-                        style={{ height: `${(data.revenue / maxRevenue) * 200}px` }}
+                        style={{
+                          height: `${Math.min(
+                            Math.max((safeNumber(data.revenue) / maxRevenue) * 200, 0),
+                            200
+                          )}px`,
+                        }}
                       />
                       <span className="text-xs text-muted-foreground">{data.month}</span>
-                      <span className="text-xs font-medium">${(data.revenue / 1000).toFixed(1)}k</span>
+                      <span className="text-xs font-medium">
+                        ${(safeNumber(data.revenue) / 1000).toFixed(1)}k
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -265,7 +345,7 @@ export default function OwnerPerformancePage() {
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b">
                   <span className="text-muted-foreground">This Month</span>
-                  <span className="font-semibold text-green-600">
+                  <span className="font-semibold text-success">
                     ${metrics.earnings.thisMonth.toLocaleString()}
                   </span>
                 </div>
@@ -277,15 +357,15 @@ export default function OwnerPerformancePage() {
                 </div>
                 <div className={cn(
                   "flex items-center justify-center gap-2 p-3 rounded-lg",
-                  metrics.earnings.change >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                  earningsChange >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
                 )}>
-                  {metrics.earnings.change >= 0 ? (
+                  {earningsChange >= 0 ? (
                     <TrendingUp className="w-4 h-4" />
                   ) : (
                     <TrendingDown className="w-4 h-4" />
                   )}
                   <span className="text-sm font-medium">
-                    {Math.abs(metrics.earnings.change).toFixed(1)}% vs last month
+                    {Math.abs(earningsChange).toFixed(1)}% vs last month
                   </span>
                 </div>
               </CardContent>
@@ -303,36 +383,62 @@ export default function OwnerPerformancePage() {
                 <div>
                   <div className="flex justify-between mb-1">
                     <span className="text-sm text-muted-foreground">Response Time</span>
-                    <span className="text-sm font-medium">{metrics.responseMetrics.averageResponseTime} hrs</span>
+                    <span className="text-sm font-medium">
+                      {safeNumber(metrics.responseMetrics.averageResponseTime)} hrs
+                    </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
-                      className="bg-green-500 h-2 rounded-full"
-                      style={{ width: `${Math.min((24 - metrics.responseMetrics.averageResponseTime) / 24 * 100, 100)}%` }}
+                      className="bg-success h-2 rounded-full"
+                      style={{
+                        width: `${Math.min(
+                          Math.max(
+                            ((24 - safeNumber(metrics.responseMetrics.averageResponseTime)) /
+                              24) *
+                              100,
+                            0
+                          ),
+                          100
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between mb-1">
                     <span className="text-sm text-muted-foreground">Response Rate</span>
-                    <span className="text-sm font-medium">{metrics.responseMetrics.responseRate}%</span>
+                    <span className="text-sm font-medium">
+                      {safeNumber(metrics.responseMetrics.responseRate)}%
+                    </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
-                      className="bg-blue-500 h-2 rounded-full"
-                      style={{ width: `${metrics.responseMetrics.responseRate}%` }}
+                      className="bg-info h-2 rounded-full"
+                      style={{
+                        width: `${Math.min(
+                          Math.max(safeNumber(metrics.responseMetrics.responseRate), 0),
+                          100
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between mb-1">
                     <span className="text-sm text-muted-foreground">Acceptance Rate</span>
-                    <span className="text-sm font-medium">{metrics.responseMetrics.acceptanceRate}%</span>
+                    <span className="text-sm font-medium">
+                      {safeNumber(metrics.responseMetrics.acceptanceRate)}%
+                    </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className="bg-primary h-2 rounded-full"
-                      style={{ width: `${metrics.responseMetrics.acceptanceRate}%` }}
+                      style={{
+                        width: `${Math.min(
+                          Math.max(safeNumber(metrics.responseMetrics.acceptanceRate), 0),
+                          100
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
@@ -359,3 +465,5 @@ export default function OwnerPerformancePage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

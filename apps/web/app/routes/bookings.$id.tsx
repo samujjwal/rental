@@ -3,14 +3,12 @@ import type {
   LoaderFunctionArgs,
   ActionFunctionArgs,
 } from "react-router";
+import { RouteErrorBoundary } from "~/components/ui";
 import { useLoaderData, useNavigate, useActionData, Form } from "react-router";
-import { useState } from "react";
 import {
   ArrowLeft,
   Calendar,
   MapPin,
-  DollarSign,
-  User,
   Package,
   Clock,
   CheckCircle,
@@ -24,24 +22,78 @@ import {
 } from "lucide-react";
 import { bookingsApi } from "~/lib/api/bookings";
 import { reviewsApi } from "~/lib/api/reviews";
+import { BookingStatus } from "~/lib/shared-types";
 import { redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Booking } from "~/types/booking";
 import { format } from "date-fns";
 import { useAuthStore } from "~/lib/store/auth";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { getUser } from "~/utils/auth";
+import { SuccessCelebration } from "~/components/animations/SuccessCelebration";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Booking Details | GharBatai Rentals" }];
 };
 
-export async function clientLoader({ params }: LoaderFunctionArgs) {
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string | undefined): value is string =>
+  Boolean(value && UUID_PATTERN.test(value));
+const MAX_BOOKING_REASON_LENGTH = 1000;
+const MAX_REVIEW_COMMENT_LENGTH = 1000;
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeDateLabel = (value: unknown, pattern: string): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : format(date, pattern);
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+const normalizeStatus = (status: unknown): string => {
+  const raw = typeof status === "string" ? status : "";
+  const upper = raw.toUpperCase();
+  if (upper === BookingStatus.PENDING_OWNER_APPROVAL) return "pending_owner_approval";
+  if (upper === BookingStatus.PENDING_PAYMENT) return "pending_payment";
+  if (upper === BookingStatus.IN_PROGRESS) return "active";
+  if (upper === BookingStatus.AWAITING_RETURN_INSPECTION) return "return_requested";
+  if (upper === BookingStatus.CONFIRMED) return "confirmed";
+  if (upper === BookingStatus.COMPLETED) return "completed";
+  if (upper === BookingStatus.SETTLED) return "settled";
+  if (upper === BookingStatus.CANCELLED) return "cancelled";
+  if (upper === BookingStatus.DISPUTED) return "disputed";
+  if (upper === BookingStatus.REFUNDED) return "refunded";
+  if (upper === BookingStatus.PAYMENT_FAILED) return "payment_failed";
+  if (upper === BookingStatus.PENDING) return "pending";
+  return raw.toLowerCase();
+};
+
+const getInitials = (firstName?: string, lastName?: string | null) => {
+  const first = firstName?.[0] || "";
+  const last = lastName?.[0] || "";
+  return (first + last).toUpperCase() || "U";
+};
+
+export async function clientLoader({ params, request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    throw redirect("/auth/login");
+  }
+
   const bookingId = params.id;
-  if (!bookingId) {
+  if (!isUuid(bookingId)) {
     throw redirect("/bookings");
   }
 
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
+    const isParticipant =
+      booking.ownerId === user.id || booking.renterId === user.id || user.role === "admin";
+    if (!isParticipant) {
+      throw redirect("/bookings");
+    }
     return { booking };
   } catch (error) {
     console.error("Failed to load booking:", error);
@@ -50,35 +102,122 @@ export async function clientLoader({ params }: LoaderFunctionArgs) {
 }
 
 export async function clientAction({ request, params }: ActionFunctionArgs) {
+  const currentUser = await getUser(request);
+  if (!currentUser) {
+    return redirect("/auth/login");
+  }
+
   const bookingId = params.id;
-  if (!bookingId) {
+  if (!isUuid(bookingId)) {
     return { error: "Booking ID is required" };
   }
 
   const formData = await request.formData();
-  const intent = formData.get("intent") as string;
+  const intent = String(formData.get("intent") || "");
+  const allowedIntents = new Set([
+    "confirm",
+    "reject",
+    "cancel",
+    "start",
+    "request_return",
+    "complete",
+    "review",
+  ]);
+  if (!allowedIntents.has(intent)) {
+    return { error: "Invalid action" };
+  }
 
   try {
+    const booking = await bookingsApi.getBookingById(bookingId);
+    const status = normalizeStatus(booking.status);
+    const isOwner = booking.ownerId === currentUser.id;
+    const isRenter = booking.renterId === currentUser.id;
+    const isAdmin = currentUser.role === "admin";
+
+    if (!isOwner && !isRenter && !isAdmin) {
+      return { error: "You are not authorized to modify this booking." };
+    }
+
     switch (intent) {
       case "confirm":
-        await bookingsApi.confirmBooking(bookingId);
+        if (!(isOwner || isAdmin) || status !== "pending_owner_approval") {
+          return { error: "Booking cannot be confirmed in its current state." };
+        }
+        await bookingsApi.approveBooking(bookingId);
         return { success: "Booking confirmed successfully" };
+      case "reject":
+        {
+          if (!(isOwner || isAdmin) || status !== "pending_owner_approval") {
+            return { error: "Booking cannot be rejected in its current state." };
+          }
+          const reason = String(formData.get("reason") || "")
+            .trim()
+            .slice(0, MAX_BOOKING_REASON_LENGTH);
+          if (!reason) {
+            return { error: "Rejection reason is required" };
+          }
+          await bookingsApi.rejectBooking(bookingId, reason);
+          return { success: "Booking declined successfully" };
+        }
       case "cancel":
         {
-          const reason = formData.get("reason") as string;
+          if (
+            !(isOwner || isRenter || isAdmin) ||
+            !["confirmed", "pending_owner_approval"].includes(status)
+          ) {
+            return { error: "Booking cannot be cancelled in its current state." };
+          }
+          const reason = String(formData.get("reason") || "")
+            .trim()
+            .slice(0, MAX_BOOKING_REASON_LENGTH);
+          if (!reason) {
+            return { error: "Cancellation reason is required" };
+          }
           await bookingsApi.cancelBooking(bookingId, reason);
           return redirect("/bookings");
         }
+      case "start":
+        if (!(isOwner || isAdmin) || status !== "confirmed") {
+          return { error: "Booking cannot be started in its current state." };
+        }
+        await bookingsApi.startBooking(bookingId);
+        return { success: "Booking started" };
+      case "request_return":
+        if (!(isRenter || isAdmin) || status !== "active") {
+          return { error: "Return cannot be requested in current booking state." };
+        }
+        await bookingsApi.requestReturn(bookingId);
+        return { success: "Return requested" };
       case "complete":
-        await bookingsApi.completeBooking(bookingId);
+        if (!(isOwner || isAdmin) || status !== "return_requested") {
+          return { error: "Booking cannot be completed in its current state." };
+        }
+        await bookingsApi.approveReturn(bookingId);
         return { success: "Booking marked as complete" };
       case "review":
         {
-          const rating = parseInt(formData.get("rating") as string);
-          const comment = formData.get("comment") as string;
+          if (!["completed", "settled"].includes(status)) {
+            return { error: "Reviews can only be submitted after completion." };
+          }
+          if (booking.review) {
+            return { error: "A review has already been submitted for this booking." };
+          }
+          const overallRating = Number(formData.get("rating"));
+          const comment = String(formData.get("comment") || "")
+            .trim()
+            .slice(0, MAX_REVIEW_COMMENT_LENGTH);
+          if (!Number.isFinite(overallRating) || overallRating < 1 || overallRating > 5) {
+            return { error: "Rating must be between 1 and 5" };
+          }
+          if (!comment) {
+            return { error: "Review comment is required" };
+          }
+          const reviewType: "OWNER_TO_RENTER" | "RENTER_TO_OWNER" =
+            isOwner ? "OWNER_TO_RENTER" : "RENTER_TO_OWNER";
           await reviewsApi.createReview({
             bookingId,
-            rating,
+            reviewType,
+            overallRating,
             comment,
           });
           return { success: "Review submitted successfully" };
@@ -86,18 +225,32 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
       default:
         return { error: "Invalid action" };
     }
-  } catch (error: any) {
-    return { error: error.response?.data?.message || "Action failed" };
+  } catch (error: unknown) {
+    return {
+      error:
+        (error &&
+          typeof error === "object" &&
+          "response" in error &&
+          (error as { response?: { data?: { message?: string } } }).response
+            ?.data?.message) ||
+        "Action failed",
+    };
   }
 }
 
 const STATUS_COLORS: Record<string, string> = {
+  pending_owner_approval: "bg-yellow-100 text-yellow-800",
+  pending_payment: "bg-orange-100 text-orange-800",
   pending: "bg-yellow-100 text-yellow-800",
   confirmed: "bg-blue-100 text-blue-800",
   active: "bg-green-100 text-green-800",
+  return_requested: "bg-amber-100 text-amber-800",
   completed: "bg-gray-100 text-gray-800",
+  settled: "bg-gray-100 text-gray-800",
   cancelled: "bg-red-100 text-red-800",
-  payment_pending: "bg-orange-100 text-orange-800",
+  payment_failed: "bg-red-100 text-red-800",
+  disputed: "bg-red-100 text-red-800",
+  refunded: "bg-blue-100 text-blue-800",
 };
 
 const PAYMENT_STATUS_COLORS: Record<string, string> = {
@@ -108,9 +261,11 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
 };
 
 const TIMELINE_STEPS = [
-  { status: "pending", label: "Booking Requested", icon: Clock },
+  { status: "pending_owner_approval", label: "Booking Requested", icon: Clock },
+  { status: "pending_payment", label: "Pending Payment", icon: Clock },
   { status: "confirmed", label: "Confirmed", icon: CheckCircle },
   { status: "active", label: "In Progress", icon: Package },
+  { status: "return_requested", label: "Return Requested", icon: FileText },
   { status: "completed", label: "Completed", icon: CheckCircle },
 ];
 
@@ -120,20 +275,42 @@ export default function BookingDetail() {
   const navigate = useNavigate();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [cancelIntent, setCancelIntent] = useState<"cancel" | "reject">("cancel");
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState("");
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isSubmittingReview] = useState(false);
 
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+
+  const normalizedStatus = normalizeStatus(booking.status);
+  const listingTitle = safeText(booking.listing?.title, "Listing");
+  const listingId = safeText(booking.listing?.id);
+  const listingDescription = safeText(booking.listing?.description, "No description available.");
+  const listingCity = safeText(booking.listing?.location?.city, "Location unavailable");
+  const renterFirstName = safeText(booking.renter?.firstName, "Renter");
+  const renterLastName = safeText(booking.renter?.lastName);
+  const ownerFirstName = safeText(booking.owner?.firstName, "Owner");
+  const ownerLastName = safeText(booking.owner?.lastName);
+  const reviewRating = safeNumber(booking.review?.rating);
+  const reviewComment = safeText(booking.review?.comment, "No review comment provided.");
+  const pricing = booking.pricing || {
+    subtotal: safeNumber(booking.subtotal),
+    serviceFee: safeNumber(booking.serviceFee),
+    deliveryFee: safeNumber(booking.deliveryFee),
+    securityDeposit: safeNumber(booking.securityDeposit),
+    totalAmount: safeNumber(booking.totalAmount),
+  };
 
   // Check for successful payment redirect
   useEffect(() => {
     const paymentSuccess = searchParams.get("payment") === "success";
     const needsVerification =
-      booking.status === "pending" || booking.paymentStatus === "pending";
+      normalizedStatus === "pending_payment" ||
+      String(booking.paymentStatus).toUpperCase() === "PENDING";
 
     if (paymentSuccess && needsVerification) {
       setIsVerifyingPayment(true);
@@ -153,30 +330,48 @@ export default function BookingDetail() {
         clearInterval(interval);
         clearTimeout(timeout);
       };
-    } else if (booking.status === "confirmed" && isVerifyingPayment) {
+    } else if (normalizedStatus === "confirmed" && isVerifyingPayment) {
       setIsVerifyingPayment(false);
+      setShowCelebration(true);
     }
-  }, [searchParams, booking.status, booking.paymentStatus, revalidator]);
+  }, [searchParams, normalizedStatus, booking.paymentStatus, revalidator]);
 
   // Get current user from auth store to determine ownership
   const { user } = useAuthStore();
   const currentUserId = user?.id || "";
 
   // Determine user role in this booking
-  const isOwner = (booking.listing as any)?.ownerId === currentUserId || booking.ownerId === currentUserId;
-  const isRenter = booking.renterId === currentUserId;
+  const isOwner = booking.ownerId === currentUserId;
 
-  const canConfirm = isOwner && booking.status === "pending";
-  const canCancel = ["pending", "confirmed"].includes(booking.status);
-  const canComplete = isOwner && booking.status === "active";
-  const canReview = booking.status === "completed" && !booking.review;
+  const normalizedPaymentStatus = String(booking.paymentStatus || "").toLowerCase();
+  const canConfirm = isOwner && normalizedStatus === "pending_owner_approval";
+  const canReject = isOwner && normalizedStatus === "pending_owner_approval";
+  const canCancel = ["confirmed", "pending_owner_approval"].includes(normalizedStatus);
+  const canStart = isOwner && normalizedStatus === "confirmed";
+  const canComplete = isOwner && normalizedStatus === "return_requested";
+  const canRequestReturn = !isOwner && normalizedStatus === "active";
+  const canReview = ["completed", "settled"].includes(normalizedStatus) && !booking.review;
+  const bookingDaysRaw =
+    (new Date(String(booking.endDate || "")).getTime() -
+      new Date(String(booking.startDate || "")).getTime()) /
+    (1000 * 60 * 60 * 24);
+  const bookingDays = Number.isFinite(bookingDaysRaw)
+    ? Math.max(0, Math.ceil(bookingDaysRaw))
+    : 0;
 
   const currentStepIndex = TIMELINE_STEPS.findIndex(
-    (step) => step.status === booking.status
+    (step) => step.status === normalizedStatus
   );
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Success Celebration */}
+      <SuccessCelebration
+        show={showCelebration}
+        title="Booking Confirmed!"
+        message="Your payment was processed successfully. The owner will be notified and your rental is confirmed."
+        onClose={() => setShowCelebration(false)}
+      />
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -190,14 +385,14 @@ export default function BookingDetail() {
             </button>
             <div className="flex items-center gap-4">
               <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[booking.status]}`}
+                className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[normalizedStatus] || "bg-gray-100 text-gray-800"}`}
               >
-                {booking.status.replace("_", " ").toUpperCase()}
+                {normalizedStatus.replace(/_/g, " ").toUpperCase()}
               </span>
               <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${PAYMENT_STATUS_COLORS[booking.paymentStatus]}`}
+                className={`px-3 py-1 rounded-full text-sm font-medium ${PAYMENT_STATUS_COLORS[normalizedPaymentStatus] || "bg-gray-100 text-gray-800"}`}
               >
-                Payment: {booking.paymentStatus}
+                Payment: {normalizedPaymentStatus}
               </span>
             </div>
           </div>
@@ -288,29 +483,31 @@ export default function BookingDetail() {
                 Listing Details
               </h2>
               <div className="flex gap-4">
-                {booking.listing.images && booking.listing.images[0] && (
+                {booking.listing?.images?.[0] && (
                   <img
                     src={booking.listing.images[0]}
-                    alt={booking.listing.title}
+                    alt={listingTitle}
                     className="w-32 h-32 object-cover rounded-lg"
                   />
                 )}
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {booking.listing.title}
+                    {listingTitle}
                   </h3>
                   <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                    {booking.listing.description}
+                    {listingDescription}
                   </p>
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-4 h-4" />
-                      {booking.listing.location?.city}
+                      {listingCity}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      {booking.listing.rating?.toFixed(1) || "N/A"}
-                    </span>
+                      <span className="flex items-center gap-1">
+                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                        {safeNumber(booking.listing?.rating) > 0
+                          ? safeNumber(booking.listing?.rating).toFixed(1)
+                          : "N/A"}
+                      </span>
                   </div>
                 </div>
               </div>
@@ -328,16 +525,11 @@ export default function BookingDetail() {
                     <span className="font-medium">Rental Period</span>
                   </div>
                   <p className="text-gray-900">
-                    {format(new Date(booking.startDate), "MMM d, yyyy")} -{" "}
-                    {format(new Date(booking.endDate), "MMM d, yyyy")}
+                    {safeDateLabel(booking.startDate, "MMM d, yyyy")} -{" "}
+                    {safeDateLabel(booking.endDate, "MMM d, yyyy")}
                   </p>
                   <p className="text-sm text-gray-500 mt-1">
-                    {Math.ceil(
-                      (new Date(booking.endDate).getTime() -
-                        new Date(booking.startDate).getTime()) /
-                        (1000 * 60 * 60 * 24)
-                    )}{" "}
-                    days
+                    {bookingDays} days
                   </p>
                 </div>
 
@@ -362,7 +554,7 @@ export default function BookingDetail() {
                     <span className="font-medium">Booking Date</span>
                   </div>
                   <p className="text-gray-900">
-                    {format(new Date(booking.createdAt), "MMM d, yyyy h:mm a")}
+                    {safeDateLabel(booking.createdAt, "MMM d, yyyy h:mm a")}
                   </p>
                 </div>
 
@@ -389,36 +581,36 @@ export default function BookingDetail() {
                 <div className="flex justify-between text-gray-600">
                   <span>Rental Amount</span>
                   <span className="font-medium">
-                    ${booking.pricing?.subtotal.toFixed(2)}
+                    ${safeNumber(pricing.subtotal).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Service Fee</span>
                   <span className="font-medium">
-                    ${booking.pricing?.serviceFee.toFixed(2)}
+                    ${safeNumber(pricing.serviceFee).toFixed(2)}
                   </span>
                 </div>
-                {booking.pricing?.deliveryFee && (
+                {safeNumber(pricing.deliveryFee) > 0 && (
                   <div className="flex justify-between text-gray-600">
                     <span>Delivery Fee</span>
                     <span className="font-medium">
-                      ${booking.pricing.deliveryFee.toFixed(2)}
+                      ${safeNumber(pricing.deliveryFee).toFixed(2)}
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between text-gray-600">
                   <span>Security Deposit</span>
                   <span className="font-medium">
-                    ${booking.pricing?.securityDeposit.toFixed(2)}
+                    ${safeNumber(pricing.securityDeposit).toFixed(2)}
                   </span>
                 </div>
                 <div className="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
                   <span>Total Paid</span>
-                  <span>${booking.totalAmount.toFixed(2)}</span>
+                  <span>${safeNumber(pricing.totalAmount).toFixed(2)}</span>
                 </div>
               </div>
 
-              {booking.paymentStatus === "paid" && (
+              {String(booking.paymentStatus).toUpperCase() === "PAID" && (
                 <div className="mt-4 flex items-center gap-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   <span>Payment completed</span>
@@ -435,20 +627,20 @@ export default function BookingDetail() {
                     <Star
                       key={i}
                       className={`w-5 h-5 ${
-                        i < booking.review!.rating
+                        i < reviewRating
                           ? "fill-yellow-400 text-yellow-400"
                           : "text-gray-300"
                       }`}
                     />
                   ))}
                   <span className="ml-2 text-gray-600">
-                    {booking.review.rating.toFixed(1)} out of 5
+                    {reviewRating.toFixed(1)} out of 5
                   </span>
                 </div>
-                <p className="text-gray-700">{booking.review.comment}</p>
+                <p className="text-gray-700">{reviewComment}</p>
                 <p className="text-sm text-gray-500 mt-3">
                   Reviewed on{" "}
-                  {format(new Date(booking.review.createdAt), "MMM d, yyyy")}
+                  {safeDateLabel(booking.review.createdAt, "MMM d, yyyy")}
                 </p>
               </div>
             )}
@@ -464,38 +656,54 @@ export default function BookingDetail() {
               <div className="flex items-center gap-3 mb-4">
                 {isOwner ? (
                   <>
-                    <img
-                      src={booking.renter.avatar || "/default-avatar.png"}
-                      alt={booking.renter.firstName}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
+                    {booking.renter?.avatar ? (
+                      <img
+                        src={booking.renter.avatar}
+                        alt={renterFirstName}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-semibold text-gray-700">
+                        {getInitials(renterFirstName, renterLastName)}
+                      </div>
+                    )}
                     <div>
                       <p className="font-medium text-gray-900">
-                        {booking.renter.firstName} {booking.renter.lastName}
+                        {renterFirstName}{renterLastName ? ` ${renterLastName}` : ""}
                       </p>
                       <div className="flex items-center gap-1">
                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                         <span className="text-sm text-gray-600">
-                          {booking.renter.rating?.toFixed(1) || "New"}
+                          {safeNumber(booking.renter.rating) > 0
+                            ? safeNumber(booking.renter.rating).toFixed(1)
+                            : "New"}
                         </span>
                       </div>
                     </div>
                   </>
                 ) : (
                   <>
-                    <img
-                      src={booking.owner.avatar || "/default-avatar.png"}
-                      alt={booking.owner.firstName}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
+                    {booking.owner?.avatar ? (
+                      <img
+                        src={booking.owner.avatar}
+                        alt={ownerFirstName}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-semibold text-gray-700">
+                        {getInitials(ownerFirstName, ownerLastName)}
+                      </div>
+                    )}
                     <div>
                       <p className="font-medium text-gray-900">
-                        {booking.owner.firstName} {booking.owner.lastName}
+                        {ownerFirstName}{ownerLastName ? ` ${ownerLastName}` : ""}
                       </p>
                       <div className="flex items-center gap-1">
                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                         <span className="text-sm text-gray-600">
-                          {booking.owner.rating?.toFixed(1) || "New"}
+                          {safeNumber(booking.owner.rating) > 0
+                            ? safeNumber(booking.owner.rating).toFixed(1)
+                            : "New"}
                         </span>
                       </div>
                     </div>
@@ -515,6 +723,16 @@ export default function BookingDetail() {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Actions</h2>
               <div className="space-y-3">
+                {["confirmed", "active", "return_requested", "completed", "settled"].includes(normalizedStatus) && (
+                  <button
+                    onClick={() => navigate(`/disputes/new/${booking.id}`)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    <span>File a Dispute</span>
+                  </button>
+                )}
+
                 {canConfirm && (
                   <Form method="post">
                     <input type="hidden" name="intent" value="confirm" />
@@ -528,6 +746,32 @@ export default function BookingDetail() {
                   </Form>
                 )}
 
+                {canStart && (
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="start" />
+                    <button
+                      type="submit"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Start Rental</span>
+                    </button>
+                  </Form>
+                )}
+
+                {canRequestReturn && (
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="request_return" />
+                    <button
+                      type="submit"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Request Return</span>
+                    </button>
+                  </Form>
+                )}
+
                 {canComplete && (
                   <Form method="post">
                     <input type="hidden" name="intent" value="complete" />
@@ -536,7 +780,7 @@ export default function BookingDetail() {
                       className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                     >
                       <CheckCircle className="w-4 h-4" />
-                      <span>Mark as Complete</span>
+                      <span>Approve Return</span>
                     </button>
                   </Form>
                 )}
@@ -551,9 +795,25 @@ export default function BookingDetail() {
                   </button>
                 )}
 
+                {canReject && (
+                  <button
+                    onClick={() => {
+                      setCancelIntent("reject");
+                      setShowCancelModal(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span>Decline Booking</span>
+                  </button>
+                )}
+
                 {canCancel && (
                   <button
-                    onClick={() => setShowCancelModal(true)}
+                    onClick={() => {
+                      setCancelIntent("cancel");
+                      setShowCancelModal(true);
+                    }}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <XCircle className="w-4 h-4" />
@@ -562,7 +822,7 @@ export default function BookingDetail() {
                 )}
 
                 <button
-                  onClick={() => navigate(`/listings/${booking.listing.id}`)}
+                  onClick={() => navigate(listingId ? `/listings/${listingId}` : "/listings")}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   <FileText className="w-4 h-4" />
@@ -593,17 +853,19 @@ export default function BookingDetail() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold text-gray-900 mb-4">
-              Cancel Booking
+              {cancelIntent === "reject" ? "Decline Booking" : "Cancel Booking"}
             </h3>
             <p className="text-gray-600 mb-4">
-              Please provide a reason for cancelling this booking:
+              Please provide a reason for this action:
             </p>
             <Form method="post">
-              <input type="hidden" name="intent" value="cancel" />
+              <input type="hidden" name="intent" value={cancelIntent} />
               <textarea
                 name="reason"
                 value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
+                onChange={(e) =>
+                  setCancelReason(e.target.value.slice(0, MAX_BOOKING_REASON_LENGTH))
+                }
                 rows={4}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-4"
                 placeholder="Enter cancellation reason..."
@@ -612,16 +874,20 @@ export default function BookingDetail() {
               <div className="flex justify-end gap-4">
                 <button
                   type="button"
-                  onClick={() => setShowCancelModal(false)}
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setCancelReason("");
+                  }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 >
                   Keep Booking
                 </button>
                 <button
                   type="submit"
+                  disabled={!cancelReason.trim()}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                 >
-                  Cancel Booking
+                  {cancelIntent === "reject" ? "Decline Booking" : "Cancel Booking"}
                 </button>
               </div>
             </Form>
@@ -669,7 +935,9 @@ export default function BookingDetail() {
               <textarea
                 name="comment"
                 value={review}
-                onChange={(e) => setReview(e.target.value)}
+                onChange={(e) =>
+                  setReview(e.target.value.slice(0, MAX_REVIEW_COMMENT_LENGTH))
+                }
                 rows={4}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Share your experience..."
@@ -699,3 +967,5 @@ export default function BookingDetail() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

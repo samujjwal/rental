@@ -1,3 +1,4 @@
+import type { LoaderFunctionArgs } from "react-router";
 import { Outlet } from "react-router";
 import {
   Box,
@@ -8,6 +9,7 @@ import {
 } from "@mui/material";
 import AdminNavigation from "~/components/admin/AdminNavigation";
 import AdminErrorBoundary from "~/components/admin/AdminErrorBoundary";
+import { requireAdmin } from "~/utils/auth";
 
 const theme = createTheme({
   palette: {
@@ -39,6 +41,11 @@ const theme = createTheme({
 
 export function ErrorBoundary() {
   return <AdminErrorBoundary />;
+}
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+  return null;
 }
 
 export default function AdminLayout() {

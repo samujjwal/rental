@@ -1,5 +1,4 @@
-import { IconButton, Tooltip, CircularProgress } from '@mui/material';
-import { Heart } from 'lucide-react';
+import { Heart, Loader2 } from 'lucide-react';
 import { useToggleFavorite, useIsFavorited } from '~/hooks/useFavorites';
 import { useAuthStore } from '~/lib/store/auth';
 import { useNavigate } from 'react-router';
@@ -12,6 +11,12 @@ export interface FavoriteButtonProps {
     className?: string;
     iconClassName?: string;
 }
+
+const sizeMap = {
+    small: { icon: 16, btn: 'h-8 w-8' },
+    medium: { icon: 20, btn: 'h-10 w-10' },
+    large: { icon: 28, btn: 'h-12 w-12' },
+};
 
 /**
  * FavoriteButton Component
@@ -46,25 +51,30 @@ export function FavoriteButton({
         }
     };
 
-    const iconSize = size === 'small' ? 16 : size === 'large' ? 28 : 20;
+    const { icon: iconSize, btn: btnSize } = sizeMap[size];
+
+    const tooltipText = !isAuthenticated
+        ? 'Login to add favorites'
+        : isFavorited
+            ? 'Remove from favorites'
+            : 'Add to favorites';
 
     const button = (
-        <IconButton
+        <button
+            type="button"
             onClick={handleClick}
             disabled={isLoading}
-            size={size}
-            className={className}
+            className={`inline-flex items-center justify-center rounded-lg transition-colors
+                ${btnSize}
+                ${isFavorited ? 'text-red-500' : 'text-gray-500'}
+                hover:text-red-500 hover:bg-red-50
+                disabled:opacity-50 disabled:cursor-not-allowed
+                ${className}`}
             aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-            sx={{
-                color: isFavorited ? 'error.main' : 'text.secondary',
-                '&:hover': {
-                    color: 'error.main',
-                    backgroundColor: 'error.light',
-                },
-            }}
+            title={showTooltip ? tooltipText : undefined}
         >
             {isLoading ? (
-                <CircularProgress size={iconSize} />
+                <Loader2 size={iconSize} className="animate-spin" />
             ) : (
                 <PressableScale>
                     <Heart
@@ -74,24 +84,8 @@ export function FavoriteButton({
                     />
                 </PressableScale>
             )}
-        </IconButton>
+        </button>
     );
-
-    if (showTooltip) {
-        return (
-            <Tooltip
-                title={
-                    !isAuthenticated
-                        ? 'Login to add favorites'
-                        : isFavorited
-                            ? 'Remove from favorites'
-                            : 'Add to favorites'
-                }
-            >
-                {button}
-            </Tooltip>
-        );
-    }
 
     return button;
 }

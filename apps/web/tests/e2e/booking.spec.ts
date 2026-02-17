@@ -175,9 +175,9 @@ test.describe("Booking Flow", () => {
     await page.goto("/bookings");
 
     // Should show the booking
-    await expect(page.locator('[data-testid="booking-card"]')).toHaveCount({
-      min: 1,
-    });
+    await expect(
+      page.locator('[data-testid="booking-card"]').first()
+    ).toBeVisible();
   });
 
   test("should send confirmation email", async ({ page }) => {

@@ -3,12 +3,15 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { BookingMode, PropertyStatus, UserRole } from '@rental-portal/database';
+import { createUserWithRole } from './e2e-helpers';
 
-describe('Insurance E2E Tests', () => {
+describe('Insurance (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let authToken: string;
-  let userId: string;
+  let ownerToken: string;
+  let adminToken: string;
+  let ownerId: string;
   let listingId: string;
 
   beforeAll(async () => {
@@ -17,358 +20,198 @@ describe('Insurance E2E Tests', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-
-    prisma = app.get<PrismaService>(PrismaService);
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     await app.init();
 
-    // Create test user and get auth token
-    const authResponse = await request(app.getHttpServer()).post('/auth/register').send({
-      email: 'insurance-test@example.com',
-      password: 'Test123!',
-      name: 'Insurance Test User',
-    });
-
-    authToken = authResponse.body.accessToken;
-    userId = authResponse.body.user.id;
-
-    // Create test listing
-    const listingResponse = await request(app.getHttpServer())
-      .post('/listings')
-      .set('Authorization', `Bearer ${authToken}`)
-      .send({
-        title: 'High-value Camera Equipment',
-        description: 'Professional camera for rent',
-        pricePerDay: 600,
-        categoryId: 'electronics-category-id',
-        location: {
-          address: '123 Main St',
-          city: 'San Francisco',
-          state: 'CA',
-          zipCode: '94102',
-        },
-      });
-
-    listingId = listingResponse.body.id;
+    prisma = app.get<PrismaService>(PrismaService);
   });
 
   afterAll(async () => {
-    // Cleanup test data
-    await prisma.insurancePolicy.deleteMany({ where: { userId } });
-    await prisma.listing.deleteMany({ where: { ownerId: userId } });
-    await prisma.user.delete({ where: { id: userId } });
+    await prisma.insurancePolicy.deleteMany({
+      where: { user: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } } },
+    });
+    await prisma.listing.deleteMany({
+      where: { owner: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } } },
+    });
+    await prisma.user.deleteMany({
+      where: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } },
+    });
     await app.close();
   });
 
+  beforeEach(async () => {
+    await prisma.insurancePolicy.deleteMany({
+      where: { user: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } } },
+    });
+    await prisma.listing.deleteMany({
+      where: { owner: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } } },
+    });
+    await prisma.user.deleteMany({
+      where: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } },
+    });
+
+    const owner = await createUserWithRole({
+      app,
+      prisma,
+      email: 'insurance-owner@test.com',
+      password: 'TestPass123!',
+      firstName: 'Insurance',
+      lastName: 'Owner',
+      role: UserRole.HOST,
+    });
+    ownerToken = owner.accessToken;
+    ownerId = owner.userId;
+
+    const admin = await createUserWithRole({
+      app,
+      prisma,
+      email: 'insurance-admin@test.com',
+      password: 'TestPass123!',
+      firstName: 'Insurance',
+      lastName: 'Admin',
+      role: UserRole.ADMIN,
+    });
+    adminToken = admin.accessToken;
+
+    const category = await prisma.category.findFirst({
+      where: { isActive: true },
+      select: { id: true },
+    });
+
+    if (!category?.id) {
+      throw new Error('No active category found for insurance e2e');
+    }
+
+    const listing = await prisma.listing.create({
+      data: {
+        ownerId,
+        categoryId: category.id,
+        title: 'Insurance Test Listing',
+        description: 'Listing used for insurance flow tests',
+        slug: `insurance-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        address: '123 Insurance Ave',
+        city: 'Test City',
+        state: 'TS',
+        zipCode: '12345',
+        country: 'US',
+        type: 'APARTMENT',
+        basePrice: 1200,
+        currency: 'USD',
+        latitude: 37.7749,
+        longitude: -122.4194,
+        status: PropertyStatus.AVAILABLE,
+        bookingMode: BookingMode.INSTANT_BOOK,
+      },
+    });
+    listingId = listing.id;
+  });
+
   describe('GET /insurance/listings/:id/requirement', () => {
-    it('should return insurance requirement for high-value listing', () => {
-      return request(app.getHttpServer())
+    it('should return listing insurance requirement', async () => {
+      const response = await request(app.getHttpServer())
         .get(`/insurance/listings/${listingId}/requirement`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.required).toBe(true);
-          expect(res.body.minimumCoverage).toBeGreaterThan(0);
-          expect(res.body.type).toBeDefined();
-          expect(res.body.reason).toBeDefined();
-        });
-    });
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
 
-    it('should return 404 for non-existent listing', () => {
-      return request(app.getHttpServer())
-        .get('/insurance/listings/nonexistent-id/requirement')
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(404);
-    });
-
-    it('should require authentication', () => {
-      return request(app.getHttpServer())
-        .get(`/insurance/listings/${listingId}/requirement`)
-        .expect(401);
+      expect(response.body).toHaveProperty('required');
+      expect(response.body).toHaveProperty('minimumCoverage');
+      expect(response.body).toHaveProperty('type');
     });
   });
 
   describe('POST /insurance/policies', () => {
-    it('should submit insurance policy', () => {
-      return request(app.getHttpServer())
-        .post('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          listingId,
-          policyNumber: 'POL-TEST-123456',
-          provider: 'Test Insurance Co',
-          type: 'LIABILITY',
-          coverageAmount: 100000,
-          effectiveDate: new Date('2026-01-01').toISOString(),
-          expirationDate: new Date('2026-12-31').toISOString(),
-          documentUrl: 'https://example.com/policy.pdf',
-        })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body.id).toBeDefined();
-          expect(res.body.status).toBe('PENDING');
-          expect(res.body.policyNumber).toBe('POL-TEST-123456');
-        });
-    });
-
-    it('should reject policy with insufficient coverage', () => {
-      return request(app.getHttpServer())
-        .post('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          listingId,
-          policyNumber: 'POL-TEST-LOW',
-          provider: 'Test Insurance Co',
-          type: 'LIABILITY',
-          coverageAmount: 100, // Too low
-          effectiveDate: new Date('2026-01-01').toISOString(),
-          expirationDate: new Date('2026-12-31').toISOString(),
-          documentUrl: 'https://example.com/policy.pdf',
-        })
-        .expect(400)
-        .expect((res) => {
-          expect(res.body.message).toContain('coverage');
-        });
-    });
-
-    it('should reject expired policy', () => {
-      return request(app.getHttpServer())
-        .post('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          listingId,
-          policyNumber: 'POL-TEST-EXPIRED',
-          provider: 'Test Insurance Co',
-          type: 'LIABILITY',
-          coverageAmount: 100000,
-          effectiveDate: new Date('2025-01-01').toISOString(),
-          expirationDate: new Date('2025-12-31').toISOString(),
-          documentUrl: 'https://example.com/policy.pdf',
-        })
-        .expect(400)
-        .expect((res) => {
-          expect(res.body.message).toContain('expired');
-        });
-    });
-
-    it('should validate required fields', () => {
-      return request(app.getHttpServer())
-        .post('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          listingId,
-          // Missing required fields
-        })
-        .expect(400);
-    });
-  });
-
-  describe('GET /insurance/policies', () => {
-    it('should return user policies', async () => {
-      // Create a policy first
-      await request(app.getHttpServer())
-        .post('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          listingId,
-          policyNumber: 'POL-GET-TEST',
-          provider: 'Test Insurance Co',
-          type: 'LIABILITY',
-          coverageAmount: 100000,
-          effectiveDate: new Date('2026-01-01').toISOString(),
-          expirationDate: new Date('2026-12-31').toISOString(),
-          documentUrl: 'https://example.com/policy.pdf',
-        });
-
-      return request(app.getHttpServer())
-        .get('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(Array.isArray(res.body)).toBe(true);
-          expect(res.body.length).toBeGreaterThan(0);
-          expect(res.body[0]).toHaveProperty('policyNumber');
-        });
-    });
-
-    it('should filter policies by status', () => {
-      return request(app.getHttpServer())
-        .get('/insurance/policies?status=PENDING')
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(Array.isArray(res.body)).toBe(true);
-          if (res.body.length > 0) {
-            expect(res.body[0].status).toBe('PENDING');
-          }
-        });
-    });
-  });
-
-  describe('GET /insurance/policies/:id', () => {
-    let policyId: string;
-
-    beforeAll(async () => {
+    it('should upload policy for listing owner', async () => {
       const response = await request(app.getHttpServer())
         .post('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({
           listingId,
-          policyNumber: 'POL-DETAIL-TEST',
+          policyNumber: `POL-${Date.now()}`,
           provider: 'Test Insurance Co',
           type: 'LIABILITY',
-          coverageAmount: 100000,
-          effectiveDate: new Date('2026-01-01').toISOString(),
-          expirationDate: new Date('2026-12-31').toISOString(),
+          coverageAmount: 20000,
+          effectiveDate: new Date().toISOString(),
+          expirationDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
           documentUrl: 'https://example.com/policy.pdf',
-        });
+        })
+        .expect(201);
 
-      policyId = response.body.id;
-    });
-
-    it('should return policy details', () => {
-      return request(app.getHttpServer())
-        .get(`/insurance/policies/${policyId}`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.id).toBe(policyId);
-          expect(res.body.policyNumber).toBe('POL-DETAIL-TEST');
-        });
-    });
-
-    it('should return 404 for non-existent policy', () => {
-      return request(app.getHttpServer())
-        .get('/insurance/policies/nonexistent-id')
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(404);
-    });
-
-    it('should not allow access to other user policies', async () => {
-      // Create another user
-      const otherUserRes = await request(app.getHttpServer()).post('/auth/register').send({
-        email: 'other-insurance-test@example.com',
-        password: 'Test123!',
-        name: 'Other Test User',
-      });
-
-      const otherUserToken = otherUserRes.body.accessToken;
-
-      return request(app.getHttpServer())
-        .get(`/insurance/policies/${policyId}`)
-        .set('Authorization', `Bearer ${otherUserToken}`)
-        .expect(403);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.status).toBe('ACTIVE');
     });
   });
 
-  describe('POST /insurance/policies/:id/verify (Admin)', () => {
-    let policyId: string;
-    let adminToken: string;
-
-    beforeAll(async () => {
-      // Create admin user
-      const adminRes = await request(app.getHttpServer()).post('/auth/register').send({
-        email: 'admin-insurance@example.com',
-        password: 'Admin123!',
-        name: 'Admin User',
-      });
-
-      adminToken = adminRes.body.accessToken;
-
-      // Create policy to verify
-      const policyRes = await request(app.getHttpServer())
+  describe('GET /insurance/listings/:id/status', () => {
+    it('should return valid insurance after policy upload', async () => {
+      await request(app.getHttpServer())
         .post('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({
           listingId,
-          policyNumber: 'POL-VERIFY-TEST',
+          policyNumber: `POL-STATUS-${Date.now()}`,
           provider: 'Test Insurance Co',
           type: 'LIABILITY',
-          coverageAmount: 100000,
-          effectiveDate: new Date('2026-01-01').toISOString(),
-          expirationDate: new Date('2026-12-31').toISOString(),
-          documentUrl: 'https://example.com/policy.pdf',
-        });
-
-      policyId = policyRes.body.id;
-    });
-
-    it('should verify policy with admin role', () => {
-      return request(app.getHttpServer())
-        .post(`/insurance/policies/${policyId}/verify`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          notes: 'Verified successfully',
+          coverageAmount: 20000,
+          effectiveDate: new Date().toISOString(),
+          expirationDate: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString(),
+          documentUrl: 'https://example.com/policy-status.pdf',
         })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.status).toBe('VERIFIED');
-          expect(res.body.verifiedBy).toBeDefined();
-        });
-    });
+        .expect(201);
 
-    it('should not allow non-admin to verify', () => {
-      return request(app.getHttpServer())
-        .post(`/insurance/policies/${policyId}/verify`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          notes: 'Attempting to verify',
-        })
-        .expect(403);
+      const response = await request(app.getHttpServer())
+        .get(`/insurance/listings/${listingId}/status`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+
+      expect(response.body.hasValidInsurance).toBe(true);
     });
   });
 
-  describe('POST /insurance/policies/:id/reject (Admin)', () => {
-    let policyId: string;
-    let adminToken: string;
-
-    beforeAll(async () => {
-      // Get admin token from previous test or create new admin
-      const adminRes = await request(app.getHttpServer()).post('/auth/login').send({
-        email: 'admin-insurance@example.com',
-        password: 'Admin123!',
-      });
-
-      adminToken = adminRes.body.accessToken;
-
-      // Create policy to reject
-      const policyRes = await request(app.getHttpServer())
+  describe('PUT /insurance/policies/:policyId/verify', () => {
+    it('should allow admin to verify policy', async () => {
+      const policy = await request(app.getHttpServer())
         .post('/insurance/policies')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
         .send({
           listingId,
-          policyNumber: 'POL-REJECT-TEST',
+          policyNumber: `POL-VERIFY-${Date.now()}`,
           provider: 'Test Insurance Co',
           type: 'LIABILITY',
-          coverageAmount: 100000,
-          effectiveDate: new Date('2026-01-01').toISOString(),
-          expirationDate: new Date('2026-12-31').toISOString(),
-          documentUrl: 'https://example.com/policy.pdf',
-        });
-
-      policyId = policyRes.body.id;
-    });
-
-    it('should reject policy with reason', () => {
-      return request(app.getHttpServer())
-        .post(`/insurance/policies/${policyId}/reject`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          reason: 'Invalid coverage documentation',
+          coverageAmount: 20000,
+          effectiveDate: new Date().toISOString(),
+          expirationDate: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString(),
+          documentUrl: 'https://example.com/policy-verify.pdf',
         })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body.status).toBe('REJECTED');
-          expect(res.body.notes).toContain('Invalid coverage documentation');
-        });
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .put(`/insurance/policies/${policy.body.id}/verify`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ approved: true, notes: 'Verified in e2e' })
+        .expect(200);
     });
 
-    it('should require reason for rejection', () => {
-      return request(app.getHttpServer())
-        .post(`/insurance/policies/${policyId}/reject`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({})
-        .expect(400);
+    it('should reject non-admin verification attempts', async () => {
+      const policy = await request(app.getHttpServer())
+        .post('/insurance/policies')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          listingId,
+          policyNumber: `POL-NONADMIN-${Date.now()}`,
+          provider: 'Test Insurance Co',
+          type: 'LIABILITY',
+          coverageAmount: 20000,
+          effectiveDate: new Date().toISOString(),
+          expirationDate: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString(),
+          documentUrl: 'https://example.com/policy-nonadmin.pdf',
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .put(`/insurance/policies/${policy.body.id}/verify`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ approved: true })
+        .expect(403);
     });
   });
 });

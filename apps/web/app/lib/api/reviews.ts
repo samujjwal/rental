@@ -3,29 +3,31 @@ import type { Review, ReviewListResponse } from "~/types/review";
 
 export interface CreateReviewRequest {
   bookingId: string;
-  rating: number;
-  comment: string;
+  reviewType: "RENTER_TO_OWNER" | "OWNER_TO_RENTER";
+  overallRating: number;
+  comment?: string;
 }
 
 export const reviewsApi = {
-  async getReviewsForListing(listingId: string): Promise<Review[]> {
-    return api.get<Review[]>(`/reviews/listing/${listingId}`);
+  async getReviewsForListing(listingId: string, page: number = 1, limit: number = 10): Promise<ReviewListResponse> {
+    return api.get<ReviewListResponse>(`/reviews/listing/${listingId}?page=${page}&limit=${limit}`);
   },
 
-  async getReviewsForUser(userId: string): Promise<ReviewListResponse> {
-    return api.get<ReviewListResponse>(`/reviews/user/${userId}?type=received`);
+  async getUserReviews(
+    userId: string,
+    type: "received" | "given",
+    page: number = 1,
+    limit: number = 10
+  ): Promise<ReviewListResponse> {
+    return api.get<ReviewListResponse>(`/reviews/user/${userId}?type=${type}&page=${page}&limit=${limit}`);
   },
 
-  async getReviewsByReviewer(reviewerId: string): Promise<Review[]> {
-    return api.get<Review[]>(`/reviews/reviewer/${reviewerId}`);
-  },
-
-  async getReceivedReviews(): Promise<Review[]> {
-    return api.get<Review[]>("/reviews/received");
-  },
-
-  async getGivenReviews(): Promise<Review[]> {
-    return api.get<Review[]>("/reviews/given");
+  async getPublicUserReviews(
+    userId: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<ReviewListResponse> {
+    return api.get<ReviewListResponse>(`/reviews/user/${userId}/public?page=${page}&limit=${limit}`);
   },
 
   async createReview(data: CreateReviewRequest): Promise<Review> {
@@ -36,18 +38,11 @@ export const reviewsApi = {
     reviewId: string,
     data: Partial<CreateReviewRequest>
   ): Promise<Review> {
-    return api.put<Review>(`/reviews/${reviewId}`, data);
+    return api.patch<Review>(`/reviews/${reviewId}`, data);
   },
 
   async deleteReview(reviewId: string): Promise<void> {
     return api.delete(`/reviews/${reviewId}`);
   },
 
-  async respondToReview(reviewId: string, response: string): Promise<Review> {
-    return api.post<Review>(`/reviews/${reviewId}/respond`, { response });
-  },
-
-  async reportReview(reviewId: string, reason: string): Promise<void> {
-    return api.post(`/reviews/${reviewId}/report`, { reason });
-  },
 };

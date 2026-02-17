@@ -3,14 +3,17 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
-import { Booking, BookingStatus, BookingMode } from '@rental-portal/database';
+import { Booking, BookingStatus, BookingMode, toNumber } from '@rental-portal/database';
 import { AvailabilityService } from '@/modules/listings/services/availability.service';
 import { BookingStateMachineService } from './booking-state-machine.service';
 import { BookingCalculationService } from './booking-calculation.service';
 import { FraudDetectionService } from '@/modules/fraud-detection/services/fraud-detection.service';
+import { InsuranceService } from '@/modules/insurance/services/insurance.service';
+import { ContentModerationService } from '@/modules/moderation/services/content-moderation.service';
 
 export interface CreateBookingDto {
   listingId: string;
@@ -30,6 +33,8 @@ export interface UpdateBookingDto {
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
@@ -37,9 +42,24 @@ export class BookingsService {
     private readonly stateMachine: BookingStateMachineService,
     private readonly calculation: BookingCalculationService,
     private readonly fraudDetection: FraudDetectionService,
+    private readonly insuranceService: InsuranceService,
+    private readonly moderationService: ContentModerationService,
   ) {}
 
   async create(renterId: string, dto: CreateBookingDto): Promise<Booking> {
+    const startDate =
+      dto.startDate instanceof Date ? dto.startDate : new Date(dto.startDate as unknown as string);
+    const endDate =
+      dto.endDate instanceof Date ? dto.endDate : new Date(dto.endDate as unknown as string);
+
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('Invalid booking dates');
+    }
+
+    if (endDate <= startDate) {
+      throw new BadRequestException('End date must be after start date');
+    }
+
     // Validate listing exists and is bookable
     const listing = await this.prisma.listing.findUnique({
       where: { id: dto.listingId },
@@ -65,11 +85,45 @@ export class BookingsService {
         throw new ForbiddenException('Booking rejected due to security policies');
     }
 
+    // Check insurance requirement for this listing's category
+    try {
+      const insuranceReq = await this.insuranceService.checkInsuranceRequirement(dto.listingId);
+      if (insuranceReq.required) {
+        const hasInsurance = await this.insuranceService.hasValidInsurance(dto.listingId);
+        if (!hasInsurance) {
+          throw new BadRequestException({
+            message: 'Insurance is required for this listing',
+            reason: insuranceReq.reason || 'Category or value requires insurance coverage',
+            insuranceRequired: true,
+          });
+        }
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.warn(`Insurance check failed for listing ${dto.listingId}, proceeding`, error);
+    }
+
+    // Moderate booking message if provided
+    if (dto.message) {
+      try {
+        const moderation = await this.moderationService.moderateMessage(dto.message);
+        if (moderation.status === 'REJECTED' || moderation.status === 'FLAGGED') {
+          throw new BadRequestException({
+            message: 'Your message contains content that violates our policies',
+            flags: moderation.flags,
+          });
+        }
+      } catch (error) {
+        if (error instanceof BadRequestException) throw error;
+        this.logger.warn('Message moderation check failed, proceeding', error);
+      }
+    }
+
     // Calculate pricing first (outside transaction)
     const pricing = await this.calculation.calculatePrice(
       dto.listingId,
-      dto.startDate,
-      dto.endDate,
+      startDate,
+      endDate,
     );
 
     // Determine initial status based on booking mode
@@ -88,25 +142,25 @@ export class BookingsService {
         where: {
           listingId: dto.listingId,
           status: {
-            notIn: ['CANCELLED', 'REFUNDED', 'REJECTED'],
+            notIn: [BookingStatus.CANCELLED, BookingStatus.REFUNDED],
           },
           OR: [
             {
               AND: [
-                { startDate: { lte: dto.startDate } },
-                { endDate: { gte: dto.startDate } },
+                { startDate: { lte: startDate } },
+                { endDate: { gte: startDate } },
               ],
             },
             {
               AND: [
-                { startDate: { lte: dto.endDate } },
-                { endDate: { gte: dto.endDate } },
+                { startDate: { lte: endDate } },
+                { endDate: { gte: endDate } },
               ],
             },
             {
               AND: [
-                { startDate: { gte: dto.startDate } },
-                { endDate: { lte: dto.endDate } },
+                { startDate: { gte: startDate } },
+                { endDate: { lte: endDate } },
               ],
             },
           ],
@@ -125,14 +179,26 @@ export class BookingsService {
       }
 
       // Create booking atomically
+      const bookingMetadata: Record<string, any> = {};
+      if ((dto as any).deliveryMethod) {
+        bookingMetadata.deliveryMethod = (dto as any).deliveryMethod;
+      }
+      if ((dto as any).deliveryAddress) {
+        bookingMetadata.deliveryAddress = (dto as any).deliveryAddress;
+      }
+
       return tx.booking.create({
         data: {
           renterId,
           listingId: dto.listingId,
-          startDate: dto.startDate,
-          endDate: dto.endDate,
+          ownerId: listing.ownerId,
+          startDate,
+          endDate,
           guestCount: dto.guestCount,
-          renterMessage: dto.message,
+          specialRequests: dto.message,
+          metadata: Object.keys(bookingMetadata).length
+            ? JSON.stringify(bookingMetadata)
+            : undefined,
           status: initialStatus,
           basePrice: pricing.breakdown.basePrice,
           totalPrice: pricing.total,
@@ -144,9 +210,8 @@ export class BookingsService {
           currency: listing.currency,
           stateHistory: {
             create: {
-              toState: initialStatus,
+              toStatus: initialStatus,
               changedBy: renterId,
-              changedAt: new Date(),
               reason: 'Booking created',
             },
           },
@@ -187,13 +252,27 @@ export class BookingsService {
       status: initialStatus,
     });
 
-    return booking;
+    return this.attachPaymentStatus(booking);
   }
 
   async findById(id: string, includePrivate: boolean = false, userId?: string): Promise<Booking> {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
       include: {
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { status: true },
+        },
+        reviews: {
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            createdAt: true,
+            reviewerId: true,
+          },
+        },
         renter: {
           select: {
             id: true,
@@ -247,16 +326,21 @@ export class BookingsService {
       }
     }
 
-    return booking;
+    return this.attachPaymentStatus(booking, userId);
   }
 
   async getRenterBookings(renterId: string, status?: BookingStatus): Promise<Booking[]> {
     const where: any = { renterId };
     if (status) where.status = status;
 
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where,
       include: {
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { status: true },
+        },
         listing: {
           include: {
             owner: {
@@ -273,6 +357,8 @@ export class BookingsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return bookings.map((booking) => this.attachPaymentStatus(booking));
   }
 
   async getOwnerBookings(ownerId: string, status?: BookingStatus): Promise<Booking[]> {
@@ -281,9 +367,14 @@ export class BookingsService {
     };
     if (status) where.status = status;
 
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where,
       include: {
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { status: true },
+        },
         renter: {
           select: {
             id: true,
@@ -301,6 +392,139 @@ export class BookingsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return bookings.map((booking) => this.attachPaymentStatus(booking));
+  }
+
+  private attachPaymentStatus(booking: any, userId?: string): any {
+    const latestPaymentStatus = booking?.payments?.[0]?.status as string | undefined;
+    let paymentStatus: 'PENDING' | 'PAID' | 'REFUNDED' | 'FAILED' = 'PENDING';
+
+    if (latestPaymentStatus) {
+      const upper = latestPaymentStatus.toUpperCase();
+      if (upper === 'COMPLETED' || upper === 'SUCCEEDED') {
+        paymentStatus = 'PAID';
+      } else if (upper === 'REFUNDED') {
+        paymentStatus = 'REFUNDED';
+      } else if (upper === 'FAILED' || upper === 'CANCELLED') {
+        paymentStatus = 'FAILED';
+      } else {
+        paymentStatus = 'PENDING';
+      }
+    } else {
+      const bookingStatus = String(booking.status || '').toUpperCase();
+      if (bookingStatus === 'REFUNDED') {
+        paymentStatus = 'REFUNDED';
+      } else if (bookingStatus === 'CANCELLED') {
+        paymentStatus = 'FAILED';
+      } else if (
+        [
+          'CONFIRMED',
+          'IN_PROGRESS',
+          'AWAITING_RETURN_INSPECTION',
+          'COMPLETED',
+          'SETTLED',
+        ].includes(bookingStatus)
+      ) {
+        paymentStatus = 'PAID';
+      } else {
+        paymentStatus = 'PENDING';
+      }
+    }
+
+    const startDate = booking.startDate ? new Date(booking.startDate) : null;
+    const endDate = booking.endDate ? new Date(booking.endDate) : null;
+    const totalDays =
+      startDate && endDate
+        ? Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000))
+        : 0;
+    const subtotal = toNumber(booking.basePrice) || 0;
+    const serviceFee = toNumber(booking.serviceFee) || 0;
+    const depositAmount = toNumber(booking.depositAmount) || 0;
+    const securityDeposit = toNumber(booking.securityDeposit) || depositAmount;
+    const totalAmount = toNumber(booking.totalAmount) || toNumber(booking.totalPrice) || 0;
+    const pricePerDay = totalDays > 0 ? subtotal / totalDays : subtotal;
+
+    let deliveryMethod: 'pickup' | 'delivery' | 'shipping' = 'pickup';
+    let deliveryAddress: string | null = null;
+    if (booking.metadata) {
+      try {
+        const parsed = JSON.parse(booking.metadata);
+        if (parsed?.deliveryMethod) {
+          const method = String(parsed.deliveryMethod);
+          if (['pickup', 'delivery', 'shipping'].includes(method)) {
+            deliveryMethod = method as typeof deliveryMethod;
+          }
+        }
+        if (parsed?.deliveryAddress) {
+          deliveryAddress = String(parsed.deliveryAddress);
+        }
+      } catch {
+        // Ignore metadata parsing errors
+      }
+    }
+
+    const listing = booking.listing
+      ? {
+          ...booking.listing,
+          images: booking.listing.photos || booking.listing.images || [],
+          pricePerDay: toNumber(booking.listing.basePrice) || pricePerDay,
+        }
+      : undefined;
+
+    const renter = booking.renter
+      ? {
+          ...booking.renter,
+          avatar: booking.renter.profilePhotoUrl || null,
+          rating: booking.renter.averageRating ?? null,
+        }
+      : undefined;
+
+    const owner = booking.listing?.owner
+      ? {
+          ...booking.listing.owner,
+          avatar: booking.listing.owner.profilePhotoUrl || null,
+          rating: booking.listing.owner.averageRating ?? null,
+        }
+      : booking.owner;
+
+    const review =
+      userId && Array.isArray(booking.reviews)
+        ? booking.reviews.find((item: any) => item.reviewerId === userId)
+        : undefined;
+
+    return {
+      ...booking,
+      ownerId: booking.ownerId || booking.listing?.ownerId,
+      listing,
+      renter,
+      owner,
+      review: review
+        ? {
+            id: review.id,
+            rating: review.rating,
+            comment: review.comment,
+            createdAt: review.createdAt,
+          }
+        : undefined,
+      paymentStatus,
+      totalDays,
+      pricePerDay,
+      subtotal,
+      serviceFee,
+      deliveryFee: 0,
+      securityDeposit,
+      totalAmount,
+      deliveryMethod,
+      deliveryAddress,
+      pricing: {
+        subtotal,
+        serviceFee,
+        deliveryFee: 0,
+        securityDeposit,
+        totalAmount,
+      },
+    };
   }
 
   async approveBooking(bookingId: string, ownerId: string): Promise<Booking> {
@@ -431,12 +655,24 @@ export class BookingsService {
   }
 
   private generateTimeline(booking: Booking, history: any[]) {
-    return history.map((h) => ({
-      state: h.state,
-      timestamp: h.transitionedAt,
-      actor: h.transitionedByUser,
-      metadata: h.metadata,
-    }));
+    return history.map((h) => {
+      let metadata = null;
+      if (h.metadata) {
+        try {
+          metadata = JSON.parse(h.metadata);
+        } catch {
+          metadata = h.metadata;
+        }
+      }
+
+      return {
+        fromStatus: h.fromStatus || null,
+        toStatus: h.toStatus,
+        timestamp: h.createdAt,
+        actor: h.changedBy || null,
+        metadata,
+      };
+    });
   }
 
   async getBlockedDates(listingId: string): Promise<string[]> {

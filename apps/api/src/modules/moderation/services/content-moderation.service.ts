@@ -299,11 +299,11 @@ export class ContentModerationService {
           action: 'CONTENT_MODERATED',
           entityType,
           entityId,
-          metadata: {
+          metadata: JSON.stringify({
             status: result.status,
             flags: result.flags,
             confidence: result.confidence,
-          } as any,
+          }),
         },
       });
     }

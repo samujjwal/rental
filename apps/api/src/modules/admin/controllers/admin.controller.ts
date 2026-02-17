@@ -22,7 +22,7 @@ import { UserRole, ListingStatus } from '@rental-portal/database';
 @ApiBearerAuth()
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -419,12 +419,10 @@ export class AdminController {
     @CurrentUser('id') adminId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('flagged') flagged?: boolean,
   ) {
     return this.adminService.getMessages(adminId, {
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
-      flagged,
     });
   }
 

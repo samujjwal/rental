@@ -98,11 +98,16 @@ export class BookingCalculationService {
       case PricingMode.PER_HOUR:
         return (listing.hourlyPrice || listing.basePrice) * duration.value;
 
-      case PricingMode.PER_DAY:
+      case PricingMode.PER_DAY: {
         if (duration.type === 'hours') {
           return listing.dailyPrice || listing.basePrice;
         }
-        return (listing.dailyPrice || listing.basePrice) * duration.value;
+        // Normalize to days for PER_DAY pricing
+        let dayCount = duration.value;
+        if (duration.type === 'weeks') dayCount = duration.value * 7;
+        else if (duration.type === 'months') dayCount = duration.value * 30;
+        return (listing.dailyPrice || listing.basePrice) * dayCount;
+      }
 
       case PricingMode.PER_WEEK:
         if (duration.type === 'days' && duration.value < 7) {
@@ -129,23 +134,35 @@ export class BookingCalculationService {
   ): Array<{ type: string; amount: number; reason: string }> {
     const discounts: Array<{ type: string; amount: number; reason: string }> = [];
 
-    // Apply only the highest discount (monthly > weekly)
-    // to prevent stacking and excessive discounts
+    // Normalize duration to days for discount calculation
+    let totalDays = duration.value;
+    if (duration.type === 'hours') {
+      totalDays = duration.value / 24;
+    } else if (duration.type === 'weeks') {
+      totalDays = duration.value * 7;
+    } else if (duration.type === 'months') {
+      totalDays = duration.value * 30;
+    }
+
+    // Apply only the highest applicable discount (monthly > weekly)
+    // Only apply if the listing has defined the discount rate
     
-    // Monthly discount (20% off for 30+ days) - highest priority
-    if (duration.type === 'days' && duration.value >= 30) {
+    // Monthly discount - highest priority
+    if ((totalDays >= 30 || duration.type === 'months') && listing.monthlyDiscount) {
+      const rate = listing.monthlyDiscount / 100;
       discounts.push({
         type: 'monthly',
-        amount: basePrice * 0.2,
-        reason: 'Monthly booking discount (20%)',
+        amount: basePrice * rate,
+        reason: `Monthly booking discount (${listing.monthlyDiscount}%)`,
       });
     }
-    // Weekly discount (10% off for 7+ days) - only if monthly not applied
-    else if (duration.type === 'days' && duration.value >= 7) {
+    // Weekly discount - only if monthly not applied
+    else if ((totalDays >= 7 || duration.type === 'weeks') && listing.weeklyDiscount) {
+      const rate = listing.weeklyDiscount / 100;
       discounts.push({
         type: 'weekly',
-        amount: basePrice * 0.1,
-        reason: 'Weekly booking discount (10%)',
+        amount: basePrice * rate,
+        reason: `Weekly booking discount (${listing.weeklyDiscount}%)`,
       });
     }
 
@@ -156,8 +173,9 @@ export class BookingCalculationService {
   }
 
   private calculateDeposit(listing: any, subtotal: number): number {
-    if (!listing.requiresDeposit) {
-      return 0;
+    const securityDeposit = toNumber(listing.securityDeposit || 0);
+    if (securityDeposit > 0) {
+      return securityDeposit;
     }
 
     if (listing.depositType === DepositType.FIXED) {

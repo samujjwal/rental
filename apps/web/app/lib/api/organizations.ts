@@ -44,16 +44,18 @@ export interface Organization {
   createdAt: string;
   updatedAt: string;
   members?: OrganizationMember[];
-  properties?: {
+  listings?: {
     id: string;
     title: string;
     status: string;
     basePrice: number;
     currency: string;
     photos: string[];
+    city?: string | null;
+    state?: string | null;
   }[];
   _count?: {
-    properties: number;
+    listings: number;
     members: number;
   };
 }
@@ -112,7 +114,7 @@ export const organizationsApi = {
    * Get all organizations for the current user
    */
   async getMyOrganizations(): Promise<OrganizationsResponse> {
-    return api.get<OrganizationsResponse>("/organizations");
+    return api.get<OrganizationsResponse>("/organizations/my");
   },
 
   /**
@@ -136,7 +138,7 @@ export const organizationsApi = {
     id: string,
     data: UpdateOrganizationDto
   ): Promise<Organization> {
-    return api.patch<Organization>(`/organizations/${id}`, data);
+    return api.put<Organization>(`/organizations/${id}`, data);
   },
 
   /**
@@ -161,7 +163,7 @@ export const organizationsApi = {
     data: InviteMemberDto
   ): Promise<{ message: string; invitationId: string }> {
     return api.post<{ message: string; invitationId: string }>(
-      `/organizations/${organizationId}/members/invite`,
+      `/organizations/${organizationId}/members`,
       data
     );
   },
@@ -174,8 +176,8 @@ export const organizationsApi = {
     memberId: string,
     data: UpdateMemberRoleDto
   ): Promise<OrganizationMember> {
-    return api.patch<OrganizationMember>(
-      `/organizations/${organizationId}/members/${memberId}`,
+    return api.put<OrganizationMember>(
+      `/organizations/${organizationId}/members/${memberId}/role`,
       data
     );
   },
@@ -183,9 +185,9 @@ export const organizationsApi = {
   /**
    * Remove a member from the organization
    */
-  async removeMember(organizationId: string, memberId: string): Promise<void> {
+  async removeMember(organizationId: string, memberUserId: string): Promise<void> {
     return api.delete<void>(
-      `/organizations/${organizationId}/members/${memberId}`
+      `/organizations/${organizationId}/members/${memberUserId}`
     );
   },
 
@@ -231,9 +233,10 @@ export const organizationsApi = {
    */
   async uploadLogo(organizationId: string, file: File): Promise<{ url: string }> {
     const formData = new FormData();
-    formData.append("logo", file);
+    formData.append("file", file);
+    formData.append("organizationId", organizationId);
     return api.post<{ url: string }>(
-      `/organizations/${organizationId}/logo`,
+      "/storage/organization-logo",
       formData,
       {
         headers: {

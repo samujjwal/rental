@@ -3,12 +3,20 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
-import { Listing as Property, PropertyStatus, VerificationStatus } from '@rental-portal/database';
+import {
+  Listing as Property,
+  PropertyStatus,
+  VerificationStatus,
+  BookingMode,
+  PropertyCondition,
+} from '@rental-portal/database';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
 import { PropertyValidationService } from './listing-validation.service';
+import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 
 export interface CreatePropertyDto {
   categoryId: string;
@@ -58,6 +66,7 @@ export interface ListingFilters extends PropertyFilters {}
 
 export interface UpdatePropertyDto extends Partial<CreatePropertyDto> {
   status?: PropertyStatus;
+  images?: string[];
 }
 
 export interface PropertyFilters {
@@ -65,6 +74,7 @@ export interface PropertyFilters {
   ownerId?: string;
   organizationId?: string;
   status?: PropertyStatus;
+  featured?: boolean;
   bookingMode?: string;
   city?: string;
   country?: string;
@@ -76,68 +86,187 @@ export interface PropertyFilters {
 
 @Injectable()
 export class PropertysService {
+  private readonly logger = new Logger(PropertysService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly templateService: CategoryTemplateService,
     private readonly validationService: PropertyValidationService,
+    private readonly moderationService: ContentModerationService,
   ) {}
 
-  async create(ownerId: string, dto: CreatePropertyDto): Promise<Property> {
-    // Validate category
-    const category = await this.prisma.category.findUnique({
-      where: { id: dto.categoryId },
+  private async resolveCategoryId(input: any): Promise<string> {
+    const categoryValue = input?.categoryId || input?.category;
+    if (!categoryValue || typeof categoryValue !== 'string') {
+      throw new BadRequestException('Category is required');
+    }
+
+    const category = await this.prisma.category.findFirst({
+      where: {
+        OR: [
+          { id: categoryValue },
+          { slug: categoryValue.toLowerCase() },
+          { name: categoryValue },
+        ],
+      },
     });
 
     if (!category) {
       throw new BadRequestException('Invalid category');
     }
 
-    // Validate category-specific data
-    const validation = await this.validationService.validateCategoryData(
-      dto.categoryId,
-      dto.categorySpecificData,
-    );
+    return category.id;
+  }
 
-    if (!validation.isValid) {
-      throw new BadRequestException({
-        message: 'Invalid category-specific data',
-        errors: validation.errors,
-      });
+  private normalizeCondition(condition?: string): PropertyCondition | undefined {
+    if (!condition) return undefined;
+    const normalized = condition.toLowerCase();
+    if (['new', 'like-new', 'excellent'].includes(normalized)) return PropertyCondition.EXCELLENT;
+    if (normalized === 'good') return PropertyCondition.GOOD;
+    if (normalized === 'fair') return PropertyCondition.FAIR;
+    if (normalized === 'poor') return PropertyCondition.POOR;
+    return undefined;
+  }
+
+  private normalizeRules(rules?: string | string[]): string[] | undefined {
+    if (!rules) return undefined;
+    if (Array.isArray(rules)) return rules;
+    return rules
+      .split('\n')
+      .map((rule) => rule.trim())
+      .filter(Boolean);
+  }
+
+  private buildMetadata(input: any): string | undefined {
+    const metadata: Record<string, any> = {};
+    if (input.deliveryOptions) metadata.deliveryOptions = input.deliveryOptions;
+    if (input.deliveryRadius != null) metadata.deliveryRadius = input.deliveryRadius;
+    if (input.deliveryFee != null) metadata.deliveryFee = input.deliveryFee;
+    if (input.minimumRentalPeriod != null) metadata.minimumRentalPeriod = input.minimumRentalPeriod;
+    if (input.maximumRentalPeriod != null) metadata.maximumRentalPeriod = input.maximumRentalPeriod;
+    if (input.cancellationPolicy) metadata.cancellationPolicy = input.cancellationPolicy;
+
+    return Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : undefined;
+  }
+
+  async create(ownerId: string, dto: CreatePropertyDto): Promise<Property> {
+    const categoryId = await this.resolveCategoryId(dto);
+
+    // Validate category-specific data
+    const categorySpecificData = dto.categorySpecificData || {};
+    if (Object.keys(categorySpecificData).length > 0) {
+      const validation = await this.validationService.validateCategoryData(
+        categoryId,
+        categorySpecificData,
+      );
+
+      if (!validation.isValid) {
+        throw new BadRequestException({
+          message: 'Invalid category-specific data',
+          errors: validation.errors,
+        });
+      }
     }
 
     // Generate slug
     const slug = await this.generateUniqueSlug(dto.title);
+
+    // Moderate listing content (title + description)
+    try {
+      const modResult = await this.moderationService.moderateListing({
+        title: dto.title,
+        description: dto.description,
+        photos: [],
+        userId: ownerId,
+      });
+      if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
+        throw new BadRequestException({
+          message: 'Listing content violates our content policies',
+          flags: modResult.flags,
+        });
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.warn('Listing moderation check failed, proceeding', error);
+    }
+
+    const location = (dto as any).location || dto;
+    const mappedLocation = location
+      ? {
+          addressLine1: location.address || dto.addressLine1,
+          addressLine2: dto.addressLine2,
+          city: location.city || dto.city,
+          state: location.state || dto.state,
+          postalCode: location.postalCode || dto.postalCode,
+          country: location.country || dto.country,
+          latitude: location.coordinates?.lat ?? dto.latitude,
+          longitude: location.coordinates?.lng ?? dto.longitude,
+        }
+      : {
+          addressLine1: dto.addressLine1,
+          addressLine2: dto.addressLine2,
+          city: dto.city,
+          state: dto.state,
+          postalCode: dto.postalCode,
+          country: dto.country,
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+        };
+
+    const basePrice = (dto as any).pricePerDay ?? dto.basePrice;
+    const weeklyPrice = (dto as any).pricePerWeek ?? dto.weeklyPrice;
+    const monthlyPrice = (dto as any).pricePerMonth ?? dto.monthlyPrice;
+    const rawBookingMode = (dto as any).bookingMode;
+    const normalizedBookingMode =
+      typeof rawBookingMode === 'string' && rawBookingMode.toUpperCase() === 'INSTANT'
+        ? BookingMode.INSTANT_BOOK
+        : rawBookingMode;
+    const bookingMode =
+      (dto as any).instantBooking === true ? BookingMode.INSTANT_BOOK : normalizedBookingMode;
 
     // Create listing
     const listing = await this.prisma.listing.create({
       data: {
         ownerId,
         organizationId: dto.organizationId,
-        categoryId: dto.categoryId,
+        categoryId,
         title: dto.title,
         description: dto.description,
         slug,
-        address: `${dto.addressLine1 || ''}${dto.addressLine2 ? ', ' + dto.addressLine2 : ''}`,
-        city: dto.city,
-        state: dto.state,
-        zipCode: dto.postalCode,
-        country: dto.country,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        photos: dto.photos?.map((p) => (typeof p === 'string' ? p : p.url)) || [],
+        address: `${mappedLocation.addressLine1 || ''}${
+          mappedLocation.addressLine2 ? ', ' + mappedLocation.addressLine2 : ''
+        }`,
+        city: mappedLocation.city,
+        state: mappedLocation.state,
+        zipCode: mappedLocation.postalCode,
+        country: mappedLocation.country,
+        latitude: mappedLocation.latitude,
+        longitude: mappedLocation.longitude,
+        photos:
+          dto.photos?.map((p) => (typeof p === 'string' ? p : p.url)) ||
+          (dto as any).images ||
+          [],
         type: 'APARTMENT' as any, // Required field
-        basePrice: dto.basePrice,
+        basePrice: basePrice,
         currency: dto.currency || 'USD',
         // requiresDeposit, depositAmount, depositType don't exist in schema
         // bookingMode, minBookingHours, maxBookingDays, leadTime, advanceNotice don't exist in schema
         amenities: dto.amenities || [],
         features: dto.features || [],
         // cancellationPolicyId: dto.cancellationPolicyId,
-        rules: dto.rules || [],
+        rules: this.normalizeRules(dto.rules) || [],
         // metaTitle, metaDescription don't exist in schema
         status: PropertyStatus.DRAFT,
         verificationStatus: VerificationStatus.PENDING,
+        bookingMode: bookingMode || BookingMode.REQUEST,
+        minStayNights: (dto as any).minimumRentalPeriod || dto.minBookingHours || 1,
+        maxStayNights: (dto as any).maximumRentalPeriod || dto.maxBookingDays || null,
+        weeklyDiscount: weeklyPrice ? 0 : undefined,
+        monthlyDiscount: monthlyPrice ? 0 : undefined,
+        condition: this.normalizeCondition((dto as any).condition),
+        securityDeposit: (dto as any).securityDeposit || undefined,
+        metadata: this.buildMetadata(dto),
       },
       include: {
         owner: {
@@ -173,6 +302,7 @@ export class PropertysService {
     if (filters.ownerId) where.ownerId = filters.ownerId;
     if (filters.organizationId) where.organizationId = filters.organizationId;
     if (filters.status) where.status = filters.status;
+    if (filters.featured != null) where.featured = filters.featured;
     if (filters.bookingMode) where.bookingMode = filters.bookingMode;
     if (filters.city) where.city = { contains: filters.city, mode: 'insensitive' };
     if (filters.country) where.country = filters.country;
@@ -305,8 +435,11 @@ export class PropertysService {
 
     return listing;
   }
-
-  async update(id: string, userId: string, dto: UpdatePropertyDto): Promise<Property> {
+  // Alias for findById
+  async findOne(id: string): Promise<Property> {
+    return this.findById(id, false);
+  }
+  async update(id: string, userId: string, dto: UpdateListingDto | UpdatePropertyDto): Promise<Property> {
     const listing = await this.findById(id, true);
 
     // Check ownership
@@ -329,9 +462,51 @@ export class PropertysService {
       }
     }
 
+    const mapped: any = { ...dto };
+
+    if ((dto as any).location) {
+      const location = (dto as any).location;
+      mapped.address = location.address || mapped.address;
+      mapped.city = location.city || mapped.city;
+      mapped.state = location.state || mapped.state;
+      mapped.zipCode = location.postalCode || mapped.zipCode;
+      mapped.country = location.country || mapped.country;
+      mapped.latitude = location.coordinates?.lat ?? mapped.latitude;
+      mapped.longitude = location.coordinates?.lng ?? mapped.longitude;
+    }
+
+    if ((dto as any).pricePerDay != null) mapped.basePrice = (dto as any).pricePerDay;
+    if ((dto as any).pricePerWeek != null) mapped.weeklyPrice = (dto as any).pricePerWeek;
+    if ((dto as any).pricePerMonth != null) mapped.monthlyPrice = (dto as any).pricePerMonth;
+    if ((dto as any).images) mapped.photos = (dto as any).images;
+    if ((dto as any).instantBooking != null) {
+      mapped.bookingMode = (dto as any).instantBooking ? BookingMode.INSTANT_BOOK : BookingMode.REQUEST;
+    } else if ((dto as any).bookingMode) {
+      const mode = String((dto as any).bookingMode).toUpperCase();
+      mapped.bookingMode = mode === 'INSTANT' ? BookingMode.INSTANT_BOOK : (dto as any).bookingMode;
+    }
+    if ((dto as any).minimumRentalPeriod != null) {
+      mapped.minStayNights = (dto as any).minimumRentalPeriod;
+    }
+    if ((dto as any).maximumRentalPeriod != null) {
+      mapped.maxStayNights = (dto as any).maximumRentalPeriod;
+    }
+    if ((dto as any).condition) {
+      mapped.condition = this.normalizeCondition((dto as any).condition);
+    }
+    if ((dto as any).rules) {
+      mapped.rules = this.normalizeRules((dto as any).rules);
+    }
+    const metadata = this.buildMetadata(dto);
+    if (metadata) mapped.metadata = metadata;
+
+    if ((dto as any).category || (dto as any).categoryId) {
+      mapped.categoryId = await this.resolveCategoryId(dto);
+    }
+
     const updated = await this.prisma.listing.update({
       where: { id },
-      data: dto as any,
+      data: mapped,
       include: {
         owner: {
           select: {
@@ -480,7 +655,7 @@ export class PropertysService {
     });
   }
 
-  async getPropertyStats(id: string) {
+  async getPropertyStats(id: string): Promise<any> {
     const [listing, bookingCount, activeBookings, revenue, reviewStats] = await Promise.all([
       this.findById(id),
       this.prisma.booking.count({ where: { listingId: id } }),
@@ -532,6 +707,83 @@ export class PropertysService {
     }
 
     return slug;
+  }
+
+  /**
+   * Get price suggestions based on similar listings in the same category/city.
+   * Returns average, median, min, max, and a suggested price range.
+   */
+  async getPriceSuggestion(params: {
+    categoryId?: string;
+    city?: string;
+    condition?: string;
+  }): Promise<{
+    averagePrice: number;
+    medianPrice: number;
+    minPrice: number;
+    maxPrice: number;
+    suggestedRange: { low: number; high: number };
+    sampleSize: number;
+  }> {
+    const where: any = {
+      status: 'PUBLISHED',
+      deletedAt: null,
+    };
+    if (params.categoryId) where.categoryId = params.categoryId;
+    if (params.city) where.city = { contains: params.city, mode: 'insensitive' };
+    if (params.condition) where.condition = params.condition;
+
+    const listings = await this.prisma.listing.findMany({
+      where,
+      select: { basePrice: true },
+      take: 200,
+      orderBy: { basePrice: 'asc' },
+    });
+
+    if (listings.length === 0) {
+      return {
+        averagePrice: 30,
+        medianPrice: 30,
+        minPrice: 10,
+        maxPrice: 100,
+        suggestedRange: { low: 20, high: 50 },
+        sampleSize: 0,
+      };
+    }
+
+    const prices = listings.map((l) => Number(l.basePrice) || 0).filter((p) => p > 0);
+    if (prices.length === 0) {
+      return {
+        averagePrice: 30,
+        medianPrice: 30,
+        minPrice: 10,
+        maxPrice: 100,
+        suggestedRange: { low: 20, high: 50 },
+        sampleSize: 0,
+      };
+    }
+
+    prices.sort((a, b) => a - b);
+    const sum = prices.reduce((acc, p) => acc + p, 0);
+    const avg = Math.round(sum / prices.length);
+    const mid = Math.floor(prices.length / 2);
+    const median =
+      prices.length % 2 === 0
+        ? Math.round((prices[mid - 1] + prices[mid]) / 2)
+        : prices[mid];
+
+    // Suggested range: 25th to 75th percentile
+    const p25 = prices[Math.floor(prices.length * 0.25)];
+    const p75 = prices[Math.floor(prices.length * 0.75)];
+
+    return {
+      averagePrice: avg,
+      medianPrice: median,
+      minPrice: prices[0],
+      maxPrice: prices[prices.length - 1],
+      suggestedRange: { low: p25, high: p75 },
+      sampleSize: prices.length,
+    };
   }
 }
 

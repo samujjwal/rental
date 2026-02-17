@@ -226,16 +226,45 @@ export class MessagesService {
       return 0;
     }
 
-    const result = await this.prisma.messageReadReceipt.createMany({
-      data: unreadMessages.map((m) => ({
-        messageId: m.id,
-        userId,
-        readAt: new Date(),
-      })),
-      skipDuplicates: true,
-    });
+    const readAt = new Date();
+    const payload = unreadMessages.map((m) => ({
+      messageId: m.id,
+      userId,
+      readAt,
+    }));
 
-    return result.count;
+    try {
+      const result = await this.prisma.messageReadReceipt.createMany({
+        data: payload,
+        skipDuplicates: true,
+      });
+
+      return result.count;
+    } catch {
+      // Message rows can disappear between select and insert in concurrent flows.
+      // Retry only with currently existing message IDs.
+      const existingMessages = await this.prisma.message.findMany({
+        where: {
+          id: { in: unreadMessages.map((m) => m.id) },
+        },
+        select: { id: true },
+      });
+
+      if (existingMessages.length === 0) {
+        return 0;
+      }
+
+      const retryResult = await this.prisma.messageReadReceipt.createMany({
+        data: existingMessages.map((m) => ({
+          messageId: m.id,
+          userId,
+          readAt,
+        })),
+        skipDuplicates: true,
+      });
+
+      return retryResult.count;
+    }
   }
 
   /**

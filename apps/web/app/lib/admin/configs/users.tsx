@@ -1,6 +1,6 @@
 import type { EntityConfig } from "../entity-framework";
 import type { AdminUser } from "~/lib/api/admin";
-import { Chip } from "@mui/material";
+import { StatusBadge } from "~/components/ui/StatusBadge";
 
 export const usersConfig: EntityConfig<AdminUser> = {
   name: "User",
@@ -41,7 +41,7 @@ export const usersConfig: EntityConfig<AdminUser> = {
           HOST: "primary",
           SUPER_ADMIN: "error",
         };
-        return <Chip label={role} color={colors[role] || "default"} size="small" />;
+        return <StatusBadge label={role} color={colors[role] || "default"} size="small" />;
       },
     },
     {
@@ -55,7 +55,7 @@ export const usersConfig: EntityConfig<AdminUser> = {
           PENDING_VERIFICATION: "warning",
           DEACTIVATED: "default",
         };
-        return <Chip label={status} color={colors[status] || "default"} size="small" />;
+        return <StatusBadge label={status} color={colors[status] || "default"} size="small" />;
       },
     },
     {
@@ -93,6 +93,17 @@ export const usersConfig: EntityConfig<AdminUser> = {
         { label: "Admin", value: "ADMIN" },
       ],
       validation: { required: true },
+    },
+    {
+      key: "status",
+      label: "Status",
+      type: "select",
+      options: [
+        { label: "Active", value: "ACTIVE" },
+        { label: "Suspended", value: "SUSPENDED" },
+        { label: "Pending Verification", value: "PENDING_VERIFICATION" },
+        { label: "Deactivated", value: "DEACTIVATED" },
+      ],
     },
   ],
 

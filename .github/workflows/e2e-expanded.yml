@@ -1,0 +1,150 @@
+name: E2E Expanded Testing
+
+on:
+  workflow_dispatch: # Manual trigger
+  schedule:
+    - cron: '0 2 * * 0' # Weekly on Sunday at 2 AM
+
+jobs:
+  e2e-expanded:
+    name: Expanded E2E Test Suite
+    runs-on: ubuntu-latest
+    continue-on-error: true # Don't fail CI if exploratory tests fail
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - name: "Owner Flows"
+            files: "e2e/owner-dashboard.spec.ts e2e/owner-listings.spec.ts"
+          - name: "Renter Flows"
+            files: "e2e/renter-dashboard.spec.ts e2e/search-browse.spec.ts"
+          - name: "Feature Tests"
+            files: "e2e/home.spec.ts e2e/favorites.spec.ts e2e/messages.spec.ts"
+          - name: "Payment & Reviews"
+            files: "e2e/payments-reviews-notifications.spec.ts"
+          - name: "Password Recovery"
+            files: "e2e/password-recovery.spec.ts"
+          - name: "Organizations"
+            files: "e2e/organizations.spec.ts"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: cd apps/web && npx playwright install --with-deps
+
+      - name: Build application
+        run: pnpm build
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Run database migrations
+        run: cd packages/database && npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+
+      - name: Seed test data
+        run: cd packages/database && npx prisma db seed
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        continue-on-error: true
+
+      - name: Start API server
+        run: cd apps/api && pnpm start &
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          EMAIL_ENABLED: "false"
+
+      - name: Start web server
+        run: cd apps/web && pnpm dev &
+        env:
+          NODE_ENV: test
+
+      - name: Wait for servers
+        run: |
+          npx wait-on http://localhost:3000 http://localhost:5000 --timeout 60000
+
+      - name: Run ${{ matrix.suite.name }}
+        run: |
+          cd apps/web
+          npx playwright test ${{ matrix.suite.files }} \
+            --project=chromium \
+            --reporter=list,html \
+            --timeout=30000
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+        continue-on-error: true
+
+      - name: Upload test results for ${{ matrix.suite.name }}
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report-${{ matrix.suite.name }}
+          path: apps/web/playwright-report/
+          retention-days: 14
+
+      - name: Upload test videos
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-videos-${{ matrix.suite.name }}
+          path: apps/web/test-results/
+          retention-days: 7
+
+  summary:
+    name: Test Summary
+    needs: e2e-expanded
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## E2E Expanded Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Exploratory testing complete" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Review individual suite results in artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** These tests explore features under development" >> $GITHUB_STEP_SUMMARY
+          echo "Failures are expected for unimplemented features (~30 tests skipped)" >> $GITHUB_STEP_SUMMARY

@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, Param, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Body, Param, UseGuards, NotFoundException, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { UsersService, UpdateProfileDto } from '../services/users.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
@@ -29,6 +29,23 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   async updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateProfileDto) {
     const user = await this.usersService.updateProfile(userId, dto);
+    const { passwordHash, mfaSecret, ...profile } = user;
+    return profile;
+  }
+
+  @Delete('me')
+  @ApiOperation({ summary: 'Delete current user account' })
+  @ApiResponse({ status: 200, description: 'Account deleted successfully' })
+  async deleteAccount(@CurrentUser('id') userId: string) {
+    await this.usersService.deleteUser(userId);
+    return { message: 'Account deleted successfully' };
+  }
+
+  @Post('upgrade-to-owner')
+  @ApiOperation({ summary: 'Upgrade current user to owner role' })
+  @ApiResponse({ status: 200, description: 'User role updated successfully' })
+  async upgradeToOwner(@CurrentUser('id') userId: string) {
+    const user = await this.usersService.upgradeToOwner(userId);
     const { passwordHash, mfaSecret, ...profile } = user;
     return profile;
   }

@@ -27,7 +27,7 @@ export interface AppError {
     sessionId?: string;
     url?: string;
     userAgent?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   severity: "low" | "medium" | "high" | "critical";
   recoverable: boolean;
@@ -70,7 +70,7 @@ export class ErrorBoundary extends Component<
     };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  static getDerivedStateFromError(_error: Error): Partial<ErrorBoundaryState> {
     return {
       hasError: true,
     };
@@ -191,7 +191,7 @@ export class ErrorBoundary extends Component<
       }
 
       localStorage.setItem("app_errors", JSON.stringify(errors));
-    } catch (e) {
+    } catch {
       // Ignore localStorage errors
     }
   }
@@ -388,7 +388,7 @@ interface UseErrorReturn {
   error: AppError | null;
   setError: (error: AppError | Error | string) => void;
   clearError: () => void;
-  reportError: (error: AppError | Error | string, context?: any) => void;
+  reportError: (error: AppError | Error | string, context?: unknown) => void;
 }
 
 export function useError(): UseErrorReturn {
@@ -429,8 +429,12 @@ export function useError(): UseErrorReturn {
     setErrorState(null);
   };
 
-  const reportError = (error: AppError | Error | string, context?: any) => {
+  const reportError = (error: AppError | Error | string, context?: unknown) => {
     let appError: AppError;
+    const normalizedContext =
+      typeof context === "object" && context !== null
+        ? (context as Record<string, unknown>)
+        : undefined;
 
     if (typeof error === "string") {
       appError = {
@@ -438,7 +442,7 @@ export function useError(): UseErrorReturn {
         name: "CustomError",
         message: error,
         timestamp: new Date(),
-        context,
+        context: normalizedContext,
         severity: "medium",
         recoverable: true,
         retryable: false,
@@ -450,13 +454,18 @@ export function useError(): UseErrorReturn {
         message: error.message,
         stack: error.stack,
         timestamp: new Date(),
-        context,
+        context: normalizedContext,
         severity: "medium",
         recoverable: true,
         retryable: false,
       };
     } else {
-      appError = { ...error, context: { ...error.context, ...context } };
+      appError = {
+        ...error,
+        context: normalizedContext
+          ? { ...(error.context ?? {}), ...normalizedContext }
+          : error.context,
+      };
     }
 
     // Report to error tracking service
@@ -489,7 +498,7 @@ interface ErrorReportingConfig {
   environment?: string;
   release?: string;
   userId?: string;
-  beforeSend?: (event: any) => any;
+  beforeSend?: (event: unknown) => unknown;
   ignoreErrors?: (error: Error) => boolean;
 }
 
@@ -550,7 +559,7 @@ class ErrorReportingService {
     this.captureException(error);
   };
 
-  captureException(error: AppError | Error, context?: any) {
+  captureException(error: AppError | Error, context?: unknown) {
     if (!this.initialized) {
       console.warn("ErrorReporting not initialized");
       return;
@@ -621,7 +630,7 @@ export function DevErrorOverlay() {
         }))
         : [];
       setErrors(normalized.slice(-10)); // Show last 10 errors
-    } catch (e) {
+    } catch {
       // Ignore
     }
 
@@ -638,7 +647,7 @@ export function DevErrorOverlay() {
           }))
           : [];
         setErrors(normalized.slice(-10));
-      } catch (e) {
+      } catch {
         // Ignore
       }
     };

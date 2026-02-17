@@ -1,22 +1,55 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useNavigate } from "react-router";
+import { useLoaderData, useNavigate, redirect } from "react-router";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
-import { api } from "~/lib/api-client";
+import { uploadApi } from "~/lib/api/upload";
+import { getUser } from "~/utils/auth";
+import { listingsApi } from "~/lib/api/listings";
+import { insuranceApi } from "~/lib/api/insurance";
+import { RouteErrorBoundary } from "~/components/ui";
+
+interface InsuranceRequirement {
+  required: boolean;
+  reason?: string;
+  type?: string;
+  minimumCoverage?: number;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string | null): value is string =>
+  Boolean(value && UUID_PATTERN.test(value));
+const MAX_POLICY_FIELD_LENGTH = 120;
+const MAX_PROVIDER_FIELD_LENGTH = 120;
+const MAX_TYPE_FIELD_LENGTH = 80;
+const MAX_COVERAGE_AMOUNT = 10_000_000;
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+  if (user.role !== "owner" && user.role !== "admin") {
+    return redirect("/dashboard");
+  }
+
   const url = new URL(request.url);
   const listingId = url.searchParams.get("listingId");
 
-  if (!listingId) {
-    throw new Error("Listing ID required");
+  if (!isUuid(listingId)) {
+    return redirect("/listings");
   }
+  try {
+    const listing = await listingsApi.getListingById(listingId);
+    if (user.role !== "admin" && listing.ownerId !== user.id) {
+      return redirect("/listings");
+    }
 
-  const requirement = await api.get<any>(
-    `/insurance/listings/${listingId}/requirement`
-  );
-
-  return { listingId, requirement };
+    const requirement = await insuranceApi.getListingRequirement(listingId);
+    return { listingId, requirement };
+  } catch (error) {
+    console.error("[insurance.upload] loader failed:", error);
+    return redirect("/listings");
+  }
 }
 
 export default function InsuranceUpload() {
@@ -31,19 +64,111 @@ export default function InsuranceUpload() {
     setError(null);
 
     const formData = new FormData(e.currentTarget);
+    const documentFile = formData.get("document") as File | null;
+    if (!documentFile) {
+      setError("Please attach your insurance document.");
+      setUploading(false);
+      return;
+    }
+    if (documentFile.size > 10 * 1024 * 1024) {
+      setError("Document must be 10MB or smaller.");
+      setUploading(false);
+      return;
+    }
+    const allowedFileTypes = new Set([
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ]);
+    if (!allowedFileTypes.has(documentFile.type)) {
+      setError("Only PDF, JPG, PNG, or WEBP documents are allowed.");
+      setUploading(false);
+      return;
+    }
+
+    let documentUrl = "";
+    try {
+      const uploadResult = await uploadApi.uploadDocument(documentFile);
+      documentUrl = uploadResult.url;
+    } catch {
+      setError("Unable to upload document. Please try again.");
+      setUploading(false);
+      return;
+    }
+
+    const coverageAmount = Number(formData.get("coverageAmount"));
+    const policyNumber = String(formData.get("policyNumber") || "")
+      .trim()
+      .slice(0, MAX_POLICY_FIELD_LENGTH);
+    const provider = String(formData.get("provider") || "")
+      .trim()
+      .slice(0, MAX_PROVIDER_FIELD_LENGTH);
+    const type = String(formData.get("type") || "")
+      .trim()
+      .slice(0, MAX_TYPE_FIELD_LENGTH);
+    const effectiveDate = String(formData.get("effectiveDate") || "");
+    const expirationDate = String(formData.get("expirationDate") || "");
+    if (!policyNumber || !provider || !type) {
+      setError("Policy number, provider, and insurance type are required.");
+      setUploading(false);
+      return;
+    }
+    if (!Number.isFinite(coverageAmount) || coverageAmount <= 0) {
+      setError("Coverage amount must be a valid positive number.");
+      setUploading(false);
+      return;
+    }
+    if (coverageAmount > MAX_COVERAGE_AMOUNT) {
+      setError("Coverage amount exceeds the allowed limit.");
+      setUploading(false);
+      return;
+    }
+    if (
+      requirement.required &&
+      typeof requirement.minimumCoverage === "number" &&
+      coverageAmount < requirement.minimumCoverage
+    ) {
+      setError(
+        `Coverage amount must be at least $${requirement.minimumCoverage.toLocaleString()}.`
+      );
+      setUploading(false);
+      return;
+    }
+    if (!effectiveDate || !expirationDate) {
+      setError("Please provide effective and expiration dates.");
+      setUploading(false);
+      return;
+    }
+    const effectiveAt = new Date(effectiveDate);
+    const expirationAt = new Date(expirationDate);
+    if (
+      Number.isNaN(effectiveAt.getTime()) ||
+      Number.isNaN(expirationAt.getTime())
+    ) {
+      setError("Please provide valid insurance dates.");
+      setUploading(false);
+      return;
+    }
+    if (expirationAt <= effectiveAt) {
+      setError("Expiration date must be after effective date.");
+      setUploading(false);
+      return;
+    }
+
     const data = {
       listingId,
-      policyNumber: formData.get("policyNumber") as string,
-      provider: formData.get("provider") as string,
-      type: formData.get("type") as string,
-      coverageAmount: parseInt(formData.get("coverageAmount") as string),
-      effectiveDate: formData.get("effectiveDate") as string,
-      expirationDate: formData.get("expirationDate") as string,
-      documentUrl: formData.get("documentUrl") as string,
+      policyNumber,
+      provider,
+      type,
+      coverageAmount,
+      effectiveDate,
+      expirationDate,
+      documentUrl,
     };
 
     try {
-      await api.post("/insurance/policies", data);
+      await insuranceApi.uploadPolicy(data);
 
       // Success - redirect to listings
       navigate("/listings?status=pending_insurance");
@@ -133,7 +258,9 @@ export default function InsuranceUpload() {
                     </p>
                     <p>
                       <strong>Minimum Coverage:</strong> $
-                      {requirement.minimumCoverage.toLocaleString()}
+                      {requirement.minimumCoverage
+                        ? requirement.minimumCoverage.toLocaleString()
+                        : "N/A"}
                     </p>
                   </div>
                 )}
@@ -161,6 +288,7 @@ export default function InsuranceUpload() {
                 id="policyNumber"
                 name="policyNumber"
                 required
+                maxLength={MAX_POLICY_FIELD_LENGTH}
                 className="mt-1 block w-full rounded-md border-input shadow-sm focus:border-primary focus:ring-ring"
                 placeholder="POL-123456"
               />
@@ -179,6 +307,7 @@ export default function InsuranceUpload() {
                 id="provider"
                 name="provider"
                 required
+                maxLength={MAX_PROVIDER_FIELD_LENGTH}
                 className="mt-1 block w-full rounded-md border-input shadow-sm focus:border-primary focus:ring-ring"
                 placeholder="State Farm, Geico, etc."
               />
@@ -221,6 +350,7 @@ export default function InsuranceUpload() {
                 name="coverageAmount"
                 required
                 min={requirement.minimumCoverage || 0}
+                max={MAX_COVERAGE_AMOUNT}
                 className="mt-1 block w-full rounded-md border-input shadow-sm focus:border-primary focus:ring-ring"
                 placeholder={requirement.minimumCoverage?.toString() || "50000"}
               />
@@ -279,16 +409,12 @@ export default function InsuranceUpload() {
                 <input
                   type="file"
                   id="document"
-                  accept=".pdf"
+                  name="document"
+                  accept=".pdf,image/*"
                   required
                   className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                 />
               </div>
-              <input
-                type="hidden"
-                name="documentUrl"
-                value="https://storage.example.com/temp.pdf"
-              />
               <p className="mt-1 text-sm text-muted-foreground">
                 Upload your insurance policy document (Max 10MB)
               </p>
@@ -331,3 +457,4 @@ export default function InsuranceUpload() {
     </div>
   );
 }
+export { RouteErrorBoundary as ErrorBoundary };

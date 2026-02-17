@@ -9,16 +9,23 @@ export type Theme = 'light' | 'dark' | 'system';
 const THEME_STORAGE_KEY = 'theme-preference';
 
 /**
- * Get the initial theme from localStorage or system preference
+ * Read stored theme preference from localStorage.
  */
-function getInitialTheme(): Theme {
-    if (typeof window === 'undefined') return 'system';
+function getStoredTheme(): Theme | null {
+    if (typeof window === 'undefined') return null;
 
     const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
     if (stored && ['light', 'dark', 'system'].includes(stored)) {
         return stored;
     }
-    return 'system';
+    return null;
+}
+
+/**
+ * Get the initial theme from localStorage with a fallback.
+ */
+function getInitialTheme(fallback: Theme = 'system'): Theme {
+    return getStoredTheme() ?? fallback;
 }
 
 /**
@@ -43,7 +50,7 @@ export function useTheme() {
 
     useEffect(() => {
         setMounted(true);
-        const initialTheme = getInitialTheme();
+        const initialTheme = getInitialTheme('system');
         setThemeState(initialTheme);
         applyTheme(initialTheme);
 
@@ -211,8 +218,8 @@ export interface ThemeProviderProps {
 
 export function ThemeProvider({ children, defaultTheme = 'system' }: ThemeProviderProps) {
     useEffect(() => {
-        const stored = getInitialTheme();
-        applyTheme(stored || defaultTheme);
+        const initialTheme = getInitialTheme(defaultTheme);
+        applyTheme(initialTheme);
     }, [defaultTheme]);
 
     return <>{children}</>;

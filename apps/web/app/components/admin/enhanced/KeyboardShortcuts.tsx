@@ -3,7 +3,7 @@
  * Global keyboard shortcuts for power users
  */
 
-import React, { useEffect, useCallback, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Dialog,
   DialogTitle,

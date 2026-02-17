@@ -1,63 +1,93 @@
 import React from "react";
-import {
-  Card as MuiCard,
-  CardContent as MuiCardContent,
-  CardHeader as MuiCardHeader,
-  CardProps as MuiCardProps,
-  CardContentProps as MuiCardContentProps,
-  CardHeaderProps as MuiCardHeaderProps,
-} from "@mui/material";
-import { Typography } from "@mui/material";
+import { cn } from "~/lib/utils";
 
-export interface CardProps extends MuiCardProps {
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-export interface CardContentProps extends MuiCardContentProps {
+export interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-export interface CardHeaderProps extends MuiCardHeaderProps {
+export interface CardHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   title?: string;
   description?: string;
+  children?: React.ReactNode;
 }
 
-export function Card({ children, ...props }: CardProps) {
-  return <MuiCard {...props}>{children}</MuiCard>;
-}
-
-export function CardContent({ children, ...props }: CardContentProps) {
-  return <MuiCardContent {...props}>{children}</MuiCardContent>;
-}
-
-export function CardHeader({ title, description, ...props }: CardHeaderProps) {
+export function Card({ children, className, ...props }: CardProps) {
   return (
-    <MuiCardHeader
+    <div
+      className={cn(
+        "rounded-lg border bg-card text-card-foreground shadow-sm",
+        className
+      )}
       {...props}
-      title={title ? <Typography variant="h6">{title}</Typography> : undefined}
-      subheader={description}
-    />
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CardContent({ children, className, ...props }: CardContentProps) {
+  return (
+    <div className={cn("p-6", className)} {...props}>
+      {children}
+    </div>
+  );
+}
+
+export function CardHeader({ title, description, children, className, ...props }: CardHeaderProps) {
+  return (
+    <div className={cn("flex flex-col space-y-1.5 p-6", className)} {...props}>
+      {title && <h3 className="text-lg font-semibold leading-none tracking-tight">{title}</h3>}
+      {description && <p className="text-sm text-muted-foreground">{description}</p>}
+      {children}
+    </div>
   );
 }
 
 export function CardTitle({
   children,
+  className,
   ...props
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <Typography variant="h6" {...props}>
+    <h3
+      className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+      {...props}
+    >
       {children}
-    </Typography>
+    </h3>
   );
 }
 
 export function CardDescription({
   children,
+  className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
-    <Typography variant="body2" color="text.secondary" {...props}>
+    <p
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    >
       {children}
-    </Typography>
+    </p>
+  );
+}
+
+export function CardFooter({
+  children,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("flex items-center p-6 pt-0", className)}
+      {...props}
+    >
+      {children}
+    </div>
   );
 }

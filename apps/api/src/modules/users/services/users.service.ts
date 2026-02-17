@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
-import { User, UserStatus, VerificationStatus } from '@rental-portal/database';
+import { User, UserRole, UserStatus, VerificationStatus } from '@rental-portal/database';
 
 export interface UpdateProfileDto {
   firstName?: string;
@@ -50,9 +50,48 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
+    const allowedFields: Array<keyof UpdateProfileDto> = [
+      'firstName',
+      'lastName',
+      'phoneNumber',
+      'bio',
+      'profilePhotoUrl',
+      'addressLine1',
+      'addressLine2',
+      'city',
+      'state',
+      'postalCode',
+      'country',
+      'timezone',
+      'preferredLanguage',
+      'preferredCurrency',
+    ];
+
+    const updateData = Object.fromEntries(
+      Object.entries(dto || {}).filter(
+        ([key, value]) => allowedFields.includes(key as keyof UpdateProfileDto) && value !== undefined,
+      ),
+    ) as UpdateProfileDto;
+
+    if (updateData.phoneNumber && !/^\+?[1-9]\d{7,14}$/.test(updateData.phoneNumber)) {
+      throw new BadRequestException('Invalid phone number format');
+    }
+
+    if (typeof updateData.bio === 'string') {
+      updateData.bio = updateData.bio.replace(/<[^>]*>/g, '').trim();
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      const existing = await this.findById(userId);
+      if (!existing) {
+        throw new NotFoundException('User not found');
+      }
+      return existing;
+    }
+
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: dto,
+      data: updateData,
     });
 
     // Invalidate cache
@@ -173,5 +212,26 @@ export class UsersService {
     });
 
     await this.cacheService.del(`user:${userId}`);
+  }
+
+  async upgradeToOwner(userId: string): Promise<User> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { role: UserRole.HOST },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'USER_ROLE_UPDATED',
+        entityType: 'User',
+        entityId: userId,
+        newValues: JSON.stringify({ role: UserRole.HOST }),
+      },
+    });
+
+    await this.cacheService.del(`user:${userId}`);
+
+    return user;
   }
 }

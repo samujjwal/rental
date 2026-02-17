@@ -4,10 +4,13 @@ import { BookingStateMachineService } from './services/booking-state-machine.ser
 import { BookingCalculationService } from './services/booking-calculation.service';
 import { BookingsController } from './controllers/bookings.controller';
 import { ListingsModule } from '../listings/listings.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { FraudDetectionModule } from '../fraud-detection/fraud-detection.module';
+import { InsuranceModule } from '../insurance/insurance.module';
+import { ModerationModule } from '../moderation/moderation.module';
 
 @Module({
-  imports: [ListingsModule, FraudDetectionModule],
+  imports: [ListingsModule, FraudDetectionModule, NotificationsModule, InsuranceModule, ModerationModule],
   controllers: [BookingsController],
   providers: [BookingsService, BookingStateMachineService, BookingCalculationService],
   exports: [BookingsService, BookingStateMachineService],

@@ -1,4 +1,3 @@
-import { Button } from '@mui/material';
 import { Map, List } from 'lucide-react';
 
 export interface MapViewToggleProps {
@@ -10,46 +9,30 @@ export interface MapViewToggleProps {
 export function MapViewToggle({ view, onViewChange, className = '' }: MapViewToggleProps) {
     return (
         <div className={`inline-flex rounded-lg border border-gray-300 bg-white shadow-sm ${className}`}>
-            <Button
+            <button
+                type="button"
                 onClick={() => onViewChange('list')}
-                variant={view === 'list' ? 'contained' : 'text'}
-                leftIcon={<List size={18} />}
-                sx={{
-                    borderRadius: '0.5rem 0 0 0.5rem',
-                    textTransform: 'none',
-                    px: 2,
-                    py: 1,
-                    ...(view === 'list' && {
-                        backgroundColor: 'primary.main',
-                        color: 'white',
-                        '&:hover': {
-                            backgroundColor: 'primary.dark',
-                        },
-                    }),
-                }}
+                className={`inline-flex items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm font-medium transition-colors
+                    ${view === 'list'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
             >
+                <List size={18} />
                 List
-            </Button>
-            <Button
+            </button>
+            <button
+                type="button"
                 onClick={() => onViewChange('map')}
-                variant={view === 'map' ? 'contained' : 'text'}
-                leftIcon={<Map size={18} />}
-                sx={{
-                    borderRadius: '0 0.5rem 0.5rem 0',
-                    textTransform: 'none',
-                    px: 2,
-                    py: 1,
-                    ...(view === 'map' && {
-                        backgroundColor: 'primary.main',
-                        color: 'white',
-                        '&:hover': {
-                            backgroundColor: 'primary.dark',
-                        },
-                    }),
-                }}
+                className={`inline-flex items-center gap-1.5 rounded-r-lg px-3 py-2 text-sm font-medium transition-colors
+                    ${view === 'map'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
             >
+                <Map size={18} />
                 Map
-            </Button>
+            </button>
         </div>
     );
 }

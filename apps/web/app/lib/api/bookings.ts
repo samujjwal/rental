@@ -4,7 +4,6 @@ import type {
   CreateBookingRequest,
   BookingCalculation,
   BookingAvailability,
-  CreateReviewRequest,
 } from "~/types/booking";
 
 export const bookingsApi = {
@@ -14,11 +13,13 @@ export const bookingsApi = {
   },
 
   async getBookingsByRenterId(renterId: string): Promise<Booking[]> {
-    return api.get<Booking[]>(`/bookings?renterId=${renterId}`);
+    // Backend uses authenticated user for renter bookings
+    return api.get<Booking[]>(`/bookings/my-bookings`);
   },
 
   async getBookingsByOwnerId(ownerId: string): Promise<Booking[]> {
-    return api.get<Booking[]>(`/bookings?ownerId=${ownerId}`);
+    // Backend uses authenticated user for owner bookings
+    return api.get<Booking[]>(`/bookings/host-bookings`);
   },
 
   async getOwnerBookings(status?: string): Promise<Booking[]> {
@@ -44,12 +45,24 @@ export const bookingsApi = {
     );
   },
 
-  async confirmBooking(id: string): Promise<Booking> {
-    return api.post<Booking>(`/bookings/${id}/confirm`);
+  async approveBooking(id: string): Promise<Booking> {
+    return api.post<Booking>(`/bookings/${id}/approve`);
   },
 
-  async completeBooking(id: string): Promise<Booking> {
-    return api.post<Booking>(`/bookings/${id}/complete`);
+  async rejectBooking(id: string, reason?: string): Promise<Booking> {
+    return api.post<Booking>(`/bookings/${id}/reject`, { reason });
+  },
+
+  async startBooking(id: string): Promise<Booking> {
+    return api.post<Booking>(`/bookings/${id}/start`);
+  },
+
+  async requestReturn(id: string): Promise<Booking> {
+    return api.post<Booking>(`/bookings/${id}/request-return`);
+  },
+
+  async approveReturn(id: string): Promise<Booking> {
+    return api.post<Booking>(`/bookings/${id}/approve-return`);
   },
 
   async calculatePrice(
@@ -81,10 +94,4 @@ export const bookingsApi = {
     return api.get<string[]>(`/bookings/blocked-dates/${listingId}`);
   },
 
-  async submitReview(
-    bookingId: string,
-    data: { rating: number; comment: string }
-  ): Promise<{ message: string; review: any }> {
-    return api.post(`/bookings/${bookingId}/review`, data);
-  },
 };

@@ -32,14 +32,11 @@ export function MarkerCluster({
                 zoomToBoundsOnClick: true,
                 iconCreateFunction: (cluster) => {
                     const count = cluster.getChildCount();
-                    let size = 'small';
                     let className = 'marker-cluster-small';
 
                     if (count > 100) {
-                        size = 'large';
                         className = 'marker-cluster-large';
                     } else if (count > 10) {
-                        size = 'medium';
                         className = 'marker-cluster-medium';
                     }
 

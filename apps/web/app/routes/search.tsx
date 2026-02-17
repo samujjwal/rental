@@ -1,19 +1,24 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useSearchParams, Link, Form, useNavigation, useSubmit } from "react-router";
-import { Search, SlidersHorizontal, MapPin, X, Grid3X3, List, Map, AlertCircle } from "lucide-react";
+import { useLoaderData, useSearchParams, Link, Form, useNavigation, useSubmit, useNavigate } from "react-router";
+import { Search, SlidersHorizontal, MapPin, X, Grid3X3, List, Map, Package } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
-import type { ListingSearchResponse } from "~/types/listing";
-import { useState, useEffect } from "react";
+import type { ListingSearchParams } from "~/types/listing";
+import type { Listing } from "~/types/listing";
+import { useState, useEffect, useCallback } from "react";
 import { cn } from "~/lib/utils";
 import { useDebounce } from "~/hooks/use-debounce";
+import type { LatLngBoundsExpression } from "leaflet";
 import {
-  Button,
+  UnifiedButton,
   Badge,
   CardGridSkeleton,
   EmptyStatePresets,
   RouteErrorBoundary,
   Alert,
 } from "~/components/ui";
+import { ListingsMap } from "~/components/map/ListingsMap";
+import type { ListingMarkerData } from "~/components/map/ListingMarker";
+import { LocationAutocomplete } from "~/components/search/LocationAutocomplete";
 
 export const meta: MetaFunction = () => {
   return [
@@ -21,33 +26,140 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "Find the perfect rental for your needs" },
   ];
 };
+const MAX_SEARCH_QUERY_LENGTH = 120;
+const MAX_SEARCH_LOCATION_LENGTH = 120;
+const MAX_CATEGORY_LENGTH = 80;
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+const humanizeCondition = (value: unknown): string =>
+  safeText(value).replace("-", " ");
+const BOUNDS_EPSILON = 0.000001;
+type SearchBounds = [[number, number], [number, number]];
+const normalizeBounds = (bounds: LatLngBoundsExpression): SearchBounds | null => {
+  if (!Array.isArray(bounds) || bounds.length !== 2) return null;
+  const southWest = bounds[0];
+  const northEast = bounds[1];
+  if (!Array.isArray(southWest) || !Array.isArray(northEast)) return null;
+  const south = Number(southWest[0]);
+  const west = Number(southWest[1]);
+  const north = Number(northEast[0]);
+  const east = Number(northEast[1]);
+  if (![south, west, north, east].every(Number.isFinite)) return null;
+  return [
+    [south, west],
+    [north, east],
+  ];
+};
+const boundsEqual = (
+  first: SearchBounds | null,
+  second: SearchBounds | null
+) => {
+  if (!first || !second) return false;
+  return (
+    Math.abs(first[0][0] - second[0][0]) < BOUNDS_EPSILON &&
+    Math.abs(first[0][1] - second[0][1]) < BOUNDS_EPSILON &&
+    Math.abs(first[1][0] - second[1][0]) < BOUNDS_EPSILON &&
+    Math.abs(first[1][1] - second[1][1]) < BOUNDS_EPSILON
+  );
+};
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  const parseNumber = (value: string | null) => {
+    if (value == null || value === "") {
+      return undefined;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(max, Math.max(min, value));
+  const normalizedLat = (() => {
+    const value = parseNumber(url.searchParams.get("lat"));
+    return typeof value === "number" && value >= -90 && value <= 90
+      ? value
+      : undefined;
+  })();
+  const normalizedLng = (() => {
+    const value = parseNumber(url.searchParams.get("lng"));
+    return typeof value === "number" && value >= -180 && value <= 180
+      ? value
+      : undefined;
+  })();
+  const normalizedQuery =
+    url.searchParams.get("query")?.trim().slice(0, MAX_SEARCH_QUERY_LENGTH) || undefined;
+  const normalizedLocation =
+    url.searchParams.get("location")?.trim().slice(0, MAX_SEARCH_LOCATION_LENGTH) || undefined;
+  const conditionParam = url.searchParams.get("condition");
+  const allowedConditions = new Set(["new", "like-new", "good", "fair", "poor"]);
+  const condition = conditionParam && allowedConditions.has(conditionParam)
+    ? conditionParam
+    : undefined;
+  const minPrice = (() => {
+    const value = parseNumber(url.searchParams.get("minPrice"));
+    return typeof value === "number" ? Math.max(0, value) : undefined;
+  })();
+  const maxPrice = (() => {
+    const value = parseNumber(url.searchParams.get("maxPrice"));
+    return typeof value === "number" ? Math.max(0, value) : undefined;
+  })();
+  const normalizedMinPrice =
+    typeof minPrice === "number" && typeof maxPrice === "number" && minPrice > maxPrice
+      ? maxPrice
+      : minPrice;
+  const normalizedMaxPrice =
+    typeof minPrice === "number" && typeof maxPrice === "number" && minPrice > maxPrice
+      ? minPrice
+      : maxPrice;
+  const radius = (() => {
+    const value = parseNumber(url.searchParams.get("radius"));
+    return typeof value === "number" ? clamp(value, 1, 500) : undefined;
+  })();
+
+  const sortByParam = url.searchParams.get("sortBy");
+  const sortBy = sortByParam &&
+    ["rating", "price-asc", "price-desc", "newest", "popular"].includes(
+      sortByParam
+    )
+      ? (sortByParam as ListingSearchParams["sortBy"])
+      : undefined;
+
   const searchParams = {
-    query: url.searchParams.get("query") || undefined,
-    category: url.searchParams.get("category") || undefined,
-    minPrice: url.searchParams.get("minPrice")
-      ? Number(url.searchParams.get("minPrice"))
-      : undefined,
-    maxPrice: url.searchParams.get("maxPrice")
-      ? Number(url.searchParams.get("maxPrice"))
-      : undefined,
-    location: url.searchParams.get("location") || undefined,
-    condition: url.searchParams.get("condition") || undefined,
+    query: normalizedQuery,
+    category: url.searchParams.get("category")?.trim().slice(0, MAX_CATEGORY_LENGTH) || undefined,
+    lat: normalizedLat,
+    lng: normalizedLng,
+    radius,
+    minPrice: normalizedMinPrice,
+    maxPrice: normalizedMaxPrice,
+    location: normalizedLocation,
+    condition,
     instantBooking:
       url.searchParams.get("instantBooking") === "true" || undefined,
     delivery: url.searchParams.get("delivery") === "true" || undefined,
-    sortBy: (url.searchParams.get("sortBy") as any) || undefined,
-    page: url.searchParams.get("page")
-      ? Number(url.searchParams.get("page"))
-      : 1,
+    sortBy,
+    page: (() => {
+      const parsedPage = parseNumber(url.searchParams.get("page"));
+      if (!parsedPage || parsedPage < 1) {
+        return 1;
+      }
+      return Math.floor(parsedPage);
+    })(),
     limit: 20,
   };
 
   try {
-    const results = await listingsApi.searchListings(searchParams);
-    return { results, searchParams, error: null };
+    const [results, categories] = await Promise.all([
+      listingsApi.searchListings(searchParams),
+      listingsApi.getCategories().catch(() => []),
+    ]);
+    return { results, categories, searchParams, error: null };
   } catch (error) {
     console.error("Search error:", error);
     return {
@@ -58,6 +170,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
         limit: 20,
         totalPages: 0,
       },
+      categories: [],
       searchParams,
       error: "Failed to load search results. Please try again.",
     };
@@ -65,27 +178,48 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 }
 
 export default function SearchPage() {
-  const { results, searchParams, error } = useLoaderData<typeof clientLoader>();
+  const { results, categories, searchParams, error } =
+    useLoaderData<typeof clientLoader>();
   const [urlSearchParams, setSearchParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
-  const [showMap, setShowMap] = useState(false);
+  const [mapBounds, setMapBounds] = useState<SearchBounds | null>(null);
+  const [highlightedListingId, setHighlightedListingId] = useState<string | undefined>();
+  const [mapOnly, setMapOnly] = useState(false);
+  const [locationValue, setLocationValue] = useState(searchParams.location || "");
+  const navigate = useNavigate();
 
   // Initialize view mode from localStorage or default to grid
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
 
   useEffect(() => {
-    const savedViewMode = localStorage.getItem("searchViewMode") as "grid" | "list" | "map";
+    const savedViewMode = localStorage.getItem("searchViewMode") as
+      | "grid"
+      | "list"
+      | "map";
     if (savedViewMode) {
       setViewMode(savedViewMode);
     }
+    const savedMapOnly = localStorage.getItem("searchMapOnly");
+    if (savedMapOnly === "true") {
+      setMapOnly(true);
+    }
   }, []);
+
+  useEffect(() => {
+    setLocationValue(searchParams.location || "");
+  }, [searchParams.location]);
+
+  useEffect(() => {
+    setQuery(searchParams.query || "");
+  }, [searchParams.query]);
 
   // Save view mode changes
   const handleViewModeChange = (mode: "grid" | "list" | "map") => {
     setViewMode(mode);
     localStorage.setItem("searchViewMode", mode);
     if (mode !== "map") {
-      setShowMap(false);
+      setMapOnly(false);
+      localStorage.setItem("searchMapOnly", "false");
     }
   };
 
@@ -96,6 +230,18 @@ export default function SearchPage() {
   // Auto-submit search when typing (debounced)
   const [query, setQuery] = useState(searchParams.query || "");
   const debouncedQuery = useDebounce(query, 500);
+
+  const handleSearchSubmit = () => {
+    const formData = new FormData();
+    if (query) formData.set("query", query);
+    Array.from(urlSearchParams.entries()).forEach(([key, value]) => {
+      if (key !== "query" && key !== "page") {
+        formData.append(key, value);
+      }
+    });
+    formData.set("page", "1");
+    submit(formData, { replace: true });
+  };
 
   useEffect(() => {
     // Only submit if query changed and it's not the initial load
@@ -113,18 +259,7 @@ export default function SearchPage() {
 
       submit(formData, { replace: true });
     }
-  }, [debouncedQuery, submit]);
-
-  const categories = [
-    "Electronics",
-    "Tools",
-    "Sports",
-    "Vehicles",
-    "Photography",
-    "Party",
-    "Outdoor",
-    "Home",
-  ];
+  }, [debouncedQuery, submit, searchParams.query, urlSearchParams]);
 
   const conditions = ["new", "like-new", "good", "fair", "poor"];
 
@@ -142,7 +277,43 @@ export default function SearchPage() {
     setSearchParams(newParams);
   };
 
+  const applyLocationFilter = (
+    locationLabel: string,
+    coords?: { lat: number; lon: number }
+  ) => {
+    const normalizedLabel = locationLabel.trim().slice(0, MAX_SEARCH_LOCATION_LENGTH);
+    const newParams = new URLSearchParams(urlSearchParams);
+    if (normalizedLabel) {
+      newParams.set("location", normalizedLabel);
+    } else {
+      newParams.delete("location");
+    }
+
+    if (coords) {
+      const lat = safeNumber(coords.lat);
+      const lon = safeNumber(coords.lon);
+      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        newParams.set("lat", lat.toFixed(6));
+        newParams.set("lng", lon.toFixed(6));
+      } else {
+        newParams.delete("lat");
+        newParams.delete("lng");
+      }
+      if (!newParams.get("radius")) {
+        newParams.set("radius", "25");
+      }
+    } else {
+      newParams.delete("lat");
+      newParams.delete("lng");
+    }
+
+    newParams.set("page", "1");
+    setSearchParams(newParams);
+  };
+
   const clearFilters = () => {
+    setLocationValue("");
+    setQuery("");
     setSearchParams({});
   };
 
@@ -150,25 +321,107 @@ export default function SearchPage() {
     ([key]) => key !== "page" && key !== "limit"
   ).length;
 
+  type LegacyLocation = { lat?: number; lon?: number };
+  const getListingCoordinates = (listing: Listing) => {
+    const location = listing.location as Listing["location"] & LegacyLocation;
+    return {
+      lat: location.coordinates?.lat ?? location.lat,
+      lng: location.coordinates?.lng ?? location.lon,
+    };
+  };
+
+  const mapListings: ListingMarkerData[] = results.listings
+    .filter((listing) => {
+      const { lat, lng } = getListingCoordinates(listing);
+      return typeof lat === "number" && typeof lng === "number";
+    })
+    .map((listing) => {
+      const { lat, lng } = getListingCoordinates(listing);
+      return {
+        id: listing.id,
+        title: listing.title,
+        price: listing.pricePerDay,
+        currency: listing.currency || "USD",
+        imageUrl: listing.images?.[0],
+        category:
+          typeof listing.category === "string"
+            ? listing.category
+            : listing.category?.name,
+        location: {
+          lat,
+          lng,
+        },
+      };
+    });
+
+  const handleMapBoundsChange = useCallback((bounds: LatLngBoundsExpression) => {
+    const normalizedBounds = normalizeBounds(bounds);
+    if (!normalizedBounds) return;
+    setMapBounds((previousBounds) =>
+      boundsEqual(previousBounds, normalizedBounds)
+        ? previousBounds
+        : normalizedBounds
+    );
+  }, []);
+
+  const handleSearchThisArea = () => {
+    if (!mapBounds || !Array.isArray(mapBounds)) return;
+    const [[south, west], [north, east]] = mapBounds as [[number, number], [number, number]];
+    const centerLat = (south + north) / 2;
+    const centerLng = (west + east) / 2;
+    const radiusKm = Math.min(
+      500,
+      Math.max(1, haversineDistanceKm(centerLat, centerLng, north, east))
+    );
+    if (
+      !Number.isFinite(centerLat) ||
+      !Number.isFinite(centerLng) ||
+      !Number.isFinite(radiusKm)
+    ) {
+      return;
+    }
+    const newParams = new URLSearchParams(urlSearchParams);
+    newParams.set("lat", centerLat.toFixed(6));
+    newParams.set("lng", centerLng.toFixed(6));
+    newParams.set("radius", radiusKm.toFixed(2));
+    newParams.set("page", "1");
+    setSearchParams(newParams);
+  };
+
+  const handleMapListingClick = (listingId: string) => {
+    const safeListingId = safeText(listingId);
+    if (!safeListingId) return;
+    navigate(`/listings/${safeListingId}`);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <Link to="/" className="text-xl font-bold text-primary">
               Rental Portal
             </Link>
 
             {/* Search Bar */}
-            <Form className="flex-1 max-w-2xl" onSubmit={(e) => { e.preventDefault(); }}>
+            <Form
+              className="order-last w-full sm:order-none sm:flex-1 sm:max-w-2xl"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSearchSubmit();
+              }}
+            >
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
                   type="text"
                   name="query"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) =>
+                    setQuery(e.target.value.slice(0, MAX_SEARCH_QUERY_LENGTH))
+                  }
+                  maxLength={MAX_SEARCH_QUERY_LENGTH}
                   placeholder="Search for items..."
                   className="w-full pl-10 pr-24 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 />
@@ -182,13 +435,35 @@ export default function SearchPage() {
                   </button>
                 )}
                 <button
-                  type="button"
+                  type="submit"
                   className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-primary-foreground px-4 py-1 rounded-md hover:bg-primary/90 transition-colors"
                 >
                   Search
                 </button>
               </div>
             </Form>
+
+            <div className="w-full sm:w-48 md:w-60">
+              <LocationAutocomplete
+                value={locationValue}
+                onChange={(value) =>
+                  setLocationValue(value.slice(0, MAX_SEARCH_LOCATION_LENGTH))
+                }
+                onSelect={(suggestion) => {
+                  setLocationValue(
+                    suggestion.shortLabel.slice(0, MAX_SEARCH_LOCATION_LENGTH)
+                  );
+                  applyLocationFilter(suggestion.shortLabel, {
+                    lat: suggestion.coordinates.lat,
+                    lon: suggestion.coordinates.lon,
+                  });
+                }}
+                inputClassName="py-2 text-sm pr-4"
+                biasZoom={8}
+                biasScale={0.6}
+                layer="city"
+              />
+            </div>
 
             <Link
               to="/dashboard"
@@ -239,7 +514,7 @@ export default function SearchPage() {
                 onClick={() => handleViewModeChange("grid")}
                 className={cn(
                   "p-2 transition-colors",
-                  viewMode === "grid" && !showMap
+                  viewMode === "grid"
                     ? "bg-primary text-primary-foreground"
                     : "bg-background hover:bg-accent"
                 )}
@@ -251,7 +526,7 @@ export default function SearchPage() {
                 onClick={() => handleViewModeChange("list")}
                 className={cn(
                   "p-2 transition-colors border-x",
-                  viewMode === "list" && !showMap
+                  viewMode === "list"
                     ? "bg-primary text-primary-foreground"
                     : "bg-background hover:bg-accent"
                 )}
@@ -260,10 +535,12 @@ export default function SearchPage() {
                 <List className="w-4 h-4" />
               </button>
               <button
-                onClick={() => { setShowMap(!showMap); if (!showMap) handleViewModeChange("map"); }}
+                onClick={() =>
+                  handleViewModeChange(viewMode === "map" ? "grid" : "map")
+                }
                 className={cn(
                   "p-2 transition-colors",
-                  showMap
+                  viewMode === "map"
                     ? "bg-primary text-primary-foreground"
                     : "bg-background hover:bg-accent"
                 )}
@@ -288,12 +565,29 @@ export default function SearchPage() {
           </div>
         </div>
 
-        <div className={cn("flex gap-6", showMap && "flex-1")}>
-          {/* Filters Sidebar */}
+        <div className={cn("flex gap-6", viewMode === "map" && "flex-1")}>
+          {/* Filters Sidebar — overlay on mobile, inline on desktop */}
           {showFilters && (
-            <aside className="w-64 shrink-0">
-              <div className="bg-card rounded-lg shadow-sm border p-6 sticky top-24">
-                <h3 className="font-semibold text-foreground mb-4">Filters</h3>
+            <>
+              {/* Mobile backdrop */}
+              <div
+                className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                onClick={() => setShowFilters(false)}
+                aria-hidden
+              />
+              <aside className="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] overflow-y-auto bg-card shadow-xl md:relative md:inset-auto md:z-auto md:w-64 md:shadow-none md:shrink-0">
+              <div className="bg-card rounded-lg md:shadow-sm md:border p-6 md:sticky md:top-24">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-foreground">Filters</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters(false)}
+                    className="md:hidden p-1 text-muted-foreground hover:text-foreground"
+                    aria-label="Close filters"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
                 {/* Category Filter */}
                 <div className="mb-6">
@@ -308,11 +602,80 @@ export default function SearchPage() {
                     className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-ring transition-colors"
                   >
                     <option value="">All Categories</option>
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                {/* Location Filter */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Location
+                  </label>
+                  <LocationAutocomplete
+                    value={locationValue}
+                    onChange={(value) =>
+                      setLocationValue(value.slice(0, MAX_SEARCH_LOCATION_LENGTH))
+                    }
+                    onSelect={(suggestion) => {
+                      setLocationValue(
+                        suggestion.shortLabel.slice(0, MAX_SEARCH_LOCATION_LENGTH)
+                      );
+                      applyLocationFilter(suggestion.shortLabel, {
+                        lat: suggestion.coordinates.lat,
+                        lon: suggestion.coordinates.lon,
+                      });
+                    }}
+                    inputClassName="py-2.5 text-sm pr-4"
+                    biasZoom={8}
+                    biasScale={0.6}
+                    layer="city"
+                  />
+                  <div className="mt-2 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => applyLocationFilter(locationValue)}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Apply location
+                    </button>
+                    {(urlSearchParams.get("lat") || urlSearchParams.get("lng")) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newParams = new URLSearchParams(urlSearchParams);
+                          newParams.delete("lat");
+                          newParams.delete("lng");
+                          newParams.delete("radius");
+                          newParams.set("page", "1");
+                          setSearchParams(newParams);
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Clear pin
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Radius */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Search Radius
+                  </label>
+                  <select
+                    value={urlSearchParams.get("radius") || "25"}
+                    onChange={(e) => handleFilterChange("radius", e.target.value)}
+                    className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-ring transition-colors"
+                  >
+                    <option value="5">5 km</option>
+                    <option value="10">10 km</option>
+                    <option value="25">25 km</option>
+                    <option value="50">50 km</option>
+                    <option value="100">100 km</option>
                   </select>
                 </div>
 
@@ -359,7 +722,7 @@ export default function SearchPage() {
                     <option value="">Any Condition</option>
                     {conditions.map((cond) => (
                       <option key={cond} value={cond}>
-                        {cond.replace("-", " ")}
+                        {humanizeCondition(cond)}
                       </option>
                     ))}
                   </select>
@@ -402,10 +765,11 @@ export default function SearchPage() {
                 </div>
               </div>
             </aside>
+            </>
           )}
 
           {/* Results Section - Split view with map */}
-          <main className={cn("flex-1", showMap && "flex gap-6")}>
+          <main className={cn("flex-1", viewMode === "map" && "flex gap-6")}>
             {/* Error Alert */}
             {error && (
               <Alert
@@ -417,7 +781,15 @@ export default function SearchPage() {
             )}
 
             {/* Listings */}
-            <div className={cn(showMap ? "w-1/2 overflow-y-auto max-h-[calc(100vh-200px)]" : "w-full")}>
+            <div
+              className={cn(
+                viewMode === "map"
+                  ? mapOnly
+                    ? "hidden"
+                    : "w-1/2 overflow-y-auto max-h-[calc(100vh-200px)]"
+                  : "w-full"
+              )}
+            >
               {/* Loading State */}
               {isLoading && (
                 <CardGridSkeleton
@@ -440,7 +812,7 @@ export default function SearchPage() {
               {!isLoading && results.listings.length > 0 && (
                 <>
                   {/* Grid View */}
-                  {viewMode === "grid" && !showMap && (
+                  {viewMode === "grid" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {results.listings.map((listing) => (
                         <ListingCard key={listing.id} listing={listing} />
@@ -449,7 +821,7 @@ export default function SearchPage() {
                   )}
 
                   {/* List View */}
-                  {viewMode === "list" && !showMap && (
+                  {viewMode === "list" && (
                     <div className="space-y-4">
                       {results.listings.map((listing) => (
                         <ListingListItem key={listing.id} listing={listing} />
@@ -458,10 +830,14 @@ export default function SearchPage() {
                   )}
 
                   {/* Map Split View - Show compact list */}
-                  {showMap && (
+                  {viewMode === "map" && !mapOnly && (
                     <div className="space-y-3">
                       {results.listings.map((listing) => (
-                        <ListingCompactCard key={listing.id} listing={listing} />
+                        <ListingCompactCard
+                          key={listing.id}
+                          listing={listing}
+                          onHighlightChange={setHighlightedListingId}
+                        />
                       ))}
                     </div>
                   )}
@@ -522,57 +898,65 @@ export default function SearchPage() {
             </div>
 
             {/* Map View */}
-            {showMap && (
-              <div className="w-1/2 sticky top-24 h-[calc(100vh-200px)]">
+            {viewMode === "map" && (
+              <div
+                className={cn(
+                  mapOnly ? "w-full" : "w-1/2",
+                  "sticky top-24 h-[calc(100vh-200px)]"
+                )}
+              >
                 <div className="bg-card border rounded-lg h-full flex flex-col">
                   {/* Map Header */}
                   <div className="p-3 border-b flex items-center justify-between">
                     <span className="text-sm font-medium text-foreground">
-                      {results.listings.length} items on map
+                      {mapListings.length} items on map
                     </span>
-                    <UnifiedButton variant="outline" size="sm">
-                      Search this area
-                    </UnifiedButton>
+                    <div className="flex items-center gap-2">
+                      <UnifiedButton
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setMapOnly((prev) => {
+                            const next = !prev;
+                            localStorage.setItem("searchMapOnly", String(next));
+                            return next;
+                          });
+                        }}
+                      >
+                        {mapOnly ? "Show list" : "Map only"}
+                      </UnifiedButton>
+                      <UnifiedButton
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSearchThisArea}
+                        disabled={!mapBounds}
+                      >
+                        Search this area
+                      </UnifiedButton>
+                    </div>
                   </div>
 
-                  {/* Map Placeholder */}
-                  <div className="flex-1 bg-muted relative">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <Map className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground mb-2">Interactive Map</p>
-                        <p className="text-sm text-muted-foreground">
-                          Integrate with Mapbox, Google Maps, or Leaflet
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Simulated Map Pins */}
-                    <div className="absolute inset-0 p-8">
-                      {results.listings.slice(0, 6).map((listing, index) => (
-                        <div
-                          key={listing.id}
-                          className="absolute bg-primary text-primary-foreground px-2 py-1 rounded-full text-xs font-bold shadow-lg cursor-pointer hover:bg-primary/90 transition-colors"
-                          style={{
-                            left: `${20 + (index % 3) * 30}%`,
-                            top: `${20 + Math.floor(index / 3) * 40}%`,
-                          }}
-                          title={listing.title}
-                        >
-                          ${listing.pricePerDay}
+                  {/* Map */}
+                  <div className="flex-1 relative">
+                    <ListingsMap
+                      listings={mapListings}
+                      onListingClick={handleMapListingClick}
+                      onBoundsChange={handleMapBoundsChange}
+                      highlightedListingId={highlightedListingId}
+                      className="h-full w-full rounded-b-lg"
+                    />
+                    {mapListings.length === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-muted/70 rounded-b-lg">
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-foreground">
+                            No geocoded listings to show.
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Try adjusting filters or switch to list view.
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Map Controls */}
-                  <div className="absolute bottom-20 right-4 flex flex-col gap-1">
-                    <button className="bg-card border rounded p-2 shadow hover:bg-accent transition-colors">
-                      <span className="text-lg font-bold">+</span>
-                    </button>
-                    <button className="bg-card border rounded p-2 shadow hover:bg-accent transition-colors">
-                      <span className="text-lg font-bold">−</span>
-                    </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -585,10 +969,14 @@ export default function SearchPage() {
 }
 
 // Grid Card Component
-function ListingCard({ listing }: { listing: any }) {
+function ListingCard({ listing }: { listing: Listing }) {
+  const listingId = safeText(listing.id);
+  const listingTitle = safeText(listing.title, "Listing");
+  const ratingValue = listing.rating ?? listing.averageRating ?? null;
+  const reviewCount = listing.totalReviews ?? listing.reviewCount ?? 0;
   return (
     <Link
-      to={`/listings/${listing.id}`}
+      to={listingId ? `/listings/${listingId}` : "/listings"}
       className="bg-card rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-shadow group"
     >
       {/* Image */}
@@ -596,12 +984,12 @@ function ListingCard({ listing }: { listing: any }) {
         {listing.images?.[0] ? (
           <img
             src={listing.images[0]}
-            alt={listing.title}
+            alt={listingTitle}
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-            No image
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground">
+            <Package className="w-10 h-10" />
           </div>
         )}
         {listing.featured && (
@@ -619,21 +1007,22 @@ function ListingCard({ listing }: { listing: any }) {
       {/* Content */}
       <div className="p-4">
         <h3 className="font-semibold text-foreground mb-1 line-clamp-2 group-hover:text-primary transition-colors">
-          {listing.title}
+          {listingTitle}
         </h3>
         <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
           <MapPin className="w-4 h-4" />
-          {listing.location?.city}, {listing.location?.state}
+          {safeText(listing.location?.city, "Location")}
+          {listing.location?.state ? `, ${listing.location.state}` : ""}
         </p>
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-muted-foreground capitalize">
-            {listing.condition?.replace("-", " ")}
+            {humanizeCondition(listing.condition)}
           </span>
-          {listing.rating && (
-            <span className="text-sm text-muted-foreground">
-              ⭐ {listing.rating.toFixed(1)} ({listing.totalReviews})
-            </span>
-          )}
+        {ratingValue != null && (
+          <span className="text-sm text-muted-foreground">
+            ⭐ {safeNumber(ratingValue).toFixed(1)} ({reviewCount})
+          </span>
+        )}
         </div>
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold text-foreground">
@@ -647,10 +1036,14 @@ function ListingCard({ listing }: { listing: any }) {
 }
 
 // List View Component
-function ListingListItem({ listing }: { listing: any }) {
+function ListingListItem({ listing }: { listing: Listing }) {
+  const listingId = safeText(listing.id);
+  const listingTitle = safeText(listing.title, "Listing");
+  const ratingValue = listing.rating ?? listing.averageRating ?? null;
+  const reviewCount = listing.totalReviews ?? listing.reviewCount ?? 0;
   return (
     <Link
-      to={`/listings/${listing.id}`}
+      to={listingId ? `/listings/${listingId}` : "/listings"}
       className="bg-card rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-shadow flex group"
     >
       {/* Image */}
@@ -658,12 +1051,12 @@ function ListingListItem({ listing }: { listing: any }) {
         {listing.images?.[0] ? (
           <img
             src={listing.images[0]}
-            alt={listing.title}
+            alt={listingTitle}
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-            No image
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground">
+            <Package className="w-8 h-8" />
           </div>
         )}
         {listing.instantBooking && (
@@ -678,13 +1071,14 @@ function ListingListItem({ listing }: { listing: any }) {
         <div>
           <div className="flex items-start justify-between mb-2">
             <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-              {listing.title}
+              {listingTitle}
             </h3>
             {listing.featured && <Badge variant="warning">Featured</Badge>}
           </div>
           <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
             <MapPin className="w-4 h-4" />
-            {listing.location?.city}, {listing.location?.state}
+            {safeText(listing.location?.city, "Location")}
+            {listing.location?.state ? `, ${listing.location.state}` : ""}
           </p>
           <p className="text-sm text-muted-foreground line-clamp-2">
             {listing.description}
@@ -693,11 +1087,11 @@ function ListingListItem({ listing }: { listing: any }) {
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground capitalize">
-              {listing.condition?.replace("-", " ")}
+              {humanizeCondition(listing.condition)}
             </span>
-            {listing.rating && (
+            {ratingValue != null && (
               <span className="text-sm text-muted-foreground">
-                ⭐ {listing.rating.toFixed(1)} ({listing.totalReviews})
+                ⭐ {safeNumber(ratingValue).toFixed(1)} ({reviewCount})
               </span>
             )}
           </div>
@@ -714,10 +1108,22 @@ function ListingListItem({ listing }: { listing: any }) {
 }
 
 // Compact Card for Map View
-function ListingCompactCard({ listing }: { listing: any }) {
+function ListingCompactCard({
+  listing,
+  onHighlightChange,
+}: {
+  listing: Listing;
+  onHighlightChange: (listingId: string | undefined) => void;
+}) {
+  const listingId = safeText(listing.id);
+  const listingTitle = safeText(listing.title, "Listing");
+  const ratingValue = listing.rating ?? listing.averageRating ?? null;
+  const reviewCount = listing.totalReviews ?? listing.reviewCount ?? 0;
   return (
     <Link
-      to={`/listings/${listing.id}`}
+      to={listingId ? `/listings/${listingId}` : "/listings"}
+      onMouseEnter={() => onHighlightChange(listingId || undefined)}
+      onMouseLeave={() => onHighlightChange(undefined)}
       className="bg-card rounded-lg border p-3 hover:shadow-md transition-shadow flex gap-3 group"
     >
       {/* Thumbnail */}
@@ -725,12 +1131,12 @@ function ListingCompactCard({ listing }: { listing: any }) {
         {listing.images?.[0] ? (
           <img
             src={listing.images[0]}
-            alt={listing.title}
+            alt={listingTitle}
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
-            No img
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground">
+            <Package className="w-5 h-5" />
           </div>
         )}
       </div>
@@ -738,15 +1144,15 @@ function ListingCompactCard({ listing }: { listing: any }) {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <h3 className="font-medium text-foreground text-sm line-clamp-1 group-hover:text-primary transition-colors">
-          {listing.title}
+          {listingTitle}
         </h3>
         <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
           <MapPin className="w-3 h-3" />
           {listing.location?.city}
         </p>
-        {listing.rating && (
+        {ratingValue != null && (
           <p className="text-xs text-muted-foreground mb-1">
-            ⭐ {listing.rating.toFixed(1)} ({listing.totalReviews})
+            ⭐ {safeNumber(ratingValue).toFixed(1)} ({reviewCount})
           </p>
         )}
         <p className="text-sm font-bold text-foreground">
@@ -760,3 +1166,15 @@ function ListingCompactCard({ listing }: { listing: any }) {
 // Error boundary for route errors
 export { RouteErrorBoundary as ErrorBoundary };
 
+function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}

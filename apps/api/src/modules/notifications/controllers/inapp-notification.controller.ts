@@ -3,11 +3,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { InAppNotificationService } from '../services/notification.service';
 
-@ApiTags('notifications')
-@Controller('notifications')
+@ApiTags('in-app notifications')
+@Controller('notifications/inapp')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
-export class NotificationController {
+export class InAppNotificationController {
   constructor(private readonly notificationService: InAppNotificationService) {}
 
   @Get()

@@ -8,14 +8,15 @@ describe('Authentication (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
 
+  const uniqueSuffix = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const buildEmail = (prefix: string) => `${prefix}-${uniqueSuffix()}@test.com`;
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
-
-    // Apply same pipes as main app
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -25,7 +26,6 @@ describe('Authentication (e2e)', () => {
     );
 
     prisma = app.get<PrismaService>(PrismaService);
-
     await app.init();
   });
 
@@ -34,161 +34,154 @@ describe('Authentication (e2e)', () => {
     await app.close();
   });
 
-  beforeEach(async () => {
-    // Clean up test data
-    await prisma.user.deleteMany({
-      where: { email: { contains: '@test.com' } },
-    });
-  });
-
-  describe('/api/auth/register (POST)', () => {
-    it('should register a new user', () => {
-      return request(app.getHttpServer())
-        .post('/api/auth/register')
+  describe('/auth/register (POST)', () => {
+    it('should register a new user', async () => {
+      const email = buildEmail('newuser');
+      const response = await request(app.getHttpServer())
+        .post('/auth/register')
         .send({
-          email: 'newuser@test.com',
+          email,
           password: 'SecurePass123!',
           firstName: 'Test',
           lastName: 'User',
-          phone: '+1234567890',
+          phoneNumber: '+1234567890',
         })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('user');
-          expect(res.body).toHaveProperty('tokens');
-          expect(res.body.user.email).toBe('newuser@test.com');
-        });
+        .expect(201);
+
+      expect(response.body).toHaveProperty('user');
+      expect(response.body).toHaveProperty('accessToken');
+      expect(response.body).toHaveProperty('refreshToken');
+      expect(response.body.user.email).toBe(email);
     });
 
     it('should reject duplicate email', async () => {
-      // Create user first
-      await request(app.getHttpServer()).post('/api/auth/register').send({
-        email: 'duplicate@test.com',
+      const email = buildEmail('duplicate');
+
+      await request(app.getHttpServer()).post('/auth/register').send({
+        email,
         password: 'SecurePass123!',
         firstName: 'Test',
         lastName: 'User',
-        phone: '+1234567890',
+        phoneNumber: '+1234567890',
       });
 
-      // Try to register again
-      return request(app.getHttpServer())
-        .post('/api/auth/register')
+      await request(app.getHttpServer())
+        .post('/auth/register')
         .send({
-          email: 'duplicate@test.com',
+          email,
           password: 'SecurePass123!',
           firstName: 'Another',
           lastName: 'User',
-          phone: '+1234567891',
+          phoneNumber: '+1234567891',
         })
         .expect(409);
     });
 
-    it('should reject invalid email format', () => {
-      return request(app.getHttpServer())
-        .post('/api/auth/register')
+    it('should reject invalid email format', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
         .send({
           email: 'invalid-email',
           password: 'SecurePass123!',
           firstName: 'Test',
           lastName: 'User',
-          phone: '+1234567890',
+          phoneNumber: '+1234567890',
         })
         .expect(400);
     });
 
-    it('should reject weak password', () => {
-      return request(app.getHttpServer())
-        .post('/api/auth/register')
+    it('should reject weak password', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
         .send({
-          email: 'weakpass@test.com',
+          email: buildEmail('weakpass'),
           password: '123',
           firstName: 'Test',
           lastName: 'User',
-          phone: '+1234567890',
+          phoneNumber: '+1234567890',
         })
         .expect(400);
     });
   });
 
-  describe('/api/auth/login (POST)', () => {
+  describe('/auth/login (POST)', () => {
+    let loginEmail: string;
+
     beforeEach(async () => {
-      // Create test user
-      await request(app.getHttpServer()).post('/api/auth/register').send({
-        email: 'logintest@test.com',
+      loginEmail = buildEmail('logintest');
+      await request(app.getHttpServer()).post('/auth/register').send({
+        email: loginEmail,
         password: 'SecurePass123!',
         firstName: 'Login',
         lastName: 'Test',
-        phone: '+1234567890',
+        phoneNumber: '+1234567890',
       });
     });
 
-    it('should login with correct credentials', () => {
-      return request(app.getHttpServer())
-        .post('/api/auth/login')
+    it('should login with correct credentials', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/auth/login')
         .send({
-          email: 'logintest@test.com',
+          email: loginEmail,
           password: 'SecurePass123!',
         })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('user');
-          expect(res.body).toHaveProperty('tokens');
-          expect(res.body.tokens).toHaveProperty('accessToken');
-          expect(res.body.tokens).toHaveProperty('refreshToken');
-        });
+        .expect(200);
+
+      expect(response.body).toHaveProperty('user');
+      expect(response.body).toHaveProperty('accessToken');
+      expect(response.body).toHaveProperty('refreshToken');
     });
 
-    it('should reject incorrect password', () => {
-      return request(app.getHttpServer())
-        .post('/api/auth/login')
+    it('should reject incorrect password', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/login')
         .send({
-          email: 'logintest@test.com',
+          email: loginEmail,
           password: 'WrongPassword123!',
         })
         .expect(401);
     });
 
-    it('should reject non-existent user', () => {
-      return request(app.getHttpServer())
-        .post('/api/auth/login')
+    it('should reject non-existent user', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/login')
         .send({
-          email: 'nonexistent@test.com',
+          email: buildEmail('nonexistent'),
           password: 'SecurePass123!',
         })
         .expect(401);
     });
   });
 
-  describe('/api/auth/refresh (POST)', () => {
+  describe('/auth/refresh (POST)', () => {
     let refreshToken: string;
 
     beforeEach(async () => {
-      // Register and login to get tokens
-      const response = await request(app.getHttpServer()).post('/api/auth/register').send({
-        email: 'refreshtest@test.com',
+      const response = await request(app.getHttpServer()).post('/auth/register').send({
+        email: buildEmail('refreshtest'),
         password: 'SecurePass123!',
         firstName: 'Refresh',
         lastName: 'Test',
-        phone: '+1234567890',
+        phoneNumber: '+1234567890',
       });
 
-      refreshToken = response.body.tokens.refreshToken;
+      refreshToken = response.body.refreshToken;
     });
 
-    it('should refresh tokens with valid refresh token', () => {
-      return request(app.getHttpServer())
-        .post('/api/auth/refresh')
+    it('should refresh tokens with valid refresh token', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/auth/refresh')
         .send({ refreshToken })
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('accessToken');
-          expect(res.body).toHaveProperty('refreshToken');
-        });
+        .expect(200);
+
+      expect(response.body).toHaveProperty('accessToken');
+      expect(response.body).toHaveProperty('refreshToken');
+      expect(response.body).toHaveProperty('user');
     });
 
-    it('should reject invalid refresh token', () => {
-      return request(app.getHttpServer())
-        .post('/api/auth/refresh')
+    it('should reject invalid refresh token', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
         .send({ refreshToken: 'invalid-token' })
         .expect(401);
     });
@@ -198,31 +191,31 @@ describe('Authentication (e2e)', () => {
     let accessToken: string;
 
     beforeEach(async () => {
-      const response = await request(app.getHttpServer()).post('/api/auth/register').send({
-        email: 'protected@test.com',
+      const response = await request(app.getHttpServer()).post('/auth/register').send({
+        email: buildEmail('protected'),
         password: 'SecurePass123!',
         firstName: 'Protected',
         lastName: 'Test',
-        phone: '+1234567890',
+        phoneNumber: '+1234567890',
       });
 
-      accessToken = response.body.tokens.accessToken;
+      accessToken = response.body.accessToken;
     });
 
-    it('should access protected route with valid token', () => {
-      return request(app.getHttpServer())
-        .get('/api/users/me')
+    it('should access protected route with valid token', async () => {
+      await request(app.getHttpServer())
+        .get('/users/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
     });
 
-    it('should reject protected route without token', () => {
-      return request(app.getHttpServer()).get('/api/users/me').expect(401);
+    it('should reject protected route without token', async () => {
+      await request(app.getHttpServer()).get('/users/me').expect(401);
     });
 
-    it('should reject protected route with invalid token', () => {
-      return request(app.getHttpServer())
-        .get('/api/users/me')
+    it('should reject protected route with invalid token', async () => {
+      await request(app.getHttpServer())
+        .get('/users/me')
         .set('Authorization', 'Bearer invalid-token')
         .expect(401);
     });

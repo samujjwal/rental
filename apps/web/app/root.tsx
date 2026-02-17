@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 
 import {
   Links,
@@ -19,6 +18,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OfflineBanner, RouteErrorBoundary } from "~/components/ui";
 import { ToastManager } from "~/components/ui/toast-manager";
 import { SkipLink } from "~/components/accessibility/SkipLink";
+import { PageTransition } from "~/components/animations/PageTransition";
+import type { User as AuthUser } from "~/types/auth";
 
 import type { LinksFunction } from "react-router";
 import stylesheet from "./tailwind.css?url";
@@ -134,7 +135,7 @@ function RootContent() {
         currentStore.accessToken !== loaderData.accessToken
       ) {
         setAuth(
-          loaderData.user,
+          loaderData.user as unknown as AuthUser,
           loaderData.accessToken,
           loaderData.refreshToken
         );
@@ -163,7 +164,9 @@ function RootContent() {
       <OfflineBanner />
       <ToastManager />
       <div id="main-content" tabIndex={-1}>
-        <Outlet />
+        <PageTransition mode="fade" duration={0.2}>
+          <Outlet />
+        </PageTransition>
       </div>
     </QueryClientProvider>
   );

@@ -123,8 +123,6 @@ export const AdaptiveContainer: React.FC<AdaptiveContainerProps> = ({
   children,
   maxWidth = "xl",
 }) => {
-  const mode = useResponsiveMode();
-
   return (
     <Box
       sx={{

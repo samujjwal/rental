@@ -1,11 +1,10 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link } from "react-router";
+import type { ComponentType } from "react";
+import { useLoaderData, Link, redirect } from "react-router";
 import {
   Package,
   Calendar,
   DollarSign,
-  TrendingUp,
-  Users,
   MessageCircle,
   AlertCircle,
   Star,
@@ -15,13 +14,13 @@ import {
   Plus,
   ArrowUpRight,
 } from "lucide-react";
-import { requireUserId, getUserToken } from "~/utils/auth";
+import { requireUser } from "~/utils/auth";
 import { listingsApi } from "~/lib/api/listings";
 import { bookingsApi } from "~/lib/api/bookings";
 import { paymentsApi } from "~/lib/api/payments";
+import { usersApi } from "~/lib/api/users";
 import type { Listing } from "~/types/listing";
 import type { Booking } from "~/types/booking";
-import type { OwnerEarnings } from "~/lib/api/payments";
 import { format } from "date-fns";
 import {
   Card,
@@ -29,77 +28,93 @@ import {
   CardHeader,
   CardTitle,
   Badge,
+  RouteErrorBoundary,
 } from "~/components/ui";
 import { PageContainer, PageHeader, DashboardSidebar } from "~/components/layout";
 import type { SidebarSection } from "~/components/layout";
 import { cn } from "~/lib/utils";
-
-// Define owner navigation items
-import {
-  LayoutDashboard,
-  Package as PackageIcon,
-  Calendar as CalendarIcon,
-  CalendarDays,
-  DollarSign as DollarIcon,
-  MessageCircle as MessageIcon,
-  Star as StarIcon,
-  Settings,
-  TrendingUp as TrendingIcon,
-  BarChart3,
-} from "lucide-react";
-
-const ownerNavSections: SidebarSection[] = [
-  {
-    items: [
-      { href: "/dashboard/owner", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/listings", label: "Listings", icon: PackageIcon },
-      { href: "/bookings", label: "Bookings", icon: CalendarIcon },
-      { href: "/dashboard/owner/calendar", label: "Calendar", icon: CalendarDays },
-      { href: "/dashboard/owner/earnings", label: "Earnings", icon: DollarIcon },
-      { href: "/messages", label: "Messages", icon: MessageIcon },
-      { href: "/reviews", label: "Reviews", icon: StarIcon },
-      { href: "/settings", label: "Settings", icon: Settings },
-    ],
-  },
-  {
-    title: "Insights",
-    items: [
-      { href: "/dashboard/owner/performance", label: "Performance", icon: TrendingIcon },
-      { href: "/dashboard/owner/insights", label: "Insights", icon: BarChart3 },
-    ],
-  },
-];
+import { PageSkeleton } from "~/components/ui/skeleton";
+import { ownerNavSections } from "~/config/navigation";
+import { notificationsApi } from "~/lib/api/notifications";
+import { messagingApi } from "~/lib/api/messaging";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Owner Dashboard | GharBatai Rentals" }];
 };
 
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeStatusKey = (value: unknown, fallback = "PENDING"): string => {
+  const status = typeof value === "string" ? value.trim() : "";
+  return (status || fallback).toUpperCase();
+};
+const safeDateLabel = (value: unknown, pattern: string): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : format(date, pattern);
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
-  const token = await getUserToken(request);
-  const headers = { Authorization: `Bearer ${token}` };
+  const user = await requireUser(request);
+  if (user.role === "admin") {
+    return redirect("/admin");
+  }
+  if (user.role !== "owner") {
+    return redirect("/dashboard/renter");
+  }
 
   try {
-    const [listings, bookings, earnings] = await Promise.all([
+    const [rawListings, rawBookings, rawEarnings, rawStats, unreadNotifs, unreadMsgs] = await Promise.all([
       listingsApi.getMyListings(),
       bookingsApi.getOwnerBookings(),
       paymentsApi.getEarnings(),
+      usersApi.getUserStats(),
+      notificationsApi.getUnreadCount().catch(() => ({ count: 0 })),
+      messagingApi.getUnreadCount().catch(() => ({ count: 0 })),
     ]);
+    const listings = Array.isArray(rawListings) ? rawListings : [];
+    const bookings = Array.isArray(rawBookings) ? rawBookings : [];
+
+    const normalizeBookingStatus = (status: unknown) => {
+      const upper = safeStatusKey(status);
+      if (upper === "IN_PROGRESS") return "active";
+      if (upper === "AWAITING_RETURN_INSPECTION") return "return_requested";
+      if (upper === "PENDING_OWNER_APPROVAL") return "pending_owner_approval";
+      if (upper === "PENDING_PAYMENT") return "pending_payment";
+      if (upper === "CONFIRMED") return "confirmed";
+      if (upper === "COMPLETED") return "completed";
+      if (upper === "SETTLED") return "settled";
+      if (upper === "CANCELLED") return "cancelled";
+      if (upper === "PAYMENT_FAILED") return "payment_failed";
+      if (upper === "DISPUTED") return "disputed";
+      if (upper === "PENDING") return "pending";
+      return String(status || "").toLowerCase();
+    };
 
     // Calculate statistics
-    const activeListings = listings.filter(
-      (l: Listing) => l.availability === "available"
-    ).length;
+    const activeListings = listings.filter((l: Listing) => {
+      const availability = String(l.availability || "").toLowerCase();
+      const status = (l.status || "").toString().toLowerCase();
+      return availability === "available" || status === "available";
+    }).length;
     const totalListings = listings.length;
-    const pendingBookings = bookings.filter(
-      (b: Booking) => b.status === "pending"
-    ).length;
-    const activeBookings = bookings.filter(
-      (b: Booking) => b.status === "confirmed" || b.status === "active"
-    ).length;
-    const completedBookings = bookings.filter(
-      (b: Booking) => b.status === "completed"
-    ).length;
+    const pendingBookings = bookings.filter((b: Booking) => {
+      const status = normalizeBookingStatus(b.status);
+      return status === "pending_owner_approval";
+    }).length;
+    const activeBookings = bookings.filter((b: Booking) => {
+      const status = normalizeBookingStatus(b.status);
+      return ["confirmed", "active", "return_requested"].includes(status);
+    }).length;
+    const completedBookings = bookings.filter((b: Booking) => {
+      const status = normalizeBookingStatus(b.status);
+      return ["completed", "settled"].includes(status);
+    }).length;
 
     const stats = {
       activeListings,
@@ -107,8 +122,10 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       pendingBookings,
       activeBookings,
       completedBookings,
-      totalEarnings: earnings?.totalAmount || 0,
-      pendingEarnings: earnings?.pendingAmount || 0,
+      totalEarnings: safeNumber(rawEarnings?.amount),
+      pendingEarnings: safeNumber(rawEarnings?.amount),
+      averageRating: safeNumber(rawStats.averageRating),
+      totalReviews: safeNumber(rawStats.totalReviews),
     };
 
     // Get recent bookings
@@ -123,10 +140,29 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       stats,
       listings: listings.slice(0, 6),
       recentBookings,
+      userStats: rawStats,
+      unreadNotifications: typeof unreadNotifs?.count === "number" ? unreadNotifs.count : 0,
+      unreadMessages: typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
     };
   } catch (error) {
     console.error("Failed to load owner dashboard:", error);
-    throw error;
+    return {
+      stats: {
+        activeListings: 0,
+        totalListings: 0,
+        pendingBookings: 0,
+        activeBookings: 0,
+        completedBookings: 0,
+        totalEarnings: 0,
+        pendingEarnings: 0,
+        averageRating: 0,
+        totalReviews: 0,
+      },
+      listings: [],
+      recentBookings: [],
+      userStats: null,
+      error: "Failed to load owner dashboard data",
+    };
   }
 }
 
@@ -137,7 +173,7 @@ function StatCard({
   trend,
   variant = "default",
 }: {
-  icon: any;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   trend?: string;
@@ -173,45 +209,40 @@ function StatCard({
 
 function BookingCard({ booking }: { booking: Booking }) {
   const statusConfig = {
-    pending: { variant: "warning" as const, icon: Clock, label: "Pending" },
-    confirmed: {
-      variant: "success" as const,
-      icon: CheckCircle,
-      label: "Confirmed",
-    },
-    active: { variant: "default" as const, icon: Package, label: "Active" },
-    completed: {
-      variant: "success" as const,
-      icon: CheckCircle,
-      label: "Completed",
-    },
-    cancelled: {
-      variant: "destructive" as const,
-      icon: XCircle,
-      label: "Cancelled",
-    },
-    disputed: {
-      variant: "destructive" as const,
-      icon: XCircle,
-      label: "Disputed",
-    },
+    PENDING_OWNER_APPROVAL: { variant: "warning" as const, icon: Clock, label: "Pending Approval" },
+    PENDING_PAYMENT: { variant: "warning" as const, icon: Clock, label: "Pending Payment" },
+    PENDING: { variant: "warning" as const, icon: Clock, label: "Pending" },
+    CONFIRMED: { variant: "success" as const, icon: CheckCircle, label: "Confirmed" },
+    IN_PROGRESS: { variant: "default" as const, icon: Package, label: "In Progress" },
+    AWAITING_RETURN_INSPECTION: { variant: "warning" as const, icon: Clock, label: "Return Requested" },
+    COMPLETED: { variant: "success" as const, icon: CheckCircle, label: "Completed" },
+    SETTLED: { variant: "success" as const, icon: CheckCircle, label: "Settled" },
+    CANCELLED: { variant: "destructive" as const, icon: XCircle, label: "Cancelled" },
+    DISPUTED: { variant: "destructive" as const, icon: XCircle, label: "Disputed" },
+    REFUNDED: { variant: "destructive" as const, icon: XCircle, label: "Refunded" },
   };
 
-  const config = statusConfig[booking.status] || statusConfig.pending;
+  const statusKey = String(booking.status || "PENDING").toUpperCase();
+  const config =
+    statusConfig[statusKey as keyof typeof statusConfig] || statusConfig.PENDING;
   const StateIcon = config.icon;
+  const renterFirstName = safeText(booking.renter?.firstName, "Renter");
+  const renterLastName = safeText(booking.renter?.lastName);
+  const listingTitle = safeText(booking.listing?.title, "Listing");
+  const bookingId = safeText(booking.id);
 
   return (
     <Link
-      to={`/bookings/${booking.id}`}
+      to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
       className="block bg-card border rounded-lg p-4 hover:shadow-md transition-shadow"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <h3 className="font-semibold text-foreground mb-1">
-            {booking.listing?.title || "Listing"}
+            {listingTitle}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {booking.renter?.firstName} {booking.renter?.lastName}
+            {renterFirstName}{renterLastName ? ` ${renterLastName}` : ""}
           </p>
         </div>
         <Badge variant={config.variant} className="flex items-center">
@@ -222,11 +253,11 @@ function BookingCard({ booking }: { booking: Booking }) {
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center text-muted-foreground">
           <Calendar className="w-4 h-4 mr-1" />
-          {format(new Date(booking.startDate), "MMM d")} -{" "}
-          {format(new Date(booking.endDate), "MMM d")}
+          {safeDateLabel(booking.startDate, "MMM d")} -{" "}
+          {safeDateLabel(booking.endDate, "MMM d")}
         </div>
         <span className="font-semibold text-primary">
-          ${booking.totalAmount.toFixed(2)}
+          ${safeNumber(booking.totalAmount ?? booking.totalPrice).toFixed(2)}
         </span>
       </div>
     </Link>
@@ -234,21 +265,19 @@ function BookingCard({ booking }: { booking: Booking }) {
 }
 
 function ListingCard({ listing }: { listing: Listing }) {
-  const locationStr =
-    typeof listing.location === "string"
-      ? listing.location
-      : listing.location.city;
-
+  const listingTitle = safeText(listing.title, "Listing");
+  const availability = safeText(listing.availability, "unknown");
+  const listingId = safeText(listing.id);
   return (
     <Link
-      to={`/listings/${listing.id}`}
+      to={listingId ? `/listings/${listingId}` : "/listings"}
       className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow block"
     >
       <div className="aspect-video bg-muted relative">
         {listing.images?.[0] ? (
           <img
             src={listing.images[0]}
-            alt={listing.title}
+            alt={listingTitle}
             className="w-full h-full object-cover"
           />
         ) : (
@@ -259,17 +288,17 @@ function ListingCard({ listing }: { listing: Listing }) {
         <span
           className={cn(
             "absolute top-2 right-2 px-2 py-1 text-white text-xs font-semibold rounded",
-            listing.availability === "available"
+            availability.toLowerCase() === "available"
               ? "bg-success"
               : "bg-muted-foreground"
           )}
         >
-          {listing.availability}
+          {availability}
         </span>
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-foreground mb-2 line-clamp-1">
-          {listing.title}
+          {listingTitle}
         </h3>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
@@ -279,7 +308,7 @@ function ListingCard({ listing }: { listing: Listing }) {
             <div className="flex items-center">
               <Star className="w-4 h-4 text-warning fill-current" />
               <span className="ml-1 text-sm text-muted-foreground">
-                {listing.rating.toFixed(1)}
+                {safeNumber(listing.rating).toFixed(1)}
               </span>
               <span className="ml-1 text-sm text-muted-foreground">
                 ({listing.totalReviews})
@@ -293,11 +322,33 @@ function ListingCard({ listing }: { listing: Listing }) {
 }
 
 export default function OwnerDashboardRoute() {
-  const { stats, listings, recentBookings } = useLoaderData<typeof clientLoader>();
+  const { stats, listings, recentBookings, unreadNotifications, unreadMessages, error } = useLoaderData<typeof clientLoader>();
+  const pendingEarnings = safeNumber(stats.pendingEarnings);
+  const totalEarnings = safeNumber(stats.totalEarnings);
+  const averageRating = safeNumber(stats.averageRating);
+
+  // Enrich nav items with unread badges
+  const navWithBadges = ownerNavSections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => {
+      if (item.href === "/messages" && unreadMessages > 0) {
+        return { ...item, badge: unreadMessages };
+      }
+      if (item.href === "/notifications" && unreadNotifications > 0) {
+        return { ...item, badge: unreadNotifications };
+      }
+      return item;
+    }),
+  }));
 
   return (
     <div className="min-h-screen bg-background py-8">
       <PageContainer>
+        {error ? (
+          <div className="mb-6 bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
+            {error}
+          </div>
+        ) : null}
         {/* Header */}
         <PageHeader
           title="Owner Dashboard"
@@ -307,7 +358,7 @@ export default function OwnerDashboardRoute() {
 
         <div className="flex gap-8">
           {/* Sidebar Navigation */}
-          <DashboardSidebar sections={ownerNavSections} />
+          <DashboardSidebar sections={navWithBadges} />
 
           {/* Main Content */}
           <div className="flex-1 space-y-8">
@@ -320,9 +371,8 @@ export default function OwnerDashboardRoute() {
               />
               <StatCard
                 icon={DollarSign}
-                label="Total Earnings"
-                value={`$${stats.totalEarnings.toFixed(2)}`}
-                trend="+12%"
+                label="Pending Earnings"
+                value={`$${pendingEarnings.toFixed(2)}`}
                 variant="success"
               />
               <StatCard
@@ -333,8 +383,9 @@ export default function OwnerDashboardRoute() {
               />
               <StatCard
                 icon={Star}
-                label="Completed Rentals"
-                value={stats.completedBookings}
+                label="Avg Rating"
+                value={averageRating.toFixed(1)}
+                trend={`${stats.totalReviews} reviews`}
                 variant="warning"
               />
             </div>
@@ -354,7 +405,7 @@ export default function OwnerDashboardRoute() {
                   </p>
                 </div>
                 <Link
-                  to="/bookings?filter=pending"
+                  to="/bookings?view=owner&status=pending_owner_approval"
                   className="px-4 py-2 bg-warning text-warning-foreground rounded-md hover:bg-warning/90 transition-colors text-sm font-medium"
                 >
                   Review Now
@@ -452,13 +503,13 @@ export default function OwnerDashboardRoute() {
                       <div className="flex justify-between items-center pb-3 border-b">
                         <span className="text-muted-foreground">Total Earned</span>
                         <span className="text-xl font-bold text-success">
-                          ${stats.totalEarnings.toFixed(2)}
+                          ${totalEarnings.toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center pb-3 border-b">
                         <span className="text-muted-foreground">Pending</span>
                         <span className="text-lg font-semibold text-warning">
-                          ${stats.pendingEarnings.toFixed(2)}
+                          ${pendingEarnings.toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -518,3 +569,5 @@ export default function OwnerDashboardRoute() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

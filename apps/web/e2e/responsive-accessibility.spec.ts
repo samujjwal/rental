@@ -1,18 +1,5 @@
-import { test, expect, Page } from "@playwright/test";
-
-// Test credentials
-const TEST_USER = {
-  email: "renter@test.com",
-  password: "Test123!@#",
-};
-
-async function login(page: Page) {
-  await page.goto("/auth/login");
-  await page.fill('input[type="email"]', TEST_USER.email);
-  await page.fill('input[type="password"]', TEST_USER.password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/.*dashboard/);
-}
+import { test, expect } from "@playwright/test";
+import { loginAs, testUsers } from "./helpers/test-utils";
 
 test.describe("Responsive Design - Mobile", () => {
   test.use({ viewport: { width: 375, height: 667 } }); // iPhone SE
@@ -109,14 +96,14 @@ test.describe("Responsive Design - Mobile", () => {
 
   test.describe("Dashboard", () => {
     test("should display mobile-friendly dashboard", async ({ page }) => {
-      await login(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/dashboard");
       // Stats should stack vertically
       await expect(page.locator('[data-testid="stats-cards"]')).toBeVisible();
     });
 
     test("should show bottom navigation", async ({ page }) => {
-      await login(page);
+      await loginAs(page, testUsers.renter);
       await page.goto("/dashboard");
       const bottomNav = page.locator('[data-testid="bottom-navigation"]');
       if (await bottomNav.isVisible()) {
@@ -218,7 +205,7 @@ test.describe("Touch Interactions", () => {
   });
 
   test("should support pull-to-refresh", async ({ page }) => {
-    await login(page);
+    await loginAs(page, testUsers.renter);
     await page.goto("/dashboard");
     
     // Simulate pull down gesture
@@ -308,7 +295,7 @@ test.describe("Accessibility", () => {
 
 test.describe("Print Styles", () => {
   test("should have print-friendly styles for booking confirmation", async ({ page }) => {
-    await login(page);
+    await loginAs(page, testUsers.renter);
     await page.goto("/bookings/1");
     
     // Emulate print media

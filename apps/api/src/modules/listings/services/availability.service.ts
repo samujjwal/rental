@@ -141,7 +141,18 @@ export class AvailabilityService {
     const existingBookings = await this.prisma.booking.findMany({
       where: {
         listingId: propertyId,
-        status: { in: ['CONFIRMED', 'COMPLETED'] },
+        status: {
+          in: [
+            'PENDING_OWNER_APPROVAL',
+            'PENDING_PAYMENT',
+            'CONFIRMED',
+            'IN_PROGRESS',
+            'AWAITING_RETURN_INSPECTION',
+            'COMPLETED',
+            'SETTLED',
+            'DISPUTED',
+          ],
+        },
         OR: [
           {
             AND: [{ startDate: { lte: endDate } }, { endDate: { gte: startDate } }],

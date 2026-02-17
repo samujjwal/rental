@@ -9,8 +9,6 @@ import {
   bulkAddFavorites,
   bulkRemoveFavorites,
   clearAllFavorites,
-  type Favorite,
-  type FavoritesResponse,
 } from "~/lib/api/favorites";
 import { toast } from "~/lib/toast";
 import { useAuthStore } from "~/lib/store/auth";
@@ -21,7 +19,7 @@ import { useAuthStore } from "~/lib/store/auth";
 export const favoritesKeys = {
   all: ["favorites"] as const,
   lists: () => [...favoritesKeys.all, "list"] as const,
-  list: (params?: any) => [...favoritesKeys.lists(), params] as const,
+  list: (params?: unknown) => [...favoritesKeys.lists(), params] as const,
   details: () => [...favoritesKeys.all, "detail"] as const,
   detail: (listingId: string) =>
     [...favoritesKeys.details(), listingId] as const,
@@ -188,7 +186,7 @@ export function useRemoveFavorite() {
       }
       toast.error("Failed to remove favorite");
     },
-    onSuccess: (data, { listingId }) => {
+    onSuccess: (_data, _variables) => {
       toast.success("Removed from favorites");
     },
     onSettled: () => {
@@ -258,7 +256,7 @@ export function useToggleFavorite() {
       }
       toast.error("Failed to update favorite");
     },
-    onSuccess: (data, { listingId }, context) => {
+    onSuccess: (data, { listingId }, _context) => {
       // Update with real data
       if (data.isFavorited && data.favorite) {
         queryClient.setQueryData(

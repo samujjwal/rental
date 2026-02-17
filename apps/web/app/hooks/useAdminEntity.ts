@@ -24,7 +24,14 @@ interface FetchEntitiesParams {
 }
 
 type FilterValue = string | number | boolean | null;
+type FilterPayload = {
+  field: string;
+  operator: string;
+  value?: FilterValue;
+  values?: FilterValue[];
+};
 type UnknownRecord = Record<string, unknown>;
+type EntityRecord = Record<string, unknown>;
 type FieldOption = { value: string; label: string; disabled?: boolean };
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -50,8 +57,67 @@ function safeBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries
+      .map(([key, nested]) => `${key}:${stableSerialize(nested)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function toRecord(value: unknown, fallback: UnknownRecord): UnknownRecord {
   return isRecord(value) ? value : fallback;
+}
+
+function buildFiltersPayload(
+  filters: Record<string, unknown>
+): FilterPayload[] {
+  return Object.entries(filters).reduce<FilterPayload[]>((acc, [field, raw]) => {
+    if (raw === undefined || raw === null || raw === "") {
+      return acc;
+    }
+
+    if (Array.isArray(raw)) {
+      if (raw.length === 0) return acc;
+      acc.push({ field, operator: "in", values: raw as FilterValue[] });
+      return acc;
+    }
+
+    if (isRecord(raw)) {
+      const operator =
+        typeof raw.operator === "string" && raw.operator.length
+          ? raw.operator
+          : "equals";
+      const values = Array.isArray(raw.values)
+        ? (raw.values as FilterValue[])
+        : undefined;
+      const value = "value" in raw ? (raw.value as FilterValue) : undefined;
+
+      if (values && values.length) {
+        acc.push({ field, operator, values });
+        return acc;
+      }
+
+      if (value !== undefined && value !== null && value !== "") {
+        acc.push({ field, operator, value });
+        return acc;
+      }
+
+      if (operator === "is_null" || operator === "is_not_null") {
+        acc.push({ field, operator });
+      }
+
+      return acc;
+    }
+
+    acc.push({ field, operator: "equals", value: raw as FilterValue });
+    return acc;
+  }, []);
 }
 
 function getErrorMessage(error: unknown): string | null {
@@ -120,10 +186,12 @@ function mapFieldType(apiType: unknown): FieldType {
   return typeMap[apiType.toLowerCase()] || "text";
 }
 
-async function fetchEntityConfig(entity: string): Promise<EntityConfig> {
+async function fetchEntityConfig(
+  entity: string
+): Promise<EntityConfig<EntityRecord>> {
   const localConfig = getEntityConfig(entity);
   if (localConfig) {
-    return localConfig;
+    return localConfig as EntityConfig<EntityRecord>;
   }
 
   try {
@@ -138,7 +206,7 @@ async function fetchEntityConfig(entity: string): Promise<EntityConfig> {
 }
 
 async function fetchEntities(
-  entityConfig: EntityConfig,
+  entityConfig: EntityConfig<EntityRecord>,
   params: FetchEntitiesParams
 ): Promise<{ data: UnknownRecord[]; total: number; totalPages: number }> {
   const searchParams = new URLSearchParams({
@@ -151,11 +219,10 @@ async function fetchEntities(
     }),
   });
 
-  Object.entries(params.filters || {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      searchParams.append(`filter[${key}]`, String(value));
-    }
-  });
+  const filterPayload = buildFiltersPayload(params.filters || {});
+  if (filterPayload.length > 0) {
+    searchParams.set("filters", JSON.stringify(filterPayload));
+  }
 
   let result: UnknownRecord;
   try {
@@ -196,7 +263,7 @@ async function fetchEntities(
 }
 
 async function fetchEntityDetail(
-  entityConfig: EntityConfig,
+  entityConfig: EntityConfig<EntityRecord>,
   id: string
 ): Promise<UnknownRecord> {
   const endpoint = entityConfig.api.getEndpoint
@@ -275,7 +342,10 @@ async function deleteEntity(
   }
 }
 
-function transformSchemaToConfig(entity: string, schema: UnknownRecord): EntityConfig {
+function transformSchemaToConfig(
+  entity: string,
+  schema: UnknownRecord
+): EntityConfig<EntityRecord> {
   const slug = safeString(schema.slug, entity);
   const name = safeString(schema.name, slug);
   const pluralName = safeString(schema.pluralName, `${name}s`);
@@ -524,7 +594,17 @@ export function useAdminEntity({
 
   // Update table state helper
   const updateTableState = useCallback((updates: Partial<TableState>) => {
-    setTableState((prev) => ({ ...prev, ...updates }));
+    setTableState((prev) => {
+      const next: TableState = { ...prev, ...updates };
+      const unchanged =
+        prev.search === next.search &&
+        stableSerialize(prev.pagination) === stableSerialize(next.pagination) &&
+        stableSerialize(prev.sorting) === stableSerialize(next.sorting) &&
+        stableSerialize(prev.filters) === stableSerialize(next.filters) &&
+        stableSerialize(prev.selectedIds) === stableSerialize(next.selectedIds);
+
+      return unchanged ? prev : next;
+    });
   }, []);
 
   // Refresh data helper

@@ -2,12 +2,14 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, pg_trgm]
 }
 
 // Audit Logs
@@ -155,6 +157,8 @@ model Listing {
   featured             Boolean            @default(false)
   lastBookedAt         DateTime?
   metadata             String? // JSON
+  searchVector         Unsupported("tsvector")? // Full-text search vector
+  embedding            Unsupported("vector(1536)")? // pgvector semantic embedding
   deletedAt            DateTime?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
@@ -644,7 +648,7 @@ model ConditionReport {
 model InsurancePolicy {
   id             String          @id @default(cuid())
   policyNumber   String          @unique
-  bookingId      String
+  bookingId      String?
   propertyId     String
   userId         String
   type           InsuranceType
@@ -661,7 +665,7 @@ model InsurancePolicy {
   updatedAt      DateTime        @updatedAt
 
   // Relations
-  booking  Booking          @relation(fields: [bookingId], references: [id])
+  booking  Booking?         @relation(fields: [bookingId], references: [id])
   property Listing          @relation(fields: [propertyId], references: [id])
   user     User             @relation("InsurancePolicyOwner", fields: [userId], references: [id])
   claims   InsuranceClaim[]
@@ -940,6 +944,7 @@ enum BookingStatus {
   CONFIRMED
   IN_PROGRESS
   CANCELLED
+  PAYMENT_FAILED
   DISPUTED
   COMPLETED
   AWAITING_RETURN_INSPECTION
@@ -1173,6 +1178,7 @@ enum DisputeStatus {
   RESOLVED
   CLOSED
   DISMISSED
+  WITHDRAWN
 }
 
 enum DisputePriority {

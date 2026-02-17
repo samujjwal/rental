@@ -1,11 +1,15 @@
-/* eslint-disable react-refresh/only-export-components */
 
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useLoaderData, useActionData, useNavigate, Link } from "react-router";
+import { Form, useLoaderData, useActionData, useNavigate, Link, redirect } from "react-router";
 import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
+import { PageSkeleton } from "~/components/ui";
+import { RouteErrorBoundary } from "~/components/ui/error-state";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { Organization as ApiOrganization } from "~/lib/api/organizations";
+import { getUser } from "~/utils/auth";
+
+export const ErrorBoundary = RouteErrorBoundary;
 
 type Organization = ApiOrganization & {
   settings?: {
@@ -15,53 +19,160 @@ type Organization = ApiOrganization & {
   };
 };
 
-export async function clientLoader({ params }: LoaderFunctionArgs) {
-  if (!params.id) {
-    throw new Response("Organization not found", { status: 404 });
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string | undefined): value is string =>
+  Boolean(value && UUID_PATTERN.test(value));
+
+async function getOrganizationMembershipRole(userId: string, organizationId: string) {
+  const members = await organizationsApi.getMembers(organizationId);
+  const currentMember = members.members.find((member) => member.userId === userId);
+  return currentMember?.role;
+}
+
+export async function clientLoader({ params, request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
   }
 
-  const organization = (await organizationsApi.getOrganization(
-    params.id
-  )) as Organization;
-  return { organization };
+  if (!isUuid(params.id)) {
+    return redirect("/organizations");
+  }
+
+  try {
+    if (user.role !== "admin") {
+      const role = await getOrganizationMembershipRole(user.id, params.id);
+      if (role !== "OWNER" && role !== "ADMIN") {
+        return redirect("/organizations");
+      }
+    }
+
+    const organization = (await organizationsApi.getOrganization(
+      params.id
+    )) as Organization;
+    return { organization };
+  } catch {
+    return redirect("/organizations");
+  }
 }
 
 export async function clientAction({ request, params }: ActionFunctionArgs) {
-  if (!params.id) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
+  if (!isUuid(params.id)) {
     return { success: false, error: "Organization not found" };
   }
   const formData = await request.formData();
-  const action = formData.get("_action");
+  const action = String(formData.get("_action") || "");
+
+  if (user.role !== "admin") {
+    const role = await getOrganizationMembershipRole(user.id, params.id);
+    if (role !== "OWNER" && role !== "ADMIN") {
+      return { success: false, error: "You do not have access to this organization" };
+    }
+    if (action === "deactivate" && role !== "OWNER") {
+      return { success: false, error: "Only organization owners can deactivate organizations" };
+    }
+  }
 
   if (action === "update") {
-    await organizationsApi.updateOrganization(params.id, {
-      name: String(formData.get("name") || ""),
-      description: String(formData.get("description") || "") || undefined,
-      website: String(formData.get("website") || "") || undefined,
-      addressLine1: String(formData.get("address") || "") || undefined,
-      phoneNumber: String(formData.get("phoneNumber") || "") || undefined,
-      email: String(formData.get("emailAddress") || "") || undefined,
-      settings: {
-        autoApproveMembers: formData.get("autoApproveMembers") === "on",
-        requireInsurance: formData.get("requireInsurance") === "on",
-        allowPublicProfile: formData.get("allowPublicProfile") === "on",
-      },
-    });
+    const name = String(formData.get("name") || "").trim();
+    const email = String(formData.get("emailAddress") || "").trim();
+    const website = String(formData.get("website") || "").trim();
+    const phoneNumber = String(formData.get("phoneNumber") || "").trim();
+    const postalCode = String(formData.get("postalCode") || "").trim();
+    const description = String(formData.get("description") || "").trim();
+    if (!name || name.length < 2) {
+      return { success: false, error: "Organization name must be at least 2 characters" };
+    }
+    if (name.length > 120) {
+      return { success: false, error: "Organization name must be 120 characters or fewer" };
+    }
+    if (description.length > 2000) {
+      return { success: false, error: "Description must be 2000 characters or fewer" };
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { success: false, error: "Please provide a valid email address" };
+    }
+    if (website) {
+      try {
+        const parsed = new URL(website);
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+          return { success: false, error: "Website must use http:// or https://" };
+        }
+      } catch {
+        return { success: false, error: "Please provide a valid website URL" };
+      }
+    }
+    if (phoneNumber && !/^\+?[0-9()\-\s]{7,20}$/.test(phoneNumber)) {
+      return { success: false, error: "Please provide a valid phone number" };
+    }
+    if (postalCode && postalCode.length > 20) {
+      return { success: false, error: "Postal code must be 20 characters or fewer" };
+    }
 
-    return { success: true, message: "Organization updated successfully" };
+    try {
+      await organizationsApi.updateOrganization(params.id, {
+        name,
+        description: description || undefined,
+        website: website || undefined,
+        addressLine1: String(formData.get("address") || "").trim() || undefined,
+        addressLine2: undefined,
+        city: String(formData.get("city") || "").trim() || undefined,
+        state: String(formData.get("state") || "").trim() || undefined,
+        postalCode: postalCode || undefined,
+        country: String(formData.get("country") || "").trim() || undefined,
+        phoneNumber: phoneNumber || undefined,
+        email: email || undefined,
+        settings: {
+          autoApproveMembers: formData.get("autoApproveMembers") === "on",
+          requireInsurance: formData.get("requireInsurance") === "on",
+          allowPublicProfile: formData.get("allowPublicProfile") === "on",
+        },
+      });
+
+      return { success: true, message: "Organization updated successfully" };
+    } catch (error: unknown) {
+      return {
+        success: false,
+        error:
+          error && typeof error === "object" && "message" in error
+            ? String((error as { message?: string }).message)
+            : "Failed to update organization",
+      };
+    }
   }
 
   if (action === "deactivate") {
-    await organizationsApi.deactivateOrganization(params.id);
+    const deactivateConfirmation = String(formData.get("deactivateConfirmation") || "")
+      .trim()
+      .toUpperCase();
+    if (deactivateConfirmation !== "DEACTIVATE") {
+      return { success: false, error: "Type DEACTIVATE to confirm organization deactivation." };
+    }
+    try {
+      await organizationsApi.deactivateOrganization(params.id);
 
-    return {
-      success: true,
-      message: "Organization deactivated",
-      redirect: "/organizations",
-    };
+      return {
+        success: true,
+        message: "Organization deactivated",
+        redirect: "/organizations",
+      };
+    } catch (error: unknown) {
+      return {
+        success: false,
+        error:
+          error && typeof error === "object" && "message" in error
+            ? String((error as { message?: string }).message)
+            : "Failed to deactivate organization",
+      };
+    }
   }
 
-  return null;
+  return { success: false, error: "Unknown action" };
 }
 
 export default function OrganizationSettings() {
@@ -69,6 +180,7 @@ export default function OrganizationSettings() {
   const actionData = useActionData<typeof clientAction>();
   const navigate = useNavigate();
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [deactivateConfirmation, setDeactivateConfirmation] = useState("");
 
   useEffect(() => {
     if (actionData?.redirect) {
@@ -83,10 +195,10 @@ export default function OrganizationSettings() {
         <div className="mb-8">
           <div className="flex items-center space-x-4 mb-4">
             <Link
-              to={`/organizations/${organization.id}`}
+              to="/organizations"
               className="text-primary hover:text-primary/80"
             >
-              ← Back to Organization
+              ← Back to Organizations
             </Link>
           </div>
           <h1 className="text-3xl font-bold text-foreground">
@@ -128,6 +240,7 @@ export default function OrganizationSettings() {
                   name="name"
                   defaultValue={organization.name}
                   required
+                  maxLength={120}
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
               </div>
@@ -166,6 +279,7 @@ export default function OrganizationSettings() {
                 <textarea
                   name="description"
                   rows={4}
+                  maxLength={2000}
                   defaultValue={organization.description ?? ""}
                   placeholder="Tell us about your organization..."
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
@@ -189,6 +303,7 @@ export default function OrganizationSettings() {
                   type="url"
                   name="website"
                   defaultValue={organization.website || ""}
+                  maxLength={2048}
                   placeholder="https://example.com"
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
@@ -202,6 +317,7 @@ export default function OrganizationSettings() {
                   type="email"
                   name="emailAddress"
                   defaultValue={organization.email || ""}
+                  maxLength={254}
                   placeholder="contact@example.com"
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
@@ -215,6 +331,7 @@ export default function OrganizationSettings() {
                   type="tel"
                   name="phoneNumber"
                   defaultValue={organization.phone || ""}
+                  maxLength={20}
                   placeholder="+1 (555) 123-4567"
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
@@ -224,13 +341,48 @@ export default function OrganizationSettings() {
                 <label className="block text-sm font-medium text-foreground mb-1">
                   Address
                 </label>
-                <textarea
-                  name="address"
-                  rows={3}
-                  defaultValue={organization.address ?? ""}
-                  placeholder="123 Main St, City, State ZIP"
-                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    name="address"
+                    defaultValue={organization.address ?? ""}
+                    maxLength={120}
+                    placeholder="123 Main St"
+                    className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+                  />
+                  <input
+                    type="text"
+                    name="city"
+                    defaultValue={organization.city ?? ""}
+                    maxLength={80}
+                    placeholder="City"
+                    className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+                  />
+                  <input
+                    type="text"
+                    name="state"
+                    defaultValue={organization.state ?? ""}
+                    maxLength={80}
+                    placeholder="State"
+                    className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+                  />
+                  <input
+                    type="text"
+                    name="postalCode"
+                    defaultValue={organization.zipCode ?? ""}
+                    maxLength={20}
+                    placeholder="Postal Code"
+                    className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+                  />
+                  <input
+                    type="text"
+                    name="country"
+                    defaultValue={organization.country ?? ""}
+                    maxLength={80}
+                    placeholder="Country"
+                    className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary md:col-span-2"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -345,12 +497,12 @@ export default function OrganizationSettings() {
                 </p>
               )}
               {organization.verificationStatus === "REJECTED" && (
-                <button
-                  type="button"
+                <Link
+                  to="/contact"
                   className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90"
                 >
-                  Request Verification
-                </button>
+                  Contact Support
+                </Link>
               )}
             </div>
           </div>
@@ -383,7 +535,10 @@ export default function OrganizationSettings() {
             </div>
             <button
               type="button"
-              onClick={() => setShowDeactivateModal(true)}
+              onClick={() => {
+                setDeactivateConfirmation("");
+                setShowDeactivateModal(true);
+              }}
               className="px-4 py-2 bg-destructive text-destructive-foreground text-sm font-medium rounded-md hover:bg-destructive/90"
             >
               Deactivate
@@ -404,17 +559,40 @@ export default function OrganizationSettings() {
               listings will be hidden and you won't be able to create new
               bookings. You can reactivate it later.
             </p>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Type DEACTIVATE to confirm
+              </label>
+              <input
+                type="text"
+                name="deactivateConfirmation"
+                value={deactivateConfirmation}
+                onChange={(event) => setDeactivateConfirmation(event.target.value)}
+                maxLength={20}
+                className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+                autoComplete="off"
+              />
+            </div>
             <Form method="post" className="flex justify-end space-x-3">
               <input type="hidden" name="_action" value="deactivate" />
+              <input
+                type="hidden"
+                name="deactivateConfirmation"
+                value={deactivateConfirmation}
+              />
               <button
                 type="button"
-                onClick={() => setShowDeactivateModal(false)}
+                onClick={() => {
+                  setDeactivateConfirmation("");
+                  setShowDeactivateModal(false);
+                }}
                 className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
               >
                 Cancel
               </button>
               <button
                 type="submit"
+                disabled={deactivateConfirmation.trim().toUpperCase() !== "DEACTIVATE"}
                 className="px-4 py-2 text-sm font-medium text-destructive-foreground bg-destructive rounded-md hover:bg-destructive/90"
               >
                 Deactivate

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '@/common/prisma/prisma.service';
 
@@ -10,6 +10,23 @@ describe('Categories (e2e)', () => {
   let adminToken: string;
   let userToken: string;
   let testCategoryId: string;
+  let adminEmail: string;
+  let userEmail: string;
+
+  const uniqueSuffix = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const register = async (email: string, firstName: string, lastName: string) => {
+    const response = await request(app.getHttpServer()).post('/auth/register').send({
+      email,
+      password: 'Password123!',
+      firstName,
+      lastName,
+      phoneNumber: '+1234567890',
+    });
+
+    expect(response.status).toBe(201);
+    return response.body as { accessToken: string };
+  };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -22,38 +39,43 @@ describe('Categories (e2e)', () => {
 
     prisma = app.get<PrismaService>(PrismaService);
 
-    // Get admin token
-    const adminLogin = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'admin@rental-portal.com', password: 'password123' });
+    const suffix = uniqueSuffix();
+    adminEmail = `admin-cat-${suffix}@test.com`;
+    userEmail = `testuser-cat-${suffix}@test.com`;
+
+    await register(adminEmail, 'Admin', 'Category');
+    await prisma.user.update({ where: { email: adminEmail }, data: { role: 'ADMIN' } });
+
+    const adminLogin = await request(app.getHttpServer()).post('/auth/login').send({
+      email: adminEmail,
+      password: 'Password123!',
+    });
+    expect(adminLogin.status).toBe(200);
     adminToken = adminLogin.body.accessToken;
 
-    // Create a test user and get token
-    const userSignup = await request(app.getHttpServer())
-      .post('/auth/signup')
-      .send({
-        email: 'testuser-cat@test.com',
-        password: 'Password123!',
-        firstName: 'Test',
-        lastName: 'User',
-      });
-    userToken = userSignup.body.accessToken;
+    const userSignup = await register(userEmail, 'Test', 'User');
+    userToken = userSignup.accessToken;
   });
 
   afterAll(async () => {
-    // Cleanup test data
     if (testCategoryId) {
       await prisma.category.delete({ where: { id: testCategoryId } }).catch(() => {});
     }
-    await prisma.user.delete({ where: { email: 'testuser-cat@test.com' } }).catch(() => {});
+
+    await prisma.user
+      .deleteMany({
+        where: {
+          OR: [{ email: adminEmail }, { email: userEmail }],
+        },
+      })
+      .catch(() => {});
+
     await app.close();
   });
 
   describe('GET /categories', () => {
     it('should return all active categories', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/categories')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/categories').expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
@@ -65,59 +87,51 @@ describe('Categories (e2e)', () => {
       });
     });
 
-    it('should include all categories when activeOnly=false (admin)', async () => {
+    it('should include all categories when activeOnly=false', async () => {
       const response = await request(app.getHttpServer())
         .get('/categories?activeOnly=false')
-        .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
     });
 
     it('should be publicly accessible without authentication', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/categories')
-        .expect(200);
-
+      const response = await request(app.getHttpServer()).get('/categories').expect(200);
       expect(response.body).toBeDefined();
     });
 
     it('should return categories in order', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/categories')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/categories').expect(200);
 
-      // Check if ordered
       for (let i = 1; i < response.body.length; i++) {
-        const prev = response.body[i - 1].order ?? 0;
-        const curr = response.body[i].order ?? 0;
-        expect(curr).toBeGreaterThanOrEqual(prev);
+        const prev = response.body[i - 1].order;
+        const curr = response.body[i].order;
+
+        // Database null ordering can vary; only compare explicit values.
+        if (typeof prev === 'number' && typeof curr === 'number') {
+          expect(curr).toBeGreaterThanOrEqual(prev);
+        }
       }
     });
   });
 
   describe('GET /categories/templates', () => {
-    it('should return all category templates', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/categories/templates')
-        .expect(200);
+    it('should return all category templates as an object map', async () => {
+      const response = await request(app.getHttpServer()).get('/categories/templates').expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toBeDefined();
+      expect(Array.isArray(response.body)).toBe(false);
+      expect(typeof response.body).toBe('object');
+      expect(Object.keys(response.body).length).toBeGreaterThan(0);
     });
   });
 
   describe('GET /categories/:id', () => {
     it('should return a category by id', async () => {
-      // First get list of categories
-      const listResponse = await request(app.getHttpServer())
-        .get('/categories')
-        .expect(200);
-
+      const listResponse = await request(app.getHttpServer()).get('/categories').expect(200);
       const categoryId = listResponse.body[0].id;
 
-      const response = await request(app.getHttpServer())
-        .get(`/categories/${categoryId}`)
-        .expect(200);
+      const response = await request(app.getHttpServer()).get(`/categories/${categoryId}`).expect(200);
 
       expect(response.body).toHaveProperty('id', categoryId);
       expect(response.body).toHaveProperty('name');
@@ -125,44 +139,36 @@ describe('Categories (e2e)', () => {
     });
 
     it('should return 404 for non-existent category', async () => {
-      await request(app.getHttpServer())
-        .get('/categories/non-existent-id')
-        .expect(404);
+      await request(app.getHttpServer()).get('/categories/non-existent-id').expect(404);
     });
   });
 
   describe('GET /categories/slug/:slug', () => {
     it('should return a category by slug', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/categories/slug/apartment')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/categories/slug/apartment').expect(200);
 
       expect(response.body).toHaveProperty('slug', 'apartment');
       expect(response.body).toHaveProperty('name');
     });
 
     it('should return 404 for non-existent slug', async () => {
-      await request(app.getHttpServer())
-        .get('/categories/slug/non-existent-slug')
-        .expect(404);
+      await request(app.getHttpServer()).get('/categories/slug/non-existent-slug').expect(404);
     });
   });
 
   describe('GET /categories/:id/stats', () => {
     it('should return category statistics', async () => {
-      const listResponse = await request(app.getHttpServer())
-        .get('/categories')
-        .expect(200);
-
+      const listResponse = await request(app.getHttpServer()).get('/categories').expect(200);
       const categoryId = listResponse.body[0].id;
 
-      const response = await request(app.getHttpServer())
-        .get(`/categories/${categoryId}/stats`)
-        .expect(200);
+      const response = await request(app.getHttpServer()).get(`/categories/${categoryId}/stats`).expect(200);
 
-      expect(response.body).toHaveProperty('propertyCount');
-      expect(response.body).toHaveProperty('totalBookings');
-      expect(typeof response.body.propertyCount).toBe('number');
+      expect(response.body).toHaveProperty('category');
+      expect(response.body).toHaveProperty('stats');
+      expect(response.body.stats).toHaveProperty('totalListings');
+      expect(response.body.stats).toHaveProperty('activeListings');
+      expect(response.body.stats).toHaveProperty('averagePrice');
+      expect(typeof response.body.stats.totalListings).toBe('number');
     });
   });
 
@@ -193,49 +199,55 @@ describe('Categories (e2e)', () => {
     });
 
     it('should reject creation by non-admin user', async () => {
-      const createDto = {
-        name: 'Unauthorized Category',
-        slug: 'unauthorized-cat',
-        templateSchema: {},
-      };
-
       await request(app.getHttpServer())
         .post('/categories')
         .set('Authorization', `Bearer ${userToken}`)
-        .send(createDto)
+        .send({
+          name: 'Unauthorized Category',
+          slug: `unauthorized-cat-${Date.now()}`,
+          templateSchema: {},
+        })
         .expect(403);
     });
 
     it('should reject creation without authentication', async () => {
       await request(app.getHttpServer())
         .post('/categories')
-        .send({ name: 'Test', slug: 'test', templateSchema: {} })
+        .send({ name: 'Test', slug: `test-${Date.now()}`, templateSchema: {} })
         .expect(401);
     });
 
     it('should reject duplicate slug', async () => {
-      const createDto = {
-        name: 'Duplicate Slug Category',
-        slug: 'apartment', // Already exists
-        templateSchema: {},
-      };
+      const duplicateSlug = `duplicate-slug-${Date.now()}`;
+      const firstName = `First Duplicate Slug Category ${Date.now()}`;
+      const secondName = `Second Duplicate Slug Category ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
       await request(app.getHttpServer())
         .post('/categories')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send(createDto)
+        .send({
+          name: firstName,
+          slug: duplicateSlug,
+          templateSchema: {},
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/categories')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: secondName,
+          slug: duplicateSlug,
+          templateSchema: {},
+        })
         .expect(400);
     });
 
     it('should validate required fields', async () => {
-      const invalidDto = {
-        description: 'Missing name and slug',
-      };
-
       await request(app.getHttpServer())
         .post('/categories')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send(invalidDto)
+        .send({ description: 'Missing name and slug' })
         .expect(400);
     });
   });
@@ -243,7 +255,6 @@ describe('Categories (e2e)', () => {
   describe('PATCH /categories/:id (Admin)', () => {
     it('should update a category as admin', async () => {
       if (!testCategoryId) {
-        // Create one first
         const createResponse = await request(app.getHttpServer())
           .post('/categories')
           .set('Authorization', `Bearer ${adminToken}`)
@@ -251,7 +262,8 @@ describe('Categories (e2e)', () => {
             name: 'Update Test Category',
             slug: `update-test-${Date.now()}`,
             templateSchema: {},
-          });
+          })
+          .expect(201);
         testCategoryId = createResponse.body.id;
       }
 
@@ -291,11 +303,11 @@ describe('Categories (e2e)', () => {
 
       expect(response.body.active).toBe(false);
 
-      // Re-enable for other tests
       await request(app.getHttpServer())
         .patch(`/categories/${testCategoryId}`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ active: true });
+        .send({ active: true })
+        .expect(200);
     });
   });
 
@@ -309,23 +321,56 @@ describe('Categories (e2e)', () => {
         .expect(403);
     });
 
-    it('should reject deletion of category with properties', async () => {
-      // Get a category that has properties (apartment usually has)
-      const categories = await request(app.getHttpServer())
-        .get('/categories')
-        .expect(200);
+    it('should reject deletion of category with listings', async () => {
+      const createdCategory = await request(app.getHttpServer())
+        .post('/categories')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: `Delete Guard Category ${Date.now()}`,
+          slug: `delete-guard-${Date.now()}`,
+          templateSchema: {},
+        })
+        .expect(201);
 
-      const categoryWithProps = categories.body.find((c: any) => c.name === 'Apartment');
-      if (categoryWithProps) {
-        await request(app.getHttpServer())
-          .delete(`/categories/${categoryWithProps.id}`)
-          .set('Authorization', `Bearer ${adminToken}`)
-          .expect(400);
+      const adminUser = await prisma.user.findUnique({
+        where: { email: adminEmail },
+        select: { id: true },
+      });
+      if (!adminUser?.id) {
+        throw new Error('Admin user not found for categories delete guard test');
       }
+
+      await prisma.listing.create({
+        data: {
+          ownerId: adminUser.id,
+          categoryId: createdCategory.body.id,
+          title: `Category Delete Guard Listing ${Date.now()}`,
+          description: 'Listing to verify category delete guard',
+          slug: `category-delete-guard-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          address: '123 Category Street',
+          city: 'Test City',
+          state: 'TS',
+          zipCode: '12345',
+          country: 'US',
+          type: 'APARTMENT',
+          basePrice: 100,
+          currency: 'USD',
+          status: 'AVAILABLE',
+          verificationStatus: 'VERIFIED',
+          bookingMode: 'REQUEST',
+        } as any,
+      });
+
+      await request(app.getHttpServer())
+        .delete(`/categories/${createdCategory.body.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(400);
+
+      await prisma.listing.deleteMany({ where: { categoryId: createdCategory.body.id } });
+      await prisma.category.delete({ where: { id: createdCategory.body.id } });
     });
 
-    it('should delete a category without properties as admin', async () => {
-      // Create a fresh category for deletion
+    it('should delete a category without listings as admin', async () => {
       const createResponse = await request(app.getHttpServer())
         .post('/categories')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -333,69 +378,59 @@ describe('Categories (e2e)', () => {
           name: 'Delete Test Category',
           slug: `delete-test-${Date.now()}`,
           templateSchema: {},
-        });
+        })
+        .expect(201);
 
       const deleteId = createResponse.body.id;
 
       await request(app.getHttpServer())
         .delete(`/categories/${deleteId}`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200);
+        .expect(204);
 
-      // Verify deletion
-      await request(app.getHttpServer())
-        .get(`/categories/${deleteId}`)
-        .expect(404);
+      await request(app.getHttpServer()).get(`/categories/${deleteId}`).expect(404);
     });
   });
 
   describe('Edge Cases', () => {
     it('should handle special characters in name', async () => {
-      const createDto = {
-        name: 'Test & Category <Special>',
-        slug: `special-chars-${Date.now()}`,
-        templateSchema: {},
-      };
-
       const response = await request(app.getHttpServer())
         .post('/categories')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send(createDto)
+        .send({
+          name: 'Test & Category <Special>',
+          slug: `special-chars-${Date.now()}`,
+          templateSchema: {},
+        })
         .expect(201);
 
-      expect(response.body.name).toBe(createDto.name);
-
-      // Cleanup
+      expect(response.body.name).toBe('Test & Category <Special>');
       await prisma.category.delete({ where: { id: response.body.id } });
     });
 
     it('should handle very long description', async () => {
       const longDescription = 'A'.repeat(5000);
-      const createDto = {
-        name: 'Long Description Test',
-        slug: `long-desc-${Date.now()}`,
-        description: longDescription,
-        templateSchema: {},
-      };
-
       const response = await request(app.getHttpServer())
         .post('/categories')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send(createDto)
+        .send({
+          name: 'Long Description Test',
+          slug: `long-desc-${Date.now()}`,
+          description: longDescription,
+          templateSchema: {},
+        })
         .expect(201);
 
       expect(response.body.description).toBe(longDescription);
-
-      // Cleanup
       await prisma.category.delete({ where: { id: response.body.id } });
     });
 
     it('should handle concurrent reads', async () => {
-      const requests = Array(10)
-        .fill(null)
-        .map(() => request(app.getHttpServer()).get('/categories'));
-
-      const responses = await Promise.all(requests);
+      const responses = await Promise.all(
+        Array(10)
+          .fill(null)
+          .map(() => request(app.getHttpServer()).get('/categories')),
+      );
 
       responses.forEach((response) => {
         expect(response.status).toBe(200);

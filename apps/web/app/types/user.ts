@@ -29,6 +29,20 @@ export interface User {
   updatedAt: string;
 }
 
+export interface PublicUser {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  profilePhotoUrl: string | null;
+  bio?: string | null;
+  averageRating: number | null;
+  totalReviews: number | null;
+  responseRate: number | null;
+  responseTime: string | null;
+  idVerificationStatus?: string | null;
+  createdAt: string;
+}
+
 export interface UserPreferences {
   emailNotifications: boolean;
   pushNotifications: boolean;
@@ -64,7 +78,7 @@ export interface UserProfile extends User {
 export interface UpdateUserRequest {
   firstName?: string;
   lastName?: string;
-  phone?: string;
+  phoneNumber?: string;
   bio?: string;
   location?: {
     city: string;
@@ -74,12 +88,13 @@ export interface UpdateUserRequest {
 }
 
 export interface NotificationPreferences {
-  emailNotifications: boolean;
-  pushNotifications: boolean;
-  smsNotifications: boolean;
-  marketingEmails: boolean;
+  email: boolean;
+  sms: boolean;
+  push: boolean;
+  inApp: boolean;
   bookingUpdates: boolean;
+  paymentUpdates: boolean;
+  reviewAlerts: boolean;
   messageAlerts: boolean;
-  promotions: boolean;
-  securityAlerts: boolean;
+  marketingEmails: boolean;
 }

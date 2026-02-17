@@ -1,5 +1,6 @@
+
 import React from "react";
-import { useForm, type FormOptions } from "@tanstack/react-form";
+import { useForm } from "@tanstack/react-form";
 import {
   Box,
   TextField,
@@ -49,7 +50,7 @@ interface FieldConfig {
   multiple?: boolean;
   multiline?: boolean;
   rows?: number;
-  defaultValue?: any;
+  defaultValue?: unknown;
   disabled?: boolean;
   gridColumn?: number; // 1-12 for Material-UI grid
   section?: string;
@@ -63,7 +64,7 @@ interface FormSection {
   collapsible?: boolean;
 }
 
-interface ModernTanStackFormProps<T extends Record<string, any>> {
+interface ModernTanStackFormProps<T extends Record<string, unknown>> {
   mode: "create" | "edit" | "view";
   fields: FieldConfig[];
   sections?: FormSection[];
@@ -80,7 +81,9 @@ interface ModernTanStackFormProps<T extends Record<string, any>> {
   className?: string;
 }
 
-export function ModernTanStackForm<T extends Record<string, any>>({
+type FieldKey<T> = Extract<keyof T, string>;
+
+export function ModernTanStackForm<T extends Record<string, unknown>>({
   mode,
   fields,
   sections,
@@ -140,14 +143,16 @@ export function ModernTanStackForm<T extends Record<string, any>>({
               minWidth: 0,
             }}
           >
-            <form.Field name={fieldConfig.name as any}>
+            <form.Field name={fieldConfig.name as FieldKey<T>}>
               {(fieldApi) => (
                 <TextField
                   {...commonProps}
                   multiline
                   rows={fieldConfig.rows || 4}
                   value={fieldApi.state.value ?? ""}
-                  onChange={(e) => fieldApi.handleChange(e.target.value as any)}
+                  onChange={(e) =>
+                    fieldApi.handleChange(e.target.value as unknown as never)
+                  }
                   onBlur={() => fieldApi.handleBlur()}
                   error={!!fieldApi.state.meta.errors?.length}
                   helperText={
@@ -168,7 +173,7 @@ export function ModernTanStackForm<T extends Record<string, any>>({
               minWidth: 0,
             }}
           >
-            <form.Field name={fieldConfig.name as any}>
+            <form.Field name={fieldConfig.name as FieldKey<T>}>
               {(fieldApi) => (
                 <TextField
                   {...commonProps}
@@ -176,9 +181,9 @@ export function ModernTanStackForm<T extends Record<string, any>>({
                   value={fieldApi.state.value ?? ""}
                   onChange={(e) =>
                     fieldApi.handleChange(
-                      e.target.value === ""
+                      (e.target.value === ""
                         ? ""
-                        : (Number(e.target.value) as any)
+                        : Number(e.target.value)) as unknown as never
                     )
                   }
                   onBlur={() => fieldApi.handleBlur()}
@@ -201,7 +206,7 @@ export function ModernTanStackForm<T extends Record<string, any>>({
               minWidth: 0,
             }}
           >
-            <form.Field name={fieldConfig.name as any}>
+            <form.Field name={fieldConfig.name as FieldKey<T>}>
               {(fieldApi) => (
                 <FormControl
                   fullWidth
@@ -215,7 +220,7 @@ export function ModernTanStackForm<T extends Record<string, any>>({
                       fieldApi.state.value ?? (fieldConfig.multiple ? [] : "")
                     }
                     onChange={(e) =>
-                      fieldApi.handleChange(e.target.value as any)
+                      fieldApi.handleChange(e.target.value as unknown as never)
                     }
                     onBlur={() => fieldApi.handleBlur()}
                     multiple={fieldConfig.multiple}
@@ -281,14 +286,16 @@ export function ModernTanStackForm<T extends Record<string, any>>({
               minWidth: 0,
             }}
           >
-            <form.Field name={fieldConfig.name as any}>
+            <form.Field name={fieldConfig.name as FieldKey<T>}>
               {(fieldApi) => (
                 <FormControlLabel
                   control={
                     <Switch
                       checked={Boolean(fieldApi.state.value)}
                       onChange={(e) =>
-                        fieldApi.handleChange(e.target.checked as any)
+                        fieldApi.handleChange(
+                          e.target.checked as unknown as never
+                        )
                       }
                       disabled={isFieldDisabled}
                       size="small"
@@ -310,10 +317,10 @@ export function ModernTanStackForm<T extends Record<string, any>>({
               minWidth: 0,
             }}
           >
-            <form.Field name={fieldConfig.name as any}>
+            <form.Field name={fieldConfig.name as FieldKey<T>}>
               {(fieldApi) => {
                 // Format date for input (yyyy-MM-dd)
-                const formatDateForInput = (dateValue: any) => {
+                const formatDateForInput = (dateValue: unknown): string => {
                   if (!dateValue) return "";
                   if (typeof dateValue === "string") {
                     // Handle ISO dates and other formats
@@ -321,7 +328,10 @@ export function ModernTanStackForm<T extends Record<string, any>>({
                     if (isNaN(date.getTime())) return dateValue; // Return as-is if invalid
                     return date.toISOString().split("T")[0];
                   }
-                  return dateValue;
+                  if (dateValue instanceof Date) {
+                    return dateValue.toISOString().split("T")[0];
+                  }
+                  return "";
                 };
 
                 return (
@@ -330,7 +340,7 @@ export function ModernTanStackForm<T extends Record<string, any>>({
                     type="date"
                     value={formatDateForInput(fieldApi.state.value)}
                     onChange={(e) =>
-                      fieldApi.handleChange(e.target.value as any)
+                      fieldApi.handleChange(e.target.value as unknown as never)
                     }
                     onBlur={() => fieldApi.handleBlur()}
                     label={fieldConfig.label}
@@ -353,13 +363,15 @@ export function ModernTanStackForm<T extends Record<string, any>>({
               minWidth: 0,
             }}
           >
-            <form.Field name={fieldConfig.name as any}>
+            <form.Field name={fieldConfig.name as FieldKey<T>}>
               {(fieldApi) => (
                 <TextField
                   {...commonProps}
                   type={fieldConfig.type}
                   value={fieldApi.state.value ?? ""}
-                  onChange={(e) => fieldApi.handleChange(e.target.value as any)}
+                  onChange={(e) =>
+                    fieldApi.handleChange(e.target.value as unknown as never)
+                  }
                   onBlur={() => fieldApi.handleBlur()}
                   error={!!fieldApi.state.meta.errors?.length}
                   helperText={
@@ -530,7 +542,7 @@ export function ModernTanStackForm<T extends Record<string, any>>({
             >
               <Button
                 variant="outlined"
-                leftIcon={<CancelIcon />}
+                startIcon={<CancelIcon />}
                 onClick={onCancel}
                 disabled={loading}
               >
@@ -539,7 +551,7 @@ export function ModernTanStackForm<T extends Record<string, any>>({
               <Button
                 type="submit"
                 variant="contained"
-                leftIcon={<SaveIcon />}
+                startIcon={<SaveIcon />}
                 disabled={loading}
               >
                 {loading

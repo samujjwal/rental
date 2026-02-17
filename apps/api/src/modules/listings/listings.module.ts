@@ -5,9 +5,10 @@ import { AvailabilityService } from './services/availability.service';
 import { ListingsController } from './controllers/listings.controller';
 import { CategoriesModule } from '../categories/categories.module';
 import { SearchModule } from '../search/search.module';
+import { ModerationModule } from '../moderation/moderation.module';
 
 @Module({
-  imports: [CategoriesModule, forwardRef(() => SearchModule)],
+  imports: [CategoriesModule, forwardRef(() => SearchModule), ModerationModule],
   controllers: [ListingsController],
   providers: [ListingsService, PropertyValidationService, AvailabilityService],
   exports: [ListingsService, AvailabilityService],

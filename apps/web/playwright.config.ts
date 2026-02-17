@@ -9,13 +9,17 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Use 1 worker to avoid parallel login conflicts causing server errors
+  // Multiple workers trying to login as same user simultaneously causes DB contention
+  workers: 1,
   reporter: "html",
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:3401",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
+    // Ensure test isolation - each test starts with clean state
+    storageState: { cookies: [], origins: [] },
   },
 
   projects: [
@@ -42,7 +46,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "cd ../api && pnpm run start:dev & cd apps/web && pnpm run dev",
+    command: "pnpm run dev --host 127.0.0.1 --port 3401",
     url: "http://localhost:3401",
     reuseExistingServer: !process.env.CI,
     timeout: 120000,

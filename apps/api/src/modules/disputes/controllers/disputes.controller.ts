@@ -1,11 +1,14 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { DisputesService, CreateDisputeDto, UpdateDisputeDto } from '../services/disputes.service';
+import { DisputesService } from '../services/disputes.service';
+import { CreateDisputeDto, UpdateDisputeDto, AddResponseDto, CloseDisputeDto } from '../dto/dispute.dto';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import { DisputeStatus, UserRole } from '@rental-portal/database';
+
+type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
 
 @ApiTags('disputes')
 @ApiBearerAuth()
@@ -16,7 +19,10 @@ export class DisputesController {
 
   @Post()
   @ApiOperation({ summary: 'Create a dispute' })
-  async createDispute(@CurrentUser('id') userId: string, @Body() dto: CreateDisputeDto) {
+  async createDispute(
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateDisputeDto,
+  ): Promise<AsyncMethodResult<DisputesService['createDispute']>> {
     return this.disputesService.createDispute(userId, dto);
   }
 
@@ -73,9 +79,9 @@ export class DisputesController {
   async addResponse(
     @Param('id') disputeId: string,
     @CurrentUser('id') userId: string,
-    @Body() response: { message: string; evidence?: string[] },
+    @Body() dto: AddResponseDto,
   ) {
-    return this.disputesService.addResponse(disputeId, userId, response);
+    return this.disputesService.addResponse(disputeId, userId, dto);
   }
 
   @Patch(':id')
@@ -86,7 +92,7 @@ export class DisputesController {
     @Param('id') disputeId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateDisputeDto,
-  ) {
+  ): Promise<AsyncMethodResult<DisputesService['updateDispute']>> {
     return this.disputesService.updateDispute(disputeId, userId, dto);
   }
 
@@ -95,8 +101,8 @@ export class DisputesController {
   async closeDispute(
     @Param('id') disputeId: string,
     @CurrentUser('id') userId: string,
-    @Body() body: { reason: string },
-  ) {
-    return this.disputesService.closeDispute(disputeId, userId, body.reason);
+    @Body() dto: CloseDisputeDto,
+  ): Promise<AsyncMethodResult<DisputesService['closeDispute']>> {
+    return this.disputesService.closeDispute(disputeId, userId, dto.reason);
   }
 }

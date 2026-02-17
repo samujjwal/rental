@@ -131,9 +131,38 @@ export async function getAdminAnalytics(
     adminApi.getAnalytics(params),
   ]);
 
-  const newUsers = analytics.userGrowth.reduce((sum, p) => sum + (p.count || 0), 0);
-  const totalBookings = analytics.bookingTrends.reduce((sum, p) => sum + (p.count || 0), 0);
-  const grossRevenue = analytics.bookingTrends.reduce((sum, p) => sum + (p.revenue || 0), 0);
+  const safeNumber = (value: unknown): number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const asArray = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
+  const userGrowth = asArray<{ date?: string; count?: number }>(analytics?.userGrowth);
+  const bookingTrends = asArray<{ date?: string; count?: number; revenue?: number }>(
+    analytics?.bookingTrends
+  );
+  const revenueByCategory = asArray<{ category?: string; revenue?: number }>(
+    analytics?.revenueByCategory
+  );
+
+  const newUsers = userGrowth.reduce((sum, p) => sum + safeNumber(p?.count), 0);
+  const totalBookings = bookingTrends.reduce((sum, p) => sum + safeNumber(p?.count), 0);
+  const grossRevenue = bookingTrends.reduce((sum, p) => sum + safeNumber(p?.revenue), 0);
+
+  const activeListings = safeNumber(
+    (dashboard as { activeListings?: unknown }).activeListings ??
+      (dashboard as { listings?: { active?: unknown } }).listings?.active
+  );
+  const pendingBookings = safeNumber(
+    (dashboard as { pendingBookings?: unknown }).pendingBookings
+  );
+  const pendingDisputes = safeNumber(
+    (dashboard as { pendingDisputes?: unknown }).pendingDisputes ??
+      (dashboard as { disputes?: { pending?: unknown } }).disputes?.pending
+  );
+  const flaggedContent = safeNumber(
+    (dashboard as { flaggedContent?: unknown }).flaggedContent
+  );
 
   const kpis: AnalyticsKpi[] = [
     {
@@ -148,7 +177,7 @@ export async function getAdminAnalytics(
     {
       id: "listings",
       label: "Listings live",
-      value: dashboard.activeListings || 0,
+      value: activeListings,
       change: 0,
       trend: "flat",
       unit: "count",
@@ -157,7 +186,7 @@ export async function getAdminAnalytics(
     {
       id: "bookings",
       label: "Bookings pending",
-      value: dashboard.pendingBookings || 0,
+      value: pendingBookings,
       change: 0,
       trend: "flat",
       unit: "count",
@@ -172,41 +201,50 @@ export async function getAdminAnalytics(
       unit: "currency",
       description: "Total transaction value in the selected window",
     },
+    {
+      id: "disputes",
+      label: "Active disputes",
+      value: pendingDisputes,
+      change: 0,
+      trend: "flat",
+      unit: "count",
+      description: "Disputes requiring review",
+    },
   ];
 
-  const trends: AnalyticsTrendPoint[] = analytics.bookingTrends.map((p) => ({
+  const trends: AnalyticsTrendPoint[] = bookingTrends.map((p) => ({
     date: p.date?.slice(0, 10) ?? "",
-    bookings: p.count ?? 0,
-    revenue: p.revenue ?? 0,
+    bookings: safeNumber(p.count),
+    revenue: safeNumber(p.revenue),
     cancellations: 0,
   }));
 
-  const topCategories: AnalyticsCategoryStat[] = analytics.revenueByCategory.map((c) => ({
-    category: c.category,
+  const topCategories: AnalyticsCategoryStat[] = revenueByCategory.map((c) => ({
+    category: c.category || "Uncategorized",
     bookings: 0,
-    revenue: c.revenue,
+    revenue: safeNumber(c.revenue),
     change: 0,
     fulfillmentTime: 0,
   }));
 
   const alerts: AnalyticsAlert[] = [];
-  if ((dashboard.pendingDisputes || 0) > 0) {
+  if (pendingDisputes > 0) {
     alerts.push({
       id: "disputes",
       severity: "warning",
       title: "Pending disputes",
       description: "There are disputes requiring review.",
-      impact: `${dashboard.pendingDisputes} pending`,
+      impact: `${pendingDisputes} pending`,
       action: { label: "View disputes", to: "/admin/disputes" },
     });
   }
-  if ((dashboard.flaggedContent || 0) > 0) {
+  if (flaggedContent > 0) {
     alerts.push({
       id: "flagged",
       severity: "info",
       title: "Flagged content",
       description: "Content is flagged and may need moderation.",
-      impact: `${dashboard.flaggedContent} flagged`,
+      impact: `${flaggedContent} flagged`,
       action: { label: "Review listings", to: "/admin/listings" },
     });
   }
@@ -220,7 +258,7 @@ export async function getAdminAnalytics(
         total: totalBookings,
         confirmed: totalBookings,
         cancelled: 0,
-        disputes: dashboard.pendingDisputes || 0,
+        disputes: pendingDisputes,
         avgDurationDays: 0,
       },
       revenue: {
@@ -230,8 +268,8 @@ export async function getAdminAnalytics(
         payoutVolume: 0,
       },
       operations: {
-        openDisputes: dashboard.pendingDisputes || 0,
-        moderationBacklog: dashboard.flaggedContent || 0,
+        openDisputes: pendingDisputes,
+        moderationBacklog: flaggedContent,
         supportSla: 0,
         fraudSignals: 0,
       },

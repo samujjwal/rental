@@ -139,7 +139,7 @@ describe('InstantSearch', () => {
   it('displays loading state', async () => {
     mockSearchListings.mockImplementation(() => new Promise(() => {})); // Never resolves
 
-    render(
+    const { container } = render(
       <BrowserRouter>
         <InstantSearch />
       </BrowserRouter>
@@ -149,7 +149,7 @@ describe('InstantSearch', () => {
     fireEvent.change(input, { target: { value: 'test' } });
 
     await waitFor(() => {
-      expect(screen.getByRole('combobox')).toBeDisabled();
+      expect(container.querySelector('.animate-spin')).toBeInTheDocument();
     });
   });
 
@@ -230,7 +230,9 @@ describe('InstantSearch', () => {
     fireEvent.change(input, { target: { value: 'camera' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(onSearch).toHaveBeenCalledWith('camera');
+    await waitFor(() => {
+      expect(onSearch).toHaveBeenCalledWith('camera');
+    });
   });
 
   it('submits search on form submit', async () => {
@@ -247,7 +249,9 @@ describe('InstantSearch', () => {
     const form = input.closest('form');
     fireEvent.submit(form!);
 
-    expect(onSearch).toHaveBeenCalledWith('camera');
+    await waitFor(() => {
+      expect(onSearch).toHaveBeenCalledWith('camera');
+    });
   });
 
   it('closes dropdown when clicking outside', async () => {

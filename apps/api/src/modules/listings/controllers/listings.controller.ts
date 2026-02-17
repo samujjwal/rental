@@ -12,15 +12,16 @@ import {
   HttpStatus,
   Inject,
   forwardRef,
+  NotFoundException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@rental-portal/database';
+import { PropertyStatus } from '@rental-portal/database';
 import {
   PropertysService,
-  CreateListingDto,
-  UpdateListingDto,
   ListingFilters,
 } from '../services/listings.service';
+import { CreateListingDto, UpdateListingDto } from '../dto/listing.dto';
 import {
   AvailabilityService,
   CreateAvailabilityDto,
@@ -31,6 +32,8 @@ import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import { SearchService, SearchQuery } from '@/modules/search/services/search.service';
+
+type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
 
 @ApiTags('Listings')
 @Controller('listings')
@@ -50,7 +53,10 @@ export class ListingsController {
   @ApiResponse({ status: 201, description: 'Listing created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async create(@CurrentUser('id') userId: string, @Body() dto: CreateListingDto) {
+  async create(
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateListingDto,
+  ): Promise<AsyncMethodResult<PropertysService['create']>> {
     return this.listingsService.create(userId, dto);
   }
 
@@ -61,6 +67,7 @@ export class ListingsController {
   @ApiQuery({ name: 'location', required: false, type: String })
   @ApiQuery({ name: 'minPrice', required: false, type: Number })
   @ApiQuery({ name: 'maxPrice', required: false, type: Number })
+  @ApiQuery({ name: 'delivery', required: false, type: Boolean })
   @ApiQuery({ name: 'sortBy', required: false, type: String })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -73,7 +80,7 @@ export class ListingsController {
     @Query('maxPrice') maxPrice?: number,
     @Query('condition') condition?: string,
     @Query('instantBooking') instantBooking?: boolean,
-    @Query('delivery') delivery?: boolean,
+    @Query('delivery') delivery?: string | boolean,
     @Query('sortBy') sortBy?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
@@ -94,10 +101,13 @@ export class ListingsController {
       searchQuery.priceRange = { min: minPrice, max: maxPrice };
     }
 
-    if (condition || instantBooking || delivery) {
+    const deliveryEnabled = delivery === true || delivery === 'true' || delivery === '1';
+
+    if (condition || instantBooking || deliveryEnabled) {
       searchQuery.filters = {
         condition,
         bookingMode: instantBooking ? 'INSTANT_BOOK' : undefined,
+        delivery: deliveryEnabled,
       };
     }
 
@@ -187,13 +197,34 @@ export class ListingsController {
     return listings.map((l) => this.mapToFrontendListing(l));
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get listing by ID' })
-  @ApiResponse({ status: 200, description: 'Listing retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Listing not found' })
-  async findById(@Param('id') id: string) {
-    const listing = await this.listingsService.findById(id);
-    return this.mapToFrontendListing(listing);
+  @Get('featured')
+  @ApiOperation({ summary: 'Get featured listings' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Featured listings retrieved successfully' })
+  async getFeaturedListings(@Query('limit') limit?: number) {
+    const result = await this.listingsService.findAll(
+      { featured: true, status: PropertyStatus.AVAILABLE },
+      1,
+      limit || 8,
+    );
+    return {
+      ...result,
+      listings: result.listings.map((l) => this.mapToFrontendListing(l)),
+    };
+  }
+
+  @Get('price-suggestion')
+  @ApiOperation({ summary: 'Get price suggestion based on similar listings' })
+  @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({ name: 'city', required: false, type: String })
+  @ApiQuery({ name: 'condition', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Price suggestion retrieved successfully' })
+  async getPriceSuggestion(
+    @Query('categoryId') categoryId?: string,
+    @Query('city') city?: string,
+    @Query('condition') condition?: string,
+  ) {
+    return this.listingsService.getPriceSuggestion({ categoryId, city, condition });
   }
 
   @Get('slug/:slug')
@@ -205,7 +236,34 @@ export class ListingsController {
     return this.mapToFrontendListing(listing);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get listing by ID' })
+  @ApiResponse({ status: 200, description: 'Listing retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Listing not found' })
+  async findById(@Param('id') id: string) {
+    const listing = await this.listingsService.findById(id);
+    return this.mapToFrontendListing(listing);
+  }
+
   private mapToFrontendListing(listing: any) {
+    let metadata: Record<string, any> = {};
+    if (listing.metadata) {
+      try {
+        metadata = JSON.parse(listing.metadata);
+      } catch {
+        metadata = {};
+      }
+    }
+
+    const availability =
+      listing.status === 'AVAILABLE'
+        ? 'available'
+        : listing.status === 'RENTED'
+          ? 'rented'
+          : listing.status === 'MAINTENANCE'
+            ? 'maintenance'
+            : 'unavailable';
+
     return {
       id: listing.id,
       ownerId: listing.ownerId,
@@ -229,26 +287,31 @@ export class ListingsController {
       },
       images: listing.photos || listing.images || [],
       status: listing.status,
-      availability: listing.status === 'AVAILABLE' ? 'available' : 'rented',
+      availability,
       features: listing.features || [],
       rating: listing.averageRating || 0,
       totalReviews: listing.totalReviews || 0,
       totalBookings: listing.totalBookings || 0,
+      bookingsCount: listing.totalBookings || 0,
       views: listing.views || listing.viewCount || 0,
       featured: listing.featured || false,
       verified: listing.verificationStatus === 'VERIFIED',
       instantBooking:
         listing.bookingMode === 'INSTANT_BOOK' || listing.instantBookable,
-      deliveryOptions: {
+      deliveryOptions: metadata.deliveryOptions || {
         pickup: true,
         delivery: false,
         shipping: false,
       },
+      deliveryRadius: metadata.deliveryRadius ?? null,
+      deliveryFee: metadata.deliveryFee ?? null,
       securityDeposit: Number(listing.securityDeposit || 0),
-      minimumRentalPeriod: listing.minStayNights || 1,
-      maximumRentalPeriod: listing.maxStayNights || null,
+      minimumRentalPeriod: metadata.minimumRentalPeriod || listing.minStayNights || 1,
+      maximumRentalPeriod: metadata.maximumRentalPeriod || listing.maxStayNights || null,
       cancellationPolicy:
-        listing.cancellationPolicy?.name?.toLowerCase() || 'flexible',
+        metadata.cancellationPolicy ||
+        listing.cancellationPolicy?.name?.toLowerCase() ||
+        'flexible',
       rules: Array.isArray(listing.rules) ? listing.rules.join('\n') : listing.rules || '',
       owner: {
         id: listing.owner?.id,
@@ -274,8 +337,8 @@ export class ListingsController {
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateListingDto,
-  ) {
-    return this.listingsService.update(id, userId, dto);
+  ): Promise<AsyncMethodResult<PropertysService['update']>> {
+    return this.listingsService.update(id, userId, dto as any);
   }
 
   @Post(':id/publish')
@@ -286,7 +349,10 @@ export class ListingsController {
   @ApiResponse({ status: 200, description: 'Listing published successfully' })
   @ApiResponse({ status: 400, description: 'Listing incomplete or not in draft status' })
   @ApiResponse({ status: 403, description: 'Forbidden - not listing owner' })
-  async publish(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async publish(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<PropertysService['publish']>> {
     return this.listingsService.publish(id, userId);
   }
 
@@ -297,7 +363,10 @@ export class ListingsController {
   @ApiOperation({ summary: 'Pause listing' })
   @ApiResponse({ status: 200, description: 'Listing paused successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - not listing owner' })
-  async pause(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async pause(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<PropertysService['pause']>> {
     return this.listingsService.pause(id, userId);
   }
 
@@ -309,7 +378,10 @@ export class ListingsController {
   @ApiResponse({ status: 200, description: 'Listing activated successfully' })
   @ApiResponse({ status: 400, description: 'Listing not verified' })
   @ApiResponse({ status: 403, description: 'Forbidden - not listing owner' })
-  async activate(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async activate(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<PropertysService['activate']>> {
     return this.listingsService.activate(id, userId);
   }
 
@@ -380,7 +452,25 @@ export class ListingsController {
     @Param('id') listingId: string,
     @Body() dto: Omit<AvailabilityCheckDto, 'propertyId'>,
   ) {
-    return this.availabilityService.checkAvailability({ ...dto, propertyId: listingId });
+    const result = await this.availabilityService.checkAvailability({
+      ...dto,
+      propertyId: listingId,
+    });
+
+    const blockedDates =
+      result.conflicts?.flatMap((conflict) => [
+        conflict.startDate.toISOString(),
+        conflict.endDate.toISOString(),
+      ]) || [];
+
+    return {
+      available: result.isAvailable,
+      blockedDates,
+      availableDates: [],
+      message: result.isAvailable
+        ? 'Listing is available for selected dates'
+        : result.conflicts?.[0]?.reason || 'Listing is not available for selected dates',
+    };
   }
 
   @Get(':id/available-dates')
@@ -398,5 +488,80 @@ export class ListingsController {
       new Date(startDate),
       new Date(endDate),
     );
+  }
+
+  @Patch(':id/availability')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update listing availability (alias for POST)' })
+  @ApiResponse({ status: 200, description: 'Availability updated' })
+  async updateAvailability(
+    @Param('id') listingId: string,
+    @Body() dto: Omit<CreateAvailabilityDto, 'propertyId'>,
+  ) {
+    return this.availabilityService.createAvailability({ ...dto, propertyId: listingId });
+  }
+
+  @Post(':id/images')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload images for a listing' })
+  @ApiResponse({ status: 200, description: 'Images uploaded' })
+  async uploadImages(
+    @Param('id') listingId: string,
+    @CurrentUser('id') userId: string,
+    @Body('urls') urls: string[],
+  ) {
+    const listing = await this.listingsService.findOne(listingId);
+    if (!listing) throw new NotFoundException('Listing not found');
+    const existingImages = Array.isArray(listing.photos) ? listing.photos : [];
+    const updatedImages = [...existingImages, ...(urls || [])];
+    await this.listingsService.update(listingId, userId, { images: updatedImages });
+    return { images: updatedImages };
+  }
+
+  @Delete(':id/images')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete images from a listing' })
+  @ApiResponse({ status: 200, description: 'Images removed' })
+  async deleteImages(
+    @Param('id') listingId: string,
+    @CurrentUser('id') userId: string,
+    @Body('urls') urls: string[],
+  ) {
+    const listing = await this.listingsService.findOne(listingId);
+    if (!listing) throw new NotFoundException('Listing not found');
+    const existingImages = Array.isArray(listing.photos) ? listing.photos : [];
+    const updatedImages = existingImages.filter((img: string) => !urls.includes(img));
+    await this.listingsService.update(listingId, userId, { images: updatedImages });
+    return { images: updatedImages };
+  }
+
+  @Get('nearby')
+  @ApiOperation({ summary: 'Get nearby listings by coordinates' })
+  @ApiQuery({ name: 'lat', required: true, type: Number })
+  @ApiQuery({ name: 'lng', required: true, type: Number })
+  @ApiQuery({ name: 'radius', required: false, type: Number, description: 'Radius in km (default 10)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max results (default 20)' })
+  @ApiResponse({ status: 200, description: 'Nearby listings retrieved' })
+  async getNearbyListings(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+    @Query('radius') radius?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+    const radiusKm = radius ? parseFloat(radius) : 10;
+    const maxResults = limit ? parseInt(limit, 10) : 20;
+
+    // Haversine-based search using raw SQL for distance calculation
+    return this.searchService.search({
+      latitude,
+      longitude,
+      radius: radiusKm,
+      limit: maxResults,
+    } as SearchQuery);
   }
 }

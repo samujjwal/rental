@@ -31,40 +31,21 @@ export interface Notification {
 }
 
 export interface NotificationPreferences {
-  email: {
-    bookingUpdates: boolean;
-    paymentUpdates: boolean;
-    messages: boolean;
-    reviews: boolean;
-    marketing: boolean;
-    securityAlerts: boolean;
-  };
-  push: {
-    bookingUpdates: boolean;
-    paymentUpdates: boolean;
-    messages: boolean;
-    reviews: boolean;
-    marketing: boolean;
-    securityAlerts: boolean;
-  };
-  sms: {
-    bookingUpdates: boolean;
-    paymentUpdates: boolean;
-    messages: boolean;
-    securityAlerts: boolean;
-  };
+  email: boolean;
+  sms: boolean;
+  push: boolean;
+  inApp: boolean;
+  bookingUpdates: boolean;
+  paymentUpdates: boolean;
+  reviewAlerts: boolean;
+  messageAlerts: boolean;
+  marketingEmails: boolean;
 }
 
 export interface NotificationsResponse {
   notifications: Notification[];
   total: number;
-  unreadCount: number;
-}
-
-export interface RegisterDeviceDto {
-  token: string;
-  platform: "web" | "ios" | "android";
-  deviceInfo?: Record<string, unknown>;
+  unreadCount?: number;
 }
 
 export const notificationsApi = {
@@ -93,14 +74,14 @@ export const notificationsApi = {
    * Get unread notification count
    */
   async getUnreadCount(): Promise<{ count: number }> {
-    return api.get<{ count: number }>("/notifications/count");
+    return api.get<{ count: number }>("/notifications/unread-count");
   },
 
   /**
    * Mark a notification as read
    */
   async markAsRead(notificationId: string): Promise<void> {
-    return api.patch<void>(`/notifications/${notificationId}/read`);
+    return api.post<void>(`/notifications/${notificationId}/read`);
   },
 
   /**
@@ -136,27 +117,5 @@ export const notificationsApi = {
     );
   },
 
-  /**
-   * Register device for push notifications
-   */
-  async registerDevice(data: RegisterDeviceDto): Promise<{ deviceId: string }> {
-    return api.post<{ deviceId: string }>(
-      "/notifications/devices/register",
-      data
-    );
-  },
-
-  /**
-   * Unregister device from push notifications
-   */
-  async unregisterDevice(deviceId: string): Promise<void> {
-    return api.post<void>("/notifications/devices/unregister", { deviceId });
-  },
-
-  /**
-   * Test push notification (development only)
-   */
-  async sendTestNotification(): Promise<void> {
-    return api.post<void>("/notifications/test");
-  },
+  // Device registration endpoints are not implemented in the API yet.
 };

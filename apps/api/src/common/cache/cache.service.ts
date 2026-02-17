@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import Redis, { RedisOptions } from 'ioredis';
 
 @Injectable()
 export class CacheService {
@@ -9,9 +9,11 @@ export class CacheService {
   private readonly subClient: Redis;
   private readonly logger = new Logger(CacheService.name);
   private readonly defaultTTL: number;
+  private readonly subscribers = new Map<string, Set<(message: any) => void>>();
+  private messageHandlerBound = false;
 
   constructor(private readonly configService: ConfigService) {
-    const redisConfig = {
+    const redisConfig: RedisOptions = {
       host: this.configService.get('redis.host'),
       port: this.configService.get('redis.port'),
       password: this.configService.get('redis.password'),
@@ -23,11 +25,18 @@ export class CacheService {
 
     this.redis = new Redis(redisConfig);
     this.pubClient = new Redis(redisConfig);
-    this.subClient = new Redis(redisConfig);
+    this.subClient = new Redis({
+      ...redisConfig,
+      // Subscriber connections can fail ready checks after entering pub/sub mode.
+      enableReadyCheck: false,
+      maxRetriesPerRequest: null,
+    });
     this.defaultTTL = this.configService.get('redis.ttl', 3600);
 
     this.redis.on('error', (err) => this.logger.error('Redis error', err));
     this.redis.on('connect', () => this.logger.log('Redis connected'));
+    this.pubClient.on('error', (err) => this.logger.error('Redis publish client error', err));
+    this.subClient.on('error', (err) => this.logger.error('Redis subscribe client error', err));
   }
 
   async get<T>(key: string): Promise<T | null> {
@@ -180,17 +189,40 @@ export class CacheService {
 
   async subscribe(channel: string, callback: (message: any) => void): Promise<void> {
     try {
-      await this.subClient.subscribe(channel);
-      this.subClient.on('message', (ch, msg) => {
-        if (ch === channel) {
-          try {
-            const parsed = JSON.parse(msg);
-            callback(parsed);
-          } catch (error) {
-            this.logger.error(`Error parsing message from ${channel}:`, error);
+      if (!this.messageHandlerBound) {
+        this.subClient.on('message', (ch, msg) => {
+          const callbacks = this.subscribers.get(ch);
+          if (!callbacks || callbacks.size === 0) {
+            return;
           }
-        }
-      });
+
+          let parsed: any;
+          try {
+            parsed = JSON.parse(msg);
+          } catch (error) {
+            this.logger.error(`Error parsing message from ${ch}:`, error);
+            return;
+          }
+
+          callbacks.forEach((cb) => {
+            try {
+              cb(parsed);
+            } catch (error) {
+              this.logger.error(`Error handling message callback for ${ch}:`, error);
+            }
+          });
+        });
+        this.messageHandlerBound = true;
+      }
+
+      const existing = this.subscribers.get(channel);
+      if (existing) {
+        existing.add(callback);
+        return;
+      }
+
+      this.subscribers.set(channel, new Set([callback]));
+      await this.subClient.subscribe(channel);
     } catch (error) {
       this.logger.error(`Error subscribing to channel ${channel}:`, error);
     }
@@ -209,8 +241,10 @@ export class CacheService {
   }
 
   async onModuleDestroy() {
-    await this.redis.quit();
-    await this.pubClient.quit();
-    await this.subClient.quit();
+    await Promise.allSettled([
+      this.redis.quit(),
+      this.pubClient.quit(),
+      this.subClient.quit(),
+    ]);
   }
 }

@@ -1,13 +1,10 @@
-/* eslint-disable react-refresh/only-export-components */
-import type { MetaFunction } from "react-router";
+
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
 import { useState } from "react";
 import {
   AlertTriangle,
-  Clock,
   XCircle,
-  FileText,
-  Image,
   User,
   Calendar,
   DollarSign,
@@ -15,8 +12,9 @@ import {
   Search,
   Loader2,
 } from "lucide-react";
-import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { adminApi, type AdminDispute } from "~/lib/api/admin";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && typeof error.message === "string") {
@@ -43,15 +41,36 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeDateLabel = (value: unknown): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleDateString();
+};
+const safeLower = (value: unknown): string =>
+  (typeof value === "string" ? value : "").toLowerCase();
+const humanize = (value: unknown): string =>
+  String(value || "").replace(/_/g, " ").trim() || "unknown";
+const shortId = (value: unknown): string => safeLower(value).slice(0, 8) || "unknown";
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
-    const disputesRes = (await adminApi.getDisputes({ limit: 50 })) as {
-      data?: Dispute[];
-      pagination?: unknown;
-    };
+    const disputesRes = await adminApi.getDisputes({ limit: 50 });
     return {
-      disputes: disputesRes.data ?? [],
-      pagination: disputesRes.pagination ?? null,
+      disputes: disputesRes.disputes ?? [],
+      pagination: {
+        total: disputesRes.total,
+        page: disputesRes.page,
+        limit: disputesRes.limit,
+      },
       error: null,
     };
   } catch (error: unknown) {
@@ -63,53 +82,50 @@ export async function clientLoader() {
   }
 }
 
-export async function clientAction({ request }: { request: Request }) {
+export async function clientAction({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+
   const formData = await request.formData();
-  const intent = formData.get("intent");
-  const disputeId = formData.get("disputeId") as string;
+  const intent = String(formData.get("intent") || "");
+  const disputeId = String(formData.get("disputeId") ?? "").trim();
+  const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-  if (intent === "resolve") {
-    const resolution = formData.get("resolution") as string;
-    const notes = formData.get("notes") as string;
-    try {
-      await adminApi.resolveDispute(disputeId, { resolution, notes });
-      return { success: true, message: "Dispute resolved successfully" };
-    } catch (error: unknown) {
-      return { success: false, error: getErrorMessage(error) || "Failed to resolve dispute" };
+  if (intent === "set-status") {
+    const status = String(formData.get("status") ?? "").trim().toUpperCase();
+    const allowedStatuses = new Set([
+      "OPEN",
+      "UNDER_REVIEW",
+      "INVESTIGATING",
+      "RESOLVED",
+      "CLOSED",
+      "DISMISSED",
+    ]);
+    if (!UUID_PATTERN.test(disputeId)) {
+      return { success: false, error: "Dispute ID is required" };
     }
-  }
-
-  if (intent === "assign") {
+    if (!allowedStatuses.has(status)) {
+      return { success: false, error: "Invalid dispute status" };
+    }
     try {
-      await adminApi.assignDispute(disputeId);
-      return { success: true, message: "Dispute assigned to you" };
+      await adminApi.updateDisputeStatus(disputeId, status);
+      return { success: true, message: "Dispute updated successfully" };
     } catch (error: unknown) {
-      return { success: false, error: getErrorMessage(error) || "Failed to assign dispute" };
+      return { success: false, error: getErrorMessage(error) || "Failed to update dispute" };
     }
   }
 
   return { success: false, error: "Unknown action" };
 }
 
-type DisputeStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
-type DisputePriority = "HIGH" | "MEDIUM" | "LOW";
-
-interface Dispute {
-  id: string;
-  type: string;
-  status: DisputeStatus;
-  priority: DisputePriority;
-  bookingId: string;
-  amount: number;
-  description: string;
-  evidence: { type: string; url: string }[];
-  renter: { id: string; firstName: string; lastName: string; email: string };
-  owner: { id: string; firstName: string; lastName: string; email: string };
-  assignedTo?: { firstName: string; lastName: string };
-  createdAt: string;
-  updatedAt: string;
-  slaDeadline?: string;
-}
+type DisputeStatus =
+  | "OPEN"
+  | "UNDER_REVIEW"
+  | "INVESTIGATING"
+  | "RESOLVED"
+  | "CLOSED"
+  | "DISMISSED";
+type DisputePriority = "URGENT" | "HIGH" | "MEDIUM" | "LOW";
 
 export default function AdminDisputesPage() {
   const { disputes, error } = useLoaderData<typeof clientLoader>();
@@ -117,30 +133,32 @@ export default function AdminDisputesPage() {
   const navigation = useNavigation();
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
+  const [selectedDispute, setSelectedDispute] = useState<AdminDispute | null>(null);
 
   const isSubmitting = navigation.state === "submitting";
 
   // Filter disputes
-  const filteredDisputes = disputes.filter((dispute: Dispute) => {
+  const query = safeLower(searchQuery);
+  const filteredDisputes = disputes.filter((dispute: AdminDispute) => {
     const matchesStatus = selectedStatus === "all" || dispute.status === selectedStatus;
-    const matchesSearch = searchQuery === "" ||
-      dispute.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dispute.renter?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dispute.owner?.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = query === "" ||
+      safeLower(dispute.id).includes(query) ||
+      safeLower(dispute.initiator?.email).includes(query);
     return matchesStatus && matchesSearch;
   });
 
   // Count by status
   const statusCounts = {
     all: disputes.length,
-    OPEN: disputes.filter((d: Dispute) => d.status === "OPEN").length,
-    IN_PROGRESS: disputes.filter((d: Dispute) => d.status === "IN_PROGRESS").length,
-    RESOLVED: disputes.filter((d: Dispute) => d.status === "RESOLVED").length,
+    OPEN: disputes.filter((d: AdminDispute) => d.status === "OPEN").length,
+    UNDER_REVIEW: disputes.filter((d: AdminDispute) => d.status === "UNDER_REVIEW").length,
+    INVESTIGATING: disputes.filter((d: AdminDispute) => d.status === "INVESTIGATING").length,
+    RESOLVED: disputes.filter((d: AdminDispute) => d.status === "RESOLVED").length,
   };
 
   const getPriorityColor = (priority: DisputePriority) => {
     switch (priority) {
+      case "URGENT": return "text-red-700 bg-red-100";
       case "HIGH": return "text-red-600 bg-red-100";
       case "MEDIUM": return "text-yellow-600 bg-yellow-100";
       case "LOW": return "text-green-600 bg-green-100";
@@ -151,9 +169,11 @@ export default function AdminDisputesPage() {
   const getStatusColor = (status: DisputeStatus) => {
     switch (status) {
       case "OPEN": return "text-red-600 bg-red-100";
-      case "IN_PROGRESS": return "text-blue-600 bg-blue-100";
+      case "UNDER_REVIEW": return "text-blue-600 bg-blue-100";
+      case "INVESTIGATING": return "text-blue-600 bg-blue-100";
       case "RESOLVED": return "text-green-600 bg-green-100";
       case "CLOSED": return "text-gray-600 bg-gray-100";
+      case "DISMISSED": return "text-gray-600 bg-gray-100";
       default: return "text-gray-600 bg-gray-100";
     }
   };
@@ -169,13 +189,6 @@ export default function AdminDisputesPage() {
     }
   };
 
-  const getDaysUntilSLA = (slaDeadline?: string) => {
-    if (!slaDeadline) return null;
-    const deadline = new Date(slaDeadline);
-    const now = new Date();
-    const diffDays = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
 
   if (error && disputes.length === 0) {
     return (
@@ -223,7 +236,8 @@ export default function AdminDisputesPage() {
           {[
             { key: "all", label: "All" },
             { key: "OPEN", label: "Open" },
-            { key: "IN_PROGRESS", label: "In Progress" },
+            { key: "UNDER_REVIEW", label: "Under Review" },
+            { key: "INVESTIGATING", label: "Investigating" },
             { key: "RESOLVED", label: "Resolved" },
           ].map((tab) => (
             <button
@@ -256,88 +270,74 @@ export default function AdminDisputesPage() {
 
         {/* Disputes List */}
         <div className="space-y-4">
-          {filteredDisputes.map((dispute: Dispute) => {
-            const daysUntilSLA = getDaysUntilSLA(dispute.slaDeadline);
-
-            return (
-              <div
-                key={dispute.id}
-                className="bg-card border rounded-xl p-4 hover:border-primary/50 transition-colors cursor-pointer"
-                onClick={() => setSelectedDispute(dispute)}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className={`px-2 py-1 text-xs font-medium rounded ${getPriorityColor(dispute.priority)}`}>
+          {filteredDisputes.map((dispute: AdminDispute) => (
+            <div
+              key={dispute.id}
+              className="bg-card border rounded-xl p-4 hover:border-primary/50 transition-colors cursor-pointer"
+              onClick={() => setSelectedDispute(dispute)}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    {dispute.priority ? (
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded ${getPriorityColor(
+                          dispute.priority as DisputePriority
+                        )}`}
+                      >
                         {dispute.priority}
                       </span>
-                      <span className={`px-2 py-1 text-xs font-medium rounded ${getStatusColor(dispute.status)}`}>
-                        {dispute.status.replace("_", " ")}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        #{dispute.id.slice(0, 8)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xl">{getTypeIcon(dispute.type)}</span>
-                      <h3 className="font-semibold text-foreground">
-                        {dispute.type.replace(/_/g, " ")}
-                      </h3>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                      <span className="flex items-center gap-1">
-                        <User className="w-4 h-4" />
-                        {dispute.renter?.firstName} {dispute.renter?.lastName} vs {dispute.owner?.firstName} {dispute.owner?.lastName}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        {new Date(dispute.createdAt).toLocaleDateString()}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="w-4 h-4" />
-                        ${dispute.amount?.toFixed(2)}
-                      </span>
-                    </div>
-
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {dispute.description}
-                    </p>
-
-                    <div className="flex items-center gap-4 mt-3">
-                      {dispute.evidence?.length > 0 && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Image className="w-4 h-4" />
-                          {dispute.evidence.length} evidence files
-                        </span>
-                      )}
-                      {dispute.assignedTo && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <User className="w-4 h-4" />
-                          Assigned to: {dispute.assignedTo.firstName}
-                        </span>
-                      )}
-                    </div>
+                    ) : null}
+                    <span className={`px-2 py-1 text-xs font-medium rounded ${getStatusColor(dispute.status as DisputeStatus)}`}>
+                      {humanize(dispute.status)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      #{shortId(dispute.id)}
+                    </span>
                   </div>
 
-                  <div className="flex flex-col items-end gap-2">
-                    {daysUntilSLA !== null && dispute.status !== "RESOLVED" && (
-                      <span className={`text-xs font-medium px-2 py-1 rounded ${
-                        daysUntilSLA <= 1 ? "bg-red-100 text-red-700" :
-                        daysUntilSLA <= 3 ? "bg-yellow-100 text-yellow-700" :
-                        "bg-gray-100 text-gray-700"
-                      }`}>
-                        <Clock className="w-3 h-3 inline mr-1" />
-                        {daysUntilSLA} days left
-                      </span>
-                    )}
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">{getTypeIcon(dispute.type)}</span>
+                    <h3 className="font-semibold text-foreground">
+                      {humanize(dispute.type)}
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                    <span className="flex items-center gap-1">
+                      <User className="w-4 h-4" />
+                      {safeText(dispute.initiator?.firstName, "User")} • {safeText(dispute.initiator?.email, "Unknown")}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      {safeDateLabel(dispute.createdAt)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <DollarSign className="w-4 h-4" />
+                      {safeNumber(dispute.amount) > 0
+                        ? `$${safeNumber(dispute.amount).toFixed(2)}`
+                        : "—"}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {safeText(dispute.description) ||
+                      safeText(dispute.reason, "No details provided")}
+                  </p>
+
+                  <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
+                    <span>
+                      Booking: {safeText(dispute.booking?.listing?.title, "Listing")}
+                    </span>
                   </div>
                 </div>
+
+                <div className="flex flex-col items-end gap-2">
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
 
           {filteredDisputes.length === 0 && (
             <div className="text-center py-12 bg-card border rounded-xl">
@@ -356,14 +356,24 @@ export default function AdminDisputesPage() {
             <div className="sticky top-0 bg-card border-b p-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">
-                  Dispute #{selectedDispute.id.slice(0, 8)}
+                  Dispute #{shortId(selectedDispute.id)}
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className={`px-2 py-0.5 text-xs font-medium rounded ${getPriorityColor(selectedDispute.priority)}`}>
-                    {selectedDispute.priority}
-                  </span>
-                  <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(selectedDispute.status)}`}>
-                    {selectedDispute.status.replace("_", " ")}
+                  {selectedDispute.priority ? (
+                    <span
+                      className={`px-2 py-0.5 text-xs font-medium rounded ${getPriorityColor(
+                        selectedDispute.priority as DisputePriority
+                      )}`}
+                    >
+                      {selectedDispute.priority}
+                    </span>
+                  ) : null}
+                  <span
+                    className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(
+                      selectedDispute.status as DisputeStatus
+                    )}`}
+                  >
+                    {humanize(selectedDispute.status)}
                   </span>
                 </div>
               </div>
@@ -377,130 +387,82 @@ export default function AdminDisputesPage() {
 
             {/* Modal Content */}
             <div className="p-6 space-y-6">
-              {/* Parties */}
+              {/* Participants */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-muted/50 rounded-lg">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Renter</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Initiator</h4>
                   <p className="font-medium text-foreground">
-                    {selectedDispute.renter?.firstName} {selectedDispute.renter?.lastName}
+                    {safeText(selectedDispute.initiator?.firstName, "User")}
                   </p>
-                  <p className="text-sm text-muted-foreground">{selectedDispute.renter?.email}</p>
+                  <p className="text-sm text-muted-foreground">{safeText(selectedDispute.initiator?.email, "Unknown")}</p>
                 </div>
                 <div className="p-4 bg-muted/50 rounded-lg">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Owner</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Defendant</h4>
                   <p className="font-medium text-foreground">
-                    {selectedDispute.owner?.firstName} {selectedDispute.owner?.lastName}
+                    {safeText(selectedDispute.defendant?.firstName, "User")}
                   </p>
-                  <p className="text-sm text-muted-foreground">{selectedDispute.owner?.email}</p>
+                  <p className="text-sm text-muted-foreground">{safeText(selectedDispute.defendant?.email, "Unknown")}</p>
                 </div>
               </div>
 
               {/* Details */}
               <div>
                 <h4 className="text-sm font-medium text-foreground mb-2">Issue Details</h4>
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <p className="font-medium text-foreground mb-2">
-                    {getTypeIcon(selectedDispute.type)} {selectedDispute.type.replace(/_/g, " ")}
+                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                  <p className="font-medium text-foreground">
+                    {getTypeIcon(selectedDispute.type)} {humanize(selectedDispute.type)}
                   </p>
-                  <p className="text-sm text-muted-foreground">{selectedDispute.description}</p>
-                  <p className="mt-2 text-sm">
+                  <p className="text-sm text-muted-foreground">
+                    {safeText(selectedDispute.description) ||
+                      safeText(selectedDispute.reason, "No details provided")}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Booking: {safeText(selectedDispute.booking?.listing?.title, "Listing")}
+                  </p>
+                  <p className="text-sm">
                     <span className="text-muted-foreground">Amount Disputed:</span>{" "}
-                    <span className="font-semibold text-foreground">${selectedDispute.amount?.toFixed(2)}</span>
+                    <span className="font-semibold text-foreground">
+                      {safeNumber(selectedDispute.amount) > 0
+                        ? `$${safeNumber(selectedDispute.amount).toFixed(2)}`
+                        : "—"}
+                    </span>
                   </p>
                 </div>
               </div>
 
-              {/* Evidence */}
-              {selectedDispute.evidence?.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-foreground mb-2">Evidence</h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    {selectedDispute.evidence.map((item, index) => (
-                      <a
-                        key={index}
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-3 bg-muted/50 rounded-lg flex items-center gap-2 hover:bg-muted transition-colors"
-                      >
-                        {item.type === "IMAGE" ? (
-                          <Image className="w-4 h-4 text-muted-foreground" />
-                        ) : (
-                          <FileText className="w-4 h-4 text-muted-foreground" />
-                        )}
-                        <span className="text-sm truncate">Evidence {index + 1}</span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Actions */}
-              {selectedDispute.status !== "RESOLVED" && (
-                <div className="border-t pt-6">
-                  <h4 className="text-sm font-medium text-foreground mb-4">Resolution</h4>
+              <div className="border-t pt-6 flex flex-wrap gap-3">
+                {selectedDispute.status !== "UNDER_REVIEW" && selectedDispute.status !== "RESOLVED" ? (
                   <Form method="post">
                     <input type="hidden" name="disputeId" value={selectedDispute.id} />
-                    <input type="hidden" name="intent" value="resolve" />
-                    
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Decision
-                      </label>
-                      <select
-                        name="resolution"
-                        className="w-full px-3 py-2 border border-input rounded-lg bg-background"
-                        required
-                      >
-                        <option value="">Select resolution...</option>
-                        <option value="FULL_REFUND_RENTER">Full refund to renter (${selectedDispute.amount?.toFixed(2)})</option>
-                        <option value="PARTIAL_REFUND_RENTER">Partial refund to renter</option>
-                        <option value="RELEASE_TO_OWNER">Release deposit to owner</option>
-                        <option value="SPLIT_50_50">Split 50/50</option>
-                        <option value="DISMISS">Dismiss (no action)</option>
-                      </select>
-                    </div>
-
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Resolution Notes
-                      </label>
-                      <textarea
-                        name="notes"
-                        rows={3}
-                        className="w-full px-3 py-2 border border-input rounded-lg bg-background"
-                        placeholder="Explain the reasoning for this decision..."
-                        required
-                      />
-                    </div>
-
-                    <div className="flex gap-3">
-                      {!selectedDispute.assignedTo && (
-                        <Form method="post">
-                          <input type="hidden" name="disputeId" value={selectedDispute.id} />
-                          <input type="hidden" name="intent" value="assign" />
-                          <UnifiedButton type="submit" variant="outline" disabled={isSubmitting}>
-                            Assign to Me
-                          </UnifiedButton>
-                        </Form>
-                      )}
-                      <UnifiedButton type="submit" disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <AlertTriangle className="w-4 h-4 mr-2" />
-                            Execute Resolution
-                          </>
-                        )}
-                      </UnifiedButton>
-                    </div>
+                    <input type="hidden" name="intent" value="set-status" />
+                    <input type="hidden" name="status" value="UNDER_REVIEW" />
+                    <UnifiedButton type="submit" variant="outline" disabled={isSubmitting}>
+                      Move to Review
+                    </UnifiedButton>
                   </Form>
-                </div>
-              )}
+                ) : null}
+                {selectedDispute.status !== "RESOLVED" ? (
+                  <Form method="post">
+                    <input type="hidden" name="disputeId" value={selectedDispute.id} />
+                    <input type="hidden" name="intent" value="set-status" />
+                    <input type="hidden" name="status" value="RESOLVED" />
+                    <UnifiedButton type="submit" disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-4 h-4 mr-2" />
+                          Resolve Dispute
+                        </>
+                      )}
+                    </UnifiedButton>
+                  </Form>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -508,3 +470,5 @@ export default function AdminDisputesPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

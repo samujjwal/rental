@@ -275,6 +275,94 @@ async function main() {
   console.log('👥 Creating users...');
   const users = [];
   const hashedPassword = await bcrypt.hash('password123', 10);
+  const testPassword = await bcrypt.hash('Test123!@#', 10);
+
+  // ===== E2E TEST USERS =====
+  console.log('🧪 Creating E2E test users...');
+  
+  // Test Renter
+  const testRenter = await prisma.user.create({
+    data: {
+      email: 'renter@test.com',
+      username: 'testrenter',
+      password: 'Test123!@#',
+      passwordHash: testPassword,
+      firstName: 'Test',
+      lastName: 'Renter',
+      phone: '+1-555-0201',
+      role: 'USER',
+      status: 'ACTIVE',
+      isActive: true,
+      emailVerified: true,
+      phoneVerified: true,
+      averageRating: 4.5,
+      totalReviews: 12,
+      responseRate: 95,
+      responseTime: '< 2 hours',
+      city: 'Los Angeles',
+      state: 'CA',
+      country: 'USA',
+    },
+  });
+  users.push(testRenter);
+  console.log('✓ Created test renter: renter@test.com');
+
+  // Test Owner
+  const testOwner = await prisma.user.create({
+    data: {
+      email: 'owner@test.com',
+      username: 'testowner',
+      password: 'Test123!@#',
+      passwordHash: testPassword,
+      firstName: 'Test',
+      lastName: 'Owner',
+      phone: '+1-555-0202',
+      role: 'HOST',
+      status: 'ACTIVE',
+      isActive: true,
+      emailVerified: true,
+      phoneVerified: true,
+      averageRating: 4.8,
+      totalReviews: 45,
+      responseRate: 98,
+      responseTime: '< 1 hour',
+      city: 'Austin',
+      state: 'TX',
+      country: 'USA',
+    },
+  });
+  users.push(testOwner);
+  console.log('✓ Created test owner: owner@test.com');
+
+  // Test Admin
+  const testAdmin = await prisma.user.create({
+    data: {
+      email: 'admin@test.com',
+      username: 'testadmin',
+      password: 'Test123!@#',
+      passwordHash: testPassword,
+      firstName: 'Test',
+      lastName: 'Admin',
+      phone: '+1-555-0203',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      isActive: true,
+      emailVerified: true,
+      phoneVerified: true,
+      averageRating: 5,
+      totalReviews: 5,
+      responseRate: 100,
+      responseTime: '< 1 hour',
+      city: 'Boston',
+      state: 'MA',
+      country: 'USA',
+    },
+  });
+  users.push(testAdmin);
+  console.log('✓ Created test admin: admin@test.com');
+  console.log('✓ E2E test users ready for testing\n');
+
+  // ===== REGULAR SEED USERS =====
 
   // Admin user
   const adminUser = await prisma.user.create({

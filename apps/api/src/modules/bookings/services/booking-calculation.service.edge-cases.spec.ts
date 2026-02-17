@@ -225,7 +225,7 @@ describe('BookingCalculationService - Edge Cases & Comprehensive Tests', () => {
         dailyPrice: 100,
         requiresDeposit: true,
         depositType: DepositType.PERCENTAGE,
-        depositPercentage: 50, // 50% of subtotal
+        depositAmount: 50, // 50% of subtotal (service reads depositAmount for percentage too)
       };
 
       mockPrismaService.listing.findUnique.mockResolvedValue(listing);
@@ -466,7 +466,7 @@ describe('BookingCalculationService - Edge Cases & Comprehensive Tests', () => {
         dailyPrice: 10000,
         requiresDeposit: true,
         depositType: DepositType.PERCENTAGE,
-        depositPercentage: 50,
+        depositAmount: 50, // service reads depositAmount for percentage too
       };
 
       mockPrismaService.listing.findUnique.mockResolvedValue(listing);

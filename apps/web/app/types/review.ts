@@ -4,23 +4,24 @@ export interface Review {
   reviewerId: string;
   revieweeId: string;
   listingId?: string;
-  rating: number;
+  rating?: number;
+  overallRating?: number;
   comment: string;
   response?: string;
   responseAt?: string;
-  status: "pending" | "published" | "hidden" | "reported";
-  type: "renter_to_owner" | "owner_to_renter" | "listing";
+  status: "DRAFT" | "PUBLISHED" | "HIDDEN";
+  type: "LISTING_REVIEW" | "RENTER_REVIEW" | "OWNER_REVIEW";
   reviewer: {
     id: string;
     firstName: string;
     lastName: string | null;
-    avatar: string | null;
+    profilePhotoUrl: string | null;
   };
   reviewee: {
     id: string;
     firstName: string;
     lastName: string | null;
-    avatar: string | null;
+    profilePhotoUrl: string | null;
   };
   listing?: {
     id: string;

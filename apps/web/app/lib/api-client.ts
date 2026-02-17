@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
 import { useAuthStore } from "./store/auth";
 import { requestNavigation } from "~/lib/navigation";
+import { toast } from "sonner";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3400/api";
@@ -39,13 +40,23 @@ class ApiClient {
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor for token refresh
+    // Response interceptor for token refresh and error handling
     this.client.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
 
-        // Don't try to refresh if it's already an auth route or if it's not a 401
+        // Handle rate limiting (429)
+        if (error.response?.status === 429) {
+          if (typeof window !== "undefined") {
+            toast.error("Too many requests. Please try again later.", {
+              description: "Rate limit exceeded",
+            });
+          }
+          return Promise.reject(error);
+        }
+
+        // Handle unauthorized (401)
         if (
           error.response?.status === 401 &&
           !originalRequest._retry &&
@@ -84,6 +95,11 @@ class ApiClient {
             // Clear auth store
             const authStore = useAuthStore.getState();
             authStore.clearAuth();
+
+            // Show session expired message
+            if (typeof window !== "undefined") {
+              toast.error("Session expired. Please login again.");
+            }
 
             requestNavigation("/auth/login", { replace: true });
             return Promise.reject(refreshError);

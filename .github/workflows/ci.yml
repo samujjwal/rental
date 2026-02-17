@@ -125,6 +125,8 @@ jobs:
                   DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
                   REDIS_HOST: localhost
                   REDIS_PORT: 6379
+                  NODE_ENV: test
+                  EMAIL_ENABLED: "false"
                   JWT_SECRET: test-jwt-secret-for-ci-only-not-for-production
 
             - name: Upload coverage report
@@ -264,4 +266,6 @@ jobs:
                   DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
                   REDIS_HOST: localhost
                   REDIS_PORT: 6379
+                  NODE_ENV: test
+                  EMAIL_ENABLED: "false"
                   JWT_SECRET: test-jwt-secret-for-ci-only-not-for-production

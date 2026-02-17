@@ -1,11 +1,10 @@
-import type { MetaFunction } from "react-router";
-import { useLoaderData, Link } from "react-router";
-import { useState } from "react";
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
+import { useLoaderData, Link, redirect } from "react-router";
+import { useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   Calendar as CalendarIcon,
-  Download,
   Plus,
   Clock,
   User,
@@ -13,7 +12,9 @@ import {
 } from "lucide-react";
 import { bookingsApi } from "~/lib/api/bookings";
 import { listingsApi } from "~/lib/api/listings";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import type { Listing } from "~/types/listing";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -22,27 +23,36 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+  if (user.role !== "owner" && user.role !== "admin") {
+    return redirect("/dashboard");
+  }
+
   try {
-    const [bookings, listings] = await Promise.all([
+    const [bookingsResponse, listingsResponse] = await Promise.all([
       bookingsApi.getOwnerBookings(),
       listingsApi.getMyListings(),
     ]);
     return {
-      bookings: bookings || [],
-      listings: listings || [],
+      bookings: Array.isArray(bookingsResponse) ? bookingsResponse : [],
+      listings: Array.isArray(listingsResponse) ? listingsResponse : [],
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       bookings: [],
       listings: [],
-      error: error?.message || "Failed to load calendar data",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load calendar data",
     };
   }
 }
-
-type ViewMode = "day" | "week" | "month";
 
 interface CalendarBooking {
   id: string;
@@ -58,13 +68,44 @@ interface CalendarBooking {
     lastName: string | null;
   };
   totalAmount: number;
+  totalPrice?: number;
 }
 
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeTime = (value: unknown): number => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? Number.NaN : date.getTime();
+};
+const safeStatus = (value: unknown): string =>
+  String(value || "").toLowerCase();
+const safeDateLabel = (value: unknown): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleDateString();
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+
 export default function OwnerCalendarPage() {
-  const { bookings, listings, error } = useLoaderData<typeof clientLoader>();
+  const { bookings, listings, error } = useLoaderData<typeof clientLoader>() as {
+    bookings: CalendarBooking[];
+    listings: Listing[];
+    error: string | null;
+  };
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [selectedListing, setSelectedListing] = useState<string>("all");
+  const listingIds = useMemo(
+    () => new Set(listings.map((listing) => listing.id)),
+    [listings]
+  );
+  const activeListingFilter =
+    selectedListing === "all" || listingIds.has(selectedListing)
+      ? selectedListing
+      : "all";
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -93,36 +134,47 @@ export default function OwnerCalendarPage() {
   };
 
   // Filter bookings by selected listing
-  const filteredBookings = selectedListing === "all"
-    ? bookings
-    : bookings.filter((b: any) => b.listing?.id === selectedListing);
+  const filteredBookings = useMemo(() => {
+    return activeListingFilter === "all"
+      ? bookings
+      : bookings.filter((b) => b.listing?.id === activeListingFilter);
+  }, [activeListingFilter, bookings]);
 
   // Check if a date has bookings
   const getBookingsForDate = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return filteredBookings.filter((booking: CalendarBooking) => {
-      const start = new Date(booking.startDate);
-      const end = new Date(booking.endDate);
-      const checkDate = new Date(dateStr);
-      return checkDate >= start && checkDate <= end;
+      const startAt = safeTime(booking.startDate);
+      const endAt = safeTime(booking.endDate);
+      if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) {
+        return false;
+      }
+      const checkAt = safeTime(dateStr);
+      return Number.isFinite(checkAt) && checkAt >= startAt && checkAt <= endAt;
     });
   };
 
   // Get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "CONFIRMED":
-        return "bg-green-500";
-      case "PENDING":
-        return "bg-yellow-500";
-      case "IN_PROGRESS":
-        return "bg-blue-500";
-      case "COMPLETED":
-        return "bg-gray-400";
-      case "CANCELLED":
-        return "bg-red-500";
+  const getStatusColor = (status: unknown) => {
+    const normalized = safeStatus(status);
+    switch (normalized) {
+      case "confirmed":
+        return "bg-success";
+      case "pending":
+      case "pending_owner_approval":
+      case "pending_payment":
+        return "bg-warning";
+      case "in_progress":
+      case "active":
+        return "bg-info";
+      case "completed":
+      case "settled":
+        return "bg-muted-foreground";
+      case "cancelled":
+      case "payment_failed":
+        return "bg-destructive";
       default:
-        return "bg-gray-300";
+        return "bg-muted-foreground/50";
     }
   };
 
@@ -172,12 +224,8 @@ export default function OwnerCalendarPage() {
               <h1 className="text-2xl font-bold text-foreground">Booking Calendar</h1>
             </div>
             <div className="flex items-center gap-3">
-              <UnifiedButton variant="outline" size="small">
-                <Download className="w-4 h-4 mr-2" />
-                Sync to iCal
-              </UnifiedButton>
               <Link to="/listings/new">
-                <UnifiedButton size="small">
+                <UnifiedButton size="sm">
                   <Plus className="w-4 h-4 mr-2" />
                   New Listing
                 </UnifiedButton>
@@ -209,7 +257,7 @@ export default function OwnerCalendarPage() {
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
-            <UnifiedButton variant="outline" size="small" onClick={goToToday}>
+            <UnifiedButton variant="outline" size="sm" onClick={goToToday}>
               Today
             </UnifiedButton>
           </div>
@@ -217,33 +265,20 @@ export default function OwnerCalendarPage() {
           <div className="flex items-center gap-4">
             {/* Listing Filter */}
             <select
-              value={selectedListing}
+              value={activeListingFilter}
               onChange={(e) => setSelectedListing(e.target.value)}
               className="px-3 py-2 border border-input rounded-lg bg-background text-sm"
             >
               <option value="all">All Listings</option>
-              {listings.map((listing: any) => (
+              {listings.map((listing) => (
                 <option key={listing.id} value={listing.id}>
                   {listing.title}
                 </option>
               ))}
             </select>
 
-            {/* View Mode Toggle */}
-            <div className="flex border border-input rounded-lg overflow-hidden">
-              {(["day", "week", "month"] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
-                    viewMode === mode
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background hover:bg-muted"
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
+            <div className="px-3 py-2 text-sm font-medium rounded-lg border border-input bg-background">
+              Month view
             </div>
           </div>
         </div>
@@ -252,23 +287,23 @@ export default function OwnerCalendarPage() {
         <div className="flex flex-wrap items-center gap-4 mb-6 text-sm">
           <span className="text-muted-foreground">Legend:</span>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-green-500"></span>
+            <span className="w-3 h-3 rounded-full bg-success"></span>
             <span>Confirmed</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
+            <span className="w-3 h-3 rounded-full bg-warning"></span>
             <span>Pending</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+            <span className="w-3 h-3 rounded-full bg-info"></span>
             <span>In Progress</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-gray-400"></span>
+            <span className="w-3 h-3 rounded-full bg-muted-foreground"></span>
             <span>Completed</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-red-500"></span>
+            <span className="w-3 h-3 rounded-full bg-destructive"></span>
             <span>Cancelled</span>
           </div>
         </div>
@@ -313,13 +348,19 @@ export default function OwnerCalendarPage() {
                       </div>
                       <div className="space-y-1">
                         {dayBookings.slice(0, 3).map((booking: CalendarBooking) => (
-                          <Link
-                            key={booking.id}
-                            to={`/bookings/${booking.id}`}
-                            className={`block text-xs p-1 rounded truncate text-white ${getStatusColor(booking.status)} hover:opacity-80 transition-opacity`}
-                          >
-                            {booking.listing?.title || "Booking"}
-                          </Link>
+                          (() => {
+                            const bookingId = safeText(booking.id);
+                            const listingTitle = safeText(booking.listing?.title, "Booking");
+                            return (
+                              <Link
+                                key={booking.id}
+                                to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
+                                className={`block text-xs p-1 rounded truncate text-white ${getStatusColor(booking.status)} hover:opacity-80 transition-opacity`}
+                              >
+                                {listingTitle}
+                              </Link>
+                            );
+                          })()
                         ))}
                         {dayBookings.length > 3 && (
                           <div className="text-xs text-muted-foreground">
@@ -342,28 +383,37 @@ export default function OwnerCalendarPage() {
           </h3>
           <div className="space-y-3">
             {filteredBookings
-              .filter((b: CalendarBooking) => new Date(b.startDate) >= new Date())
+              .filter((b: CalendarBooking) => {
+                const startAt = safeTime(b.startDate);
+                return Number.isFinite(startAt) && startAt >= Date.now();
+              })
               .slice(0, 5)
               .map((booking: CalendarBooking) => (
+                (() => {
+                  const bookingId = safeText(booking.id);
+                  const renterFirstName = safeText(booking.renter?.firstName, "Renter");
+                  const renterLastName = safeText(booking.renter?.lastName);
+                  const listingTitle = safeText(booking.listing?.title, "Booking");
+                  return (
                 <Link
                   key={booking.id}
-                  to={`/bookings/${booking.id}`}
+                  to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
                   className="flex items-center justify-between p-4 bg-card border rounded-lg hover:border-primary/50 transition-colors"
                 >
                   <div className="flex items-center gap-4">
                     <div className={`w-2 h-12 rounded-full ${getStatusColor(booking.status)}`} />
                     <div>
                       <h4 className="font-medium text-foreground">
-                        {booking.listing?.title}
+                        {listingTitle}
                       </h4>
                       <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <User className="w-4 h-4" />
-                          {booking.renter?.firstName} {booking.renter?.lastName}
+                          {renterFirstName}{renterLastName ? ` ${renterLastName}` : ""}
                         </span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
-                          {new Date(booking.startDate).toLocaleDateString()} - {new Date(booking.endDate).toLocaleDateString()}
+                          {safeDateLabel(booking.startDate)} - {safeDateLabel(booking.endDate)}
                         </span>
                       </div>
                     </div>
@@ -371,15 +421,20 @@ export default function OwnerCalendarPage() {
                   <div className="text-right">
                     <div className="flex items-center gap-1 text-foreground font-semibold">
                       <DollarSign className="w-4 h-4" />
-                      {booking.totalAmount?.toFixed(2)}
+                      {safeNumber(booking.totalAmount ?? booking.totalPrice).toFixed(2)}
                     </div>
                     <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full text-white ${getStatusColor(booking.status)}`}>
-                      {booking.status?.replace("_", " ")}
+                      {String(booking.status || "").replace(/_/g, " ")}
                     </span>
                   </div>
                 </Link>
+                  );
+                })()
               ))}
-            {filteredBookings.filter((b: CalendarBooking) => new Date(b.startDate) >= new Date()).length === 0 && (
+            {filteredBookings.filter((b: CalendarBooking) => {
+              const startAt = safeTime(b.startDate);
+              return Number.isFinite(startAt) && startAt >= Date.now();
+            }).length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
                 <CalendarIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>No upcoming bookings</p>
@@ -391,3 +446,5 @@ export default function OwnerCalendarPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

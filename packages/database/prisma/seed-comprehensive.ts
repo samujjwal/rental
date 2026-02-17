@@ -25,6 +25,127 @@ function generateRefundId(): string {
   return `re_${faker.string.alphanumeric(24)}`;
 }
 
+// Time series helpers
+function monthsAgo(months: number): Date {
+  const date = new Date();
+  date.setMonth(date.getMonth() - months);
+  return date;
+}
+
+function getBookingDateForMonth(monthIndex: number): Date {
+  const now = new Date();
+  const targetMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() - monthIndex,
+    1
+  );
+  const daysInMonth = new Date(
+    targetMonth.getFullYear(),
+    targetMonth.getMonth() + 1,
+    0
+  ).getDate();
+  const randomDay = faker.number.int({ min: 1, max: Math.max(1, daysInMonth - 7) });
+  return new Date(targetMonth.getFullYear(), targetMonth.getMonth(), randomDay);
+}
+
+// Seasonal pricing multiplier
+function getSeasonalMultiplier(date: Date): number {
+  const month = date.getMonth();
+  if (month >= 5 && month <= 7) return 1.3; // Summer peak
+  if (month === 11 || month === 0) return 1.2; // Holiday peak
+  return 0.9; // Off-season
+}
+
+// Weighted status selection
+function getWeightedBookingStatus(isPast: boolean, isVeryCurrent: boolean): string {
+  if (isVeryCurrent) {
+    return faker.helpers.weightedArrayElement([
+      { weight: 35, value: 'IN_PROGRESS' },
+      { weight: 25, value: 'CONFIRMED' },
+      { weight: 10, value: 'PENDING' },
+      { weight: 5, value: 'PENDING_OWNER_APPROVAL' },
+      { weight: 5, value: 'PENDING_PAYMENT' },
+      { weight: 5, value: 'DISPUTED' },
+      { weight: 5, value: 'AWAITING_RETURN_INSPECTION' },
+      { weight: 5, value: 'DRAFT' },
+      { weight: 5, value: 'PAYMENT_FAILED' },
+    ]);
+  }
+  
+  if (isPast) {
+    return faker.helpers.weightedArrayElement([
+      { weight: 45, value: 'COMPLETED' },
+      { weight: 15, value: 'CONFIRMED' },
+      { weight: 10, value: 'CANCELLED' },
+      { weight: 8, value: 'SETTLED' },
+      { weight: 7, value: 'REFUNDED' },
+      { weight: 5, value: 'DISPUTED' },
+      { weight: 5, value: 'PAYMENT_FAILED' },
+      { weight: 5, value: 'DRAFT' },
+    ]);
+  }
+  
+  return faker.helpers.weightedArrayElement([
+    { weight: 40, value: 'CONFIRMED' },
+    { weight: 15, value: 'PENDING' },
+    { weight: 10, value: 'PENDING_OWNER_APPROVAL' },
+    { weight: 8, value: 'PENDING_PAYMENT' },
+    { weight: 7, value: 'CANCELLED' },
+    { weight: 5, value: 'DRAFT' },
+    { weight: 5, value: 'PAYMENT_FAILED' },
+    { weight: 5, value: 'IN_PROGRESS' },
+    { weight: 5, value: 'DISPUTED' },
+  ]);
+}
+
+function getPaymentStatusFromBooking(bookingStatus: string): string {
+  switch (bookingStatus) {
+    case 'COMPLETED':
+    case 'CONFIRMED':
+    case 'IN_PROGRESS':
+    case 'SETTLED':
+    case 'AWAITING_RETURN_INSPECTION':
+      return 'COMPLETED';
+    case 'CANCELLED':
+    case 'REFUNDED':
+      return 'REFUNDED';
+    case 'PENDING':
+    case 'PENDING_OWNER_APPROVAL':
+    case 'DRAFT':
+      return 'PENDING';
+    case 'PENDING_PAYMENT':
+      return 'PROCESSING';
+    case 'PAYMENT_FAILED':
+      return 'FAILED';
+    case 'DISPUTED':
+      return 'COMPLETED';
+    default:
+      return 'PENDING';
+  }
+}
+
+function getRealisticBookingDuration(): number {
+  const durationType = faker.helpers.weightedArrayElement([
+    { weight: 40, value: 'weekend' },
+    { weight: 30, value: 'week' },
+    { weight: 20, value: 'short' },
+    { weight: 10, value: 'extended' }
+  ]);
+
+  switch (durationType) {
+    case 'weekend':
+      return faker.number.int({ min: 2, max: 3 });
+    case 'week':
+      return 7;
+    case 'short':
+      return 1;
+    case 'extended':
+      return faker.number.int({ min: 14, max: 30 });
+    default:
+      return 3;
+  }
+}
+
 async function main() {
   console.log('🌱 Starting comprehensive database seeding...\n');
 
@@ -191,6 +312,146 @@ async function main() {
         requiredFields: ['location'],
       },
     }),
+    prisma.category.create({
+      data: {
+        name: 'Studio',
+        slug: 'studio',
+        description: 'Studio apartments and artist spaces',
+        icon: 'studio',
+        isActive: true,
+        active: true,
+        order: 6,
+        pricingMode: 'PER_NIGHT',
+        searchableFields: ['amenities', 'size'],
+        requiredFields: ['address'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Villa',
+        slug: 'villa',
+        description: 'Luxury villas and vacation homes',
+        icon: 'villa',
+        isActive: true,
+        active: true,
+        order: 7,
+        pricingMode: 'PER_NIGHT',
+        searchableFields: ['bedrooms', 'bathrooms', 'pool', 'amenities'],
+        requiredFields: ['bedrooms', 'bathrooms', 'address'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Bike',
+        slug: 'bike',
+        description: 'Bicycles and motorcycles for rent',
+        icon: 'bike',
+        isActive: true,
+        active: true,
+        order: 8,
+        pricingMode: 'PER_DAY',
+        searchableFields: ['type', 'brand'],
+        requiredFields: ['type'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Camera & Electronics',
+        slug: 'camera-electronics',
+        description: 'Cameras, drones, and electronic equipment',
+        icon: 'camera',
+        isActive: true,
+        active: true,
+        order: 9,
+        pricingMode: 'PER_DAY',
+        searchableFields: ['brand', 'model', 'type'],
+        requiredFields: ['brand', 'type'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Event Space',
+        slug: 'event-space',
+        description: 'Event venues and party spaces',
+        icon: 'event',
+        isActive: true,
+        active: true,
+        order: 10,
+        pricingMode: 'PER_HOUR',
+        searchableFields: ['capacity', 'amenities', 'type'],
+        requiredFields: ['capacity', 'address'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Office Space',
+        slug: 'office-space',
+        description: 'Coworking and private office spaces',
+        icon: 'office',
+        isActive: true,
+        active: true,
+        order: 11,
+        pricingMode: 'PER_MONTH',
+        searchableFields: ['desks', 'amenities', 'type'],
+        requiredFields: ['address'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Musical Instrument',
+        slug: 'musical-instrument',
+        description: 'Guitars, keyboards, drums, and more',
+        icon: 'music',
+        isActive: true,
+        active: true,
+        order: 12,
+        pricingMode: 'PER_DAY',
+        searchableFields: ['instrument', 'brand'],
+        requiredFields: ['instrument'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Sports Equipment',
+        slug: 'sports-equipment',
+        description: 'Sports and outdoor recreation gear',
+        icon: 'sports',
+        isActive: true,
+        active: true,
+        order: 13,
+        pricingMode: 'PER_DAY',
+        searchableFields: ['sport', 'type', 'brand'],
+        requiredFields: ['type'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Clothing & Costumes',
+        slug: 'clothing-costumes',
+        description: 'Formal wear, costumes, and special occasion clothing',
+        icon: 'clothing',
+        isActive: true,
+        active: true,
+        order: 14,
+        pricingMode: 'PER_DAY',
+        searchableFields: ['type', 'size', 'occasion'],
+        requiredFields: ['type', 'size'],
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Storage Space',
+        slug: 'storage-space',
+        description: 'Storage units and warehouse space',
+        icon: 'storage',
+        isActive: true,
+        active: true,
+        order: 15,
+        pricingMode: 'PER_MONTH',
+        searchableFields: ['size', 'type', 'climate'],
+        requiredFields: ['size', 'address'],
+      },
+    }),
   ]);
 
   console.log(`✓ Created ${categories.length} categories\n`);
@@ -250,11 +511,106 @@ async function main() {
 
   console.log(`✓ Created ${emailTemplates.length} email templates\n`);
 
-  // Create users
+  //Create users
   console.log('👥 Creating users...');
   const hashedPassword = await bcrypt.hash('password123', 10);
+  const testPassword = await bcrypt.hash('Test123!@#', 10);
 
-  const users = await Promise.all([
+  // ===== E2E TEST USERS =====
+  console.log('🧪 Creating E2E test users...');
+  
+  const testRenter = await prisma.user.create({
+    data: {
+      email: 'renter@test.com',
+      username: 'testrenter',
+      passwordHash: testPassword,
+      firstName: 'Test',
+      lastName: 'Renter',
+      phone: '+1-555-0201',
+      profilePhotoUrl: faker.image.avatar(),
+      bio: 'E2E test renter account',
+      role: 'USER',
+      status: 'ACTIVE',
+      emailVerified: true,
+      phoneVerified: true,
+      isActive: true,
+      averageRating: 4.5,
+      totalReviews: 12,
+      responseRate: 95,
+      responseTime: '< 2 hours',
+      city: 'Los Angeles',
+      state: 'CA',
+      country: 'USA',
+      lastLoginAt: new Date(),
+      mfaEnabled: false,
+      stripeCustomerId: `cus_test_renter_${faker.string.alphanumeric(10)}`,
+    },
+  });
+  console.log('✓ Created test renter: renter@test.com');
+
+  const testOwner = await prisma.user.create({
+    data: {
+      email: 'owner@test.com',
+      username: 'testowner',
+      passwordHash: testPassword,
+      firstName: 'Test',
+      lastName: 'Owner',
+      phone: '+1-555-0202',
+      profilePhotoUrl: faker.image.avatar(),
+      bio: 'E2E test owner account',
+      role: 'HOST',
+      status: 'ACTIVE',
+      emailVerified: true,
+      phoneVerified: true,
+      isActive: true,
+      averageRating: 4.8,
+      totalReviews: 45,
+      responseRate: 98,
+      responseTime: '< 1 hour',
+      city: 'Austin',
+      state: 'TX',
+      country: 'USA',
+      lastLoginAt: new Date(),
+      mfaEnabled: false,
+      stripeCustomerId: `cus_test_owner_${faker.string.alphanumeric(10)}`,
+      stripeConnectId: `acct_test_owner_${faker.string.alphanumeric(12)}`,
+      stripeChargesEnabled: true,
+      stripePayoutsEnabled: true,
+      stripeOnboardingComplete: true,
+    },
+  });
+  console.log('✓ Created test owner: owner@test.com');
+
+  const testAdmin = await prisma.user.create({
+    data: {
+      email: 'admin@test.com',
+      username: 'testadmin',
+      passwordHash: testPassword,
+      firstName: 'Test',
+      lastName: 'Admin',
+      phone: '+1-555-0203',
+      profilePhotoUrl: faker.image.avatar(),
+      bio: 'E2E test admin account',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      emailVerified: true,
+      phoneVerified: true,
+      isActive: true,
+      averageRating: 5,
+      totalReviews: 5,
+      responseRate: 100,
+      responseTime: '< 1 hour',
+      city: 'Boston',
+      state: 'MA',
+      country: 'USA',
+      lastLoginAt: new Date(),
+      mfaEnabled: false,
+    },
+  });
+  console.log('✓ Created test admin: admin@test.com');
+  console.log('✓ E2E test users ready\n');
+
+  const users = [testRenter, testOwner, testAdmin, ...(await Promise.all([
     // Admin user
     prisma.user.create({
       data: {
@@ -316,7 +672,12 @@ async function main() {
           profilePhotoUrl: faker.image.avatar(),
           bio: faker.lorem.sentence(),
           role: isHost ? 'HOST' : 'USER',
-          status: faker.helpers.arrayElement(['ACTIVE', 'ACTIVE', 'ACTIVE', 'SUSPENDED']),
+          status: faker.helpers.weightedArrayElement([
+            { weight: 80, value: 'ACTIVE' },
+            { weight: 8, value: 'SUSPENDED' },
+            { weight: 7, value: 'PENDING_VERIFICATION' },
+            { weight: 5, value: 'DELETED' },
+          ]),
           emailVerified: faker.datatype.boolean({ probability: 0.9 }),
           phoneVerified: faker.datatype.boolean({ probability: 0.7 }),
           isActive: true,
@@ -337,7 +698,7 @@ async function main() {
         },
       });
     }),
-  ]);
+  ]))];
 
   console.log(`✓ Created ${users.length} users\n`);
 
@@ -485,10 +846,18 @@ async function main() {
           country: 'USA',
           latitude: faker.location.latitude(),
           longitude: faker.location.longitude(),
-          type: faker.helpers.arrayElement(['APARTMENT', 'HOUSE', 'VILLA', 'CONDO', 'TOWNHOUSE']),
-          status: faker.helpers.arrayElement(['AVAILABLE', 'RENTED', 'MAINTENANCE']),
+          type: faker.helpers.arrayElement(['APARTMENT', 'HOUSE', 'VILLA', 'CONDO', 'TOWNHOUSE', 'STUDIO', 'COTTAGE', 'CABIN', 'LOFT', 'OTHER']),
+          status: faker.helpers.weightedArrayElement([
+            { weight: 50, value: 'AVAILABLE' },
+            { weight: 15, value: 'RENTED' },
+            { weight: 10, value: 'MAINTENANCE' },
+            { weight: 8, value: 'UNAVAILABLE' },
+            { weight: 7, value: 'DRAFT' },
+            { weight: 5, value: 'SUSPENDED' },
+            { weight: 5, value: 'ARCHIVED' },
+          ]),
           verificationStatus: faker.helpers.arrayElement(['PENDING', 'VERIFIED', 'REJECTED']),
-          condition: faker.helpers.arrayElement(['EXCELLENT', 'GOOD', 'FAIR']),
+          condition: faker.helpers.arrayElement(['EXCELLENT', 'GOOD', 'FAIR', 'POOR']),
           bookingMode: faker.helpers.arrayElement(['REQUEST', 'INSTANT_BOOK']),
           basePrice: new Prisma.Decimal(
             faker.number.float({ min: 50, max: 500, fractionDigits: 2 }),
@@ -549,7 +918,8 @@ async function main() {
           averageRating: faker.number.float({ min: 3, max: 5, fractionDigits: 1 }),
           totalReviews: faker.number.int({ min: 0, max: 100 }),
           totalBookings: faker.number.int({ min: 0, max: 50 }),
-          views: faker.number.int({ min: 0, max: 1000 }),
+          views: faker.number.int({ min: 50, max: 2000 }),
+          viewCount: faker.number.int({ min: 50, max: 2000 }),
           instantBookable: faker.datatype.boolean({ probability: 0.6 }),
           minStayNights: faker.number.int({ min: 1, max: 7 }),
           maxStayNights: faker.number.int({ min: 30, max: 365 }),
@@ -587,8 +957,8 @@ async function main() {
 
   console.log(`✓ Created ${availabilityRecords.length} availability records\n`);
 
-  // Create bookings
-  console.log('📅 Creating bookings...');
+  // Create bookings with TIME-SERIES data spanning 12 months
+  console.log('📅 Creating bookings with historical data...');
   const bookings: any[] = [];
   const renters = users.filter((u) => u.role === 'USER' || u.role === 'CUSTOMER');
 
@@ -598,13 +968,26 @@ async function main() {
 
     if (listing.ownerId === renter.id) continue;
 
-    const startDate = faker.date.soon({ days: 90 });
-    const endDate = new Date(
-      startDate.getTime() + faker.number.int({ min: 1, max: 14 }) * 24 * 60 * 60 * 1000,
-    );
-    const nights = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const basePrice = Number(listing.basePrice);
+    // Distribute bookings across 12 months
+    const monthIndex = Math.floor((i / 300) * 12);
+    const startDate = getBookingDateForMonth(11 - monthIndex);
+    
+    // Realistic booking duration
+    const nights = getRealisticBookingDuration();
+    const endDate = new Date(startDate.getTime() + nights * 24 * 60 * 60 * 1000);
+    
+    // Apply seasonal pricing
+    const seasonalMultiplier = getSeasonalMultiplier(startDate);
+    const basePrice = Number(listing.basePrice) * seasonalMultiplier;
     const totalPrice = basePrice * nights + Number(listing.cleaningFee || 0);
+
+    // Determine if booking is in the past, current, or future
+    const now = new Date();
+    const isPast = endDate < now;
+    const isVeryCurrent = Math.abs(now.getTime() - startDate.getTime()) < 7 * 24 * 60 * 60 * 1000;
+    
+    // Get realistic weighted status
+    const status = getWeightedBookingStatus(isPast, isVeryCurrent);
 
     try {
       const booking = await prisma.booking.create({
@@ -619,8 +1002,9 @@ async function main() {
           cleaningFee: listing.cleaningFee,
           serviceFee: new Prisma.Decimal(totalPrice * 0.1),
           totalPrice: new Prisma.Decimal(totalPrice),
+          totalAmount: new Prisma.Decimal(totalPrice),
           currency: 'USD',
-          status: faker.helpers.arrayElement(['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']),
+          status: status as any,
           guestCount: faker.number.int({ min: 1, max: 6 }),
           specialRequests: faker.lorem.sentence(),
           guestNotes: faker.lorem.sentence(),
@@ -629,6 +1013,7 @@ async function main() {
           checkOutTime: '11:00',
           ownerEarnings: new Prisma.Decimal(totalPrice * 0.9),
           platformFee: new Prisma.Decimal(totalPrice * 0.1),
+          createdAt: startDate,
         },
       });
 
@@ -638,7 +1023,7 @@ async function main() {
     }
   }
 
-  console.log(`✓ Created ${bookings.length} bookings\n`);
+  console.log(`✓ Created ${bookings.length} bookings spanning 12 months\n`);
 
   // Create booking state history
   console.log('📝 Creating booking state history...');
@@ -658,16 +1043,18 @@ async function main() {
 
   console.log(`✓ Created ${stateHistory.length} booking state history records\n`);
 
-  // Create payments
+  // Create payments ALIGNED with booking status
   console.log('💳 Creating payments...');
   const payments = await Promise.all(
-    bookings.slice(0, 200).map((booking) =>
-      prisma.payment.create({
+    bookings.slice(0, 250).map((booking) => {
+      const paymentStatus = getPaymentStatusFromBooking(booking.status);
+      
+      return prisma.payment.create({
         data: {
           bookingId: booking.id,
           amount: booking.totalPrice,
           currency: 'USD',
-          status: faker.helpers.arrayElement(['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED']),
+          status: paymentStatus as any,
           paymentMethod: faker.helpers.arrayElement(['CREDIT_CARD', 'DEBIT_CARD', 'PAYPAL']),
           paymentIntentId: generatePaymentIntentId(),
           stripePaymentIntentId: generatePaymentIntentId(),
@@ -675,11 +1062,12 @@ async function main() {
           stripeChargeId: generateStripeId(),
           fee: new Prisma.Decimal(Number(booking.totalPrice) * 0.03),
           netAmount: new Prisma.Decimal(Number(booking.totalPrice) * 0.97),
-          processedAt: faker.date.recent({ days: 30 }),
+          processedAt: paymentStatus === 'COMPLETED' ? booking.createdAt : faker.date.recent({ days: 30 }),
           description: `Payment for booking ${booking.id}`,
+          createdAt: booking.createdAt,
         },
-      }),
-    ),
+      });
+    }),
   );
 
   console.log(`✓ Created ${payments.length} payments\n`);
@@ -720,7 +1108,7 @@ async function main() {
           bookingId: booking.id,
           amount: booking.securityDeposit || new Prisma.Decimal(0),
           currency: 'USD',
-          status: faker.helpers.arrayElement(['PENDING', 'HELD', 'RELEASED', 'CAPTURED']),
+          status: faker.helpers.arrayElement(['PENDING', 'AUTHORIZED', 'HELD', 'RELEASED', 'CAPTURED', 'FAILED']),
           stripeId: generateStripeId(),
           paymentIntentId: generatePaymentIntentId(),
           expiresAt: faker.date.future({ days: 30 }),
@@ -748,7 +1136,7 @@ async function main() {
             faker.number.float({ min: 100, max: 5000, fractionDigits: 2 }),
           ),
           currency: 'USD',
-          status: faker.helpers.arrayElement(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']),
+          status: faker.helpers.arrayElement(['PENDING', 'PROCESSING', 'IN_TRANSIT', 'COMPLETED', 'PAID', 'FAILED', 'CANCELLED']),
           stripeId: `tr_${faker.string.alphanumeric(24)}`,
           transferId: `tr_${faker.string.alphanumeric(24)}`,
           paidAt: faker.datatype.boolean({ probability: 0.7 })
@@ -762,11 +1150,16 @@ async function main() {
 
   console.log(`✓ Created ${payouts.length} payouts\n`);
 
-  // Create ledger entries
+  // Create ledger entries for ALL payments
   console.log('📊 Creating ledger entries...');
   const ledgerEntries = await Promise.all(
-    bookings.slice(0, 150).map((booking) =>
-      prisma.ledgerEntry.create({
+    payments.map((payment) => {
+      const booking = bookings.find(b => b.id === payment.bookingId);
+      if (!booking) return null;
+      
+      // Create main payment ledger entry + platform fee entry
+      const entries = [];
+      entries.push(prisma.ledgerEntry.create({
         data: {
           bookingId: booking.id,
           accountId: booking.ownerId,
@@ -776,13 +1169,120 @@ async function main() {
           amount: new Prisma.Decimal(Number(booking.totalPrice) * 0.9),
           currency: 'USD',
           description: `Payment for booking ${booking.id}`,
-          status: faker.helpers.arrayElement(['PENDING', 'POSTED', 'SETTLED']),
+          status: payment.status === 'COMPLETED' ? 'SETTLED' : 'PENDING',
+          createdAt: booking.createdAt,
+        },
+      }));
+      
+      // Platform fee entry
+      entries.push(prisma.ledgerEntry.create({
+        data: {
+          bookingId: booking.id,
+          accountId: 'platform',
+          accountType: 'REVENUE',
+          side: 'DEBIT',
+          transactionType: 'PLATFORM_FEE',
+          amount: new Prisma.Decimal(Number(booking.totalPrice) * 0.1),
+          currency: 'USD',
+          description: `Platform fee for booking ${booking.id}`,
+          status: payment.status === 'COMPLETED' ? 'SETTLED' : 'PENDING',
+          createdAt: booking.createdAt,
+        },
+      }));
+      
+      return entries;
+    }).flat(),
+  );
+
+  console.log(`✓ Created ${ledgerEntries.filter(Boolean).length} ledger entries\n`);
+  
+  // Create additional ledger entries for refunds and payouts
+  console.log('📊 Creating additional ledger entries (refunds, payouts, deposits)...');
+  const additionalLedgerEntries = await Promise.all([
+    // Refund ledger entries
+    ...refunds.slice(0, 20).map((refund) => {
+      const booking = bookings.find(b => b.id === refund.bookingId);
+      return prisma.ledgerEntry.create({
+        data: {
+          bookingId: refund.bookingId,
+          accountId: booking?.ownerId || 'unknown',
+          accountType: 'LIABILITY',
+          side: 'DEBIT',
+          transactionType: 'REFUND',
+          amount: new Prisma.Decimal(Number(refund.amount)),
+          currency: 'USD',
+          description: `Refund for booking ${refund.bookingId}`,
+          status: refund.status === 'COMPLETED' ? 'SETTLED' : 'PENDING',
+        },
+      });
+    }),
+    // Payout ledger entries
+    ...payouts.slice(0, 20).map((payout) =>
+      prisma.ledgerEntry.create({
+        data: {
+          accountId: payout.ownerId,
+          accountType: 'EXPENSE',
+          side: 'DEBIT',
+          transactionType: 'PAYOUT',
+          amount: payout.amount,
+          currency: 'USD',
+          description: `Payout to owner ${payout.ownerId}`,
+          status: payout.status === 'COMPLETED' || payout.status === 'PAID' ? 'SETTLED' : 'PENDING',
         },
       }),
     ),
-  );
+    // Deposit hold/release entries
+    ...depositHolds.slice(0, 20).map((hold) => {
+      const booking = bookings.find(b => b.id === hold.bookingId);
+      return prisma.ledgerEntry.create({
+        data: {
+          bookingId: hold.bookingId,
+          accountId: booking?.renterId || 'unknown',
+          accountType: 'ASSET',
+          side: hold.status === 'RELEASED' ? 'DEBIT' : 'CREDIT',
+          transactionType: hold.status === 'RELEASED' ? 'DEPOSIT_RELEASE' : 'DEPOSIT_HOLD',
+          amount: hold.amount,
+          currency: 'USD',
+          description: `Deposit ${hold.status === 'RELEASED' ? 'release' : 'hold'} for booking ${hold.bookingId}`,
+          status: hold.status === 'RELEASED' ? 'SETTLED' : 'POSTED',
+        },
+      });
+    }),
+    // Owner earning entries
+    ...bookings.filter(b => b.status === 'COMPLETED').slice(0, 20).map((booking) =>
+      prisma.ledgerEntry.create({
+        data: {
+          bookingId: booking.id,
+          accountId: booking.ownerId,
+          accountType: 'RECEIVABLE',
+          side: 'CREDIT',
+          transactionType: 'OWNER_EARNING',
+          amount: new Prisma.Decimal(Number(booking.totalPrice) * 0.85),
+          currency: 'USD',
+          description: `Owner earnings for booking ${booking.id}`,
+          status: 'SETTLED',
+        },
+      }),
+    ),
+    // Service fee entries
+    ...bookings.slice(0, 20).map((booking) =>
+      prisma.ledgerEntry.create({
+        data: {
+          bookingId: booking.id,
+          accountId: booking.renterId,
+          accountType: 'REVENUE',
+          side: 'CREDIT',
+          transactionType: 'SERVICE_FEE',
+          amount: new Prisma.Decimal(Number(booking.totalPrice) * 0.05),
+          currency: 'USD',
+          description: `Service fee for booking ${booking.id}`,
+          status: 'SETTLED',
+        },
+      }),
+    ),
+  ]);
 
-  console.log(`✓ Created ${ledgerEntries.length} ledger entries\n`);
+  console.log(`✓ Created ${additionalLedgerEntries.length} additional ledger entries\n`);
 
   // Create reviews
   console.log('⭐ Creating reviews...');
@@ -811,7 +1311,12 @@ async function main() {
             checkInRating: faker.number.int({ min: 1, max: 5 }),
             content: faker.lorem.paragraphs(2),
             response: faker.lorem.sentence(),
-            status: 'PUBLISHED',
+            status: faker.helpers.weightedArrayElement([
+              { weight: 75, value: 'PUBLISHED' },
+              { weight: 10, value: 'DRAFT' },
+              { weight: 10, value: 'HIDDEN' },
+              { weight: 5, value: 'FLAGGED' },
+            ]),
           },
         });
       })
@@ -850,11 +1355,20 @@ async function main() {
         data: {
           userId: user.id,
           type: faker.helpers.arrayElement([
+            'BOOKING_REQUEST',
             'BOOKING_CONFIRMED',
             'BOOKING_CANCELLED',
+            'BOOKING_REMINDER',
             'PAYMENT_RECEIVED',
             'REVIEW_RECEIVED',
             'MESSAGE_RECEIVED',
+            'SYSTEM_UPDATE',
+            'SYSTEM_ANNOUNCEMENT',
+            'MARKETING',
+            'PAYOUT_PROCESSED',
+            'VERIFICATION_COMPLETE',
+            'DISPUTE_OPENED',
+            'LISTING_APPROVED',
           ]),
           title: faker.lorem.words(3),
           message: faker.lorem.sentence(),
@@ -914,7 +1428,7 @@ async function main() {
           bookingId: booking.id,
           propertyId: listing.id,
           userId: booking.renterId,
-          type: faker.helpers.arrayElement(['PROPERTY_DAMAGE', 'LIABILITY', 'TRIP_CANCELLATION']),
+          type: faker.helpers.arrayElement(['PROPERTY_DAMAGE', 'LIABILITY', 'TRIP_CANCELLATION', 'MEDICAL']),
           provider: faker.helpers.arrayElement([
             'Airbnb Host Protection',
             'Custom Insurance',
@@ -924,7 +1438,7 @@ async function main() {
           coverageAmount: new Prisma.Decimal(Number(booking.totalPrice) * 2),
           premium: new Prisma.Decimal(Number(booking.totalPrice) * 0.05),
           currency: 'USD',
-          status: faker.helpers.arrayElement(['ACTIVE', 'EXPIRED', 'CANCELLED']),
+          status: faker.helpers.arrayElement(['ACTIVE', 'EXPIRED', 'CANCELLED', 'PENDING']),
           startDate: booking.startDate,
           endDate: booking.endDate,
           documents: Array.from(
@@ -956,7 +1470,7 @@ async function main() {
             ),
             description: faker.lorem.paragraph(),
             incidentDate: faker.date.recent({ days: 30 }),
-            status: faker.helpers.arrayElement(['PENDING', 'APPROVED', 'REJECTED', 'PAID']),
+            status: faker.helpers.arrayElement(['PENDING', 'APPROVED', 'REJECTED', 'PROCESSING', 'PAID', 'CANCELLED']),
             approvedAmount: new Prisma.Decimal(
               faker.number.float({ min: 50, max: 1500, fractionDigits: 2 }),
             ),
@@ -986,7 +1500,7 @@ async function main() {
         data: {
           bookingId: booking.id,
           listingId: listing.id,
-          type: faker.helpers.arrayElement(['GENERAL', 'BOOKING', 'DISPUTE']),
+          type: faker.helpers.arrayElement(['GENERAL', 'BOOKING', 'DISPUTE', 'SUPPORT']),
           status: faker.helpers.arrayElement(['ACTIVE', 'ARCHIVED', 'CLOSED']),
           lastMessageAt: faker.date.recent({ days: 30 }),
         },
@@ -1103,12 +1617,25 @@ async function main() {
             defendantId: faker.datatype.boolean() ? booking.ownerId : booking.renterId,
             assignedTo: users[0].id,
             title: faker.lorem.words(4),
-            type: faker.helpers.arrayElement(['PROPERTY_DAMAGE', 'PAYMENT_ISSUE', 'CANCELLATION']),
+            type: faker.helpers.arrayElement([
+              'PROPERTY_DAMAGE',
+              'PAYMENT_ISSUE',
+              'CANCELLATION',
+              'CLEANING_FEE',
+              'RULES_VIOLATION',
+              'MISSING_ITEMS',
+              'CONDITION_MISMATCH',
+              'REFUND_REQUEST',
+              'OTHER',
+            ]),
             status: faker.helpers.arrayElement([
               'OPEN',
               'UNDER_REVIEW',
               'INVESTIGATING',
               'RESOLVED',
+              'CLOSED',
+              'DISMISSED',
+              'WITHDRAWN',
             ]),
             priority: faker.helpers.arrayElement(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
             description: faker.lorem.paragraph(),
@@ -1237,6 +1764,185 @@ async function main() {
 
   console.log(`✓ Created ${auditLogs.length} audit logs\n`);
 
+  // ===== ENRICH E2E TEST USER DATA =====
+  console.log('\n🧪 Enriching E2E test user data for comprehensive testing...\n');
+
+  // Test Owner's Listings (10 diverse listings)
+  console.log('  Creating test owner listings...');
+  const testOwnerListings = await Promise.all(
+    categories.slice(0, 5).flatMap((category, catIdx) =>
+      Array.from({ length: 2 }, async (_, i) => {
+        const viewCount = faker.number.int({ min: 300, max: 1500 });
+        return prisma.listing.create({
+          data: {
+            title: `Test Owner ${category.name} ${i + 1}`,
+            slug: `test-owner-${category.slug}-${catIdx * 2 + i}`,
+            description: faker.lorem.paragraphs(2),
+            address: faker.location.streetAddress(),
+            city: 'Austin',
+            state: 'TX',
+            zipCode: faker.location.zipCode(),
+            country: 'USA',
+            latitude: faker.location.latitude(),
+            longitude: faker.location.longitude(),
+            ownerId: testOwner.id,
+            categoryId: category.id,
+            cancellationPolicyId: policies[i % policies.length].id,
+            type: faker.helpers.arrayElement(['APARTMENT', 'HOUSE', 'VILLA', 'CONDO', 'TOWNHOUSE']),
+            status: i === 0 ? 'AVAILABLE' : 'RENTED',
+            verificationStatus: 'VERIFIED',
+            bookingMode: i % 2 === 0 ? 'INSTANT_BOOK' : 'REQUEST',
+            basePrice: new Prisma.Decimal(faker.number.float({ min: 100, max: 400, fractionDigits: 2 })),
+            currency: 'USD',
+            securityDeposit: new Prisma.Decimal(200),
+            cleaningFee: new Prisma.Decimal(50),
+            amenities: ['WiFi', 'Kitchen', 'Parking', 'AC'],
+            photos: Array.from({ length: 6 }, () => 
+              `https://picsum.photos/seed/${faker.string.alphanumeric(12)}/800/600.jpg`
+            ),
+            rules: ['No smoking', 'No parties'],
+            bedrooms: faker.number.int({ min: 1, max: 4 }),
+            bathrooms: 2,
+            maxGuests: 4,
+            averageRating: faker.number.float({ min: 4.2, max: 4.9, fractionDigits: 1 }),
+            totalReviews: faker.number.int({ min: 10, max: 40 }),
+            totalBookings: faker.number.int({ min: 15, max: 50 }),
+            views: viewCount,
+            viewCount: viewCount,
+            instantBookable: i % 2 === 0,
+            minStayNights: 1,
+            maxStayNights: 90,
+            checkInTime: '15:00',
+            checkOutTime: '11:00',
+            featured: i === 0,
+            isActive: true,
+          },
+        });
+      })
+    )
+  );
+
+  console.log(`  ✓ Created ${testOwnerListings.length} test owner listings`);
+
+  // Test Renter's Bookings (15 bookings across different states and times)
+  console.log('  Creating test renter bookings...');
+  const testRenterBookings = await Promise.all(
+    testOwnerListings.slice(0, 10).map(async (listing, i) => {
+      const monthIndex = i;
+      const startDate = getBookingDateForMonth(10 - monthIndex);
+      const nights = getRealisticBookingDuration();
+      const endDate = new Date(startDate.getTime() + nights * 24 * 60 * 60 * 1000);
+      
+      const statuses = ['CONFIRMED', 'COMPLETED', 'PENDING', 'COMPLETED', 'COMPLETED', 
+                       'CONFIRMED', 'COMPLETED', 'CANCELLED', 'COMPLETED', 'IN_PROGRESS'];
+      const status = statuses[i % statuses.length];
+      
+      const basePrice = Number(listing.basePrice);
+      const totalPrice = basePrice * nights + Number(listing.cleaningFee || 0);
+      
+      return prisma.booking.create({
+        data: {
+          listingId: listing.id,
+          ownerId: listing.ownerId,
+          renterId: testRenter.id,
+          startDate,
+          endDate,
+          basePrice: listing.basePrice,
+          securityDeposit: listing.securityDeposit,
+          cleaningFee: listing.cleaningFee,
+          serviceFee: new Prisma.Decimal(totalPrice * 0.1),
+          totalPrice: new Prisma.Decimal(totalPrice),
+          totalAmount: new Prisma.Decimal(totalPrice),
+          currency: 'USD',
+          status: status as any,
+          guestCount: faker.number.int({ min: 1, max: 4 }),
+          specialRequests: 'Test booking for E2E tests',
+          checkInTime: '15:00',
+          checkOutTime: '11:00',
+          ownerEarnings: new Prisma.Decimal(totalPrice * 0.9),
+          platformFee: new Prisma.Decimal(totalPrice * 0.1),
+          createdAt: startDate,
+        },
+      });
+    })
+  );
+
+  console.log(`  ✓ Created ${testRenterBookings.length} test renter bookings`);
+
+  // Test Renter's Reviews (for completed bookings)
+  console.log('  Creating test renter reviews...');
+  const testRenterReviews = await Promise.all(
+    testRenterBookings
+      .filter(b => b.status === 'COMPLETED')
+      .map(booking =>
+        prisma.review.create({
+          data: {
+            bookingId: booking.id,
+            listingId: booking.listingId,
+            reviewerId: testRenter.id,
+            revieweeId: testOwner.id,
+            type: 'LISTING_REVIEW',
+            rating: faker.number.int({ min: 4, max: 5 }),
+            overallRating: faker.number.int({ min: 4, max: 5 }),
+            accuracyRating: 5,
+            communicationRating: 5,
+            cleanlinessRating: faker.number.int({ min: 4, max: 5 }),
+            valueRating: faker.number.int({ min: 4, max: 5 }),
+            locationRating: 5,
+            checkInRating: 5,
+            content: 'Great experience with this rental! Everything was as described.',
+            status: 'PUBLISHED',
+          },
+        })
+      )
+  );
+
+  console.log(`  ✓ Created ${testRenterReviews.length} test renter reviews`);
+
+  // Test Owner's Bookings on their listings (20 bookings from others)
+  console.log('  Creating bookings on test owner listings...');
+  const testOwnerBookingsReceived = await Promise.all(
+    testOwnerListings.flatMap((listing, idx) =>
+      renters.slice(0, 2).map(async (renter, renterIdx) => {
+        const monthIndex = (idx * 2 + renterIdx) % 12;
+        const startDate = getBookingDateForMonth(11 - monthIndex);
+        const nights = getRealisticBookingDuration();
+        const endDate = new Date(startDate.getTime() + nights * 24 * 60 * 60 * 1000);
+        
+        const isPast = endDate < new Date();
+        const status = isPast 
+          ? (renterIdx === 0 ? 'COMPLETED' : 'CONFIRMED')
+          : 'CONFIRMED';
+        
+        const basePrice = Number(listing.basePrice);
+        const totalPrice = basePrice * nights + Number(listing.cleaningFee || 0);
+        
+        return prisma.booking.create({
+          data: {
+            listingId: listing.id,
+            ownerId: testOwner.id,
+            renterId: renter.id,
+            startDate,
+            endDate,
+            basePrice: listing.basePrice,
+            totalPrice: new Prisma.Decimal(totalPrice),
+            totalAmount: new Prisma.Decimal(totalPrice),
+            currency: 'USD',
+            status: status as any,
+            guestCount: 2,
+            ownerEarnings: new Prisma.Decimal(totalPrice * 0.9),
+            platformFee: new Prisma.Decimal(totalPrice * 0.1),
+            createdAt: startDate,
+          },
+        }).catch(() => null);
+      })
+    )
+  );
+
+  console.log(`  ✓ Created ${testOwnerBookingsReceived.filter(Boolean).length} bookings on test owner listings`);
+
+  console.log('✓ E2E test user data enrichment complete!\n');
+
   // Summary
   console.log('\n🎉 Database seeding completed successfully!\n');
   console.log('========================================');
@@ -1259,7 +1965,7 @@ async function main() {
   console.log(`Refunds: ${refunds.length}`);
   console.log(`Deposit Holds: ${depositHolds.length}`);
   console.log(`Payouts: ${payouts.length}`);
-  console.log(`Ledger Entries: ${ledgerEntries.length}`);
+  console.log(`Ledger Entries: ${ledgerEntries.filter(Boolean).length} + ${additionalLedgerEntries.length} additional`);
   console.log(`Reviews: ${reviews.length}`);
   console.log(`Favorite Listings: ${favorites.filter(Boolean).length}`);
   console.log(`Notifications: ${notifications.length}`);

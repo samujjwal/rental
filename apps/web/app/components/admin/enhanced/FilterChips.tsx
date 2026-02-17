@@ -7,13 +7,10 @@ import React, { useState, useCallback, useMemo } from "react";
 import {
   Box,
   Chip,
-  IconButton,
-  Menu,
   MenuItem,
   TextField,
   Button,
   Typography,
-  Divider,
   Select,
   FormControl,
   InputLabel,
@@ -37,23 +34,25 @@ export interface FilterChip {
   field: string;
   label: string;
   type: "text" | "date" | "select" | "number" | "boolean";
-  value: any;
+  value: unknown;
   operator?: "equals" | "contains" | "gt" | "lt" | "gte" | "lte" | "between";
   color?: "primary" | "secondary" | "success" | "warning" | "error" | "info";
   icon?: React.ReactNode;
 }
 
+type AvailableField = {
+  field: string;
+  label: string;
+  type: FilterChip["type"];
+  options?: Array<{ value: string; label: string }>;
+};
+
 interface FilterChipsProps {
   filters: FilterChip[];
   onFilterAdd: (filter: FilterChip) => void;
   onFilterRemove: (filterId: string) => void;
-  onFilterUpdate: (filterId: string, value: any) => void;
-  availableFields?: Array<{
-    field: string;
-    label: string;
-    type: FilterChip["type"];
-    options?: Array<{ value: string; label: string }>;
-  }>;
+  onFilterUpdate: (filterId: string, value: unknown) => void;
+  availableFields?: AvailableField[];
   maxFilters?: number;
 }
 
@@ -61,20 +60,22 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
   filters,
   onFilterAdd,
   onFilterRemove,
-  onFilterUpdate,
+  onFilterUpdate: _onFilterUpdate,
   availableFields = [],
   maxFilters = 10,
 }) => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedField, setSelectedField] = useState<string>("");
-  const [filterValue, setFilterValue] = useState<any>("");
+  const [filterValue, setFilterValue] = useState<
+    string | number | [string, string]
+  >("");
   const [filterOperator, setFilterOperator] =
     useState<FilterChip["operator"]>("equals");
 
   // Create a map of unique identifiers to fields for handling duplicates
   const fieldMap = useMemo(() => {
-    const map = new Map<string, any>();
-    availableFields.forEach((field, index) => {
+    const map = new Map<string, AvailableField>();
+    availableFields.forEach((field) => {
       // Create unique identifier using field and label combination
       const uniqueId = `${field.field}_${field.label.toLowerCase().replace(/\s+/g, "_")}`;
       map.set(uniqueId, field);
@@ -195,7 +196,7 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
       {filters.length > 0 && (
         <Button
           size="small"
-          leftIcon={<CloseIcon fontSize="small" />}
+          startIcon={<CloseIcon fontSize="small" />}
           onClick={() => filters.forEach((f) => onFilterRemove(f.id))}
           sx={{ ml: 1 }}
         >
@@ -309,6 +310,9 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
                   }
 
                   if (field.type === "number") {
+                    const rangeValue = Array.isArray(filterValue)
+                      ? filterValue
+                      : ["", ""];
                     if (filterOperator === "between") {
                       return (
                         <Box sx={{ display: "flex", gap: 2 }}>
@@ -316,11 +320,11 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
                             fullWidth
                             type="number"
                             label="Min Value"
-                            value={filterValue?.[0] || ""}
+                            value={rangeValue[0] || ""}
                             onChange={(e) =>
                               setFilterValue([
                                 e.target.value,
-                                filterValue?.[1] || "",
+                                rangeValue[1] || "",
                               ])
                             }
                             size="medium"
@@ -329,10 +333,10 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
                             fullWidth
                             type="number"
                             label="Max Value"
-                            value={filterValue?.[1] || ""}
+                            value={rangeValue[1] || ""}
                             onChange={(e) =>
                               setFilterValue([
-                                filterValue?.[0] || "",
+                                rangeValue[0] || "",
                                 e.target.value,
                               ])
                             }
@@ -354,6 +358,9 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
                   }
 
                   if (field.type === "date") {
+                    const rangeValue = Array.isArray(filterValue)
+                      ? filterValue
+                      : ["", ""];
                     if (filterOperator === "between") {
                       return (
                         <Box sx={{ display: "flex", gap: 2 }}>
@@ -361,11 +368,11 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
                             fullWidth
                             type="date"
                             label="Start Date"
-                            value={filterValue?.[0] || ""}
+                            value={rangeValue[0] || ""}
                             onChange={(e) =>
                               setFilterValue([
                                 e.target.value,
-                                filterValue?.[1] || "",
+                                rangeValue[1] || "",
                               ])
                             }
                             InputLabelProps={{ shrink: true }}
@@ -375,10 +382,10 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
                             fullWidth
                             type="date"
                             label="End Date"
-                            value={filterValue?.[1] || ""}
+                            value={rangeValue[1] || ""}
                             onChange={(e) =>
                               setFilterValue([
-                                filterValue?.[0] || "",
+                                rangeValue[0] || "",
                                 e.target.value,
                               ])
                             }

@@ -64,5 +64,11 @@ export {
   useOnlineStatus,
 } from "./offline-banner";
 
+// Dialog components
+export { Dialog, DialogFooter } from "./dialog";
+
+// Pagination
+export { Pagination } from "./pagination";
+
 // Toast/Alert components
 export { Toast, ToastContainer, Alert, FormError } from "./toast";

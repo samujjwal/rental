@@ -165,7 +165,7 @@ test.describe("Listings", () => {
     await expect(page.locator('[data-testid="listings-map"]')).toBeVisible();
 
     // Should show markers
-    await expect(page.locator(".leaflet-marker-icon")).toHaveCount({ min: 1 });
+    await expect(page.locator(".leaflet-marker-icon").first()).toBeVisible();
   });
 
   test("should filter by price range", async ({ page }) => {

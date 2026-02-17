@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
-import { InsuranceService, InsuranceStatus } from './insurance.service';
+import { InsuranceService } from './insurance.service';
+import { InsuranceStatus } from '@rental-portal/database';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceVerificationService } from './insurance-verification.service';
 import { InsurancePolicyService } from './insurance-policy.service';
@@ -165,16 +166,16 @@ describe('InsuranceService', () => {
       policyService.createPolicy.mockResolvedValue({
         id: 'policy-789',
         ...mockPolicyData,
-        status: InsuranceStatus.PENDING,
+        status: InsuranceStatus.ACTIVE,
       } as any);
 
       const result = await service.uploadInsurancePolicy(mockPolicyData);
 
-      expect(result.status).toBe(InsuranceStatus.PENDING);
+      expect(result.status).toBe(InsuranceStatus.ACTIVE);
       expect(policyService.createPolicy).toHaveBeenCalledWith(
         expect.objectContaining({
           ...mockPolicyData,
-          status: InsuranceStatus.PENDING,
+          status: InsuranceStatus.ACTIVE,
         }),
       );
     });
@@ -242,7 +243,7 @@ describe('InsuranceService', () => {
     it('should verify policy successfully', async () => {
       const mockPolicy = {
         id: 'policy-123',
-        status: InsuranceStatus.PENDING,
+        status: InsuranceStatus.ACTIVE,
         coverageAmount: 100000,
         expirationDate: new Date('2026-12-31'),
         listingId: 'listing-456',
@@ -251,7 +252,7 @@ describe('InsuranceService', () => {
       policyService.getPolicy.mockResolvedValue(mockPolicy as any);
       policyService.updatePolicyStatus.mockResolvedValue({
         ...mockPolicy,
-        status: InsuranceStatus.VERIFIED,
+        status: InsuranceStatus.ACTIVE,
       } as any);
 
       // We expect no return (void)
@@ -259,7 +260,7 @@ describe('InsuranceService', () => {
 
       expect(policyService.updatePolicyStatus).toHaveBeenCalledWith(
         'policy-123',
-        InsuranceStatus.VERIFIED,
+        InsuranceStatus.ACTIVE,
         expect.objectContaining({
           verifiedBy: 'admin-456',
         }),
@@ -269,14 +270,14 @@ describe('InsuranceService', () => {
     it('should reject policy with notes', async () => {
       const mockPolicy = {
         id: 'policy-123',
-        status: InsuranceStatus.PENDING,
+        status: InsuranceStatus.ACTIVE,
         listingId: 'listing-456',
       };
 
       policyService.getPolicy.mockResolvedValue(mockPolicy as any);
       policyService.updatePolicyStatus.mockResolvedValue({
         ...mockPolicy,
-        status: InsuranceStatus.REJECTED,
+        status: InsuranceStatus.CANCELLED,
       } as any);
 
       await service.verifyInsurancePolicy(
@@ -288,7 +289,7 @@ describe('InsuranceService', () => {
 
       expect(policyService.updatePolicyStatus).toHaveBeenCalledWith(
         'policy-123',
-        InsuranceStatus.REJECTED,
+        InsuranceStatus.CANCELLED,
         expect.objectContaining({
           verifiedBy: 'admin-456',
           notes: 'Invalid coverage amount',
@@ -306,7 +307,7 @@ describe('InsuranceService', () => {
         {
           id: 'policy-1',
           expirationDate: expiringDate,
-          status: InsuranceStatus.VERIFIED,
+          status: InsuranceStatus.ACTIVE,
           user: { id: 'user-123', email: 'user@example.com' },
         },
       ];

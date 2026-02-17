@@ -5,18 +5,16 @@ import type {
   FilterState,
   SortState,
   PaginationState,
-  Column,
-  Action,
   FilterValue,
 } from "~/types/admin";
 
 // Simple debounce implementation to avoid external dependency
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
+function debounce<Args extends unknown[]>(
+  func: (...args: Args) => void,
   wait: number
-): (...args: Parameters<T>) => void {
+): (...args: Args) => void {
   let timeout: NodeJS.Timeout;
-  return (...args: Parameters<T>) => {
+  return (...args: Args) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
@@ -26,17 +24,14 @@ function debounce<T extends (...args: any[]) => any>(
  * Production-grade hook for managing data table state
  * Provides filtering, sorting, pagination, and selection with performance optimizations
  */
-export function useDataTable<T extends Record<string, any>>(
+export function useDataTable<T extends Record<string, unknown>>(
   options: UseDataTableOptions<T>
 ): UseDataTableReturn<T> {
   const {
     data: initialData,
     columns,
-    actions = [],
     filters: filterFields = [],
-    stats,
     pagination: initialPagination = {},
-    sorting: initialSorting = {},
     selection: selectionOptions = {},
     onRowClick,
     onSelectionChange,
@@ -49,9 +44,6 @@ export function useDataTable<T extends Record<string, any>>(
     initialPage = 1,
     initialLimit = 20,
     debounceMs = 300,
-    virtualScrolling = false,
-    rowHeight = 50,
-    maxHeight,
   } = options;
 
   // State management
@@ -138,7 +130,9 @@ export function useDataTable<T extends Record<string, any>>(
               return cellValue === value;
 
             case "multiselect":
-              return Array.isArray(value) && value.includes(cellValue);
+              return (
+                Array.isArray(value) && value.includes(String(cellValue ?? ""))
+              );
 
             case "number":
               return Number(cellValue) === Number(value);
@@ -263,7 +257,7 @@ export function useDataTable<T extends Record<string, any>>(
   }, [paginatedData, selectedIds, selectionOptions.enabled]);
 
   const hasActiveFilters = useMemo(() => {
-    return Object.entries(filters).some(([key, value]) => {
+    return Object.entries(filters).some(([_key, value]) => {
       if (!value) return false;
       if (Array.isArray(value)) return value.length > 0;
       return value !== "";

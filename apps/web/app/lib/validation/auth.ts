@@ -37,7 +37,7 @@ export const signupSchema = z
       .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number")
       .optional()
       .or(z.literal("")),
-    role: z.enum(["renter", "owner"]),
+    role: z.enum(["renter", "owner"]).optional(), // Optional - for UI only, not sent to API
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",

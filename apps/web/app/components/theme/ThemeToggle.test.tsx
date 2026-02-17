@@ -51,7 +51,7 @@ describe('useTheme', () => {
     expect(screen.getByTestId('theme').textContent).toBe('system');
   });
 
-  it('reads theme from localStorage', () => {
+  it('reads theme from localStorage', async () => {
     mockLocalStorage.getItem.mockReturnValue('dark');
 
     const TestComponent = () => {
@@ -61,7 +61,7 @@ describe('useTheme', () => {
 
     render(<TestComponent />);
     // After mount, it should read from localStorage
-    waitFor(() => {
+    await waitFor(() => {
       expect(screen.getByTestId('theme').textContent).toBe('dark');
     });
   });
@@ -104,7 +104,7 @@ describe('useTheme', () => {
     expect(mockLocalStorage.setItem).toHaveBeenCalledWith('theme-preference', 'dark');
   });
 
-  it('detects dark mode correctly', () => {
+  it('detects dark mode correctly', async () => {
     mockLocalStorage.getItem.mockReturnValue('dark');
     mockMatchMedia.mockReturnValue({
       matches: true, // prefers dark mode
@@ -118,12 +118,12 @@ describe('useTheme', () => {
     };
 
     render(<TestComponent />);
-    waitFor(() => {
+    await waitFor(() => {
       expect(screen.getByTestId('is-dark').textContent).toBe('true');
     });
   });
 
-  it('applies theme class to document element', () => {
+  it('applies theme class to document element', async () => {
     mockLocalStorage.getItem.mockReturnValue('dark');
 
     const TestComponent = () => {
@@ -133,7 +133,7 @@ describe('useTheme', () => {
 
     render(<TestComponent />);
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(mockClassList.remove).toHaveBeenCalledWith('light', 'dark');
       expect(mockClassList.add).toHaveBeenCalledWith('dark');
     });

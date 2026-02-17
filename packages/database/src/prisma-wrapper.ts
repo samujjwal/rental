@@ -175,4 +175,12 @@ export class PrismaWrapper {
   $executeRaw<T = any>(query: any, ...args: any[]) {
     return this.prisma.$executeRaw<T>(query, ...args);
   }
+
+  $queryRawUnsafe<T = any>(query: string, ...values: any[]) {
+    return this.prisma.$queryRawUnsafe<T>(query, ...values);
+  }
+
+  $executeRawUnsafe(query: string, ...values: any[]) {
+    return this.prisma.$executeRawUnsafe(query, ...values);
+  }
 }

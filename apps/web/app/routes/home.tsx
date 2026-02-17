@@ -1,12 +1,12 @@
-/* eslint-disable react-refresh/only-export-components */
 
 import type { MetaFunction } from "react-router";
-import { Link, Form, useLoaderData, useNavigation } from "react-router";
+import { Link, useLoaderData, useNavigation } from "react-router";
 import { useAuthStore } from "~/lib/store/auth";
 import { DevUserSwitcher } from "~/components/DevUserSwitcher";
 import { listingsApi } from "~/lib/api/listings";
+import { geoApi } from "~/lib/api/geo";
 import type { Listing } from "~/types/listing";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   Home as HomeIcon,
   Car,
@@ -20,7 +20,6 @@ import {
   Shield,
   CreditCard,
   CheckCircle,
-  Loader2,
   LayoutDashboard,
   Calendar,
   MessageSquare,
@@ -31,6 +30,8 @@ import {
   EmptyState,
   RouteErrorBoundary,
 } from "~/components/ui";
+import { InstantSearch } from "~/components/search/InstantSearch";
+import { LocationAutocomplete } from "~/components/search/LocationAutocomplete";
 
 export const meta: MetaFunction = () => [
   { title: "GharBatai Rentals - Rent Anything, Anywhere" },
@@ -40,14 +41,33 @@ export const meta: MetaFunction = () => [
   },
 ];
 
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
+const safeInitial = (value: unknown): string => {
+  const name = typeof value === "string" ? value.trim() : "";
+  return (name[0] || "U").toUpperCase();
+};
+
 export async function clientLoader() {
+  const normalizeListings = (items: unknown): Listing[] =>
+    Array.isArray(items) ? (items.filter(Boolean).slice(0, 8) as Listing[]) : [];
+
   try {
-    const { listings: featuredListings } = await listingsApi.searchListings({
-      limit: 8,
-    });
-    return { featuredListings };
+    const featuredListings = await listingsApi.getFeaturedListings();
+    return { featuredListings: normalizeListings(featuredListings) };
   } catch {
-    return { featuredListings: [] };
+    try {
+      const { listings } = await listingsApi.searchListings({ limit: 8 });
+      return { featuredListings: normalizeListings(listings) };
+    } catch {
+      return { featuredListings: [] };
+    }
   }
 }
 
@@ -66,64 +86,105 @@ export default function Home() {
   const navigation = useNavigation();
   const [location, setLocation] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
+  const [locationCoords, setLocationCoords] = useState<{
+    lat: number;
+    lon: number;
+  } | null>(null);
 
   const detectLocation = useCallback(async () => {
     if (!navigator.geolocation) {
+      setLocationError("Location is not supported in this browser.");
       return;
     }
 
+    setLocationError("");
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        const lat = safeNumber(position.coords.latitude);
+        const lon = safeNumber(position.coords.longitude);
+        if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) {
+          setLocationError("We couldn't read your coordinates. Please type your city instead.");
+          setLocationLoading(false);
+          return;
+        }
+
+        // Coordinates are enough for search; reverse geocoding is best-effort.
+        setLocationCoords({ lat, lon });
         try {
-          // Use reverse geocoding to get city name
-          // Using OpenStreetMap's Nominatim API (free, no API key required)
-          const controller = new AbortController();
-          const timeoutId = window.setTimeout(() => controller.abort(), 4000);
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json&addressdetails=1`,
-            {
-              signal: controller.signal,
-              headers: {
-                Accept: "application/json",
-                "Accept-Language": navigator.language || "en",
-              },
+          const { result } = await geoApi.reverse(
+            lat,
+            lon,
+            navigator.language || "en"
+          );
+
+          const label = result?.shortLabel || result?.address?.locality || "";
+
+          if (label) {
+            setLocation(label);
+            if (result?.provider === "fallback") {
+              setLocationError(
+                "Address lookup is temporarily unavailable. Using precise GPS coordinates."
+              );
             }
-          ).finally(() => window.clearTimeout(timeoutId));
-          const data = await response.json();
-          
-          // Extract city from the response
-          const city = data.address?.city || 
-                      data.address?.town || 
-                      data.address?.village || 
-                      data.address?.county ||
-                      "";
-          
-          if (city) {
-            setLocation(city);
+          } else {
+            // Reverse geocoding can legitimately return null in sparse areas.
+            // Keep location usable for search with a stable fallback label.
+            setLocation("Near me");
+          }
+          if (result?.provider !== "fallback") {
+            setLocationError("");
           }
         } catch (error) {
           console.error('Error getting location:', error);
+          // Keep coordinates and allow search even if label lookup fails.
+          setLocation("Near me");
+          setLocationError("");
         } finally {
           setLocationLoading(false);
         }
       },
       (error) => {
         console.error('Error detecting location:', error);
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationError("Location access was denied. You can type your city instead.");
+        } else if (error.code === error.TIMEOUT) {
+          setLocationError("Location request timed out. Please try again or type your city.");
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          setLocationError("Your device couldn't provide a location. Please type your city.");
+        } else {
+          setLocationError("We couldn't detect your location. Please type it in.");
+        }
         setLocationLoading(false);
       },
       {
         enableHighAccuracy: false,
-        timeout: 5000,
+        timeout: 10000,
         maximumAge: 300000, // Cache for 5 minutes
       }
     );
   }, []);
 
-  useEffect(() => {
-    // Auto-detect location on component mount
-    detectLocation();
-  }, [detectLocation]);
+  const buildSearchUrl = useCallback(
+    (query: string) => {
+      const params = new URLSearchParams();
+      if (query) params.set("query", query);
+      if (location) params.set("location", location);
+      if (locationCoords) {
+        const lat = safeNumber(locationCoords.lat);
+        const lon = safeNumber(locationCoords.lon);
+        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+          params.set("lat", lat.toFixed(6));
+          params.set("lng", lon.toFixed(6));
+        }
+        params.set("radius", "25");
+      }
+      const queryString = params.toString();
+      return queryString ? `/search?${queryString}` : "/search";
+    },
+    [location, locationCoords]
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -168,7 +229,7 @@ export default function Home() {
                   {user.avatar ? (
                     <img src={user.avatar} alt={user.firstName} className="h-full w-full object-cover" />
                   ) : (
-                    <span>{user.firstName[0]}</span>
+                    <span>{safeInitial(user.firstName)}</span>
                   )}
                 </Link>
               </div>
@@ -216,44 +277,61 @@ export default function Home() {
 
             {/* Advanced Search Bar */}
             <div className="mt-10 max-w-3xl mx-auto">
-              <Form
-                action="/search"
-                method="get"
-                className="bg-card border border-border rounded-2xl shadow-xl p-2"
-              >
+              <div className="bg-card border border-border rounded-2xl shadow-xl p-2">
                 <div className="flex flex-col md:flex-row gap-2">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <input
-                      type="text"
-                      name="q"
+                  <div className="flex-1">
+                    <InstantSearch
                       placeholder="What are you looking for?"
-                      className="w-full rounded-xl border-0 bg-muted/50 pl-12 pr-4 py-3.5 text-base focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="w-full"
+                      getSearchUrl={buildSearchUrl}
                     />
                   </div>
                   <div className="flex-1 relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    {locationLoading && (
-                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
-                    )}
-                    <input
-                      type="text"
-                      name="location"
-                      placeholder="Location"
+                    <LocationAutocomplete
                       value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      className="w-full rounded-xl border-0 bg-muted/50 pl-12 pr-4 py-3.5 text-base focus:outline-none focus:ring-2 focus:ring-ring"
+                      onChange={(value) => {
+                        setLocation(value);
+                        setLocationError("");
+                        if (!value) {
+                          setLocationCoords(null);
+                        }
+                      }}
+                      onSelect={(suggestion) => {
+                        setLocation(suggestion.shortLabel);
+                        setLocationCoords({
+                          lat: suggestion.coordinates.lat,
+                          lon: suggestion.coordinates.lon,
+                        });
+                        setLocationError("");
+                      }}
+                      placeholder="Location"
+                      inputClassName="pr-36"
+                      bias={locationCoords || undefined}
+                      biasZoom={10}
+                      biasScale={0.8}
+                      layer="city"
                     />
+                    <button
+                      type="button"
+                      onClick={detectLocation}
+                      disabled={locationLoading}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted disabled:opacity-60"
+                      aria-label="Use my location"
+                    >
+                      {locationLoading ? "Locating..." : "Use my location"}
+                    </button>
                   </div>
-                  <button
-                    type="submit"
-                    className="flex items-center justify-center gap-2 rounded-xl bg-primary px-8 py-3.5 text-base font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90"
-                  >
-                    <Search className="h-5 w-5" />
-                    Search
-                  </button>
                 </div>
-              </Form>
+                {locationError && (
+                  <p
+                    className="mt-3 text-sm text-muted-foreground"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    {locationError}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -360,6 +438,8 @@ export default function Home() {
           {navigation.state !== "loading" && featuredListings.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {featuredListings.slice(0, 8).map((listing: Listing) => {
+                const listingId = safeText(listing.id);
+                const listingTitle = safeText(listing.title, "Listing");
                 const ratingValue = listing.rating ?? listing.averageRating;
                 const reviewCount = listing.reviewCount ?? listing.totalReviews;
                 const pricePerDay = listing.pricePerDay ?? listing.basePrice ?? 0;
@@ -368,14 +448,14 @@ export default function Home() {
                 return (
                 <Link
                   key={listing.id}
-                  to={`/listings/${listing.id}`}
+                  to={listingId ? `/listings/${listingId}` : "/listings"}
                   className="group bg-card rounded-xl border border-border overflow-hidden hover:shadow-lg transition-shadow"
                 >
                   <div className="aspect-[4/3] bg-muted relative overflow-hidden">
                     {listing.images?.[0] ? (
                       <img
                         src={listing.images[0]}
-                        alt={listing.title}
+                        alt={listingTitle}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
@@ -386,12 +466,12 @@ export default function Home() {
                   </div>
                   <div className="p-4">
                     <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                      {listing.title}
+                      {listingTitle}
                     </h3>
                     <div className="flex items-center gap-1 mt-1">
                       <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                       <span className="text-sm text-muted-foreground">
-                        {ratingValue != null ? ratingValue.toFixed(1) : "New"}
+                        {ratingValue != null ? safeNumber(ratingValue).toFixed(1) : "New"}
                         {reviewCount ? ` (${reviewCount})` : ""}
                       </span>
                     </div>

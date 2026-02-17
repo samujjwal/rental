@@ -358,11 +358,7 @@ export class StripeService {
     await this.prisma.booking.update({
       where: { id: bookingId },
       data: {
-        // If payment fails, it might go back to pending payment or stay there.
-        // We don't have a 'PAYMENT_FAILED' status.
-        // We can leave it as PENDING_PAYMENT or move to CANCELLED if expired?
-        // Let's not change status blindly to something that doesn't exist.
-        // paymentStatus: 'FAILED', // Removed
+        status: BookingStatus.PAYMENT_FAILED,
       },
     });
 

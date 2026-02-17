@@ -3,7 +3,6 @@ import type { LatLngBoundsExpression } from 'leaflet';
 import { ListingsMap } from './ListingsMap';
 import { MapViewToggle } from './MapViewToggle';
 import type { ListingMarkerData } from './ListingMarker';
-import { Box, Button, Chip } from '@mui/material';
 import { RefreshCw } from 'lucide-react';
 
 export interface MapSearchViewProps {
@@ -13,7 +12,6 @@ export interface MapSearchViewProps {
     onListingClick?: (listingId: string) => void;
     onBoundsChange?: (bounds: LatLngBoundsExpression) => void;
     highlightedListingId?: string;
-    onHighlightChange?: (listingId: string | undefined) => void;
     className?: string;
     showSearchThisArea?: boolean;
     onSearchThisArea?: () => void;
@@ -26,7 +24,6 @@ export function MapSearchView({
     onListingClick,
     onBoundsChange,
     highlightedListingId,
-    onHighlightChange,
     className = '',
     showSearchThisArea = false,
     onSearchThisArea,
@@ -68,37 +65,23 @@ export function MapSearchView({
             {/* Search This Area Button - Top Center */}
             {view === 'map' && showSearchThisArea && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
-                    <Button
-                        variant="contained"
-                        leftIcon={<RefreshCw size={18} />}
+                    <button
+                        type="button"
                         onClick={handleSearchThisArea}
-                        sx={{
-                            backgroundColor: 'white',
-                            color: 'text.primary',
-                            boxShadow: 2,
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            '&:hover': {
-                                backgroundColor: 'grey.100',
-                            },
-                        }}
+                        className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-md transition-colors hover:bg-gray-100"
                     >
+                        <RefreshCw size={18} />
                         Search this area
-                    </Button>
+                    </button>
                 </div>
             )}
 
             {/* Listing Count - Top Right */}
             {view === 'map' && (
                 <div className="absolute top-4 right-4 z-[1000]">
-                    <Chip
-                        label={`${visibleListingsCount} ${visibleListingsCount === 1 ? 'listing' : 'listings'}`}
-                        sx={{
-                            backgroundColor: 'white',
-                            fontWeight: 600,
-                            boxShadow: 2,
-                        }}
-                    />
+                    <span className="inline-block rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 shadow-md">
+                        {visibleListingsCount} {visibleListingsCount === 1 ? 'listing' : 'listings'}
+                    </span>
                 </div>
             )}
 

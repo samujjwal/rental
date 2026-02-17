@@ -1,12 +1,10 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link } from "react-router";
 import {
   Settings,
   Zap,
   Database,
   Bell,
-  Lock,
-  Globe,
   Mail,
   Server,
   Shield,
@@ -14,7 +12,10 @@ import {
   Activity,
   HardDrive,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
+import { requireAdmin } from "~/utils/auth";
+import { RouteErrorBoundary } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [
@@ -23,7 +24,9 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export async function clientLoader() {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const [generalSettings, systemHealth, databaseInfo] = await Promise.all([
       adminApi.getGeneralSettings(),
@@ -37,12 +40,15 @@ export async function clientLoader() {
       databaseInfo,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       generalSettings: null,
       systemHealth: null,
       databaseInfo: null,
-      error: error?.message || "Failed to load system settings",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load system settings",
     };
   }
 }
@@ -50,7 +56,7 @@ export async function clientLoader() {
 interface SettingsCategory {
   title: string;
   description: string;
-  icon: any;
+  icon: LucideIcon;
   href: string;
   status?: "active" | "warning" | "error";
   stats?: { label: string; value: string | number }[];
@@ -300,3 +306,5 @@ export default function SystemSettingsPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

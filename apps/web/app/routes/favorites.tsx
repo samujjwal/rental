@@ -1,27 +1,26 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link, useNavigation, useRevalidator } from "react-router";
-import { useState } from "react";
+import { useLoaderData, Link, useRevalidator, redirect } from "react-router";
+import { useState, useCallback, useMemo } from "react";
 import {
   Heart,
   MapPin,
   Star,
-  Calendar,
   Trash2,
   Search,
   Grid as LayoutGrid,
   List,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
-import { useAuthStore } from "~/lib/store/auth";
+import { getUser } from "~/utils/auth";
 import {
   Button,
   Badge,
-  CardGridSkeleton,
-  EmptyStatePresets,
   RouteErrorBoundary,
 } from "~/components/ui";
-import { cn } from "~/lib/utils";
+import { toast } from "~/lib/toast";
 
 export const meta: MetaFunction = () => {
   return [
@@ -55,15 +54,32 @@ interface FavoriteListing {
   savedAt?: string;
 }
 
-export async function clientLoader({ request }: LoaderFunctionArgs) {
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string): boolean => UUID_PATTERN.test(value);
+const MAX_SEARCH_QUERY_LENGTH = 120;
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeText = (value: unknown): string =>
+  typeof value === "string" ? value : "";
+const safeLower = (value: unknown): string => safeText(value).toLowerCase();
+const safeLocation = (listing: FavoriteListing): string => {
+  const city = safeText(listing.location?.city);
+  const state = safeText(listing.location?.state);
+  if (city && state) return `${city}, ${state}`;
+  return city || state || "Location";
+};
+
+export async function clientLoader({ request: _request }: LoaderFunctionArgs) {
+  const user = await getUser(_request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   try {
-    // Get the authenticated user's ID from the auth store
-    const user = useAuthStore.getState().user;
-    if (!user) {
-      throw new Error("User not authenticated");
-    }
-    
-    const favorites = await listingsApi.getFavoriteListings(user.id);
+    const favoritesResult = await listingsApi.getFavoriteListings(user.id);
+    const favorites = Array.isArray(favoritesResult) ? favoritesResult : [];
     return { favorites, error: null };
   } catch (error) {
     console.error("Failed to load favorites:", error);
@@ -72,7 +88,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 }
 
 export default function FavoritesPage() {
-  const { favorites, error } = useLoaderData<{
+  const { favorites: serverFavorites, error } = useLoaderData<{
     favorites: FavoriteListing[];
     error: string | null;
   }>();
@@ -81,24 +97,58 @@ export default function FavoritesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
+  // Optimistic state: track IDs that have been optimistically removed
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
 
+  const favorites = serverFavorites.filter((f) => !removedIds.has(f.id));
+
+  const query = safeLower(searchQuery);
   const filteredFavorites = favorites.filter((listing) =>
-    listing.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    listing.category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    listing.location.city.toLowerCase().includes(searchQuery.toLowerCase())
+    safeLower(listing.title).includes(query) ||
+    safeLower(listing.category?.name).includes(query) ||
+    safeLower(listing.location?.city).includes(query)
   );
 
-  const handleRemoveFavorite = async (listingId: string) => {
+  const totalPages = Math.max(1, Math.ceil(filteredFavorites.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedFavorites = useMemo(
+    () => filteredFavorites.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE),
+    [filteredFavorites, safePage]
+  );
+
+  const handleRemoveFavorite = useCallback(async (listingId: string) => {
+    if (!isUuid(listingId)) {
+      return;
+    }
+    const confirmed = window.confirm("Remove this listing from your favorites?");
+    if (!confirmed) {
+      return;
+    }
+
+    // Optimistically remove from UI immediately
+    setRemovedIds((prev) => new Set(prev).add(listingId));
     setRemovingId(listingId);
+
     try {
       await listingsApi.removeFavorite(listingId);
+      toast.success("Removed from favorites");
+      // Sync server state in background
       revalidator.revalidate();
     } catch (error) {
       console.error("Failed to remove favorite:", error);
+      // Rollback: restore the item
+      setRemovedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(listingId);
+        return next;
+      });
+      toast.error("Failed to remove favorite. Please try again.");
     } finally {
       setRemovingId(null);
     }
-  };
+  }, [revalidator]);
 
   if (error) {
     return (
@@ -128,7 +178,7 @@ export default function FavoritesPage() {
               </p>
             </div>
             <Link to="/search">
-              <Button variant="outlined">
+              <Button variant="outline">
                 <Search className="w-4 h-4 mr-2" />
                 Browse More
               </Button>
@@ -160,22 +210,26 @@ export default function FavoritesPage() {
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value.slice(0, MAX_SEARCH_QUERY_LENGTH));
+                    setCurrentPage(1);
+                  }}
                   placeholder="Search favorites..."
+                  maxLength={MAX_SEARCH_QUERY_LENGTH}
                   className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                 />
               </div>
               <div className="flex items-center gap-2">
                 <Button
-                  variant={viewMode === "grid" ? "contained" : "outlined"}
-                  size="small"
+                  variant={viewMode === "grid" ? "primary" : "outline"}
+                  size="sm"
                   onClick={() => setViewMode("grid")}
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </Button>
                 <Button
-                  variant={viewMode === "list" ? "contained" : "outlined"}
-                  size="small"
+                  variant={viewMode === "list" ? "primary" : "outline"}
+                  size="sm"
                   onClick={() => setViewMode("list")}
                 >
                   <List className="w-4 h-4" />
@@ -193,18 +247,27 @@ export default function FavoritesPage() {
               </div>
             ) : viewMode === "grid" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredFavorites.map((listing) => (
+                {paginatedFavorites.map((listing) => {
+                  const listingId = safeText(listing.id);
+                  const listingTitle = safeText(listing.title) || "Listing";
+                  return (
                   <div
                     key={listing.id}
                     className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
                   >
                     <div className="relative aspect-[4/3]">
-                      <Link to={`/listings/${listing.id}`}>
-                        <img
-                          src={listing.images[0] || "/placeholder-listing.jpg"}
-                          alt={listing.title}
-                          className="w-full h-full object-cover"
-                        />
+                      <Link to={listingId ? `/listings/${listingId}` : "/listings"}>
+                        {listing.images?.[0] ? (
+                          <img
+                            src={listing.images[0]}
+                            alt={listingTitle}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-muted flex items-center justify-center text-sm font-semibold text-foreground">
+                            {listingTitle[0] || "L"}
+                          </div>
+                        )}
                       </Link>
                       <button
                         onClick={() => handleRemoveFavorite(listing.id)}
@@ -223,23 +286,25 @@ export default function FavoritesPage() {
                       )}
                     </div>
                     <div className="p-4">
-                      <Link to={`/listings/${listing.id}`}>
+                      <Link to={listingId ? `/listings/${listingId}` : "/listings"}>
                         <h3 className="font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
-                          {listing.title}
+                          {listingTitle}
                         </h3>
                       </Link>
                       <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                         <MapPin className="w-4 h-4" />
-                        <span>{listing.location.city}, {listing.location.state}</span>
+                        <span>{safeLocation(listing)}</span>
                       </div>
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-1">
                           <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                           <span className="font-medium">
-                            {listing.averageRating?.toFixed(1) || "New"}
+                            {listing.averageRating != null
+                              ? safeNumber(listing.averageRating).toFixed(1)
+                              : "New"}
                           </span>
                           <span className="text-muted-foreground text-sm">
-                            ({listing.reviewCount})
+                            ({listing.reviewCount ?? 0})
                           </span>
                         </div>
                         <div className="font-semibold text-foreground">
@@ -249,30 +314,39 @@ export default function FavoritesPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredFavorites.map((listing) => (
+                {paginatedFavorites.map((listing) => {
+                  const listingId = safeText(listing.id);
+                  const listingTitle = safeText(listing.title) || "Listing";
+                  return (
                   <div
                     key={listing.id}
                     className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow flex"
                   >
                     <div className="relative w-48 h-32 flex-shrink-0">
-                      <Link to={`/listings/${listing.id}`}>
-                        <img
-                          src={listing.images[0] || "/placeholder-listing.jpg"}
-                          alt={listing.title}
-                          className="w-full h-full object-cover"
-                        />
+                      <Link to={listingId ? `/listings/${listingId}` : "/listings"}>
+                        {listing.images?.[0] ? (
+                          <img
+                            src={listing.images[0]}
+                            alt={listingTitle}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-muted flex items-center justify-center text-sm font-semibold text-foreground">
+                            {listingTitle[0] || "L"}
+                          </div>
+                        )}
                       </Link>
                     </div>
                     <div className="flex-1 p-4 flex flex-col justify-between">
                       <div>
                         <div className="flex items-start justify-between">
-                          <Link to={`/listings/${listing.id}`}>
+                          <Link to={listingId ? `/listings/${listingId}` : "/listings"}>
                             <h3 className="font-semibold text-foreground hover:text-primary transition-colors">
-                              {listing.title}
+                              {listingTitle}
                             </h3>
                           </Link>
                           <button
@@ -296,11 +370,15 @@ export default function FavoritesPage() {
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <MapPin className="w-4 h-4" />
-                            <span>{listing.location.city}</span>
+                            <span>{safeLocation(listing)}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                            <span>{listing.averageRating?.toFixed(1) || "New"}</span>
+                            <span>
+                              {listing.averageRating != null
+                                ? safeNumber(listing.averageRating).toFixed(1)
+                                : "New"}
+                            </span>
                           </div>
                           {listing.instantBooking && (
                             <Badge variant="outline" className="text-xs">Instant Book</Badge>
@@ -313,7 +391,32 @@ export default function FavoritesPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-8">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {safePage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
               </div>
             )}
           </>

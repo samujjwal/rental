@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, CSSProperties } from 'react';
+import { useRef, useState, useCallback } from 'react';
 
 export interface VirtualListProps<T> {
     items: T[];

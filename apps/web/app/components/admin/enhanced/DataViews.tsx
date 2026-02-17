@@ -3,7 +3,7 @@
  * Multiple view modes: Table, Cards, List for different screen sizes
  */
 
-import React, { useState, useCallback } from "react";
+import React from "react";
 import {
   Box,
   Card,
@@ -30,21 +30,36 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as ViewIcon,
-  MoreVert as MoreIcon,
 } from "@mui/icons-material";
 import type { ColumnDef } from "@tanstack/react-table";
 
 export type ViewMode = "table" | "cards" | "list";
 
-interface DataViewProps {
-  data: any[];
-  columns: ColumnDef<any>[];
+type DataRow = Record<string, unknown> & { id?: string | number };
+
+interface DataViewProps<T extends DataRow> {
+  data: T[];
+  columns: ColumnDef<T>[];
   viewMode: ViewMode;
-  onRowClick?: (row: any) => void;
-  onRowEdit?: (row: any) => void;
-  onRowDelete?: (row: any) => void;
-  onRowView?: (row: any) => void;
+  onRowClick?: (row: T) => void;
+  onRowEdit?: (row: T) => void;
+  onRowDelete?: (row: T) => void;
+  onRowView?: (row: T) => void;
 }
+
+const getColumnId = <T extends DataRow>(
+  col?: ColumnDef<T>
+): string | undefined => {
+  if (!col) return undefined;
+  if (typeof col.id === "string") return col.id;
+  if (
+    "accessorKey" in col &&
+    typeof (col as { accessorKey?: unknown }).accessorKey === "string"
+  ) {
+    return (col as { accessorKey: string }).accessorKey;
+  }
+  return undefined;
+};
 
 interface ViewModeToggleProps {
   value: ViewMode;
@@ -94,16 +109,16 @@ export const ViewModeToggle: React.FC<ViewModeToggleProps> = ({
   );
 };
 
-export const CardView: React.FC<DataViewProps> = ({
+export const CardView = <T extends DataRow>({
   data,
   columns,
   onRowClick,
   onRowEdit,
   onRowDelete,
   onRowView,
-}) => {
-  const getDisplayValue = (row: any, columnId: string) => {
-    const value = row[columnId];
+}: DataViewProps<T>) => {
+  const getDisplayValue = (row: T, columnId: string) => {
+    const value = row[columnId as keyof T];
     if (value === null || value === undefined) return "-";
     if (typeof value === "boolean") return value ? "Yes" : "No";
     if (typeof value === "object") return JSON.stringify(value);
@@ -111,20 +126,16 @@ export const CardView: React.FC<DataViewProps> = ({
   };
 
   const getPrimaryField = () => {
-    const nameField = columns.find((col: any) =>
-      ["name", "title", "label"].includes((col as any).id || (col as any).accessorKey)
-    );
-    return (
-      (nameField as any)?.id ||
-      (nameField as any)?.accessorKey ||
-      (columns[0] as any)?.id ||
-      (columns[0] as any)?.accessorKey
-    );
+    const nameField = columns.find((col) => {
+      const id = getColumnId(col);
+      return id ? ["name", "title", "label"].includes(id) : false;
+    });
+    return getColumnId(nameField ?? columns[0]) || "id";
   };
 
   const getSecondaryFields = () => {
-    return columns.slice(0, 4).filter((col: any) => {
-      const id = (col as any).id || (col as any).accessorKey;
+    return columns.slice(0, 4).filter((col) => {
+      const id = getColumnId(col);
       return id !== getPrimaryField() && id !== "id" && id !== "actions";
     });
   };
@@ -136,7 +147,10 @@ export const CardView: React.FC<DataViewProps> = ({
         const secondaryFields = getSecondaryFields();
 
         return (
-          <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={row.id || index}>
+          <Grid
+            size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
+            key={row.id ?? index}
+          >
             <Card
               sx={{
                 height: "100%",
@@ -164,8 +178,9 @@ export const CardView: React.FC<DataViewProps> = ({
                     mt: 2,
                   }}
                 >
-                  {secondaryFields.map((col: any) => {
-                    const id = col.id || col.accessorKey;
+                  {secondaryFields.map((col) => {
+                    const id = getColumnId(col);
+                    if (!id) return null;
                     const header = col.header || id;
 
                     return (
@@ -229,16 +244,16 @@ export const CardView: React.FC<DataViewProps> = ({
   );
 };
 
-export const ListView: React.FC<DataViewProps> = ({
+export const ListView = <T extends DataRow>({
   data,
   columns,
   onRowClick,
   onRowEdit,
   onRowDelete,
   onRowView,
-}) => {
-  const getDisplayValue = (row: any, columnId: string) => {
-    const value = row[columnId];
+}: DataViewProps<T>) => {
+  const getDisplayValue = (row: T, columnId: string) => {
+    const value = row[columnId as keyof T];
     if (value === null || value === undefined) return "-";
     if (typeof value === "boolean") return value ? "Yes" : "No";
     if (typeof value === "object") return JSON.stringify(value);
@@ -246,30 +261,27 @@ export const ListView: React.FC<DataViewProps> = ({
   };
 
   const getPrimaryField = () => {
-    const nameField = columns.find((col: any) =>
-      ["name", "title", "label"].includes((col as any).id || (col as any).accessorKey)
-    );
-    return (
-      (nameField as any)?.id ||
-      (nameField as any)?.accessorKey ||
-      (columns[0] as any)?.id ||
-      (columns[0] as any)?.accessorKey
-    );
+    const nameField = columns.find((col) => {
+      const id = getColumnId(col);
+      return id ? ["name", "title", "label"].includes(id) : false;
+    });
+    return getColumnId(nameField ?? columns[0]) || "id";
   };
 
   const getSecondaryField = () => {
-    const secondaryFields = columns.filter((col: any) => {
-      const id = (col as any).id || (col as any).accessorKey;
+    const secondaryFields = columns.filter((col) => {
+      const id = getColumnId(col);
       return id !== getPrimaryField() && id !== "id" && id !== "actions";
     });
-    return (secondaryFields[0] as any)?.id || (secondaryFields[0] as any)?.accessorKey;
+    return getColumnId(secondaryFields[0]);
   };
 
   const getStatusField = () => {
-    const statusField = columns.find((col: any) =>
-      ["status", "state", "active"].includes((col as any).id || (col as any).accessorKey)
-    );
-    return (statusField as any)?.id || (statusField as any)?.accessorKey;
+    const statusField = columns.find((col) => {
+      const id = getColumnId(col);
+      return id ? ["status", "state", "active"].includes(id) : false;
+    });
+    return getColumnId(statusField);
   };
 
   return (
@@ -280,7 +292,7 @@ export const ListView: React.FC<DataViewProps> = ({
         const statusField = getStatusField();
 
         return (
-          <React.Fragment key={row.id || index}>
+          <React.Fragment key={row.id ?? index}>
             <ListItem
               sx={{
                 cursor: onRowClick ? "pointer" : "default",

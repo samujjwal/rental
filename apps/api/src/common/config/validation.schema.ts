@@ -18,31 +18,48 @@ export const validationSchema = Joi.object({
   JWT_REFRESH_EXPIRES_IN: Joi.string().default('30d'),
 
   // Redis
-  REDIS_URL: Joi.string().required(),
+  REDIS_URL: Joi.string().optional(),
+  REDIS_HOST: Joi.string().default('localhost'),
+  REDIS_PORT: Joi.number().default(3479),
+  REDIS_PASSWORD: Joi.string().allow('').optional(),
+  REDIS_TTL: Joi.number().default(3600),
 
-  // AWS S3
-  AWS_REGION: Joi.string().required(),
-  AWS_ACCESS_KEY_ID: Joi.string().required(),
-  AWS_SECRET_ACCESS_KEY: Joi.string().required(),
-  AWS_S3_BUCKET: Joi.string().required(),
+  // AWS S3 / MinIO (optional)
+  AWS_REGION: Joi.string().optional(),
+  AWS_ACCESS_KEY_ID: Joi.string().optional(),
+  AWS_SECRET_ACCESS_KEY: Joi.string().optional(),
+  AWS_S3_BUCKET: Joi.string().optional(),
+  AWS_S3_ENDPOINT: Joi.string().optional(),
   CDN_URL: Joi.string().optional(),
 
-  // Stripe
-  STRIPE_SECRET_KEY: Joi.string().required(),
-  STRIPE_PUBLISHABLE_KEY: Joi.string().required(),
-  STRIPE_WEBHOOK_SECRET: Joi.string().required(),
+  // Cloudflare R2 (optional)
+  R2_ACCOUNT_ID: Joi.string().optional(),
+  R2_ACCESS_KEY_ID: Joi.string().optional(),
+  R2_SECRET_ACCESS_KEY: Joi.string().optional(),
+  R2_BUCKET_NAME: Joi.string().optional(),
+  R2_PUBLIC_URL: Joi.string().optional(),
 
-  // Elasticsearch
-  ELASTICSEARCH_NODE: Joi.string().required(),
+  // Stripe (optional for dev)
+  STRIPE_SECRET_KEY: Joi.string().optional(),
+  STRIPE_PUBLISHABLE_KEY: Joi.string().optional(),
+  STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
+
+  // Elasticsearch (optional)
+  ELASTICSEARCH_NODE: Joi.string().optional(),
   ELASTICSEARCH_USERNAME: Joi.string().optional(),
   ELASTICSEARCH_PASSWORD: Joi.string().optional(),
 
-  // Email
-  SMTP_HOST: Joi.string().required(),
+  // Email (Resend/SendGrid/SMTP)
+  RESEND_API_KEY: Joi.string().optional(),
+  SENDGRID_API_KEY: Joi.string().optional(),
+  EMAIL_FROM: Joi.string().email().optional(),
+  EMAIL_ENABLED: Joi.boolean().optional(),
+  SMTP_HOST: Joi.string().optional(),
   SMTP_PORT: Joi.number().default(587),
-  SMTP_USER: Joi.string().required(),
-  SMTP_PASSWORD: Joi.string().required(),
-  SMTP_FROM: Joi.string().email().required(),
+  SMTP_SECURE: Joi.boolean().optional(),
+  SMTP_USER: Joi.string().optional(),
+  SMTP_PASSWORD: Joi.string().optional(),
+  SMTP_FROM: Joi.string().email().optional(),
 
   // SMS (Twilio)
   TWILIO_ACCOUNT_SID: Joi.string().optional(),
@@ -53,6 +70,12 @@ export const validationSchema = Joi.object({
   FIREBASE_PROJECT_ID: Joi.string().optional(),
   FIREBASE_PRIVATE_KEY: Joi.string().optional(),
   FIREBASE_CLIENT_EMAIL: Joi.string().optional(),
+  FCM_SERVER_KEY: Joi.string().optional(),
+
+  // Content Moderation (OpenAI)
+  OPENAI_API_KEY: Joi.string().optional(),
+  OPENAI_MODEL: Joi.string().optional(),
+  MODERATION_CONFIDENCE_THRESHOLD: Joi.number().optional(),
 
   // Rate Limiting
   RATE_LIMIT_TTL: Joi.number().default(60),

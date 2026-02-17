@@ -1,35 +1,25 @@
 import type { MetaFunction } from "react-router";
-import { useLoaderData, Link, useSearchParams, Form, useActionData } from "react-router";
-import { useState } from "react";
+import { useLoaderData, Link, useSearchParams, useActionData, redirect } from "react-router";
 import {
   Star,
-  MessageCircle,
-  Calendar,
   User,
   Package,
-  ThumbsUp,
-  ThumbsDown,
-  Flag,
-  Filter,
-  Search,
-  Edit,
-  Trash2,
   AlertCircle,
   CheckCircle,
   Clock,
 } from "lucide-react";
 import { reviewsApi } from "~/lib/api/reviews";
-import { useAuthStore } from "~/lib/store/auth";
+import { getUser } from "~/utils/auth";
 import { format } from "date-fns";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Badge,
+  RouteErrorBoundary,
 } from "~/components/ui";
 import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
+import { Skeleton } from "~/components/ui/skeleton";
 
 import type { Review } from "~/types/review";
 
@@ -40,84 +30,125 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-interface ReviewsData {
-  reviews: Review[];
-  stats: {
-    total: number;
-    averageRating: number;
-    ratings: { [key: number]: number };
-    pending: number;
-  };
-}
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string | null): value is string =>
+  Boolean(value && UUID_PATTERN.test(value));
+const safeNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const safeDateLabel = (value: unknown, pattern: string): string => {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "Unknown date" : format(date, pattern);
+};
+const safeText = (value: unknown, fallback = ""): string => {
+  const text = typeof value === "string" ? value : "";
+  return text || fallback;
+};
 
 export async function clientLoader({ request }: { request: Request }) {
   const url = new URL(request.url);
-  const view = url.searchParams.get("view") || "received";
+  const rawView = url.searchParams.get("view");
+  const view = rawView === "given" ? "given" : "received";
   const rating = url.searchParams.get("rating");
+  const ratingNumber = rating ? Number.parseInt(rating, 10) : null;
+  const normalizedRating =
+    Number.isInteger(ratingNumber) && ratingNumber >= 1 && ratingNumber <= 5
+      ? ratingNumber
+      : null;
+  const rawPage = Number(url.searchParams.get("page") ?? "1");
+  const page =
+    Number.isFinite(rawPage) && rawPage > 0
+      ? Math.min(Math.floor(rawPage), 1000)
+      : 1;
+  const limit = 10;
 
   try {
-    const [received, given] = await Promise.all([
-      reviewsApi.getReceivedReviews(),
-      reviewsApi.getGivenReviews(),
-    ]);
+    const currentUser = await getUser(request);
+    if (!currentUser) {
+      return redirect("/auth/login");
+    }
 
-    const reviews = view === "given" ? given : received;
+    const reviewResponse = await reviewsApi.getUserReviews(
+      currentUser.id,
+      view,
+      page,
+      limit
+    );
+    const reviews = reviewResponse.reviews || [];
 
     // Filter by rating if specified
-    const filteredReviews = rating
-      ? reviews.filter((r: Review) => r.rating === parseInt(rating))
+    const filteredReviews = Number.isInteger(normalizedRating)
+      ? reviews.filter((r: Review) =>
+          (r.overallRating ?? r.rating) === normalizedRating
+        )
       : reviews;
 
     // Calculate stats
     const stats = {
-      total: reviews.length,
+      total: reviewResponse.total || reviews.length,
       averageRating: reviews.length > 0
-        ? reviews.reduce((sum: number, r: Review) => sum + r.rating, 0) / reviews.length
+        ? reviews.reduce((sum: number, r: Review) => sum + (r.overallRating ?? r.rating ?? 0), 0) / reviews.length
         : 0,
       ratings: {
-        5: reviews.filter((r: Review) => r.rating === 5).length,
-        4: reviews.filter((r: Review) => r.rating === 4).length,
-        3: reviews.filter((r: Review) => r.rating === 3).length,
-        2: reviews.filter((r: Review) => r.rating === 2).length,
-        1: reviews.filter((r: Review) => r.rating === 1).length,
+        5: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 5).length,
+        4: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 4).length,
+        3: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 3).length,
+        2: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 2).length,
+        1: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 1).length,
       },
-      pending: reviews.filter((r: Review) => r.status === "pending").length,
+      pending: reviews.filter((r: Review) => r.status === "DRAFT").length,
     };
 
-    return { reviews: filteredReviews, stats, view, error: null };
-  } catch (error: any) {
+    return { reviews: filteredReviews, stats, view, error: null, page, total: reviewResponse.total || reviews.length, limit };
+  } catch (error: unknown) {
     return {
       reviews: [],
       stats: { total: 0, averageRating: 0, ratings: {}, pending: 0 },
       view,
-      error: error?.message || "Failed to load reviews",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load reviews",
+      page: 1,
+      total: 0,
+      limit: 10,
     };
   }
 }
 
 export async function clientAction({ request }: { request: Request }) {
+  const currentUser = await getUser(request);
+  if (!currentUser) {
+    return redirect("/auth/login");
+  }
+
   const formData = await request.formData();
-  const intent = formData.get("intent");
-  const reviewId = formData.get("reviewId") as string;
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "delete") {
+    return { success: false, message: "Unknown action" };
+  }
+  const reviewId = String(formData.get("reviewId") ?? "").trim();
+  const requestView = new URL(request.url).searchParams.get("view");
+  const view = String(formData.get("view") || requestView || "");
 
   try {
-    if (intent === "respond") {
-      const response = formData.get("response") as string;
-      await reviewsApi.respondToReview(reviewId, response);
-      return { success: true, message: "Response submitted successfully" };
+    if (!isUuid(reviewId)) {
+      return { success: false, message: "Missing review ID" };
     }
-    if (intent === "report") {
-      const reason = formData.get("reason") as string;
-      await reviewsApi.reportReview(reviewId, reason);
-      return { success: true, message: "Review reported successfully" };
+    if (view !== "given") {
+      return { success: false, message: "Only authored reviews can be deleted." };
     }
-    if (intent === "delete") {
-      await reviewsApi.deleteReview(reviewId);
-      return { success: true, message: "Review deleted successfully" };
-    }
-    return { success: false, message: "Unknown action" };
-  } catch (error: any) {
-    return { success: false, message: error?.message || "Action failed" };
+    await reviewsApi.deleteReview(reviewId);
+    return { success: true, message: "Review deleted successfully" };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Action failed",
+    };
   }
 }
 
@@ -138,9 +169,13 @@ function RatingStars({ rating, size = "default" }: { rating: number; size?: "sma
   );
 }
 
-function ReviewCard({ review, isOwner }: { review: Review; isOwner: boolean }) {
-  const [showResponseForm, setShowResponseForm] = useState(false);
-  const [showReportForm, setShowReportForm] = useState(false);
+function ReviewCard({ review }: { review: Review }) {
+  const ratingValue = review.overallRating ?? review.rating ?? 0;
+  const reviewerFirstName = safeText(review.reviewer?.firstName, "User");
+  const reviewerLastName = safeText(review.reviewer?.lastName);
+  const reviewerFullName = `${reviewerFirstName}${reviewerLastName ? ` ${reviewerLastName}` : ""}`;
+  const listingTitle = safeText(review.listing?.title, "Listing");
+  const listingId = safeText(review.listing?.id);
 
   return (
     <Card>
@@ -148,10 +183,10 @@ function ReviewCard({ review, isOwner }: { review: Review; isOwner: boolean }) {
         <div className="flex gap-4">
           {/* Reviewer Avatar */}
           <div className="flex-shrink-0">
-            {review.reviewer.avatar ? (
+            {review.reviewer?.profilePhotoUrl ? (
               <img
-                src={review.reviewer.avatar}
-                alt={review.reviewer.firstName}
+                src={review.reviewer.profilePhotoUrl}
+                alt={reviewerFullName}
                 className="w-12 h-12 rounded-full object-cover"
               />
             ) : (
@@ -166,26 +201,26 @@ function ReviewCard({ review, isOwner }: { review: Review; isOwner: boolean }) {
             <div className="flex items-start justify-between mb-2">
               <div>
                 <p className="font-semibold text-foreground">
-                  {review.reviewer.firstName} {review.reviewer.lastName}
+                  {reviewerFullName}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <RatingStars rating={review.rating} size="small" />
+                  <RatingStars rating={ratingValue} size="small" />
                   <span className="text-sm text-muted-foreground">
-                    {format(new Date(review.createdAt), "MMM d, yyyy")}
+                    {safeDateLabel(review.createdAt, "MMM d, yyyy")}
                   </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {review.status === "pending" && (
+                {review.status === "DRAFT" && (
                   <Badge variant="warning">
                     <Clock className="w-3 h-3 mr-1" />
                     Pending
                   </Badge>
                 )}
-                {review.status === "reported" && (
+                {review.status === "HIDDEN" && (
                   <Badge variant="destructive">
                     <AlertCircle className="w-3 h-3 mr-1" />
-                    Reported
+                    Hidden
                   </Badge>
                 )}
               </div>
@@ -194,19 +229,19 @@ function ReviewCard({ review, isOwner }: { review: Review; isOwner: boolean }) {
             {/* Listing Info */}
             {review.listing && (
               <Link
-                to={`/listings/${review.listing.id}`}
+                to={listingId ? `/listings/${listingId}` : "/listings"}
                 className="flex items-center gap-2 p-2 bg-muted rounded-lg mb-3 hover:bg-muted/80 transition-colors"
               >
                 <div className="w-10 h-10 rounded bg-muted-foreground/20 overflow-hidden flex-shrink-0">
-                  {review.listing.images && review.listing.images[0] ? (
-                    <img src={review.listing.images[0]} alt="" className="w-full h-full object-cover" />
+                  {review.listing?.images?.[0] ? (
+                    <img src={review.listing.images[0]} alt={listingTitle} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Package className="w-5 h-5 text-muted-foreground" />
                     </div>
                   )}
                 </div>
-                <span className="text-sm font-medium text-foreground">{review.listing.title}</span>
+                <span className="text-sm font-medium text-foreground">{listingTitle}</span>
               </Link>
             )}
 
@@ -219,90 +254,13 @@ function ReviewCard({ review, isOwner }: { review: Review; isOwner: boolean }) {
                 <p className="text-sm font-medium text-foreground mb-1">Owner Response</p>
                 <p className="text-sm text-muted-foreground">{review.response}</p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  {review.responseAt && format(new Date(review.responseAt), "MMM d, yyyy")}
+                  {review.responseAt
+                    ? safeDateLabel(review.responseAt, "MMM d, yyyy")
+                    : null}
                 </p>
               </div>
             )}
 
-            {/* Actions */}
-            <div className="flex items-center gap-4">
-              <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                <ThumbsUp className="w-4 h-4" />
-                Helpful
-              </button>
-              
-              {isOwner && !review.response && (
-                <button
-                  onClick={() => setShowResponseForm(!showResponseForm)}
-                  className="flex items-center gap-1 text-sm text-primary hover:text-primary/80"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  Respond
-                </button>
-              )}
-
-              {review.status !== "reported" && (
-                <button
-                  onClick={() => setShowReportForm(!showReportForm)}
-                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-destructive"
-                >
-                  <Flag className="w-4 h-4" />
-                  Report
-                </button>
-              )}
-            </div>
-
-            {/* Response Form */}
-            {showResponseForm && (
-              <Form method="post" className="mt-4 p-4 bg-muted rounded-lg">
-                <input type="hidden" name="intent" value="respond" />
-                <input type="hidden" name="reviewId" value={review.id} />
-                <textarea
-                  name="response"
-                  placeholder="Write your response..."
-                  className="w-full p-3 border border-input rounded-lg bg-background resize-none"
-                  rows={3}
-                  required
-                />
-                <div className="flex justify-end gap-2 mt-3">
-                  <UnifiedButton type="button" variant="outline" size="small" onClick={() => setShowResponseForm(false)}>
-                    Cancel
-                  </UnifiedButton>
-                  <UnifiedButton type="submit" size="small">
-                    Submit Response
-                  </UnifiedButton>
-                </div>
-              </Form>
-            )}
-
-            {/* Report Form */}
-            {showReportForm && (
-              <Form method="post" className="mt-4 p-4 bg-destructive/5 border border-destructive/20 rounded-lg">
-                <input type="hidden" name="intent" value="report" />
-                <input type="hidden" name="reviewId" value={review.id} />
-                <p className="text-sm font-medium text-foreground mb-2">Report this review</p>
-                <select
-                  name="reason"
-                  className="w-full p-2 border border-input rounded-lg bg-background mb-3"
-                  required
-                >
-                  <option value="">Select a reason</option>
-                  <option value="inappropriate">Inappropriate content</option>
-                  <option value="fake">Fake or misleading</option>
-                  <option value="spam">Spam</option>
-                  <option value="harassment">Harassment</option>
-                  <option value="other">Other</option>
-                </select>
-                <div className="flex justify-end gap-2">
-                  <UnifiedButton type="button" variant="outline" size="small" onClick={() => setShowReportForm(false)}>
-                    Cancel
-                  </UnifiedButton>
-                  <UnifiedButton type="submit" size="small" variant="outline" variant="destructive">
-                    Report
-                  </UnifiedButton>
-                </div>
-              </Form>
-            )}
           </div>
         </div>
       </CardContent>
@@ -311,16 +269,16 @@ function ReviewCard({ review, isOwner }: { review: Review; isOwner: boolean }) {
 }
 
 export default function ReviewsPage() {
-  const { reviews, stats, view, error } = useLoaderData<typeof clientLoader>();
+  const { reviews, stats, view, error, page, total, limit } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuthStore();
 
   const currentRating = searchParams.get("rating");
 
   const handleViewChange = (newView: string) => {
     const params = new URLSearchParams(searchParams);
     params.set("view", newView);
+    params.set("page", "1");
     setSearchParams(params);
   };
 
@@ -328,11 +286,14 @@ export default function ReviewsPage() {
     const params = new URLSearchParams(searchParams);
     if (rating) {
       params.set("rating", rating);
+      params.set("page", "1");
     } else {
       params.delete("rating");
     }
     setSearchParams(params);
   };
+
+  const totalPages = Math.ceil(total / limit);
 
   if (error) {
     return (
@@ -363,7 +324,7 @@ export default function ReviewsPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Success/Error Messages */}
         {actionData?.success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
+          <div className="mb-6 p-4 bg-success/10 border border-success/30 rounded-lg flex items-center gap-2 text-success">
             <CheckCircle className="w-5 h-5" />
             {actionData.message}
           </div>
@@ -381,9 +342,14 @@ export default function ReviewsPage() {
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
               {/* Average Rating */}
               <div className="text-center">
-                <p className="text-5xl font-bold text-foreground">{stats.averageRating.toFixed(1)}</p>
-                <RatingStars rating={Math.round(stats.averageRating)} />
-                <p className="text-sm text-muted-foreground mt-1">{stats.total} reviews</p>
+                <p className="text-5xl font-bold text-foreground">
+                  {safeNumber(stats.averageRating).toFixed(1)}
+                </p>
+                <RatingStars rating={Math.round(safeNumber(stats.averageRating))} />
+                <p className="text-sm text-muted-foreground mt-1">
+                  {stats.total} reviews
+                  <span className="ml-2 text-xs text-muted-foreground">(page stats)</span>
+                </p>
               </div>
 
               {/* Rating Breakdown */}
@@ -447,11 +413,7 @@ export default function ReviewsPage() {
         <div className="space-y-4">
           {reviews.length > 0 ? (
             reviews.map((review: Review) => (
-              <ReviewCard
-                key={review.id}
-                review={review}
-                isOwner={view === "received"}
-              />
+              <ReviewCard key={review.id} review={review} />
             ))
           ) : (
             <Card>
@@ -470,7 +432,39 @@ export default function ReviewsPage() {
             </Card>
           )}
         </div>
+
+        {totalPages > 1 && (
+          <div className="mt-8 flex items-center justify-center gap-2">
+            <UnifiedButton
+              variant="outline"
+              disabled={page <= 1}
+              onClick={() => {
+                const params = new URLSearchParams(searchParams);
+                params.set("page", String(page - 1));
+                setSearchParams(params);
+              }}
+            >
+              Previous
+            </UnifiedButton>
+            <span className="text-sm text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+            <UnifiedButton
+              variant="outline"
+              disabled={page >= totalPages}
+              onClick={() => {
+                const params = new URLSearchParams(searchParams);
+                params.set("page", String(page + 1));
+                setSearchParams(params);
+              }}
+            >
+              Next
+            </UnifiedButton>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

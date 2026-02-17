@@ -19,6 +19,8 @@
   "references": [
     { "path": "./apps/api" },
     { "path": "./apps/web" },
-    { "path": "./packages/database" }
+    { "path": "./packages/database" },
+    { "path": "./packages/mobile-sdk" },
+    { "path": "./packages/shared-types" }
   ]
 }

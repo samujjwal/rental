@@ -11,6 +11,7 @@ import { QueueModule } from './common/queue/queue.module';
 import { EmailModule } from './common/email/email.module';
 import { StorageModule } from './common/storage/storage.module';
 import { ModerationModule as CommonModerationModule } from './common/moderation/moderation.module';
+import { EventsModule } from './common/events/events.module';
 
 // Feature modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -28,6 +29,13 @@ import { AdminModule } from './modules/admin/admin.module';
 import { DevModule } from './modules/admin/dev.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { InsuranceModule } from './modules/insurance/insurance.module';
+import { GeoModule } from './modules/geo/geo.module';
+import { FavoritesModule } from './modules/favorites/favorites.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { TaxModule } from './modules/tax/tax.module';
+import { FraudDetectionModule } from './modules/fraud-detection/fraud-detection.module';
+import { AiModule } from './modules/ai/ai.module';
 
 import configuration from './config/configuration';
 
@@ -71,6 +79,7 @@ import configuration from './config/configuration';
     EmailModule,
     StorageModule,
     CommonModerationModule,
+    EventsModule,
 
     // Feature modules
     AuthModule,
@@ -84,10 +93,17 @@ import configuration from './config/configuration';
     ReviewsModule,
     DisputesModule,
     NotificationsModule,
+    FavoritesModule,
+    AnalyticsModule,
     AdminModule,
     DevModule,
     ModerationModule,
     InsuranceModule,
+    GeoModule,
+    OrganizationsModule,
+    TaxModule,
+    FraudDetectionModule,
+    AiModule,
   ],
 })
 export class AppModule {}

@@ -1,5 +1,5 @@
-import type { MetaFunction, ActionFunctionArgs } from "react-router";
-import { Form, Link, useActionData, useNavigation } from "react-router";
+import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { Form, Link, redirect, useActionData, useNavigation } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, UserPlus } from "lucide-react";
@@ -9,7 +9,8 @@ import { useAuthStore } from "~/lib/store/auth";
 import { createUserSession } from "~/utils/auth";
 import { signupSchema, type SignupInput } from "~/lib/validation/auth";
 import { cn } from "~/lib/utils";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
+import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -18,23 +19,63 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (user) {
+    return redirect("/dashboard");
+  }
+  return null;
+}
+
 export async function clientAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const firstName = formData.get("firstName") as string;
-  const lastName = formData.get("lastName") as string;
-  const phone = formData.get("phone") as string;
-  const role = formData.get("role") as "renter" | "owner";
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "signup") {
+    return { error: "Invalid request." };
+  }
+  const rawRole = String(formData.get("role") || "").trim().toLowerCase();
+  const allowedRoles = new Set(["renter", "owner"]);
+  const email = String(formData.get("email") || "").trim().slice(0, 320);
+  const password = String(formData.get("password") || "").slice(0, 128);
+  const confirmPassword = String(formData.get("confirmPassword") || "").slice(0, 128);
+  const firstName = String(formData.get("firstName") || "").trim().slice(0, 50);
+  const lastName = String(formData.get("lastName") || "").trim().slice(0, 50);
+  const phone = String(formData.get("phone") || "").trim().slice(0, 20);
+  const parsedForm = {
+    email,
+    password,
+    confirmPassword,
+    firstName,
+    lastName,
+    phone,
+    role: allowedRoles.has(rawRole) ? rawRole : "renter",
+  };
+
+  const validation = signupSchema.safeParse(parsedForm);
+  if (!validation.success) {
+    return {
+      error: validation.error.issues[0]?.message || "Please fix the form errors.",
+    };
+  }
+
+  const {
+    email: validatedEmail,
+    password: validatedPassword,
+    firstName: validatedFirstName,
+    lastName: validatedLastName,
+    phone: validatedPhone,
+    role: validatedRole,
+  } = validation.data;
 
   try {
     const response = await authApi.signup({
-      email,
-      password,
-      firstName,
-      lastName: lastName || undefined,
-      phone: phone || undefined,
-      role,
+      email: validatedEmail,
+      password: validatedPassword,
+      firstName: validatedFirstName,
+      lastName: validatedLastName || undefined,
+      phone: validatedPhone || undefined,
+      // Note: role is not sent - API creates all users as 'renter'
+      // Users can upgrade to 'owner' via /become-owner
     });
 
     // Update auth store immediately for better SPA experience
@@ -47,11 +88,14 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       remember: false,
       redirectTo: "/dashboard",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       error:
-        error.response?.data?.message ||
-        "Registration failed. Please try again.",
+        error && typeof error === "object" && "response" in error
+          ? (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message ||
+            "Registration failed. Please try again."
+          : "Registration failed. Please try again.",
     };
   }
 }
@@ -65,11 +109,14 @@ export default function Signup() {
 
   const {
     register,
-    handleSubmit,
     watch,
+    trigger,
     formState: { errors },
   } = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
+    defaultValues: {
+      role: "renter",
+    },
   });
 
   const password = watch("password", "");
@@ -107,7 +154,7 @@ export default function Signup() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-3xl font-bold text-primary">Rental Portal</h1>
+            <h1 className="text-3xl font-bold text-primary">Sign Up</h1>
           </Link>
           <p className="text-muted-foreground mt-2">
             Create your account to get started
@@ -116,7 +163,16 @@ export default function Signup() {
 
         {/* Signup Form */}
         <div className="bg-card border rounded-lg shadow-lg p-8">
-          <Form method="post">
+          <Form
+            method="post"
+            onSubmit={async (event) => {
+              const isValid = await trigger();
+              if (!isValid) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="intent" value="signup" />
             {/* Error Message */}
             {actionData?.error && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -170,6 +226,7 @@ export default function Signup() {
                   type="text"
                   id="firstName"
                   name="firstName"
+                  maxLength={50}
                   className={inputClasses}
                   placeholder="John"
                 />
@@ -191,6 +248,7 @@ export default function Signup() {
                   type="text"
                   id="lastName"
                   name="lastName"
+                  maxLength={50}
                   className={inputClasses}
                   placeholder="Doe"
                 />
@@ -215,6 +273,7 @@ export default function Signup() {
                 type="email"
                 id="email"
                 name="email"
+                maxLength={320}
                 className={inputClasses}
                 placeholder="you@example.com"
               />
@@ -238,6 +297,7 @@ export default function Signup() {
                 type="tel"
                 id="phone"
                 name="phone"
+                maxLength={20}
                 className={inputClasses}
                 placeholder="+1234567890"
               />
@@ -262,6 +322,7 @@ export default function Signup() {
                   type={showPassword ? "text" : "password"}
                   id="password"
                   name="password"
+                  maxLength={128}
                   className={cn(inputClasses, "pr-10")}
                   placeholder="••••••••"
                 />
@@ -336,6 +397,7 @@ export default function Signup() {
                   type={showConfirmPassword ? "text" : "password"}
                   id="confirmPassword"
                   name="confirmPassword"
+                  maxLength={128}
                   className={cn(inputClasses, "pr-10")}
                   placeholder="••••••••"
                 />
@@ -388,3 +450,5 @@ export default function Signup() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

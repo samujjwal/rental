@@ -16,7 +16,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from '../services/auth.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
-import { User } from '@rental-portal/database';
+import { User, UserRole } from '@rental-portal/database';
 
 import {
   RegisterDto,
@@ -52,6 +52,26 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Ip() ipAddress: string, @Req() req: Request) {
     const userAgent = req.headers['user-agent'];
     return this.authService.login(dto, ipAddress, userAgent);
+  }
+
+  @Post('dev-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Development-only login without password' })
+  @ApiResponse({ status: 200, description: 'Successfully logged in for development' })
+  async devLogin(
+    @Body() body: { email?: string; role?: UserRole },
+    @Ip() ipAddress: string,
+    @Req() req: Request,
+  ) {
+    const userAgent = req.headers['user-agent'];
+    return this.authService.devLogin(
+      {
+        email: body?.email,
+        role: body?.role,
+      },
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Post('refresh')

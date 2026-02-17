@@ -1,0 +1,128 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - region "Notifications alt+T"
+  - generic [ref=e6]:
+    - generic [ref=e9]:
+      - heading "Renter Dashboard" [level=1] [ref=e10]
+      - paragraph [ref=e11]: Track your bookings and discover new items
+    - generic [ref=e12]:
+      - complementary [ref=e13]:
+        - navigation [ref=e15]:
+          - list [ref=e17]:
+            - listitem [ref=e18]:
+              - link "Dashboard" [ref=e19] [cursor=pointer]:
+                - /url: /dashboard/renter
+                - generic [ref=e20]:
+                  - img [ref=e21]
+                  - text: Dashboard
+            - listitem [ref=e26]:
+              - link "My Bookings" [ref=e27] [cursor=pointer]:
+                - /url: /bookings
+                - generic [ref=e28]:
+                  - img [ref=e29]
+                  - text: My Bookings
+            - listitem [ref=e31]:
+              - link "Favorites" [ref=e32] [cursor=pointer]:
+                - /url: /favorites
+                - generic [ref=e33]:
+                  - img [ref=e34]
+                  - text: Favorites
+            - listitem [ref=e36]:
+              - link "Messages" [ref=e37] [cursor=pointer]:
+                - /url: /messages
+                - generic [ref=e38]:
+                  - img [ref=e39]
+                  - text: Messages
+            - listitem [ref=e41]:
+              - link "Notifications" [ref=e42] [cursor=pointer]:
+                - /url: /notifications
+                - generic [ref=e43]:
+                  - img [ref=e44]
+                  - text: Notifications
+            - listitem [ref=e47]:
+              - link "Reviews" [ref=e48] [cursor=pointer]:
+                - /url: /reviews
+                - generic [ref=e49]:
+                  - img [ref=e50]
+                  - text: Reviews
+            - listitem [ref=e52]:
+              - link "Settings" [ref=e53] [cursor=pointer]:
+                - /url: /settings
+                - generic [ref=e54]:
+                  - img [ref=e55]
+                  - text: Settings
+          - list [ref=e60]:
+            - listitem [ref=e61]:
+              - link "Become an Owner" [ref=e62] [cursor=pointer]:
+                - /url: /become-owner
+                - generic [ref=e63]:
+                  - img [ref=e64]
+                  - text: Become an Owner
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - generic [ref=e68]:
+            - img [ref=e71]
+            - paragraph [ref=e73]: Upcoming Bookings
+            - paragraph [ref=e74]: "0"
+          - generic [ref=e76]:
+            - img [ref=e79]
+            - paragraph [ref=e83]: Active Rentals
+            - paragraph [ref=e84]: "0"
+          - generic [ref=e86]:
+            - img [ref=e89]
+            - paragraph [ref=e92]: Completed Bookings
+            - paragraph [ref=e93]: "0"
+          - generic [ref=e95]:
+            - img [ref=e98]
+            - paragraph [ref=e100]: Favorites
+            - paragraph [ref=e101]: "0"
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - generic [ref=e105]:
+                - heading "My Bookings" [level=3] [ref=e106]
+                - link "View All →" [ref=e107] [cursor=pointer]:
+                  - /url: /bookings
+              - generic [ref=e110]:
+                - img [ref=e111]
+                - paragraph [ref=e113]: No bookings yet
+                - link "Start Browsing" [ref=e114] [cursor=pointer]:
+                  - /url: /search
+                  - img [ref=e115]
+                  - text: Start Browsing
+            - generic [ref=e118]:
+              - generic [ref=e119]:
+                - heading "Recommended for You" [level=3] [ref=e120]:
+                  - img [ref=e121]
+                  - text: Recommended for You
+                - link "Explore More →" [ref=e124] [cursor=pointer]:
+                  - /url: /search
+              - generic [ref=e127]:
+                - img [ref=e128]
+                - paragraph [ref=e132]: No recommendations available
+          - generic [ref=e133]:
+            - generic [ref=e134]:
+              - heading "Spending Summary" [level=3] [ref=e136]
+              - generic [ref=e138]:
+                - generic [ref=e139]:
+                  - generic [ref=e140]: Total Spent
+                  - generic [ref=e141]: $0.00
+                - generic [ref=e142]:
+                  - generic [ref=e143]: Completed Rentals
+                  - generic [ref=e144]: "0"
+                - generic [ref=e145]:
+                  - generic [ref=e146]: Active Bookings
+                  - generic [ref=e147]: "0"
+            - generic [ref=e148]:
+              - generic [ref=e149]:
+                - heading "My Favorites" [level=3] [ref=e150]
+                - link "View All →" [ref=e151] [cursor=pointer]:
+                  - /url: /favorites
+              - generic [ref=e154]:
+                - img [ref=e155]
+                - paragraph [ref=e157]: No favorites yet
+```

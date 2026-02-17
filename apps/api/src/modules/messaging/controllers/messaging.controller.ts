@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { ConversationsService, CreateConversationDto } from '../services/conversations.service';
+import { ConversationsService } from '../services/conversations.service';
+import { CreateConversationDto } from '../dto/messaging.dto';
 import { MessagesService } from '../services/messages.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
@@ -69,6 +70,21 @@ export class MessagingController {
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
       before: before ? new Date(before) : undefined,
+    });
+  }
+
+  @Post(':id/messages')
+  @ApiOperation({ summary: 'Send message in conversation' })
+  async sendMessage(
+    @Param('id') conversationId: string,
+    @CurrentUser('id') userId: string,
+    @Body('content') content: string,
+    @Body('attachments') attachments?: string[],
+  ) {
+    return this.messagesService.sendMessage(userId, {
+      conversationId,
+      content,
+      attachments,
     });
   }
 

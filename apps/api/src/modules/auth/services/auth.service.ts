@@ -69,7 +69,7 @@ export class AuthService {
         lastName: dto.lastName,
         phoneNumber: dto.phoneNumber,
         dateOfBirth: dto.dateOfBirth,
-        role: UserRole.CUSTOMER,
+        role: UserRole.USER,
         status: UserStatus.ACTIVE,
       },
     });
@@ -150,6 +150,71 @@ export class AuthService {
     };
   }
 
+  async devLogin(
+    options: { email?: string; role?: UserRole },
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponse> {
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    if (nodeEnv !== 'development') {
+      throw new UnauthorizedException('Dev login is only available in development');
+    }
+
+    const normalizedEmail = options.email?.trim().toLowerCase();
+    const requestedRole = options.role;
+    const preferredRole = Object.values(UserRole).includes(requestedRole as UserRole)
+      ? requestedRole
+      : undefined;
+
+    let user = normalizedEmail
+      ? await this.prisma.user.findFirst({
+          where: {
+            email: normalizedEmail,
+            status: UserStatus.ACTIVE,
+            ...(preferredRole ? { role: preferredRole } : {}),
+          },
+        })
+      : null;
+
+    if (!user && preferredRole) {
+      user = await this.prisma.user.findFirst({
+        where: { role: preferredRole, status: UserStatus.ACTIVE },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    if (!user) {
+      user = await this.prisma.user.findFirst({
+        where: { status: UserStatus.ACTIVE },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    if (!user) {
+      throw new UnauthorizedException('No active user available for dev login');
+    }
+
+    const { accessToken, refreshToken } = await this.tokenService.generateTokens(user);
+    await this.tokenService.createSession(user.id, refreshToken, accessToken, {
+      ipAddress,
+      userAgent,
+    });
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        lastLoginIp: ipAddress,
+      },
+    });
+
+    return {
+      user: this.sanitizeUser(user),
+      accessToken,
+      refreshToken,
+    };
+  }
+
   async refreshTokens(refreshToken: string): Promise<AuthResponse> {
     const session = await this.prisma.session.findUnique({
       where: { refreshToken },
@@ -207,6 +272,23 @@ export class AuthService {
     });
 
     await this.cacheService.del(`user:${userId}`);
+  }
+
+  async validateSessionToken(userId: string, accessToken?: string | null): Promise<boolean> {
+    if (!accessToken) {
+      return false;
+    }
+
+    const session = await this.prisma.session.findFirst({
+      where: {
+        userId,
+        token: accessToken,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+
+    return Boolean(session);
   }
 
   async validateUser(userId: string): Promise<User | null> {

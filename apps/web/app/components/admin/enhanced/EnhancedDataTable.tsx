@@ -1,9 +1,10 @@
+
 /**
  * Enhanced Data Table Component
  * World-class admin table with all features integrated
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Box,
   Paper,
@@ -34,8 +35,9 @@ import {
   type ColumnDef,
   type SortingState,
   type ColumnFiltersState,
-  type VisibilityState,
   type RowSelectionState,
+  type OnChangeFn,
+  type PaginationState,
 } from "@tanstack/react-table";
 import {
   Add as AddIcon,
@@ -43,7 +45,6 @@ import {
   ExpandLess as ExpandLessIcon,
   Refresh as RefreshIcon,
   Download as ExportIcon,
-  Settings as SettingsIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as ViewIcon,
@@ -53,8 +54,9 @@ import { SmartSearch } from "./SmartSearch";
 import { FilterChips, type FilterChip } from "./FilterChips";
 import { CardView, ListView, ViewModeToggle, type ViewMode } from "./DataViews";
 import { useResponsiveMode } from "./ResponsiveLayout";
+import { BulkActionsToolbar } from "~/components/admin/BulkActions";
 
-interface EnhancedDataTableProps<T = any> {
+interface EnhancedDataTableProps<T extends Record<string, unknown> = Record<string, unknown>> {
   // Data
   data: T[];
   columns: ColumnDef<T>[];
@@ -95,6 +97,9 @@ interface EnhancedDataTableProps<T = any> {
   onAdd?: () => void;
   onRefresh?: () => void;
   onExport?: () => void;
+  onBulkDelete?: (rows: T[]) => void;
+  onBulkStatusChange?: (rows: T[], status: string) => void;
+  availableBulkStatuses?: Array<{ value: string; label: string; icon?: React.ReactNode }>;
 
   // Customization
   title?: string;
@@ -117,7 +122,7 @@ interface EnhancedDataTableProps<T = any> {
   searchSuggestions?: string[];
 }
 
-export function EnhancedDataTable<T = any>({
+export function EnhancedDataTable<T extends Record<string, unknown> = Record<string, unknown>>({
   data,
   columns,
   totalCount,
@@ -142,6 +147,9 @@ export function EnhancedDataTable<T = any>({
   onAdd,
   onRefresh,
   onExport,
+  onBulkDelete,
+  onBulkStatusChange,
+  availableBulkStatuses = [],
   title,
   enableSearch = true,
   enableFilters = true,
@@ -152,7 +160,28 @@ export function EnhancedDataTable<T = any>({
   enableAdvancedMode = true,
   searchSuggestions = [],
 }: EnhancedDataTableProps<T>) {
+  const stableSerialize = useCallback((value: unknown): string => {
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+    }
+    if (value && typeof value === "object") {
+      const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+        a.localeCompare(b)
+      );
+      return `{${entries
+        .map(([key, nested]) => `${key}:${stableSerialize(nested)}`)
+        .join(",")}}`;
+    }
+    return JSON.stringify(value);
+  }, []);
+
   const responsiveMode = useResponsiveMode();
+  const onColumnFiltersChangeRef = useRef(onColumnFiltersChange);
+  const lastEmittedFiltersRef = useRef<string>("");
+
+  useEffect(() => {
+    onColumnFiltersChangeRef.current = onColumnFiltersChange;
+  }, [onColumnFiltersChange]);
 
   // View mode state
   const [viewMode, setViewMode] = useState<ViewMode>(
@@ -181,19 +210,74 @@ export function EnhancedDataTable<T = any>({
 
   // Convert filter chips to column filters
   useEffect(() => {
-    if (onColumnFiltersChange) {
-      const filters = filterChips.map((chip) => ({
-        id: chip.field,
-        value: {
-          value: chip.value,
-          operator: chip.operator || "equals",
-        },
-      }));
-      onColumnFiltersChange(filters);
-    }
-  }, [filterChips, onColumnFiltersChange]);
+    const onChange = onColumnFiltersChangeRef.current;
+    if (!onChange) return;
+
+    const filters = filterChips.map((chip) => ({
+      id: chip.field,
+      value: {
+        value: chip.value,
+        operator: chip.operator || "equals",
+      },
+    }));
+    const serializedFilters = stableSerialize(filters);
+    if (serializedFilters === lastEmittedFiltersRef.current) return;
+
+    lastEmittedFiltersRef.current = serializedFilters;
+    onChange(filters);
+  }, [filterChips, stableSerialize]);
 
   // Table instance
+  const handleSortingChange: OnChangeFn<SortingState> | undefined =
+    onSortingChange
+      ? (updater) => {
+          const next =
+            typeof updater === "function" ? updater(sorting) : updater;
+          onSortingChange(next);
+        }
+      : undefined;
+
+  const handleColumnFiltersChange: OnChangeFn<ColumnFiltersState> | undefined =
+    onColumnFiltersChange
+      ? (updater) => {
+          const next =
+            typeof updater === "function" ? updater(columnFilters) : updater;
+          onColumnFiltersChange(next);
+        }
+      : undefined;
+
+  const handleRowSelectionChange: OnChangeFn<RowSelectionState> | undefined =
+    onRowSelectionChange
+      ? (updater) => {
+          const next =
+            typeof updater === "function" ? updater(rowSelection) : updater;
+          onRowSelectionChange(next);
+        }
+      : undefined;
+
+  const handlePaginationChange: OnChangeFn<PaginationState> | undefined =
+    onPaginationChange
+      ? (updater) => {
+          const next =
+            typeof updater === "function"
+              ? updater({ pageIndex, pageSize })
+              : updater;
+          onPaginationChange({
+            pageIndex: next.pageIndex,
+            pageSize: next.pageSize,
+          });
+        }
+      : undefined;
+
+  const handleGlobalFilterChange: OnChangeFn<string> | undefined =
+    onGlobalFilterChange
+      ? (updater) => {
+          const next =
+            typeof updater === "function" ? updater(globalFilter) : updater;
+          onGlobalFilterChange(next);
+        }
+      : undefined;
+
   const table = useReactTable({
     data,
     columns,
@@ -205,11 +289,11 @@ export function EnhancedDataTable<T = any>({
       rowSelection,
       pagination: { pageIndex, pageSize },
     },
-    onSortingChange: onSortingChange as any,
-    onColumnFiltersChange: onColumnFiltersChange as any,
-    onGlobalFilterChange,
-    onRowSelectionChange: onRowSelectionChange as any,
-    onPaginationChange: onPaginationChange as any,
+    onSortingChange: handleSortingChange,
+    onColumnFiltersChange: handleColumnFiltersChange,
+    onGlobalFilterChange: handleGlobalFilterChange,
+    onRowSelectionChange: handleRowSelectionChange,
+    onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -241,14 +325,15 @@ export function EnhancedDataTable<T = any>({
   }, []);
 
   // Handle filter update
-  const handleFilterUpdate = useCallback((filterId: string, value: any) => {
+  const handleFilterUpdate = useCallback((filterId: string, value: unknown) => {
     setFilterChips((prev) =>
       prev.map((f) => (f.id === filterId ? { ...f, value } : f))
     );
   }, []);
 
   // Selected rows count
-  const selectedCount = Object.keys(rowSelection).length;
+  const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
+  const selectedCount = selectedRows.length;
 
   return (
     <Paper elevation={1} sx={{ width: "100%", overflow: "hidden" }}>
@@ -330,7 +415,7 @@ export function EnhancedDataTable<T = any>({
             {onAdd && (
               <Button
                 variant="contained"
-                leftIcon={<AddIcon />}
+                startIcon={<AddIcon />}
                 onClick={onAdd}
                 size="medium"
               >
@@ -375,7 +460,7 @@ export function EnhancedDataTable<T = any>({
           <Box>
             <Button
               size="small"
-              leftIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              startIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
               onClick={() => setShowAdvanced(!showAdvanced)}
               sx={{ alignSelf: "flex-start" }}
             >
@@ -515,6 +600,21 @@ export function EnhancedDataTable<T = any>({
         )}
       </Toolbar>
 
+      <Box sx={{ px: { xs: 1, sm: 2 }, pt: 2 }}>
+        <BulkActionsToolbar
+          selectedCount={selectedCount}
+          onClearSelection={() => table.resetRowSelection()}
+          onDelete={onBulkDelete ? () => onBulkDelete(selectedRows) : undefined}
+          onStatusChange={
+            onBulkStatusChange
+              ? (status) => onBulkStatusChange(selectedRows, status)
+              : undefined
+          }
+          availableStatuses={availableBulkStatuses}
+          isLoading={loading}
+        />
+      </Box>
+
       {/* Loading Bar */}
       {loading && <LinearProgress />}
 
@@ -552,7 +652,7 @@ export function EnhancedDataTable<T = any>({
         )}
 
         {viewMode === "table" && (
-          <TableContainer sx={{ maxHeight: 600 }}>
+          <TableContainer sx={{ maxHeight: 600 }} data-testid="data-table">
             <Table
               size="medium"
               sx={{ "& .MuiTableCell-root": { py: 1.5, px: 2 } }}

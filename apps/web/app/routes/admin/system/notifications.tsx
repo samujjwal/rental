@@ -1,4 +1,4 @@
-import type { MetaFunction } from "react-router";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
 import { useState, useEffect } from "react";
 import {
@@ -15,7 +15,8 @@ import {
   VolumeX,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
@@ -65,24 +66,75 @@ const defaultSettings: NotificationSettings = {
   maxEmailsPerHour: 100,
   maxPushPerHour: 50,
 };
+const MIN_NOTIFICATIONS_PER_HOUR = 1;
+const MAX_NOTIFICATIONS_PER_HOUR = 10000;
 
-export async function clientLoader() {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   try {
     const settingsRes = await adminApi.getSettings();
     return {
       settings: (settingsRes.notifications as unknown as NotificationSettings) || defaultSettings,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       settings: defaultSettings,
-      error: error?.message || "Failed to load notification settings",
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load notification settings",
     };
   }
 }
 
-export async function clientAction({ request }: { request: Request }) {
+export async function clientAction({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+
   const formData = await request.formData();
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "save") {
+    return { success: false, error: "Invalid action" };
+  }
+  const parsePositiveInt = (value: FormDataEntryValue | null, fallback: number) => {
+    const num = Number(value);
+    return Number.isFinite(num) && num > 0 ? Math.floor(num) : fallback;
+  };
+
+  const adminDigestTime = String(formData.get("adminDigestTime") ?? "").trim();
+  if (adminDigestTime && !/^\d{2}:\d{2}$/.test(adminDigestTime)) {
+    return { success: false, error: "Digest time must be in HH:MM format" };
+  }
+  if (adminDigestTime) {
+    const [hour, minute] = adminDigestTime.split(":").map(Number);
+    if (
+      !Number.isInteger(hour) ||
+      !Number.isInteger(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      return { success: false, error: "Digest time must be a valid 24-hour time." };
+    }
+  }
+  const maxEmailsPerHour = parsePositiveInt(
+    formData.get("maxEmailsPerHour"),
+    defaultSettings.maxEmailsPerHour
+  );
+  const maxPushPerHour = parsePositiveInt(
+    formData.get("maxPushPerHour"),
+    defaultSettings.maxPushPerHour
+  );
+  if (
+    maxEmailsPerHour < MIN_NOTIFICATIONS_PER_HOUR ||
+    maxEmailsPerHour > MAX_NOTIFICATIONS_PER_HOUR ||
+    maxPushPerHour < MIN_NOTIFICATIONS_PER_HOUR ||
+    maxPushPerHour > MAX_NOTIFICATIONS_PER_HOUR
+  ) {
+    return { success: false, error: "Per-hour notification limits are out of range." };
+  }
   
   const settings: Partial<NotificationSettings> = {
     emailEnabled: formData.get("emailEnabled") === "true",
@@ -98,18 +150,24 @@ export async function clientAction({ request }: { request: Request }) {
     paymentFailureNotification: formData.get("paymentFailureNotification") === "true",
     dailyDigestEnabled: formData.get("dailyDigestEnabled") === "true",
     weeklyReportEnabled: formData.get("weeklyReportEnabled") === "true",
-    adminDigestTime: formData.get("adminDigestTime") as string,
-    maxEmailsPerHour: parseInt(formData.get("maxEmailsPerHour") as string, 10),
-    maxPushPerHour: parseInt(formData.get("maxPushPerHour") as string, 10),
+    adminDigestTime: adminDigestTime || defaultSettings.adminDigestTime,
+    maxEmailsPerHour,
+    maxPushPerHour,
   };
 
   try {
     await adminApi.updateSettings({ notifications: settings });
     return { success: true, message: "Notification settings updated successfully" };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      error: error?.response?.data?.message || "Failed to update settings",
+      error:
+        (error &&
+          typeof error === "object" &&
+          "response" in error &&
+          (error as { response?: { data?: { message?: string } } }).response
+            ?.data?.message) ||
+        "Failed to update settings",
     };
   }
 }
@@ -119,6 +177,10 @@ export default function NotificationsSettingsPage() {
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const actionMessage =
+    typeof actionData?.message === "string" ? actionData.message : null;
+  const actionError =
+    typeof actionData?.error === "string" ? actionData.error : null;
 
   const [formValues, setFormValues] = useState<NotificationSettings>(settings);
 
@@ -171,16 +233,16 @@ export default function NotificationsSettingsPage() {
       </div>
 
       {/* Action Messages */}
-      {actionData?.success && (
+      {actionData?.success && actionMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
           <CheckCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.message}
+          {actionMessage}
         </div>
       )}
-      {actionData?.error && (
+      {actionError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <XCircle className="w-5 h-5 inline-block mr-2" />
-          {actionData.error}
+          {actionError}
         </div>
       )}
       {error && (
@@ -191,6 +253,7 @@ export default function NotificationsSettingsPage() {
       )}
 
       <Form method="post">
+        <input type="hidden" name="intent" value="save" />
         {/* Notification Channels */}
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
@@ -476,3 +539,5 @@ export default function NotificationsSettingsPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

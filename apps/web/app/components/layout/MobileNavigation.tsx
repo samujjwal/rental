@@ -17,6 +17,8 @@ import {
   Plus,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
+import { authApi } from "~/lib/api/auth";
+import { useAuthStore } from "~/lib/store/auth";
 
 interface MobileNavItem {
   href: string;
@@ -80,6 +82,7 @@ export function MobileHeader({
   messageCount,
   notificationCount,
   userName,
+  onLogout,
 }: MobileNavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -144,6 +147,7 @@ export function MobileHeader({
           isAuthenticated={isAuthenticated}
           messageCount={messageCount}
           userName={userName}
+          onLogout={onLogout}
         />
       )}
     </>
@@ -158,16 +162,26 @@ function MobileSlideMenu({
   isAuthenticated,
   messageCount,
   userName,
+  onLogout,
 }: {
   onClose: () => void;
   isAuthenticated?: boolean;
   messageCount?: number;
   userName?: string;
+  onLogout?: () => void;
 }) {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    // Add logout logic here
+  const handleLogout = async () => {
+    const refreshToken =
+      typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
+    try {
+      await authApi.logout(refreshToken || undefined);
+    } catch {
+      // Ignore logout API errors
+    }
+    useAuthStore.getState().clearAuth();
+    onLogout?.();
     onClose();
     navigate("/auth/login");
   };

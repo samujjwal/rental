@@ -26,13 +26,14 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Get user notifications' })
   async getNotifications(
     @CurrentUser('id') userId: string,
-    @Query('status') status?: string,
+    @Query('unreadOnly') unreadOnly?: string,
     @Query('type') type?: NotificationType,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
     return this.notificationsService.getUserNotifications(userId, {
       type,
+      unreadOnly: unreadOnly === 'true',
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
     });
@@ -55,7 +56,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Mark all notifications as read' })
   async markAllAsRead(@CurrentUser('id') userId: string) {
     const count = await this.notificationsService.markAllAsRead(userId);
-    return { marked: count };
+    return { count };
   }
 
   @Delete(':id')
@@ -78,6 +79,6 @@ export class NotificationsController {
     @Body() preferences: Partial<NotificationPreferences>,
   ) {
     await this.notificationsService.updatePreferences(userId, preferences);
-    return { message: 'Preferences updated successfully' };
+    return this.notificationsService.getPreferences(userId);
   }
 }

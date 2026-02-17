@@ -1,10 +1,11 @@
-/* eslint-disable react-refresh/only-export-components */
+
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   useParams,
   type LoaderFunctionArgs,
   useLoaderData,
   Link as RouterLink,
+  redirect,
 } from "react-router";
 import {
   Box,
@@ -21,6 +22,7 @@ import {
 } from "~/components/admin/enhanced";
 import { requireAdmin, getSession } from "~/utils/auth";
 import { useAuthStore } from "~/lib/store/auth";
+import type { User as AuthUser } from "~/types/auth";
 import type {
   ViewMode,
   FieldConfig,
@@ -28,6 +30,7 @@ import type {
 } from "~/lib/admin/entity-framework";
 import type { ColumnDef, SortingState, ColumnFiltersState } from "@tanstack/react-table";
 import { useAdminEntity } from "~/hooks/useAdminEntity";
+import { RouteErrorBoundary } from "~/components/ui";
 
 type EntityRecord = Record<string, unknown> & { id?: unknown };
 
@@ -63,6 +66,19 @@ function getRecordId(record: EntityRecord): string | null {
 }
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const entity = new URL(request.url).pathname.split("/").pop() || "";
+  const allowedEntities = new Set([
+    "users",
+    "listings",
+    "bookings",
+    "payments",
+    "organizations",
+    "categories",
+  ]);
+  if (!allowedEntities.has(entity)) {
+    return redirect("/admin");
+  }
+
   const user = await requireAdmin(request);
   const session = await getSession(request);
   const accessToken = session.get("accessToken");
@@ -115,7 +131,11 @@ export default function ModernDynamicEntityPage() {
       loaderData?.accessToken &&
       loaderData?.refreshToken
     ) {
-      setAuth(loaderData.user, loaderData.accessToken, loaderData.refreshToken);
+      setAuth(
+        loaderData.user as unknown as AuthUser,
+        loaderData.accessToken,
+        loaderData.refreshToken
+      );
     }
   }, [loaderData, setAuth]);
 
@@ -178,6 +198,45 @@ export default function ModernDynamicEntityPage() {
       setSelectedRecord(null);
     },
     [entityConfig, deleteEntity, refresh]
+  );
+
+  const bulkStatusOptions = useMemo(() => {
+    const statusField = entityConfig?.fields.find(
+      (field) => String(field.key) === "status" && Array.isArray(field.options)
+    );
+    if (!statusField?.options) return [];
+    return statusField.options.map((option) => ({
+      value: option.value,
+      label: option.label,
+    }));
+  }, [entityConfig]);
+
+  const handleBulkDelete = useCallback(
+    async (records: EntityRecord[]) => {
+      if (!entityConfig) return;
+      const ids = records
+        .map(getRecordId)
+        .filter((id): id is string => Boolean(id));
+      if (ids.length === 0) return;
+      await Promise.all(ids.map((id) => deleteEntity(id)));
+      refresh();
+      setRowSelection({});
+    },
+    [entityConfig, deleteEntity, refresh]
+  );
+
+  const handleBulkStatusChange = useCallback(
+    async (records: EntityRecord[], status: string) => {
+      if (!entityConfig) return;
+      const ids = records
+        .map(getRecordId)
+        .filter((id): id is string => Boolean(id));
+      if (ids.length === 0) return;
+      await Promise.all(ids.map((id) => update({ id, data: { status } })));
+      refresh();
+      setRowSelection({});
+    },
+    [entityConfig, refresh, update]
   );
 
   // Handle form submit
@@ -360,6 +419,7 @@ export default function ModernDynamicEntityPage() {
           loading={loading}
           error={errorMessage || undefined}
           totalCount={total}
+          defaultViewMode="table"
           pageIndex={pagination.pageIndex}
           pageSize={pagination.pageSize}
           onPaginationChange={(p) => {
@@ -418,6 +478,9 @@ export default function ModernDynamicEntityPage() {
           onRowView={handleView}
           onRowEdit={handleEdit}
           onRowDelete={handleDelete}
+          onBulkDelete={handleBulkDelete}
+          onBulkStatusChange={bulkStatusOptions.length ? handleBulkStatusChange : undefined}
+          availableBulkStatuses={bulkStatusOptions}
         />
       )}
 
@@ -444,3 +507,5 @@ export default function ModernDynamicEntityPage() {
     </Box>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

@@ -8,6 +8,8 @@ import { BookingCalculationService } from './booking-calculation.service';
 import { FraudDetectionService } from '../../fraud-detection/services/fraud-detection.service';
 import { BookingMode, BookingStatus } from '@rental-portal/database';
 import { BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { InsuranceService } from '../../insurance/services/insurance.service';
+import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 
 describe('BookingsService', () => {
   let service: BookingsService;
@@ -78,6 +80,19 @@ describe('BookingsService', () => {
         {
           provide: FraudDetectionService,
           useValue: mockFraudDetectionService,
+        },
+        {
+          provide: InsuranceService,
+          useValue: {
+            checkInsuranceRequirement: jest.fn().mockResolvedValue({ required: false }),
+            validateInsurance: jest.fn().mockResolvedValue(true),
+          },
+        },
+        {
+          provide: ContentModerationService,
+          useValue: {
+            moderateText: jest.fn().mockResolvedValue({ isApproved: true, flags: [] }),
+          },
         },
       ],
     }).compile();

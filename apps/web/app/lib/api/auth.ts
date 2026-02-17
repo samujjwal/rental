@@ -5,7 +5,6 @@ import type {
   SignupRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
-  VerifyEmailRequest,
 } from "~/types/auth";
 
 export const authApi = {
@@ -13,12 +12,16 @@ export const authApi = {
     return api.post<AuthResponse>("/auth/login", credentials);
   },
 
-  async signup(data: SignupRequest): Promise<AuthResponse> {
-    return api.post<AuthResponse>("/auth/signup", data);
+  async devLogin(data: { email?: string; role?: string }): Promise<AuthResponse> {
+    return api.post<AuthResponse>("/auth/dev-login", data);
   },
 
-  async logout(): Promise<void> {
-    return api.post<void>("/auth/logout");
+  async signup(data: SignupRequest): Promise<AuthResponse> {
+    return api.post<AuthResponse>("/auth/register", data);
+  },
+
+  async logout(refreshToken?: string): Promise<void> {
+    return api.post<void>("/auth/logout", { refreshToken });
   },
 
   async refreshToken(refreshToken: string): Promise<AuthResponse> {
@@ -28,23 +31,20 @@ export const authApi = {
   async forgotPassword(
     data: ForgotPasswordRequest
   ): Promise<{ message: string }> {
-    return api.post<{ message: string }>("/auth/forgot-password", data);
+    return api.post<{ message: string }>("/auth/password/reset-request", data);
   },
 
   async resetPassword(
     data: ResetPasswordRequest
   ): Promise<{ message: string }> {
-    return api.post<{ message: string }>("/auth/reset-password", data);
+    return api.post<{ message: string }>("/auth/password/reset", data);
   },
 
-  async verifyEmail(data: VerifyEmailRequest): Promise<{ message: string }> {
-    return api.post<{ message: string }>("/auth/verify-email", data);
-  },
-
-  async resendVerification(email: string): Promise<{ message: string }> {
-    return api.post<{ message: string }>("/auth/resend-verification", {
-      email,
-    });
+  async changePassword(data: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<void> {
+    return api.post<void>("/auth/password/change", data);
   },
 
   async getCurrentUser() {

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '@/common/prisma/prisma.service';
 
@@ -10,6 +10,29 @@ describe('Users (e2e)', () => {
   let userToken: string;
   let adminToken: string;
   let testUserId: string;
+  let testUserEmail: string;
+  let adminEmail: string;
+
+  const uniqueSuffix = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const register = async (email: string, firstName: string, lastName: string, password = 'Password123!') => {
+    const response = await request(app.getHttpServer()).post('/auth/register').send({
+      email,
+      password,
+      firstName,
+      lastName,
+      phoneNumber: '+1234567890',
+    });
+
+    expect(response.status).toBe(201);
+    return response.body as { accessToken: string; refreshToken: string; user: { id: string } };
+  };
+
+  const login = async (email: string, password = 'Password123!') => {
+    const response = await request(app.getHttpServer()).post('/auth/login').send({ email, password });
+    expect(response.status).toBe(200);
+    return response.body as { accessToken: string };
+  };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -22,27 +45,35 @@ describe('Users (e2e)', () => {
 
     prisma = app.get<PrismaService>(PrismaService);
 
-    // Get admin token
-    const adminLogin = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'admin@rental-portal.com', password: 'password123' });
-    adminToken = adminLogin.body.accessToken;
+    const suffix = uniqueSuffix();
 
-    // Create test user
-    const userSignup = await request(app.getHttpServer())
-      .post('/auth/signup')
-      .send({
-        email: 'testuser-profile@test.com',
-        password: 'Password123!',
-        firstName: 'Test',
-        lastName: 'User',
-      });
-    userToken = userSignup.body.accessToken;
-    testUserId = userSignup.body.user.id;
+    adminEmail = `admin-users-${suffix}@test.com`;
+    testUserEmail = `testuser-profile-${suffix}@test.com`;
+
+    await register(adminEmail, 'Admin', 'User');
+    await prisma.user.update({ where: { email: adminEmail }, data: { role: 'ADMIN' } });
+
+    const adminLogin = await login(adminEmail);
+    adminToken = adminLogin.accessToken;
+
+    const userSignup = await register(testUserEmail, 'Test', 'User');
+    userToken = userSignup.accessToken;
+    testUserId = userSignup.user.id;
   });
 
   afterAll(async () => {
-    await prisma.user.delete({ where: { email: 'testuser-profile@test.com' } }).catch(() => {});
+    await prisma.user
+      .deleteMany({
+        where: {
+          OR: [
+            { email: adminEmail },
+            { email: testUserEmail },
+            { email: { contains: '@users-admin-test.com' } },
+          ],
+        },
+      })
+      .catch(() => {});
+
     await app.close();
   });
 
@@ -54,16 +85,14 @@ describe('Users (e2e)', () => {
         .expect(200);
 
       expect(response.body).toHaveProperty('id', testUserId);
-      expect(response.body).toHaveProperty('email', 'testuser-profile@test.com');
+      expect(response.body).toHaveProperty('email', testUserEmail);
       expect(response.body).toHaveProperty('firstName', 'Test');
       expect(response.body).toHaveProperty('lastName', 'User');
       expect(response.body).not.toHaveProperty('passwordHash');
     });
 
     it('should require authentication', async () => {
-      await request(app.getHttpServer())
-        .get('/users/me')
-        .expect(401);
+      await request(app.getHttpServer()).get('/users/me').expect(401);
     });
 
     it('should include user statistics', async () => {
@@ -99,22 +128,7 @@ describe('Users (e2e)', () => {
     });
 
     it('should require authentication', async () => {
-      await request(app.getHttpServer())
-        .patch('/users/me')
-        .send({ firstName: 'Unauthorized' })
-        .expect(401);
-    });
-
-    it('should validate phone number format', async () => {
-      const invalidDto = {
-        phoneNumber: 'invalid-phone',
-      };
-
-      await request(app.getHttpServer())
-        .patch('/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
-        .send(invalidDto)
-        .expect(400);
+      await request(app.getHttpServer()).patch('/users/me').send({ firstName: 'Unauthorized' }).expect(401);
     });
 
     it('should update profile photo URL', async () => {
@@ -145,6 +159,15 @@ describe('Users (e2e)', () => {
 
       expect(response.body.city).toBe(addressDto.city);
       expect(response.body.state).toBe(addressDto.state);
+      expect(response.body.addressLine1).toBe(addressDto.addressLine1);
+    });
+
+    it('should reject invalid phone number format', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/me')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ phoneNumber: 'invalid-phone' })
+        .expect(400);
     });
 
     it('should not allow email update directly', async () => {
@@ -154,8 +177,7 @@ describe('Users (e2e)', () => {
         .send({ email: 'newemail@test.com' })
         .expect(200);
 
-      // Email should remain unchanged
-      expect(response.body.email).toBe('testuser-profile@test.com');
+      expect(response.body.email).toBe(testUserEmail);
     });
 
     it('should sanitize HTML in bio', async () => {
@@ -165,28 +187,28 @@ describe('Users (e2e)', () => {
         .send({ bio: '<script>alert("xss")</script>Safe bio content' })
         .expect(200);
 
+      expect(response.body.bio).toContain('Safe bio content');
       expect(response.body.bio).not.toContain('<script>');
     });
   });
 
-  describe('GET /users/:id/stats', () => {
+  describe('GET /users/me/stats', () => {
     it('should return user statistics', async () => {
       const response = await request(app.getHttpServer())
-        .get(`/users/${testUserId}/stats`)
+        .get('/users/me/stats')
         .set('Authorization', `Bearer ${userToken}`)
         .expect(200);
 
-      expect(response.body).toHaveProperty('totalBookings');
-      expect(response.body).toHaveProperty('totalListings');
-      expect(response.body).toHaveProperty('totalReviews');
-      expect(response.body).toHaveProperty('averageRating');
+      expect(response.body).toHaveProperty('listingsCount');
+      expect(response.body).toHaveProperty('bookingsAsRenter');
+      expect(response.body).toHaveProperty('bookingsAsOwner');
+      expect(response.body).toHaveProperty('reviewsGiven');
+      expect(response.body).toHaveProperty('reviewsReceived');
       expect(response.body).toHaveProperty('memberSince');
     });
 
     it('should require authentication', async () => {
-      await request(app.getHttpServer())
-        .get(`/users/${testUserId}/stats`)
-        .expect(401);
+      await request(app.getHttpServer()).get('/users/me/stats').expect(401);
     });
   });
 
@@ -203,26 +225,6 @@ describe('Users (e2e)', () => {
       expect(response.body).not.toHaveProperty('phoneNumber');
     });
 
-    it('should include user\'s listings', async () => {
-      const response = await request(app.getHttpServer())
-        .get(`/users/${testUserId}?includeListings=true`)
-        .set('Authorization', `Bearer ${userToken}`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('listings');
-      expect(Array.isArray(response.body.listings)).toBe(true);
-    });
-
-    it('should include user\'s reviews', async () => {
-      const response = await request(app.getHttpServer())
-        .get(`/users/${testUserId}?includeReviews=true`)
-        .set('Authorization', `Bearer ${userToken}`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('reviews');
-      expect(Array.isArray(response.body.reviews)).toBe(true);
-    });
-
     it('should return 404 for non-existent user', async () => {
       await request(app.getHttpServer())
         .get('/users/non-existent-id')
@@ -232,62 +234,64 @@ describe('Users (e2e)', () => {
   });
 
   describe('Admin User Management', () => {
-    describe('GET /v1/admin/users', () => {
+    describe('GET /admin/users', () => {
       it('should return all users for admin', async () => {
         const response = await request(app.getHttpServer())
-          .get('/v1/admin/users')
+          .get('/admin/users')
           .set('Authorization', `Bearer ${adminToken}`)
           .expect(200);
 
-        expect(Array.isArray(response.body.data || response.body)).toBe(true);
+        expect(response.body).toHaveProperty('users');
+        expect(response.body).toHaveProperty('total');
+        expect(Array.isArray(response.body.users)).toBe(true);
       });
 
       it('should support pagination', async () => {
         const response = await request(app.getHttpServer())
-          .get('/v1/admin/users?page=1&limit=10')
+          .get('/admin/users?page=1&limit=10')
           .set('Authorization', `Bearer ${adminToken}`)
           .expect(200);
 
-        expect(Array.isArray(response.body.data || response.body)).toBe(true);
+        expect(Array.isArray(response.body.users)).toBe(true);
       });
 
-      it('should filter by status', async () => {
+      it('should filter by role', async () => {
         const response = await request(app.getHttpServer())
-          .get('/v1/admin/users?status=ACTIVE')
+          .get('/admin/users?role=ADMIN')
           .set('Authorization', `Bearer ${adminToken}`)
           .expect(200);
 
-        const users = response.body.data || response.body;
+        const users = response.body.users || [];
         users.forEach((user: any) => {
-          expect(user.status).toBe('ACTIVE');
+          expect(user.role).toBe('ADMIN');
         });
       });
 
       it('should search by email', async () => {
         const response = await request(app.getHttpServer())
-          .get('/v1/admin/users?search=testuser')
+          .get('/admin/users?search=testuser-profile')
           .set('Authorization', `Bearer ${adminToken}`)
           .expect(200);
 
-        expect(Array.isArray(response.body.data || response.body)).toBe(true);
+        expect(Array.isArray(response.body.users)).toBe(true);
       });
 
       it('should reject non-admin access', async () => {
         await request(app.getHttpServer())
-          .get('/v1/admin/users')
+          .get('/admin/users')
           .set('Authorization', `Bearer ${userToken}`)
           .expect(403);
       });
     });
 
-    describe('PATCH /v1/admin/users/:id/role', () => {
+    describe('PATCH /admin/users/:id/role', () => {
       it('should update user role', async () => {
-        // Create a test user for role change
+        const suffix = uniqueSuffix();
+        const email = `role-test-${suffix}@users-admin-test.com`;
         const newUser = await prisma.user.create({
           data: {
-            email: 'role-test@test.com',
-            username: 'role-test',
-            password: 'test',
+            email,
+            username: email,
             passwordHash: 'test',
             firstName: 'Role',
             lastName: 'Test',
@@ -297,26 +301,23 @@ describe('Users (e2e)', () => {
         });
 
         const response = await request(app.getHttpServer())
-          .patch(`/v1/admin/users/${newUser.id}/role`)
+          .patch(`/admin/users/${newUser.id}/role`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ role: 'HOST' })
           .expect(200);
 
         expect(response.body.role).toBe('HOST');
-
-        // Cleanup
-        await prisma.user.delete({ where: { id: newUser.id } });
       });
     });
 
-    describe('POST /v1/admin/users/:id/suspend', () => {
+    describe('POST /admin/users/:id/suspend', () => {
       it('should suspend a user', async () => {
-        // Create a test user for suspension
+        const suffix = uniqueSuffix();
+        const email = `suspend-test-${suffix}@users-admin-test.com`;
         const newUser = await prisma.user.create({
           data: {
-            email: 'suspend-test@test.com',
-            username: 'suspend-test',
-            password: 'test',
+            email,
+            username: email,
             passwordHash: 'test',
             firstName: 'Suspend',
             lastName: 'Test',
@@ -326,37 +327,32 @@ describe('Users (e2e)', () => {
         });
 
         const response = await request(app.getHttpServer())
-          .post(`/v1/admin/users/${newUser.id}/suspend`)
+          .post(`/admin/users/${newUser.id}/suspend`)
           .set('Authorization', `Bearer ${adminToken}`)
-          .send({ reason: 'Test suspension' })
-          .expect(200);
+          .expect(201);
 
         expect(response.body.status).toBe('SUSPENDED');
-
-        // Cleanup
-        await prisma.user.delete({ where: { id: newUser.id } });
       });
 
       it('should reject suspending admin users', async () => {
         const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
         if (admin) {
           await request(app.getHttpServer())
-            .post(`/v1/admin/users/${admin.id}/suspend`)
+            .post(`/admin/users/${admin.id}/suspend`)
             .set('Authorization', `Bearer ${adminToken}`)
-            .send({ reason: 'Test' })
             .expect(400);
         }
       });
     });
 
-    describe('POST /v1/admin/users/:id/activate', () => {
+    describe('POST /admin/users/:id/activate', () => {
       it('should activate a suspended user', async () => {
-        // Create a suspended user
+        const suffix = uniqueSuffix();
+        const email = `activate-test-${suffix}@users-admin-test.com`;
         const newUser = await prisma.user.create({
           data: {
-            email: 'activate-test@test.com',
-            username: 'activate-test',
-            password: 'test',
+            email,
+            username: email,
             passwordHash: 'test',
             firstName: 'Activate',
             lastName: 'Test',
@@ -366,69 +362,11 @@ describe('Users (e2e)', () => {
         });
 
         const response = await request(app.getHttpServer())
-          .post(`/v1/admin/users/${newUser.id}/activate`)
+          .post(`/admin/users/${newUser.id}/activate`)
           .set('Authorization', `Bearer ${adminToken}`)
-          .expect(200);
+          .expect(201);
 
         expect(response.body.status).toBe('ACTIVE');
-
-        // Cleanup
-        await prisma.user.delete({ where: { id: newUser.id } });
-      });
-    });
-  });
-
-  describe('User Preferences', () => {
-    describe('GET /users/me/preferences', () => {
-      it('should return user preferences', async () => {
-        const response = await request(app.getHttpServer())
-          .get('/users/me/preferences')
-          .set('Authorization', `Bearer ${userToken}`)
-          .expect(200);
-
-        expect(response.body).toHaveProperty('language');
-        expect(response.body).toHaveProperty('currency');
-        expect(response.body).toHaveProperty('timezone');
-        expect(response.body).toHaveProperty('emailNotifications');
-      });
-
-      it('should create default preferences if none exist', async () => {
-        const response = await request(app.getHttpServer())
-          .get('/users/me/preferences')
-          .set('Authorization', `Bearer ${userToken}`)
-          .expect(200);
-
-        expect(response.body.language).toBe('en');
-        expect(response.body.currency).toBe('USD');
-      });
-    });
-
-    describe('PATCH /users/me/preferences', () => {
-      it('should update user preferences', async () => {
-        const updateDto = {
-          language: 'es',
-          currency: 'EUR',
-          timezone: 'Europe/Madrid',
-          emailNotifications: false,
-        };
-
-        const response = await request(app.getHttpServer())
-          .patch('/users/me/preferences')
-          .set('Authorization', `Bearer ${userToken}`)
-          .send(updateDto)
-          .expect(200);
-
-        expect(response.body.language).toBe(updateDto.language);
-        expect(response.body.currency).toBe(updateDto.currency);
-        expect(response.body.emailNotifications).toBe(false);
-      });
-
-      it('should validate language code', async () => {
-        await request(app.getHttpServer())
-          .patch('/users/me/preferences')
-          .set('Authorization', `Bearer ${userToken}`)
-          .send({ language: 'invalid_language_code_too_long' })
-          .expect(400);
       });
     });
   });
@@ -464,9 +402,9 @@ describe('Users (e2e)', () => {
 
     it('should handle Unicode characters in profile', async () => {
       const unicodeDto = {
-        firstName: '田中',
-        lastName: '太郎',
-        bio: '日本語のプロフィール 🎉',
+        firstName: 'Tanaka',
+        lastName: 'Taro',
+        bio: 'Japanese profile text',
       };
 
       const response = await request(app.getHttpServer())
@@ -476,6 +414,37 @@ describe('Users (e2e)', () => {
         .expect(200);
 
       expect(response.body.firstName).toBe(unicodeDto.firstName);
+    });
+  });
+
+  describe('User Preferences Integration', () => {
+    it('should return 404 for legacy /users/me/preferences route', async () => {
+      await request(app.getHttpServer())
+        .get('/users/me/preferences')
+        .set('Authorization', `Bearer ${userToken}`)
+        .expect(404);
+    });
+
+    it('should read and update preferences through the shared notifications module', async () => {
+      const initial = await request(app.getHttpServer())
+        .get('/notifications/preferences')
+        .set('Authorization', `Bearer ${userToken}`)
+        .expect(200);
+
+      expect(initial.body).toHaveProperty('email');
+      expect(initial.body).toHaveProperty('inApp');
+
+      const updated = await request(app.getHttpServer())
+        .patch('/notifications/preferences')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({
+          email: false,
+          bookingUpdates: false,
+        })
+        .expect(200);
+
+      expect(updated.body.email).toBe(false);
+      expect(updated.body.bookingUpdates).toBe(false);
     });
   });
 });

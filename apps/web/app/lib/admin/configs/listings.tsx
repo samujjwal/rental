@@ -1,6 +1,6 @@
 import type { EntityConfig } from "../entity-framework";
 import type { AdminListing } from "~/lib/api/admin";
-import { Chip } from "@mui/material";
+import { StatusBadge } from "~/components/ui/StatusBadge";
 
 export const listingsConfig: EntityConfig<AdminListing> = {
   name: "Listing",
@@ -27,12 +27,15 @@ export const listingsConfig: EntityConfig<AdminListing> = {
       header: "Status",
       Cell: ({ cell }) => {
         const val = cell.getValue<string>();
-        const colors: Record<string, any> = {
+        const colors: Record<
+          string,
+          "default" | "primary" | "secondary" | "success" | "warning" | "error" | "info"
+        > = {
           active: "success",
           draft: "default",
           archived: "warning",
         };
-        return <Chip label={val} color={colors[val] || "default"} size="small" />;
+        return <StatusBadge label={val} color={colors[val] || "default"} size="small" />;
       },
     },
     {

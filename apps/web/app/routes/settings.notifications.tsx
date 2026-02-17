@@ -1,33 +1,108 @@
-import type { ActionFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { Form, useActionData, useLoaderData, redirect } from "react-router";
 import { useState } from "react";
 import { notificationsApi, type NotificationPreferences } from "~/lib/api/notifications";
+import { getUser } from "~/utils/auth";
+import { RouteErrorBoundary } from "~/components/ui";
 
-export async function clientLoader() {
+const DEFAULT_PREFS: NotificationPreferences = {
+  email: true,
+  sms: false,
+  push: true,
+  inApp: true,
+  bookingUpdates: true,
+  paymentUpdates: true,
+  reviewAlerts: true,
+  messageAlerts: true,
+  marketingEmails: false,
+};
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   try {
     const preferences = await notificationsApi.getPreferences();
     return { preferences, error: null };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to fetch notification preferences:", error);
     // Return default preferences if API fails
     return {
-      preferences: {} as NotificationPreferences,
-      error: error?.message || "Failed to load preferences",
+      preferences: DEFAULT_PREFS,
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load preferences",
     };
   }
 }
 
 export async function clientAction({ request }: ActionFunctionArgs) {
+  const user = await getUser(request);
+  if (!user) {
+    return redirect("/auth/login");
+  }
+
   const formData = await request.formData();
-  const preferences = JSON.parse(formData.get("preferences") as string);
+  const intent = String(formData.get("intent") || "");
+  if (intent !== "save") {
+    return { success: false, message: "Invalid action" };
+  }
+  const rawPreferences = formData.get("preferences");
+  if (typeof rawPreferences !== "string") {
+    return { success: false, message: "Invalid preferences payload" };
+  }
+  if (rawPreferences.length > 20_000) {
+    return { success: false, message: "Preferences payload is too large" };
+  }
+
+  let parsedPreferences: unknown;
+  try {
+    parsedPreferences = JSON.parse(rawPreferences);
+  } catch {
+    return { success: false, message: "Invalid preferences payload" };
+  }
+
+  const parsedObject =
+    parsedPreferences && typeof parsedPreferences === "object"
+      ? (parsedPreferences as Record<string, unknown>)
+      : {};
+
+  const preferences: NotificationPreferences = {
+    email: Boolean(parsedObject.email ?? DEFAULT_PREFS.email),
+    sms: Boolean(parsedObject.sms ?? DEFAULT_PREFS.sms),
+    push: Boolean(parsedObject.push ?? DEFAULT_PREFS.push),
+    inApp: Boolean(parsedObject.inApp ?? DEFAULT_PREFS.inApp),
+    bookingUpdates: Boolean(
+      parsedObject.bookingUpdates ?? DEFAULT_PREFS.bookingUpdates
+    ),
+    paymentUpdates: Boolean(
+      parsedObject.paymentUpdates ?? DEFAULT_PREFS.paymentUpdates
+    ),
+    reviewAlerts: Boolean(parsedObject.reviewAlerts ?? DEFAULT_PREFS.reviewAlerts),
+    messageAlerts: Boolean(
+      parsedObject.messageAlerts ?? DEFAULT_PREFS.messageAlerts
+    ),
+    marketingEmails: Boolean(
+      parsedObject.marketingEmails ?? DEFAULT_PREFS.marketingEmails
+    ),
+  };
 
   try {
     await notificationsApi.updatePreferences(preferences);
     return { success: true, message: "Preferences updated successfully" };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error?.response?.data?.message || error?.message || "Failed to update preferences",
+      message:
+        error && typeof error === "object" && "response" in error
+          ? (error as { response?: { data?: { message?: string } } }).response
+              ?.data?.message ||
+            (error as { message?: string }).message ||
+            "Failed to update preferences"
+          : "Failed to update preferences",
     };
   }
 }
@@ -37,9 +112,27 @@ export default function NotificationSettings() {
     useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const [preferences, setPreferences] =
-    useState<NotificationPreferences>(initialPreferences);
+    useState<NotificationPreferences>({
+      ...DEFAULT_PREFS,
+      ...initialPreferences,
+    });
 
-  const notificationTypes = [
+  const channelPrefs: Array<{
+    key: keyof NotificationPreferences;
+    label: string;
+    description: string;
+  }> = [
+    { key: "email", label: "Email", description: "Send updates to your inbox" },
+    { key: "push", label: "Push", description: "Real-time alerts on your device" },
+    { key: "sms", label: "SMS", description: "Text messages for urgent updates" },
+    { key: "inApp", label: "In-App", description: "In-app activity notifications" },
+  ];
+
+  const typePrefs: Array<{
+    key: keyof NotificationPreferences;
+    label: string;
+    description: string;
+  }> = [
     {
       key: "bookingUpdates",
       label: "Booking Updates",
@@ -51,42 +144,31 @@ export default function NotificationSettings() {
       description: "Payments sent, received, and payouts",
     },
     {
-      key: "messages",
+      key: "messageAlerts",
       label: "Messages",
       description: "New messages from other users",
     },
     {
-      key: "reviews",
+      key: "reviewAlerts",
       label: "Reviews",
       description: "New reviews and rating updates",
     },
     {
-      key: "marketing",
+      key: "marketingEmails",
       label: "Marketing",
-      description: "Promotions and news",
-    },
-    {
-      key: "securityAlerts",
-      label: "Security Alerts",
-      description: "Login alerts and security changes",
+      description: "Promotions and product updates",
     },
   ];
 
-  const updatePreference = (type: string, channel: string, value: boolean) => {
+  const updatePreference = (
+    key: keyof NotificationPreferences,
+    value: boolean
+  ) => {
     setPreferences((prev) => ({
       ...prev,
-      [channel]: {
-        ...(prev as any)[channel],
-        [type]: value,
-      },
+      [key]: value,
     }));
   };
-
-  const channels = [
-    { key: "email", label: "Email", icon: "📧" },
-    { key: "push", label: "Push", icon: "🔔" },
-    { key: "sms", label: "SMS", icon: "📱" },
-  ];
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -117,63 +199,68 @@ export default function NotificationSettings() {
             </div>
           )}
 
-          {/* Preferences Table */}
-          <div className="px-6 py-6">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-border">
-                <thead>
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Notification Type
-                    </th>
-                    {channels.map((channel) => (
-                      <th
-                        key={channel.key}
-                        className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider"
-                      >
-                        <div className="flex flex-col items-center">
-                          <span className="text-2xl mb-1">{channel.icon}</span>
-                          <span>{channel.label}</span>
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-card divide-y divide-border">
-                  {notificationTypes.map((type) => (
-                    <tr key={type.key} className="hover:bg-muted/50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <div className="text-sm font-medium text-foreground">
-                            {type.label}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {type.description}
-                          </div>
-                        </div>
-                      </td>
-                      {channels.map((channel) => (
-                        <td key={channel.key} className="px-6 py-4 text-center">
-                          <input
-                            type="checkbox"
-                            checked={
-                              (preferences as any)[channel.key]?.[type.key] ?? false
-                            }
-                            onChange={(e) =>
-                              updatePreference(
-                                type.key,
-                                channel.key,
-                                e.target.checked
-                              )
-                            }
-                            className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Preferences */}
+          <div className="px-6 py-6 space-y-6">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                Channels
+              </h2>
+              <div className="mt-4 grid grid-cols-1 gap-4">
+                {channelPrefs.map((pref) => (
+                  <label
+                    key={pref.key}
+                    className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {pref.label}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {pref.description}
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(preferences[pref.key])}
+                      onChange={(e) =>
+                        updatePreference(pref.key, e.target.checked)
+                      }
+                      className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                Activity Types
+              </h2>
+              <div className="mt-4 grid grid-cols-1 gap-4">
+                {typePrefs.map((pref) => (
+                  <label
+                    key={pref.key}
+                    className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {pref.label}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {pref.description}
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(preferences[pref.key])}
+                      onChange={(e) =>
+                        updatePreference(pref.key, e.target.checked)
+                      }
+                      className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
+                    />
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -185,18 +272,8 @@ export default function NotificationSettings() {
                   type="button"
                   onClick={() => {
                     const newPrefs = { ...preferences };
-                    const channels = ["email", "push", "sms"] as const;
-                    
-                    channels.forEach((channel) => {
-                      if ((newPrefs as any)[channel]) {
-                        const channelPrefs = { ...(newPrefs as any)[channel] };
-                        notificationTypes.forEach((type) => {
-                          if (Object.prototype.hasOwnProperty.call(channelPrefs, type.key)) {
-                            channelPrefs[type.key] = true;
-                          }
-                        });
-                        (newPrefs as any)[channel] = channelPrefs;
-                      }
+                    [...channelPrefs, ...typePrefs].forEach((pref) => {
+                      newPrefs[pref.key] = true as NotificationPreferences[typeof pref.key];
                     });
                     setPreferences(newPrefs);
                   }}
@@ -208,18 +285,8 @@ export default function NotificationSettings() {
                   type="button"
                   onClick={() => {
                     const newPrefs = { ...preferences };
-                    const channels = ["email", "push", "sms"] as const;
-                    
-                    channels.forEach((channel) => {
-                      if ((newPrefs as any)[channel]) {
-                        const channelPrefs = { ...(newPrefs as any)[channel] };
-                        notificationTypes.forEach((type) => {
-                          if (Object.prototype.hasOwnProperty.call(channelPrefs, type.key)) {
-                            channelPrefs[type.key] = false;
-                          }
-                        });
-                        (newPrefs as any)[channel] = channelPrefs;
-                      }
+                    [...channelPrefs, ...typePrefs].forEach((pref) => {
+                      newPrefs[pref.key] = false as NotificationPreferences[typeof pref.key];
                     });
                     setPreferences(newPrefs);
                   }}
@@ -230,6 +297,7 @@ export default function NotificationSettings() {
               </div>
 
               <Form method="post">
+                <input type="hidden" name="intent" value="save" />
                 <input
                   type="hidden"
                   name="preferences"
@@ -278,3 +346,4 @@ export default function NotificationSettings() {
     </div>
   );
 }
+export { RouteErrorBoundary as ErrorBoundary };

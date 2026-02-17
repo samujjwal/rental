@@ -3,6 +3,8 @@ import { BookingStateMachineService } from './booking-state-machine.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { BookingStatus } from '@rental-portal/database';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { BookingCalculationService } from './booking-calculation.service';
 
 const mockPrismaService = {
   booking: {
@@ -13,6 +15,24 @@ const mockPrismaService = {
   bookingStateHistory: {
     create: jest.fn(),
     findMany: jest.fn(),
+  },
+  refund: {
+    findFirst: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockResolvedValue({ id: 'refund-1' }),
+  },
+  payment: {
+    findFirst: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockResolvedValue({ id: 'payment-1' }),
+  },
+  conditionReport: {
+    findFirst: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockResolvedValue({ id: 'report-1' }),
+  },
+  dispute: {
+    findFirst: jest.fn().mockResolvedValue(null),
+  },
+  user: {
+    findUnique: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@test.com' }),
   },
 };
 
@@ -33,6 +53,20 @@ describe('BookingStateMachineService', () => {
         BookingStateMachineService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: CacheService, useValue: mockCacheService },
+        {
+          provide: NotificationsService,
+          useValue: {
+            sendNotification: jest.fn().mockResolvedValue(undefined),
+            createNotification: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: BookingCalculationService,
+          useValue: {
+            calculatePrice: jest.fn().mockResolvedValue({ subtotal: 100 }),
+            calculateRefund: jest.fn().mockResolvedValue({ refundAmount: 50 }),
+          },
+        },
       ],
     }).compile();
 
@@ -111,7 +145,10 @@ describe('BookingStateMachineService', () => {
         status: BookingStatus.PENDING_PAYMENT,
         createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000), // 25 hours ago
         renterId: 'renter-1',
-        listing: { ownerId: 'owner-1' },
+        listing: { ownerId: 'owner-1', owner: { stripeConnectId: 'acct_test' } },
+        ownerEarnings: 100,
+        currency: 'USD',
+        paymentIntentId: null,
       };
 
       // Mock findMany to return expired booking first, then empty for second call

@@ -29,52 +29,76 @@ import {
   Gavel as DisputeIcon,
   Assessment as ReportsIcon,
 } from "@mui/icons-material";
-import { ActivityFeed } from "~/components/admin/ActivityFeed";
+import { ActivityFeed, type ActivityItem } from "~/components/admin/ActivityFeed";
+import { RouteErrorBoundary } from "~/components/ui";
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await requireAdmin(request);
-  const [analytics, auditLogs] = await Promise.all([
-    getAdminAnalytics(request, "30d"),
-    adminApi.getAuditLogs({ limit: 20 })
-  ]);
-  
-  // Transform audit logs to activity items
-  const activities = auditLogs.logs.map(log => ({
-    id: log.id,
-    type: log.entity.toLowerCase() as any,
-    action: log.action,
-    description: `${log.userEmail} ${log.action} on ${log.entity} #${log.entityId}`,
-    timestamp: log.createdAt,
-    user: { name: log.userEmail },
-    severity: determineSeverity(log.action),
-    link: getEntityLink(log.entity, log.entityId),
-  }));
-  
-  return { user, analytics, activities };
+  try {
+    const [analytics, auditLogs] = await Promise.all([
+      getAdminAnalytics(request, "30d"),
+      adminApi.getAuditLogs({ limit: 20 }),
+    ]);
+
+    // Transform audit logs to activity items
+    const auditItems = Array.isArray(auditLogs?.logs) ? auditLogs.logs : [];
+    const activities = auditItems.map((log) => {
+      const entity = String(log.entity || "").toLowerCase();
+      const type: ActivityItem["type"] = (
+        ["system", "listing", "user", "booking", "payment", "dispute", "review"] as const
+      ).includes(entity as ActivityItem["type"])
+        ? (entity as ActivityItem["type"])
+        : "system";
+
+      return {
+        id: log.id,
+        type,
+        action: log.action,
+        description: `${log.userEmail} ${log.action} on ${log.entity} #${log.entityId}`,
+        timestamp: log.createdAt,
+        user: { name: log.userEmail },
+        severity: determineSeverity(log.action),
+        link: getEntityLink(log.entity),
+      };
+    });
+
+    return { user, analytics, activities, error: null };
+  } catch (error: unknown) {
+    return {
+      user,
+      analytics: null,
+      activities: [],
+      error:
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message)
+          : "Failed to load admin dashboard data",
+    };
+  }
 }
 
-function determineSeverity(action: string): "success" | "error" | "warning" | "info" {
-  if (action.includes("delete") || action.includes("suspend") || action.includes("reject")) {
+function determineSeverity(action: unknown): "success" | "error" | "warning" | "info" {
+  const normalized = String(action || "").toLowerCase();
+  if (normalized.includes("delete") || normalized.includes("suspend") || normalized.includes("reject")) {
     return "error";
   }
-  if (action.includes("flag") || action.includes("warning")) {
+  if (normalized.includes("flag") || normalized.includes("warning")) {
     return "warning";
   }
-  if (action.includes("create") || action.includes("approve") || action.includes("complete")) {
+  if (normalized.includes("create") || normalized.includes("approve") || normalized.includes("complete")) {
     return "success";
   }
   return "info";
 }
 
-function getEntityLink(entity: string, entityId: string): string | undefined {
+function getEntityLink(entity: unknown): string | undefined {
   const entityMap: Record<string, string> = {
-    user: "/admin/users",
-    listing: "/admin/listings",
-    booking: "/admin/bookings",
+    user: "/admin/entities/users",
+    listing: "/admin/entities/listings",
+    booking: "/admin/entities/bookings",
     dispute: "/admin/disputes",
-    payment: "/admin/payments",
+    payment: "/admin/entities/payments",
   };
-  return entityMap[entity.toLowerCase()];
+  return entityMap[String(entity || "").toLowerCase()];
 }
 
 function formatCurrency(value: number): string {
@@ -90,43 +114,60 @@ function formatNumber(value: number): string {
 }
 
 export default function AdminDashboard() {
-  const { user, analytics, activities } = useLoaderData<typeof clientLoader>();
-  const { summary, alerts } = analytics;
+  const { user, analytics, activities, error } = useLoaderData<typeof clientLoader>();
   const [activeTab, setActiveTab] = useState(0);
+
+  if (error || !analytics) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">
+          <AlertTitle>Unable to load admin dashboard</AlertTitle>
+          {error || "Failed to load admin dashboard data"}
+        </Alert>
+      </Box>
+    );
+  }
+  const { summary, alerts } = analytics;
 
   const quickLinks = [
     {
-      href: "/admin/users",
+      href: "/admin/entities/users",
       label: "User Directory",
       description: "Review accounts & roles",
       icon: <UsersIcon />,
     },
     {
-      href: "/admin/listings",
+      href: "/admin/entities/listings",
       label: "Listings",
       description: "Moderate submissions",
       icon: <HomeIcon />,
     },
     {
-      href: "/admin/bookings",
+      href: "/admin/entities/bookings",
       label: "Bookings",
       description: "Resolve issues fast",
       icon: <CalendarIcon />,
     },
     {
-      href: "/admin/payments",
+      href: "/admin/disputes",
+      label: "Disputes",
+      description: "Review and resolve disputes",
+      icon: <ShieldIcon />,
+    },
+    {
+      href: "/admin/entities/payments",
       label: "Payments",
       description: "Audit payouts & refunds",
       icon: <MoneyIcon />,
     },
     {
-      href: "/admin/organizations",
+      href: "/admin/entities/organizations",
       label: "Organizations",
       description: "Manage business accounts",
       icon: <ShieldIcon />,
     },
     {
-      href: "/admin/categories",
+      href: "/admin/entities/categories",
       label: "Categories",
       description: "Configure property types",
       icon: <ShieldIcon />,
@@ -204,7 +245,7 @@ export default function AdminDashboard() {
               variant="contained"
               component={Link}
               to="/admin/analytics"
-              rightIcon={<ArrowRightIcon />}
+              endIcon={<ArrowRightIcon />}
               sx={{ borderRadius: 2 }}
             >
               Full Analytics
@@ -267,7 +308,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Live KPI Cards */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 4 }} data-testid="platform-stats">
         <Typography variant="h6" gutterBottom>
           Key Metrics (Last 30 Days)
         </Typography>
@@ -289,9 +330,19 @@ export default function AdminDashboard() {
               kpi.unit === "currency"
                 ? formatCurrency(kpi.value)
                 : formatNumber(kpi.value);
+            
+            // Map KPI IDs to test IDs for compatibility
+            const testIdMap: Record<string, string> = {
+              activeUsers: "total-users",
+              listings: "total-listings",
+              bookings: "total-bookings",
+              revenue: "total-revenue",
+              disputes: "active-disputes",
+            };
+            const testId = testIdMap[kpi.id] || kpi.id;
 
             return (
-              <Card key={kpi.id} sx={{ flex: "1 1 250px", minWidth: 200 }}>
+              <Card key={kpi.id} sx={{ flex: "1 1 250px", minWidth: 200 }} data-testid={testId}>
                 <CardContent>
                   <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
                     <Icon sx={{ color: `${trendColor}.main`, mr: 1 }} />
@@ -374,7 +425,7 @@ export default function AdminDashboard() {
             variant="text"
             component={Link}
             to="/admin/system/audit"
-            rightIcon={<ArrowRightIcon />}
+            endIcon={<ArrowRightIcon />}
           >
             View All
           </Button>
@@ -390,3 +441,4 @@ export default function AdminDashboard() {
     </Box>
   );
 }
+export { RouteErrorBoundary as ErrorBoundary };

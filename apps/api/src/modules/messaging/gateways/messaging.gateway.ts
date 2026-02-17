@@ -9,7 +9,8 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
-import { MessagesService, SendMessageDto } from '../services/messages.service';
+import { MessagesService } from '../services/messages.service';
+import { SendMessageDto } from '../dto/messaging.dto';
 import { ConversationsService } from '../services/conversations.service';
 import { WsJwtAuthGuard } from '@/modules/auth/guards/ws-jwt-auth.guard';
 
@@ -24,6 +25,7 @@ interface AuthenticatedSocket extends Socket {
     credentials: true,
   },
 })
+@UseGuards(WsJwtAuthGuard)
 export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -34,6 +36,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   constructor(
     private messagesService: MessagesService,
     private conversationsService: ConversationsService,
+    private wsAuthGuard: WsJwtAuthGuard,
   ) {}
 
   /**
@@ -41,30 +44,29 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
    */
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      // Extract user ID from socket handshake (set by WsJwtAuthGuard)
-      const userId = client.handshake.auth?.userId || client.handshake.query?.userId;
-
-      if (!userId) {
-        this.logger.warn(`Connection rejected: No userId provided`);
-        client.disconnect();
-        return;
-      }
-
-      client.userId = userId as string;
+      const auth = await this.wsAuthGuard.authenticateClient(client);
+      const userId = auth.userId;
+      client.userId = userId;
+      client.data.userId = userId;
+      client.handshake.auth = {
+        ...client.handshake.auth,
+        userId,
+        email: auth.email,
+      };
 
       // Track user's socket connections
-      if (!this.userSockets.has(userId as string)) {
-        this.userSockets.set(userId as string, new Set());
+      if (!this.userSockets.has(userId)) {
+        this.userSockets.set(userId, new Set());
       }
-      this.userSockets.get(userId as string)!.add(client.id);
+      this.userSockets.get(userId)!.add(client.id);
 
       this.logger.log(`Client connected: ${client.id} (User: ${userId})`);
 
       // Emit online status to user's contacts
-      this.broadcastUserStatus(userId as string, 'online');
+      this.broadcastUserStatus(userId, 'online');
 
       // Send unread count to client
-      const unreadCount = await this.conversationsService.getTotalUnreadCount(userId as string);
+      const unreadCount = await this.conversationsService.getTotalUnreadCount(userId);
       client.emit('unread_count', { count: unreadCount });
     } catch (error) {
       this.logger.error(`Connection error: ${error.message}`);

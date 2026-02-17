@@ -1,28 +1,10 @@
-import { test, expect, Page } from "@playwright/test";
-
-// Test credentials
-const TEST_RENTER = {
-  email: "renter@test.com",
-  password: "Test123!@#",
-};
-
-const TEST_OWNER = {
-  email: "owner@test.com",
-  password: "Test123!@#",
-};
-
-async function loginAs(page: Page, email: string, password: string) {
-  await page.goto("/auth/login");
-  await page.fill('input[type="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/.*dashboard/);
-}
+import { test, expect } from "@playwright/test";
+import { loginAs, testUsers } from "./helpers/test-utils";
 
 test.describe("Payment Flows", () => {
   test.describe("Checkout Payment", () => {
     test.beforeEach(async ({ page }) => {
-      await loginAs(page, TEST_RENTER.email, TEST_RENTER.password);
+      await loginAs(page, testUsers.renter);
       await page.goto("/checkout/1");
     });
 
@@ -135,7 +117,7 @@ test.describe("Payment Flows", () => {
 
   test.describe("Payment Methods Management", () => {
     test.beforeEach(async ({ page }) => {
-      await loginAs(page, TEST_RENTER.email, TEST_RENTER.password);
+      await loginAs(page, testUsers.renter);
       await page.goto("/settings/payment-methods");
     });
 
@@ -184,7 +166,7 @@ test.describe("Payment Flows", () => {
 
 test.describe("Insurance Flow", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, TEST_RENTER.email, TEST_RENTER.password);
+    await loginAs(page, testUsers.renter);
   });
 
   test("should display insurance options at checkout", async ({ page }) => {
@@ -242,7 +224,7 @@ test.describe("Insurance Flow", () => {
 test.describe("Reviews Flow", () => {
   test.describe("Renter Reviews", () => {
     test.beforeEach(async ({ page }) => {
-      await loginAs(page, TEST_RENTER.email, TEST_RENTER.password);
+      await loginAs(page, testUsers.renter);
     });
 
     test("should see review prompt after completed booking", async ({ page }) => {
@@ -337,7 +319,7 @@ test.describe("Reviews Flow", () => {
 
   test.describe("Owner Reviews", () => {
     test.beforeEach(async ({ page }) => {
-      await loginAs(page, TEST_OWNER.email, TEST_OWNER.password);
+      await loginAs(page, testUsers.owner);
     });
 
     test("should review renter after booking", async ({ page }) => {
@@ -439,7 +421,7 @@ test.describe("Reviews Flow", () => {
 
   test.describe("Owner Review Responses", () => {
     test.beforeEach(async ({ page }) => {
-      await loginAs(page, TEST_OWNER.email, TEST_OWNER.password);
+      await loginAs(page, testUsers.owner);
     });
 
     test("should respond to review", async ({ page }) => {
@@ -485,7 +467,7 @@ test.describe("Reviews Flow", () => {
 
   test.describe("Report Review", () => {
     test("should report inappropriate review", async ({ page }) => {
-      await loginAs(page, TEST_RENTER.email, TEST_RENTER.password);
+      await loginAs(page, testUsers.renter);
       await page.goto("/listings/1");
       
       const reportButton = page.locator('[data-testid="report-review"]').first();
@@ -510,7 +492,7 @@ test.describe("Reviews Flow", () => {
 
 test.describe("Notifications Flow", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, TEST_RENTER.email, TEST_RENTER.password);
+    await loginAs(page, testUsers.renter);
   });
 
   test("should display notifications icon", async ({ page }) => {
@@ -597,7 +579,7 @@ test.describe("Notifications Flow", () => {
 
 test.describe("Real-time Updates", () => {
   test("should receive new message notification", async ({ page }) => {
-    await loginAs(page, TEST_RENTER.email, TEST_RENTER.password);
+    await loginAs(page, testUsers.renter);
     await page.goto("/messages");
     
     // This would require WebSocket testing
@@ -605,7 +587,7 @@ test.describe("Real-time Updates", () => {
   });
 
   test("should receive booking status update", async ({ page }) => {
-    await loginAs(page, TEST_RENTER.email, TEST_RENTER.password);
+    await loginAs(page, testUsers.renter);
     await page.goto("/bookings/1");
     
     // Status should update in real-time when owner approves

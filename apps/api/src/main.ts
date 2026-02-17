@@ -3,6 +3,8 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import * as path from 'path';
+import * as express from 'express';
 import { AppModule } from './app.module';
 import { PrismaService } from './common/prisma/prisma.service';
 
@@ -64,6 +66,10 @@ async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix('api');
+
+  // Serve local uploads (development or local storage fallback)
+  const localStoragePath = configService.get('LOCAL_STORAGE_PATH') || './uploads';
+  app.use('/uploads', express.static(path.resolve(localStoragePath)));
 
   // API versioning - routes without @Version decorator work without prefix
   app.enableVersioning({

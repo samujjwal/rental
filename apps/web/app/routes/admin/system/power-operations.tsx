@@ -1,9 +1,9 @@
 import React, { useState } from "react";
+import type { LoaderFunctionArgs } from "react-router";
 import {
   Box,
   Typography,
   Paper,
-  Button,
   TextField,
   Alert,
   Snackbar,
@@ -19,15 +19,16 @@ import {
 } from "@mui/material";
 import {
   Backup as BackupIcon,
-  Restore as RestoreIcon,
   Storage as DatabaseIcon,
   QueryStats as QueryIcon,
   Warning as WarningIcon,
   ExpandMore as ExpandMoreIcon,
-  Upload as UploadIcon,
-  Download as DownloadIcon,
 } from "@mui/icons-material";
+import { Link } from "react-router";
 import { adminApi } from "~/lib/api/admin";
+import { UnifiedButton } from "~/components/ui";
+import { requireAdmin } from "~/utils/auth";
+import { RouteErrorBoundary } from "~/components/ui";
 
 interface Operation {
   id: string;
@@ -44,6 +45,11 @@ interface QueryResult {
   rows: Array<Array<unknown>>;
   executionTime: number;
   rowCount: number;
+}
+
+export async function clientLoader({ request }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+  return null;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -70,7 +76,6 @@ export default function PowerOperationsPage() {
   const [operationProgress, setOperationProgress] = useState(0);
   const [query, setQuery] = useState("");
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [backupFile, setBackupFile] = useState<File | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     operation: Operation | null;
@@ -140,28 +145,10 @@ export default function PowerOperationsPage() {
       icon: <BackupIcon />,
       action: async () => {
         const backup = await adminApi.createBackup("full");
-        console.log("Database backup created:", backup);
-      },
-    },
-    {
-      id: "restore-database",
-      name: "Restore Database",
-      description: "Restore database from a backup file",
-      icon: <RestoreIcon />,
-      action: async () => {
-        if (!backupFile) {
-          throw new Error("Please select a backup file first");
+        if (backup?.downloadUrl) {
+          window.open(backup.downloadUrl, "_blank", "noopener,noreferrer");
         }
-        // Get the backup ID from the file name or use a recent backup
-        const { backups } = await adminApi.getBackups();
-        if (backups.length === 0) {
-          throw new Error("No backups available to restore");
-        }
-        const result = await adminApi.restoreBackup(backups[0].id);
-        console.log("Database restored:", result.message);
       },
-      danger: true,
-      requiresConfirmation: true,
     },
     {
       id: "optimize-database",
@@ -169,9 +156,8 @@ export default function PowerOperationsPage() {
       description: "Optimize database performance and clean up unused data",
       icon: <DatabaseIcon />,
       action: async () => {
-        // Call the API to optimize database (vacuum, analyze, etc.)
-        const dbInfo = await adminApi.getDatabaseInfo();
-        console.log("Database optimization completed. Current DB info:", dbInfo);
+        await adminApi.runDatabaseVacuum();
+        await adminApi.runDatabaseAnalyze();
       },
     },
     {
@@ -180,25 +166,8 @@ export default function PowerOperationsPage() {
       description: "Clear all application caches and temporary data",
       icon: <DatabaseIcon />,
       action: async () => {
-        // Call the system health endpoint to verify cache is accessible, 
-        // then perform cache clearing through appropriate endpoint
-        const health = await adminApi.getSystemHealth();
-        console.log("System health after cache operations:", health);
+        await adminApi.clearCache("all");
       },
-    },
-    {
-      id: "reset-admin-passwords",
-      name: "Reset Admin Passwords",
-      description: "Reset all admin user passwords to temporary values",
-      icon: <WarningIcon />,
-      action: async () => {
-        // This would typically be a specific admin endpoint
-        // For now, we get the admin users list
-        const users = await adminApi.getUsers({ role: "ADMIN", limit: 100 });
-        console.log("Admin users to reset:", users.total);
-      },
-      danger: true,
-      requiresConfirmation: true,
     },
   ];
 
@@ -232,13 +201,6 @@ export default function PowerOperationsPage() {
     } finally {
       setLoading(false);
       setActiveOperation(null);
-    }
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setBackupFile(file);
     }
   };
 
@@ -276,7 +238,7 @@ export default function PowerOperationsPage() {
               Database Operations
             </Typography>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {operations.slice(0, 3).map((operation) => (
+              {operations.slice(0, 2).map((operation) => (
                 <Box key={operation.id}>
                   <UnifiedButton
                     fullWidth
@@ -303,7 +265,7 @@ export default function PowerOperationsPage() {
               System Operations
             </Typography>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {operations.slice(3).map((operation) => (
+              {operations.slice(2).map((operation) => (
                 <Box key={operation.id}>
                   <UnifiedButton
                     fullWidth
@@ -438,58 +400,17 @@ export default function PowerOperationsPage() {
             <Typography variant="h6" gutterBottom>
               Backup & Restore
             </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
               <Box sx={{ flex: "1 1 300px" }}>
                 <Typography variant="subtitle2" gutterBottom>
-                  Download Backup
+                  Manage Backups
                 </Typography>
-                <UnifiedButton
-                  variant="primary"
-                  leftIcon={<DownloadIcon />}
-                  onClick={() => executeOperation(operations[0])}
-                  disabled={loading}
-                  fullWidth
-                >
-                  Download Latest Backup
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Create, download, and restore backups from the dedicated backups console.
+                </Typography>
+                <UnifiedButton asChild variant="primary" disabled={loading}>
+                  <Link to="/admin/system/backups">Open Backup Management</Link>
                 </UnifiedButton>
-              </Box>
-              <Box sx={{ flex: "1 1 300px" }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Upload Backup for Restore
-                </Typography>
-                <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                  <UnifiedButton
-                    variant="outline"
-                    leftIcon={<UploadIcon />}
-                    disabled={loading}
-                    className="relative"
-                  >
-                    Select Backup File
-                    <input
-                      type="file"
-                      accept=".sql,.backup,.dump"
-                      hidden
-                      onChange={handleFileUpload}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                  </UnifiedButton>
-                  {backupFile && (
-                    <>
-                      <Chip
-                        label={backupFile.name}
-                        size="small"
-                        onDelete={() => setBackupFile(null)}
-                      />
-                      <UnifiedButton
-                        variant="destructive"
-                        onClick={() => executeOperation(operations[1])}
-                        disabled={loading}
-                      >
-                        Restore
-                      </UnifiedButton>
-                    </>
-                  )}
-                </Box>
               </Box>
             </Box>
           </Paper>
@@ -503,7 +424,7 @@ export default function PowerOperationsPage() {
       >
         <DialogTitle>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <WarningIcon variant="destructive" />
+            <WarningIcon color="error" />
             Confirm Dangerous Operation
           </Box>
         </DialogTitle>
@@ -558,3 +479,5 @@ export default function PowerOperationsPage() {
     </Box>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary };

@@ -8,9 +8,8 @@ import {
     Checkbox,
     Menu,
     MenuItem,
-    Chip,
 } from '@mui/material';
-import { Trash2, MoreVertical, X, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Trash2, X, Clock } from 'lucide-react';
 import { ConfirmDialog } from '~/components/ui/ConfirmDialog';
 import { FadeIn } from '~/components/animations';
 
@@ -37,8 +36,6 @@ export function BulkActionsToolbar({
 }: BulkActionsToolbarProps) {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [selectedStatus, setSelectedStatus] = useState<string>('');
-
     const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
         setAnchorEl(event.currentTarget);
     };
@@ -48,7 +45,6 @@ export function BulkActionsToolbar({
     };
 
     const handleStatusChange = (status: string) => {
-        setSelectedStatus(status);
         handleMenuClose();
         onStatusChange?.(status);
     };
@@ -86,7 +82,7 @@ export function BulkActionsToolbar({
                             color="inherit"
                             onClick={handleMenuOpen}
                             disabled={isLoading}
-                            leftIcon={<Clock size={16} />}
+                            startIcon={<Clock size={16} />}
                         >
                             Change Status
                         </Button>

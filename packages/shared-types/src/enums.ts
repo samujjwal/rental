@@ -1,0 +1,168 @@
+// ============================================================================
+// Shared Enums
+// Single source of truth for status enums used by both frontend and backend
+// ============================================================================
+
+export enum BookingStatus {
+  DRAFT = 'DRAFT',
+  PENDING = 'PENDING',
+  PENDING_PAYMENT = 'PENDING_PAYMENT',
+  PENDING_OWNER_APPROVAL = 'PENDING_OWNER_APPROVAL',
+  CONFIRMED = 'CONFIRMED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  CANCELLED = 'CANCELLED',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
+  DISPUTED = 'DISPUTED',
+  COMPLETED = 'COMPLETED',
+  AWAITING_RETURN_INSPECTION = 'AWAITING_RETURN_INSPECTION',
+  REFUNDED = 'REFUNDED',
+  SETTLED = 'SETTLED',
+}
+
+export enum ListingStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  ARCHIVED = 'ARCHIVED',
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  REJECTED = 'REJECTED',
+}
+
+export enum PropertyStatus {
+  AVAILABLE = 'AVAILABLE',
+  RENTED = 'RENTED',
+  MAINTENANCE = 'MAINTENANCE',
+  UNAVAILABLE = 'UNAVAILABLE',
+  DRAFT = 'DRAFT',
+  SUSPENDED = 'SUSPENDED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum UserRole {
+  USER = 'USER',
+  HOST = 'HOST',
+  ADMIN = 'ADMIN',
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  CUSTOMER = 'CUSTOMER',
+}
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  DELETED = 'DELETED',
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
+}
+
+export enum DisputeStatus {
+  OPEN = 'OPEN',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  INVESTIGATING = 'INVESTIGATING',
+  RESOLVED = 'RESOLVED',
+  CLOSED = 'CLOSED',
+  WITHDRAWN = 'WITHDRAWN',
+}
+
+export enum DisputeType {
+  PROPERTY_DAMAGE = 'PROPERTY_DAMAGE',
+  PAYMENT_ISSUE = 'PAYMENT_ISSUE',
+  CANCELLATION = 'CANCELLATION',
+  CLEANING_FEE = 'CLEANING_FEE',
+  RULES_VIOLATION = 'RULES_VIOLATION',
+  MISSING_ITEMS = 'MISSING_ITEMS',
+  CONDITION_MISMATCH = 'CONDITION_MISMATCH',
+  REFUND_REQUEST = 'REFUND_REQUEST',
+  OTHER = 'OTHER',
+}
+
+export enum ReviewType {
+  LISTING_REVIEW = 'LISTING_REVIEW',
+  RENTER_REVIEW = 'RENTER_REVIEW',
+  OWNER_REVIEW = 'OWNER_REVIEW',
+}
+
+export enum PayoutStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  IN_TRANSIT = 'IN_TRANSIT',
+  COMPLETED = 'COMPLETED',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum DepositStatus {
+  PENDING = 'PENDING',
+  AUTHORIZED = 'AUTHORIZED',
+  HELD = 'HELD',
+  RELEASED = 'RELEASED',
+  CAPTURED = 'CAPTURED',
+  FAILED = 'FAILED',
+}
+
+export enum NotificationType {
+  BOOKING_REQUEST = 'BOOKING_REQUEST',
+  BOOKING_CONFIRMED = 'BOOKING_CONFIRMED',
+  BOOKING_CANCELLED = 'BOOKING_CANCELLED',
+  BOOKING_REMINDER = 'BOOKING_REMINDER',
+  PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
+  REVIEW_RECEIVED = 'REVIEW_RECEIVED',
+  MESSAGE_RECEIVED = 'MESSAGE_RECEIVED',
+  SYSTEM_UPDATE = 'SYSTEM_UPDATE',
+  SYSTEM_ANNOUNCEMENT = 'SYSTEM_ANNOUNCEMENT',
+  MARKETING = 'MARKETING',
+  PAYOUT_PROCESSED = 'PAYOUT_PROCESSED',
+  VERIFICATION_COMPLETE = 'VERIFICATION_COMPLETE',
+  DISPUTE_OPENED = 'DISPUTE_OPENED',
+  LISTING_APPROVED = 'LISTING_APPROVED',
+}
+
+export enum OrganizationRole {
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  MEMBER = 'MEMBER',
+}
+
+export enum OrganizationStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
+}
+
+export enum PricingMode {
+  PER_NIGHT = 'PER_NIGHT',
+  PER_MONTH = 'PER_MONTH',
+  PER_HOUR = 'PER_HOUR',
+  PER_DAY = 'PER_DAY',
+  PER_WEEK = 'PER_WEEK',
+  CUSTOM = 'CUSTOM',
+}
+
+export enum DeliveryMethod {
+  PICKUP = 'pickup',
+  DELIVERY = 'delivery',
+  SHIPPING = 'shipping',
+}
+
+export enum CancellationPolicy {
+  FLEXIBLE = 'flexible',
+  MODERATE = 'moderate',
+  STRICT = 'strict',
+}
+
+export enum ItemCondition {
+  NEW = 'new',
+  LIKE_NEW = 'like-new',
+  GOOD = 'good',
+  FAIR = 'fair',
+  POOR = 'poor',
+}
+
+export enum SearchSortBy {
+  PRICE_ASC = 'price-asc',
+  PRICE_DESC = 'price-desc',
+  RATING = 'rating',
+  NEWEST = 'newest',
+  POPULAR = 'popular',
+}
