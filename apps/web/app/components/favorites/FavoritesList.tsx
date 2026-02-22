@@ -161,7 +161,7 @@ export function FavoritesList({
                                 <div
                                     className="h-full w-full bg-cover bg-center"
                                     style={{
-                                        backgroundImage: `url(${favorite.listing?.images?.[0] || '/placeholder.jpg'})`,
+                                        backgroundImage: `url(${favorite.listing?.photos?.[0] || '/placeholder.jpg'})`,
                                     }}
                                 />
                             </Link>

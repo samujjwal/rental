@@ -3,6 +3,7 @@ import { api } from "~/lib/api-client";
 export interface Dispute {
   id: string;
   bookingId: string;
+  title?: string;
   type: string;
   description: string;
   amount?: number;

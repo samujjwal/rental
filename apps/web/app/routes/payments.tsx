@@ -1,7 +1,7 @@
 
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams, Link, useRevalidator, redirect } from "react-router";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   DollarSign,
   TrendingUp,
@@ -24,6 +24,7 @@ import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { StatCardSkeleton, TableSkeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
+import { exportToCsv } from "~/utils/export";
 
 export const meta: MetaFunction = () => {
   return [
@@ -103,7 +104,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 
   try {
     // Fetch all payment data from real API
-    const [balanceData, earningsData, summaryData, transactionsData] = await Promise.all([
+    const results = await Promise.allSettled([
       paymentsApi.getBalance(),
       paymentsApi.getEarnings(),
       paymentsApi.getEarningsSummary(),
@@ -114,6 +115,18 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
         status,
       }),
     ]);
+
+    const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
+      r.status === 'fulfilled' ? r.value : fallback;
+
+    const balanceData = settled(results[0], { balance: 0, currency: 'USD' } as any);
+    const earningsData = settled(results[1], { amount: 0, currency: 'USD' } as any);
+    const summaryData = settled(results[2], { thisMonth: 0, lastMonth: 0, total: 0, currency: 'USD' } as any);
+    const transactionsData = settled(results[3], { transactions: [], total: 0, page: 1, limit: 20 } as any);
+
+    const failedSections = results
+      .map((r, i) => r.status === 'rejected' ? ['balance', 'earnings', 'summary', 'transactions'][i] : null)
+      .filter(Boolean) as string[];
 
     const data: PaymentsData = {
       balance: {
@@ -133,7 +146,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       totalTransactions: safeNumber(transactionsData.total),
       page: Math.max(1, safeNumber(transactionsData.page || 1)),
       limit: Math.max(1, safeNumber(transactionsData.limit || 20)),
-      error: null,
+      error: failedSections.length > 0 ? `Failed to load: ${failedSections.join(', ')}` : null,
     };
 
     return data;
@@ -209,45 +222,23 @@ export default function PaymentsPage() {
     : 0;
   const safeEarningsGrowth = Math.min(Math.max(safeNumber(earningsGrowth), -9999), 9999);
 
-  const handleExport = () => {
+  const handleExport = useCallback(() => {
     if (!data.transactions.length) return;
-    const headers = [
-      "Date",
-      "Type",
-      "Status",
-      "Amount",
-      "Currency",
-      "Description",
-      "Booking ID",
-      "Listing",
-    ];
-    const rows = data.transactions.map((transaction) => [
-      new Date(transaction.createdAt).toISOString(),
-      transaction.type,
-      transaction.status,
-      String(transaction.amountSigned ?? transaction.amount),
-      transaction.currency,
-      transaction.description || "",
-      transaction.booking?.id || "",
-      transaction.booking?.listing?.title || "",
-    ]);
-    const csv = [headers, ...rows]
-      .map((row) =>
-        row
-          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
-          .join(",")
-      )
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+    exportToCsv(
+      data.transactions,
+      [
+        { header: 'Date', accessor: (t) => new Date(t.createdAt).toISOString() },
+        { header: 'Type', accessor: (t) => t.type },
+        { header: 'Status', accessor: (t) => t.status },
+        { header: 'Amount', accessor: (t) => String(t.amountSigned ?? t.amount) },
+        { header: 'Currency', accessor: (t) => t.currency },
+        { header: 'Description', accessor: (t) => t.description || '' },
+        { header: 'Booking ID', accessor: (t) => t.booking?.id || '' },
+        { header: 'Listing', accessor: (t) => t.booking?.listing?.title || '' },
+      ],
+      'transactions',
+    );
+  }, [data.transactions]);
 
   if (data.error) {
     return (
@@ -617,3 +608,4 @@ export default function PaymentsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

@@ -1,6 +1,8 @@
 import { Controller, Get, Patch, Post, Body, Param, UseGuards, NotFoundException, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
-import { UsersService, UpdateProfileDto } from '../services/users.service';
+import { UsersService } from '../services/users.service';
+import { DataExportService } from '../services/data-export.service';
+import { UpdateProfileDto } from '../dto/update-profile.dto';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 
@@ -9,7 +11,10 @@ import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly dataExportService: DataExportService,
+  ) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -81,5 +86,12 @@ export class UsersController {
       idVerificationStatus: user.idVerificationStatus,
       createdAt: user.createdAt,
     };
+  }
+
+  @Get('me/export')
+  @ApiOperation({ summary: 'Export all personal data (GDPR)' })
+  @ApiResponse({ status: 200, description: 'Data exported successfully' })
+  async exportData(@CurrentUser('id') userId: string) {
+    return this.dataExportService.exportUserData(userId);
   }
 }

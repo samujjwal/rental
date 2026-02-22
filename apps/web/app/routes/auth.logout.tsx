@@ -72,3 +72,4 @@ export default function LogoutPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

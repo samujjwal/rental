@@ -7,6 +7,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { ThemeToggle } from "~/components/theme";
 
 export interface SidebarItem {
   href: string;
@@ -108,6 +109,10 @@ export function DashboardSidebar({ sections, className }: DashboardSidebarProps)
           )}
         </div>
       ))}
+      {/* Theme Toggle */}
+      <div className="border-t pt-4 px-3">
+        <ThemeToggle size="sm" />
+      </div>
     </nav>
   );
 

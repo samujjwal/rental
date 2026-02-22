@@ -38,6 +38,12 @@ interface DepositReleaseEvent {
   timestamp: string;
 }
 
+interface DepositCaptureEvent {
+  bookingId: string;
+  amount: number;
+  timestamp: string;
+}
+
 @Injectable()
 export class PaymentEventsService implements OnModuleInit {
   private readonly logger = new Logger(PaymentEventsService.name);
@@ -68,6 +74,10 @@ export class PaymentEventsService implements OnModuleInit {
 
     await this.cacheService.subscribe('booking:deposit-release', (event: DepositReleaseEvent) =>
       this.handleDepositRelease(event),
+    );
+
+    await this.cacheService.subscribe('booking:deposit-capture', (event: DepositCaptureEvent) =>
+      this.handleDepositCapture(event),
     );
 
     this.logger.log('Subscribed to payment event channels');
@@ -191,6 +201,28 @@ export class PaymentEventsService implements OnModuleInit {
       this.logger.log(`Deposit released for booking ${bookingId}`);
     } catch (error) {
       this.logger.error(`Deposit release failed for booking ${bookingId}: ${error.message}`, error.stack);
+    }
+  }
+
+  private async handleDepositCapture(event: DepositCaptureEvent): Promise<void> {
+    const { bookingId, amount } = event;
+
+    this.logger.log(`Processing deposit capture for booking ${bookingId}: ${amount}`);
+
+    try {
+      const depositHold = await this.prisma.depositHold.findFirst({
+        where: { bookingId, status: 'AUTHORIZED' },
+      });
+
+      if (!depositHold) {
+        this.logger.warn(`No active deposit hold found for booking ${bookingId}`);
+        return;
+      }
+
+      await this.stripeService.captureDeposit(depositHold.id, amount);
+      this.logger.log(`Deposit captured for booking ${bookingId}, amount: ${amount}`);
+    } catch (error) {
+      this.logger.error(`Deposit capture failed for booking ${bookingId}: ${error.message}`, error.stack);
     }
   }
 }

@@ -7,14 +7,7 @@ import {
   Link as RouterLink,
   redirect,
 } from "react-router";
-import {
-  Box,
-  Typography,
-  Breadcrumbs,
-  Link,
-  Alert,
-  CircularProgress,
-} from "@mui/material";
+import { ChevronRight, Loader2 } from "lucide-react";
 import {
   EnhancedDataTable,
   EnhancedForm,
@@ -345,49 +338,35 @@ export default function ModernDynamicEntityPage() {
   // Loading state
   if (isConfigLoading) {
     return (
-      <Box
-        sx={{
-          p: 3,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: 400,
-        }}
-      >
-        <CircularProgress />
-      </Box>
+      <div className="flex items-center justify-center min-h-[400px] p-6">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   // Error state
   if (errorMessage && !entityConfig) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">{errorMessage}</Alert>
-      </Box>
+      <div className="p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <p className="text-red-800 dark:text-red-300 font-medium">{errorMessage}</p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <div className="p-6">
       {/* Breadcrumbs */}
-      <Breadcrumbs sx={{ mb: 2 }}>
-        <Link
-          color="inherit"
-          component={RouterLink}
-          to="/admin"
-          underline="hover"
-        >
-          Admin
-        </Link>
-        <Typography color="text.primary">
-          {entityConfig?.pluralName || "Entity"}
-        </Typography>
-      </Breadcrumbs>
+      <nav className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 mb-4">
+        <RouterLink to="/admin" className="hover:text-gray-900 dark:hover:text-gray-200 hover:underline">Admin</RouterLink>
+        <ChevronRight className="w-4 h-4" />
+        <span className="text-gray-900 dark:text-white">{entityConfig?.pluralName || "Entity"}</span>
+      </nav>
 
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           {view === "table"
             ? entityConfig?.pluralName
             : view === "form"
@@ -395,19 +374,17 @@ export default function ModernDynamicEntityPage() {
                 ? `Edit ${entityConfig?.name}`
                 : `Create ${entityConfig?.name}`
               : `${entityConfig?.name} Details`}
-        </Typography>
+        </h1>
         {entityConfig?.description && view === "table" && (
-          <Typography variant="body2" color="text.secondary">
-            {entityConfig.description}
-          </Typography>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{entityConfig.description}</p>
         )}
-      </Box>
+      </div>
 
       {/* Error Alert */}
       {errorMessage && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {errorMessage}
-        </Alert>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+          <p className="text-red-800 dark:text-red-300 font-medium">{errorMessage}</p>
+        </div>
       )}
 
       {/* Content */}
@@ -504,8 +481,9 @@ export default function ModernDynamicEntityPage() {
           enableAutoSave={false}
         />
       )}
-    </Box>
+    </div>
   );
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

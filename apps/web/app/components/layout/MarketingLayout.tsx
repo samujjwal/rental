@@ -1,6 +1,7 @@
 import { Link, Outlet } from "react-router";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
+import { ThemeToggle } from "~/components/theme";
 
 const navLinks = [
   { href: "/search", label: "Browse Rentals" },
@@ -45,6 +46,7 @@ export function MarketingLayout() {
 
             {/* Auth actions */}
             <div className="hidden md:flex items-center gap-3">
+              <ThemeToggle size="sm" />
               <Link
                 to="/auth/login"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"

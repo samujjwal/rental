@@ -5,8 +5,7 @@ export interface Listing {
   description: string;
   category: string | { id: string; name: string; slug: string };
   subcategory: string | null;
-  pricePerDay: number;
-  basePrice?: number; // Alias for pricePerDay
+  basePrice: number;
   pricePerWeek: number | null;
   pricePerMonth: number | null;
   currency: string;
@@ -22,7 +21,9 @@ export interface Listing {
       lng: number;
     };
   };
-  images: string[];
+  photos: string[];
+  images?: string[];
+  categoryId?: string;
   availability: "available" | "rented" | "maintenance" | "unavailable";
   status?:
     | "AVAILABLE"
@@ -31,7 +32,7 @@ export interface Listing {
     | "UNAVAILABLE"
     | "DRAFT"
     | "SUSPENDED"
-    | "ARCHIVED"; // Alternative status field
+    | "ARCHIVED";
   availabilitySchedule: {
     startDate: string | null;
     endDate: string | null;
@@ -51,15 +52,14 @@ export interface Listing {
   rules: string | null;
   features: string[];
   rating: number | null;
-  averageRating?: number; // Alias for rating
   totalReviews: number;
-  reviewCount?: number; // Alias for totalReviews
   totalBookings: number;
-  bookingsCount?: number; // Alias for totalBookings
-  totalEarnings?: number; // Total earnings from this listing
+  totalEarnings?: number;
   views: number;
   featured: boolean;
   verified: boolean;
+  categorySlug?: string | null;
+  categorySpecificData?: Record<string, unknown>;
   owner: {
     id: string;
     firstName: string;
@@ -77,7 +77,7 @@ export interface CreateListingRequest {
   description: string;
   category: string;
   subcategory?: string;
-  pricePerDay: number;
+  basePrice: number;
   pricePerWeek?: number;
   pricePerMonth?: number;
   condition: "new" | "like-new" | "good" | "fair" | "poor";
@@ -92,7 +92,7 @@ export interface CreateListingRequest {
       lng: number;
     };
   };
-  images: string[];
+  photos: string[];
   instantBooking?: boolean;
   deliveryOptions: {
     pickup: boolean;
@@ -107,6 +107,7 @@ export interface CreateListingRequest {
   cancellationPolicy: "flexible" | "moderate" | "strict";
   rules?: string;
   features?: string[];
+  categorySpecificData?: Record<string, unknown>;
 }
 
 export type UpdateListingRequest = Partial<CreateListingRequest>;
@@ -147,6 +148,9 @@ export interface Category {
   slug: string;
   description: string;
   icon: string;
+  requiredFields?: string[];
+  searchableFields?: string[];
+  templateSchema?: string;
   subcategories: {
     id: string;
     name: string;

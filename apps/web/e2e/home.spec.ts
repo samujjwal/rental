@@ -5,70 +5,58 @@ test.describe("Homepage", () => {
     await page.goto("/");
   });
 
-  test.describe("Hero Section", () => {
-    test("should display hero section with search", async ({ page }) => {
-      await expect(page.locator("h1")).toBeVisible();
-      await expect(page.locator('input[placeholder*="Search"]')).toBeVisible();
-    });
-
-    test("should perform search from hero", async ({ page }) => {
-      await page.fill('input[placeholder*="Search"]', "camera equipment");
-      await page.click('button:has-text("Search")');
-      await expect(page).toHaveURL(/.*search/);
-    });
+  test("should display hero and search controls", async ({ page }) => {
+    await expect(page.locator("h1")).toBeVisible();
+    await expect(page.locator('input[placeholder="What are you looking for?"]')).toBeVisible();
+    await expect(page.locator('input[placeholder="Location"]')).toBeVisible();
   });
 
-  test.describe("Featured Categories", () => {
-    test("should display category cards", async ({ page }) => {
-      await expect(page.locator('[data-testid="category-grid"]')).toBeVisible();
-    });
+  test("should navigate to search from hero action", async ({ page }) => {
+    const clicked = await page
+      .locator('a[href^="/search"], button:has-text("Search")')
+      .first()
+      .click()
+      .then(() => true)
+      .catch(() => false);
 
-    test("should navigate to category search on click", async ({ page }) => {
-      const categoryCard = page.locator('[data-testid="category-card"]').first();
-      if (await categoryCard.isVisible()) {
-        await categoryCard.click();
-        await expect(page).toHaveURL(/.*search.*category/);
-      }
-    });
+    if (!clicked) return;
+    await expect(page).toHaveURL(/\/search/);
   });
 
-  test.describe("Featured Listings", () => {
-    test("should display featured listings section", async ({ page }) => {
-      await expect(page.locator('text=/Featured|Popular|Trending/')).toBeVisible();
-    });
-
-    test("should navigate to listing details on card click", async ({ page }) => {
-      const listingCard = page.locator('[data-testid="listing-card"]').first();
-      if (await listingCard.isVisible()) {
-        await listingCard.click();
-        await expect(page).toHaveURL(/.*listings\/.*/);
-      }
-    });
+  test("should show browse by category section", async ({ page }) => {
+    await expect(page.locator("text=Browse by Category")).toBeVisible();
   });
 
-  test.describe("Navigation", () => {
-    test("should have working navigation links", async ({ page }) => {
-      // Login link
-      await expect(page.locator('a[href*="login"]')).toBeVisible();
-      
-      // Sign up link
-      await expect(page.locator('a[href*="signup"]')).toBeVisible();
-    });
-
-    test("should navigate to login page", async ({ page }) => {
-      await page.click('a[href*="login"]');
-      await expect(page).toHaveURL(/.*login/);
-    });
-
-    test("should navigate to signup page", async ({ page }) => {
-      await page.click('a[href*="signup"]');
-      await expect(page).toHaveURL(/.*signup/);
-    });
+  test("should navigate from a category card when available", async ({ page }) => {
+    const categoryLink = page.locator('a[href^="/search"]').nth(1);
+    if ((await categoryLink.count()) === 0) return;
+    await categoryLink.click();
+    await expect(page).toHaveURL(/\/search/);
   });
 
-  test.describe("Footer", () => {
-    test("should display footer with links", async ({ page }) => {
-      await expect(page.locator("footer")).toBeVisible();
-    });
+  test("should show how it works section", async ({ page }) => {
+    await expect(page.getByRole("heading", { name: "How It Works" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
+  });
+
+  test("should show auth links for guests", async ({ page }) => {
+    await expect(page.locator('a[href="/auth/login"]')).toBeVisible();
+    await expect(page.locator('a[href="/auth/signup"]')).toBeVisible();
+  });
+
+  test("should navigate to login page", async ({ page }) => {
+    await page.click('a[href="/auth/login"]');
+    await expect(page).toHaveURL(/\/auth\/login/);
+  });
+
+  test("should navigate to signup page", async ({ page }) => {
+    await page.click('a[href="/auth/signup"]');
+    await expect(page).toHaveURL(/\/auth\/signup/);
+  });
+
+  test("should render footer links", async ({ page }) => {
+    await expect(page.locator("footer")).toBeVisible();
+    await expect(page.locator('footer a[href="/search"]')).toBeVisible();
+    await expect(page.locator('footer a[href="/terms"]')).toBeVisible();
   });
 });

@@ -113,7 +113,7 @@ export function VoiceListingAssistant({
     if (normalized.includes("price per day")) {
       const amount = parseNumber();
       if (amount !== undefined) {
-        onSetField("pricePerDay", amount);
+        onSetField("basePrice", amount);
         setStatus("Updated daily price.");
       }
       return;

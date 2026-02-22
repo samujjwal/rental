@@ -14,9 +14,8 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import {
   CategoriesService,
-  CreateCategoryDto,
-  UpdateCategoryDto,
 } from '../services/categories.service';
+import { CreateCategoryDto, UpdateCategoryDto } from '../dto/category.dto';
 import { CategoryTemplateService } from '../services/category-template.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';

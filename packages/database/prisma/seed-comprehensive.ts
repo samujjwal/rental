@@ -1309,7 +1309,7 @@ async function main() {
             valueRating: faker.number.int({ min: 1, max: 5 }),
             locationRating: faker.number.int({ min: 1, max: 5 }),
             checkInRating: faker.number.int({ min: 1, max: 5 }),
-            content: faker.lorem.paragraphs(2),
+            comment: faker.lorem.paragraphs(2),
             response: faker.lorem.sentence(),
             status: faker.helpers.weightedArrayElement([
               { weight: 75, value: 'PUBLISHED' },
@@ -1890,7 +1890,7 @@ async function main() {
             valueRating: faker.number.int({ min: 4, max: 5 }),
             locationRating: 5,
             checkInRating: 5,
-            content: 'Great experience with this rental! Everything was as described.',
+            comment: 'Great experience with this rental! Everything was as described.',
             status: 'PUBLISHED',
           },
         })

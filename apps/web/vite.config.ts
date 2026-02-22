@@ -17,6 +17,25 @@ export default defineConfig(({ mode }) => {
         plugins: [tailwindcss, autoprefixer],
       },
     },
+    build: {
+      // Target modern browsers for smaller output
+      target: 'es2022',
+      // Improve chunk splitting for vendor libraries
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            // Separate large vendor deps into their own chunks for long-term caching
+            if (id.includes('node_modules')) {
+              if (id.includes('date-fns')) return 'vendor-date-fns';
+              if (id.includes('lucide-react')) return 'vendor-icons';
+              if (id.includes('react-router')) return 'vendor-router';
+              if (id.includes('zod')) return 'vendor-zod';
+              if (id.includes('zustand') || id.includes('immer')) return 'vendor-state';
+            }
+          },
+        },
+      },
+    },
     server: {
       port: 3401,
       strictPort: true,

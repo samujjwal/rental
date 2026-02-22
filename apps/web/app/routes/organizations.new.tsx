@@ -502,3 +502,4 @@ export default function NewOrganizationPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

@@ -13,6 +13,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { adminApi, type AdminDispute } from "~/lib/api/admin";
+import { disputesApi, type DisputeDetail } from "~/lib/api/disputes";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
 
@@ -115,6 +116,78 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     }
   }
 
+  if (intent === "assign-to-me") {
+    if (!UUID_PATTERN.test(disputeId)) {
+      return { success: false, error: "Dispute ID is required" };
+    }
+    try {
+      await adminApi.assignDispute(disputeId);
+      return { success: true, message: "Dispute assigned for review" };
+    } catch (error: unknown) {
+      return { success: false, error: getErrorMessage(error) || "Failed to assign dispute" };
+    }
+  }
+
+  if (intent === "add-note") {
+    const adminNote = String(formData.get("adminNote") ?? "").trim();
+    if (!UUID_PATTERN.test(disputeId)) {
+      return { success: false, error: "Dispute ID is required" };
+    }
+    if (adminNote.length < 3) {
+      return { success: false, error: "Admin note must be at least 3 characters" };
+    }
+    try {
+      await adminApi.updateDispute(disputeId, { adminNotes: adminNote });
+      return { success: true, message: "Admin note added" };
+    } catch (error: unknown) {
+      return { success: false, error: getErrorMessage(error) || "Failed to add admin note" };
+    }
+  }
+
+  if (intent === "send-message") {
+    const message = String(formData.get("message") ?? "").trim();
+    if (!UUID_PATTERN.test(disputeId)) {
+      return { success: false, error: "Dispute ID is required" };
+    }
+    if (message.length < 3) {
+      return { success: false, error: "Message must be at least 3 characters" };
+    }
+    try {
+      await disputesApi.respondToDispute(disputeId, message);
+      return { success: true, message: "Message sent to dispute thread" };
+    } catch (error: unknown) {
+      return { success: false, error: getErrorMessage(error) || "Failed to send message" };
+    }
+  }
+
+  if (intent === "resolve-dispute") {
+    const resolution = String(formData.get("resolution") ?? "").trim();
+    const resolvedAmountRaw = String(formData.get("resolvedAmount") ?? "").trim();
+    const resolvedAmount =
+      resolvedAmountRaw.length > 0 && !Number.isNaN(Number(resolvedAmountRaw))
+        ? Number(resolvedAmountRaw)
+        : undefined;
+    if (!UUID_PATTERN.test(disputeId)) {
+      return { success: false, error: "Dispute ID is required" };
+    }
+    if (resolution.length < 3) {
+      return { success: false, error: "Resolution note must be at least 3 characters" };
+    }
+    if (resolvedAmount !== undefined && resolvedAmount < 0) {
+      return { success: false, error: "Resolved amount cannot be negative" };
+    }
+    try {
+      await adminApi.resolveDispute(disputeId, {
+        resolution,
+        notes: resolution,
+        resolvedAmount,
+      });
+      return { success: true, message: "Dispute resolved successfully" };
+    } catch (error: unknown) {
+      return { success: false, error: getErrorMessage(error) || "Failed to resolve dispute" };
+    }
+  }
+
   return { success: false, error: "Unknown action" };
 }
 
@@ -132,19 +205,49 @@ export default function AdminDisputesPage() {
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedType, setSelectedType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDispute, setSelectedDispute] = useState<AdminDispute | null>(null);
+  const [selectedDisputeDetail, setSelectedDisputeDetail] = useState<DisputeDetail | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const isSubmitting = navigation.state === "submitting";
 
+  const openDisputeDetails = async (dispute: AdminDispute) => {
+    setSelectedDispute(dispute);
+    setSelectedDisputeDetail(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    try {
+      const detail = await disputesApi.getDisputeById(dispute.id);
+      setSelectedDisputeDetail(detail);
+    } catch (detailLoadError: unknown) {
+      setDetailError(getErrorMessage(detailLoadError));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeDisputeDetails = () => {
+    setSelectedDispute(null);
+    setSelectedDisputeDetail(null);
+    setDetailError(null);
+    setDetailLoading(false);
+  };
+
   // Filter disputes
   const query = safeLower(searchQuery);
+  const availableTypes = Array.from(
+    new Set(disputes.map((dispute: AdminDispute) => dispute.type).filter(Boolean)),
+  );
   const filteredDisputes = disputes.filter((dispute: AdminDispute) => {
     const matchesStatus = selectedStatus === "all" || dispute.status === selectedStatus;
+    const matchesType = selectedType === "all" || dispute.type === selectedType;
     const matchesSearch = query === "" ||
       safeLower(dispute.id).includes(query) ||
       safeLower(dispute.initiator?.email).includes(query);
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesType && matchesSearch;
   });
 
   // Count by status
@@ -221,12 +324,18 @@ export default function AdminDisputesPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Success/Error Messages */}
         {actionData?.success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
+          <div
+            className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700"
+            data-testid="dispute-action-success"
+          >
             {actionData.message}
           </div>
         )}
         {actionData?.error && (
-          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
+          <div
+            className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive"
+            data-testid="dispute-action-error"
+          >
             {actionData.error}
           </div>
         )}
@@ -242,6 +351,15 @@ export default function AdminDisputesPage() {
           ].map((tab) => (
             <button
               key={tab.key}
+              data-testid={
+                tab.key === "OPEN"
+                  ? "filter-open"
+                  : tab.key === "UNDER_REVIEW"
+                    ? "filter-in-progress"
+                    : tab.key === "RESOLVED"
+                      ? "filter-resolved"
+                      : undefined
+              }
               onClick={() => setSelectedStatus(tab.key)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedStatus === tab.key
@@ -252,6 +370,29 @@ export default function AdminDisputesPage() {
               {tab.label} ({statusCounts[tab.key as keyof typeof statusCounts]})
             </button>
           ))}
+        </div>
+
+        {/* Type Filter */}
+        <div className="mb-6">
+          <div className="max-w-md">
+            <label htmlFor="dispute-type-filter" className="block text-sm font-medium mb-2">
+              Filter by type
+            </label>
+            <select
+              id="dispute-type-filter"
+              data-testid="type-filter"
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              className="w-full px-3 py-2 border border-input rounded-lg bg-background"
+            >
+              <option value="all">All types</option>
+              {availableTypes.map((type) => (
+                <option key={type} value={type}>
+                  {humanize(type)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -269,12 +410,13 @@ export default function AdminDisputesPage() {
         </div>
 
         {/* Disputes List */}
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="disputes-list">
           {filteredDisputes.map((dispute: AdminDispute) => (
             <div
               key={dispute.id}
+              data-testid="dispute-card"
               className="bg-card border rounded-xl p-4 hover:border-primary/50 transition-colors cursor-pointer"
-              onClick={() => setSelectedDispute(dispute)}
+              onClick={() => void openDisputeDetails(dispute)}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -350,8 +492,14 @@ export default function AdminDisputesPage() {
 
       {/* Dispute Detail Modal */}
       {selectedDispute && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          data-testid="dispute-details-overlay"
+        >
+          <div
+            className="bg-card border rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+            data-testid="dispute-details"
+          >
             {/* Modal Header */}
             <div className="sticky top-0 bg-card border-b p-4 flex items-center justify-between">
               <div>
@@ -378,7 +526,8 @@ export default function AdminDisputesPage() {
                 </div>
               </div>
               <button
-                onClick={() => setSelectedDispute(null)}
+                data-testid="close-dispute-details"
+                onClick={closeDisputeDetails}
                 className="p-2 hover:bg-muted rounded-lg"
               >
                 <XCircle className="w-5 h-5" />
@@ -387,6 +536,18 @@ export default function AdminDisputesPage() {
 
             {/* Modal Content */}
             <div className="p-6 space-y-6">
+              {detailLoading && (
+                <div className="p-3 bg-muted/40 rounded-lg text-sm text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading dispute details...
+                </div>
+              )}
+              {detailError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                  {detailError}
+                </div>
+              )}
+
               {/* Participants */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-muted/50 rounded-lg">
@@ -406,7 +567,7 @@ export default function AdminDisputesPage() {
               </div>
 
               {/* Details */}
-              <div>
+              <div data-testid="dispute-details-section">
                 <h4 className="text-sm font-medium text-foreground mb-2">Issue Details</h4>
                 <div className="p-4 bg-muted/50 rounded-lg space-y-2">
                   <p className="font-medium text-foreground">
@@ -430,9 +591,60 @@ export default function AdminDisputesPage() {
                 </div>
               </div>
 
+              {/* Evidence */}
+              <div data-testid="evidence-section">
+                <h4 className="text-sm font-medium text-foreground mb-2">Evidence</h4>
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  {Array.isArray(selectedDisputeDetail?.evidence) &&
+                  selectedDisputeDetail.evidence.length > 0 ? (
+                    <ul className="space-y-2 text-sm">
+                      {selectedDisputeDetail.evidence.map((item, index) => (
+                        <li key={`evidence-${index}`} className="text-muted-foreground">
+                          {typeof item === "string" ? item : JSON.stringify(item)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No evidence attached for this dispute.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div data-testid="dispute-messages">
+                <h4 className="text-sm font-medium text-foreground mb-2">Discussion</h4>
+                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                  {Array.isArray(selectedDisputeDetail?.responses) &&
+                  selectedDisputeDetail.responses.length > 0 ? (
+                    selectedDisputeDetail.responses.map((response) => (
+                      <div key={response.id} className="border rounded-md p-3 bg-background">
+                        <p className="text-sm text-foreground">{safeText(response.content, "No content")}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {safeText(response.user?.email, "Unknown user")} • {safeDateLabel(response.createdAt)}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No responses yet.</p>
+                  )}
+                </div>
+              </div>
+
               {/* Actions */}
-              <div className="border-t pt-6 flex flex-wrap gap-3">
-                {selectedDispute.status !== "UNDER_REVIEW" && selectedDispute.status !== "RESOLVED" ? (
+              <div className="border-t pt-6 space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  <Form method="post">
+                    <input type="hidden" name="disputeId" value={selectedDispute.id} />
+                    <input type="hidden" name="intent" value="assign-to-me" />
+                    <UnifiedButton
+                      type="submit"
+                      variant="outline"
+                      disabled={isSubmitting}
+                      data-testid="assign-dispute-button"
+                    >
+                      Assign to Me
+                    </UnifiedButton>
+                  </Form>
                   <Form method="post">
                     <input type="hidden" name="disputeId" value={selectedDispute.id} />
                     <input type="hidden" name="intent" value="set-status" />
@@ -441,27 +653,95 @@ export default function AdminDisputesPage() {
                       Move to Review
                     </UnifiedButton>
                   </Form>
-                ) : null}
-                {selectedDispute.status !== "RESOLVED" ? (
-                  <Form method="post">
-                    <input type="hidden" name="disputeId" value={selectedDispute.id} />
-                    <input type="hidden" name="intent" value="set-status" />
-                    <input type="hidden" name="status" value="RESOLVED" />
-                    <UnifiedButton type="submit" disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Updating...
-                        </>
-                      ) : (
-                        <>
-                          <AlertTriangle className="w-4 h-4 mr-2" />
-                          Resolve Dispute
-                        </>
-                      )}
-                    </UnifiedButton>
-                  </Form>
-                ) : null}
+                </div>
+
+                <Form method="post" className="space-y-3">
+                  <input type="hidden" name="disputeId" value={selectedDispute.id} />
+                  <input type="hidden" name="intent" value="add-note" />
+                  <label className="block text-sm font-medium text-foreground">
+                    Admin note
+                    <textarea
+                      name="adminNote"
+                      className="mt-2 w-full min-h-24 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Add internal handling notes for this dispute..."
+                      data-testid="admin-note-input"
+                    />
+                  </label>
+                  <UnifiedButton
+                    type="submit"
+                    variant="outline"
+                    disabled={isSubmitting}
+                    data-testid="add-note-button"
+                  >
+                    Add Note
+                  </UnifiedButton>
+                </Form>
+
+                <Form method="post" className="space-y-3">
+                  <input type="hidden" name="disputeId" value={selectedDispute.id} />
+                  <input type="hidden" name="intent" value="send-message" />
+                  <label className="block text-sm font-medium text-foreground">
+                    Send message
+                    <textarea
+                      name="message"
+                      className="mt-2 w-full min-h-24 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Send a message to the dispute thread..."
+                      data-testid="dispute-message-input"
+                    />
+                  </label>
+                  <UnifiedButton
+                    type="submit"
+                    variant="outline"
+                    disabled={isSubmitting}
+                    data-testid="send-dispute-message-button"
+                  >
+                    Send Message
+                  </UnifiedButton>
+                </Form>
+
+                <Form method="post" className="space-y-3">
+                  <input type="hidden" name="disputeId" value={selectedDispute.id} />
+                  <input type="hidden" name="intent" value="resolve-dispute" />
+                  <label className="block text-sm font-medium text-foreground">
+                    Resolution notes
+                    <textarea
+                      name="resolution"
+                      className="mt-2 w-full min-h-24 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Summarize the dispute resolution decision..."
+                      data-testid="resolution-note-input"
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-foreground">
+                    Resolved amount (optional)
+                    <input
+                      name="resolvedAmount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="0.00"
+                      data-testid="resolved-amount-input"
+                    />
+                  </label>
+                  <UnifiedButton
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-destructive hover:bg-destructive/90"
+                    data-testid="resolve-dispute-button"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-4 h-4 mr-2" />
+                        Resolve Dispute
+                      </>
+                    )}
+                  </UnifiedButton>
+                </Form>
               </div>
             </div>
           </div>
@@ -472,3 +752,4 @@ export default function AdminDisputesPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

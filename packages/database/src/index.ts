@@ -46,6 +46,7 @@ export type {
   OrganizationMember,
   AuditLog,
   Availability,
+  IdentityDocument,
 } from '@prisma/client';
 
 // Export enums as both types and values for API usage
@@ -55,6 +56,9 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   SUPER_ADMIN = 'SUPER_ADMIN',
   CUSTOMER = 'CUSTOMER',
+  OPERATIONS_ADMIN = 'OPERATIONS_ADMIN',
+  FINANCE_ADMIN = 'FINANCE_ADMIN',
+  SUPPORT_ADMIN = 'SUPPORT_ADMIN',
 }
 
 export enum UserStatus {
@@ -153,6 +157,7 @@ export enum ReviewType {
 export enum VerificationStatus {
   PENDING = 'PENDING',
   VERIFIED = 'VERIFIED',
+  APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
 }
 
@@ -263,6 +268,21 @@ export enum InsuranceStatus {
   ACTIVE = 'ACTIVE',
   EXPIRED = 'EXPIRED',
   CANCELLED = 'CANCELLED',
+  PENDING = 'PENDING',
+}
+
+export enum InsuranceType {
+  PROPERTY_DAMAGE = 'PROPERTY_DAMAGE',
+  LIABILITY = 'LIABILITY',
+  TRIP_CANCELLATION = 'TRIP_CANCELLATION',
+  MEDICAL = 'MEDICAL',
+}
+
+export enum IdentityDocumentType {
+  DRIVERS_LICENSE = 'DRIVERS_LICENSE',
+  PASSPORT = 'PASSPORT',
+  NATIONAL_ID = 'NATIONAL_ID',
+  OTHER = 'OTHER',
 }
 
 export enum PropertyCondition {

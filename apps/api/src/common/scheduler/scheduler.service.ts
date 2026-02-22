@@ -3,6 +3,7 @@ import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { EmbeddingService } from '@/modules/ai/services/embedding.service';
 import { BookingStatus } from '@rental-portal/database';
 import { addHours, addDays, isBefore } from 'date-fns';
 
@@ -12,6 +13,7 @@ export class SchedulerService {
 
   constructor(
     private prisma: PrismaService,
+    private embeddingService: EmbeddingService,
     @InjectQueue('bookings') private bookingsQueue: Queue,
     @InjectQueue('notifications') private notificationsQueue: Queue,
     @InjectQueue('search-indexing') private searchQueue: Queue,
@@ -372,6 +374,52 @@ export class SchedulerService {
   }
 
   /**
+   * Retry failed settlements (daily at 4 AM)
+   * Finds bookings that completed > 24h ago but haven't settled
+   */
+  @Cron('0 4 * * *')
+  async retryFailedSettlements() {
+    this.logger.log('Retrying failed settlements...');
+
+    try {
+      const twentyFourHoursAgo = addHours(new Date(), -24);
+
+      const staleBookings = await this.prisma.booking.findMany({
+        where: {
+          status: BookingStatus.COMPLETED,
+          completedAt: {
+            lt: twentyFourHoursAgo,
+          },
+        },
+        select: { id: true, completedAt: true },
+      });
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const booking of staleBookings) {
+        try {
+          await this.bookingsQueue.add('settle-booking', {
+            bookingId: booking.id,
+          });
+          successCount++;
+        } catch (error) {
+          failCount++;
+          this.logger.error(`Settlement retry failed for booking ${booking.id}: ${error.message}`);
+        }
+      }
+
+      if (staleBookings.length > 0) {
+        this.logger.log(
+          `Settlement retry: ${successCount} queued, ${failCount} failed out of ${staleBookings.length} stale bookings`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Error retrying settlements: ${error.message}`);
+    }
+  }
+
+  /**
    * Health check interval (every 30 seconds)
    */
   @Interval(30000)
@@ -393,6 +441,20 @@ export class SchedulerService {
       }
     } catch (error) {
       this.logger.error(`Health check failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Backfill missing embeddings for semantic search every 6 hours
+   */
+  @Cron('0 */6 * * *')
+  async backfillEmbeddings() {
+    this.logger.log('Starting embedding backfill...');
+    try {
+      const result = await this.embeddingService.backfillEmbeddings(50);
+      this.logger.log(`Embedding backfill complete: ${JSON.stringify(result)}`);
+    } catch (error) {
+      this.logger.error(`Embedding backfill failed: ${error.message}`);
     }
   }
 }

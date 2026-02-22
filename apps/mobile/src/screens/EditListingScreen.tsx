@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
+import { ImagePicker, SelectedImage } from "../components/ImagePicker";
+import { showSuccess, showError, showApiError } from "../components/Toast";
 
 
 type Props = NativeStackScreenProps<RootStackParamList, "EditListing">;
@@ -17,6 +19,8 @@ export function EditListingScreen({ route }: Props) {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [bookingMode, setBookingMode] = useState<"REQUEST" | "INSTANT">("REQUEST");
+  const [images, setImages] = useState<SelectedImage[]>([]);
+  const [generatingDesc, setGeneratingDesc] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -27,6 +31,9 @@ export function EditListingScreen({ route }: Props) {
         setDescription(listing.description || "");
         const basePrice = listing.pricePerDay ?? listing.basePrice;
         setPrice(basePrice != null ? String(basePrice) : "");
+        // Load existing photos
+        const photos = listing.photos || [];
+        setImages(photos.map((uri: string) => ({ uri })));
         if (listing.bookingMode) {
           const mode = listing.bookingMode.toUpperCase();
           setBookingMode(mode === "INSTANT_BOOK" || mode === "INSTANT" ? "INSTANT" : "REQUEST");
@@ -71,9 +78,15 @@ export function EditListingScreen({ route }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <Text style={styles.heading}>Edit Listing</Text>
       <Text style={styles.subtitle}>Listing ID: {listingId}</Text>
+      <ImagePicker
+        images={images}
+        onImagesChange={setImages}
+        maxImages={10}
+        label="Photos"
+      />
       <TextInput
         value={title}
         onChangeText={setTitle}
@@ -85,7 +98,40 @@ export function EditListingScreen({ route }: Props) {
         onChangeText={setDescription}
         placeholder="Description"
         style={styles.input}
+        multiline
+        numberOfLines={4}
       />
+      <Pressable
+        style={[styles.aiButton, generatingDesc && styles.aiButtonDisabled]}
+        onPress={async () => {
+          if (!title.trim()) {
+            showError('Enter a title first');
+            return;
+          }
+          setGeneratingDesc(true);
+          try {
+            const result = await mobileClient.generateDescription({
+              title,
+              city: undefined,
+            });
+            setDescription(result.description);
+            showSuccess('Description generated');
+          } catch {
+            showError('Failed to generate description');
+          } finally {
+            setGeneratingDesc(false);
+          }
+        }}
+        disabled={generatingDesc}
+        accessibilityRole="button"
+        accessibilityLabel="Generate description with AI"
+      >
+        {generatingDesc ? (
+          <ActivityIndicator size="small" color="#4A90D9" />
+        ) : (
+          <Text style={styles.aiButtonText}>{'\u2728'} Generate with AI</Text>
+        )}
+      </Pressable>
       <TextInput
         value={price}
         onChangeText={setPrice}
@@ -135,7 +181,7 @@ export function EditListingScreen({ route }: Props) {
           {loading ? "Saving..." : "Save"}
         </Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -211,5 +257,26 @@ const styles = StyleSheet.create({
   },
   toggleTextActive: {
     color: "#FFFFFF",
+  },
+  aiButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#4A90D9",
+    backgroundColor: "#EFF6FF",
+    marginBottom: 12,
+    alignSelf: "flex-start",
+  },
+  aiButtonDisabled: {
+    opacity: 0.6,
+  },
+  aiButtonText: {
+    color: "#4A90D9",
+    fontWeight: "600",
+    fontSize: 13,
   },
 });

@@ -3,11 +3,18 @@ import {
   IsDateString,
   IsOptional,
   IsInt,
+  IsEnum,
   Min,
   Max,
   MaxLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+export enum DeliveryMethod {
+  PICKUP = 'pickup',
+  DELIVERY = 'delivery',
+  SHIPPING = 'shipping',
+}
 
 export class CreateBookingDto {
   @ApiProperty({ description: 'Listing ID to book' })
@@ -29,11 +36,21 @@ export class CreateBookingDto {
   @Max(100)
   guestCount?: number;
 
-  @ApiProperty({ description: 'Message to the owner', required: false })
+  @ApiProperty({ description: 'Delivery method', enum: DeliveryMethod })
+  @IsEnum(DeliveryMethod)
+  deliveryMethod: DeliveryMethod;
+
+  @ApiProperty({ description: 'Delivery address (required when delivery method is delivery)', required: false })
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
-  message?: string;
+  @MaxLength(500)
+  deliveryAddress?: string;
+
+  @ApiProperty({ description: 'Special requests or notes to the owner', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  specialRequests?: string;
 
   @ApiProperty({ description: 'Promo code', required: false })
   @IsOptional()
@@ -85,6 +102,13 @@ export class CancelBookingDto {
 
 export class InitiateDisputeDto {
   @ApiProperty({ description: 'Reason for the dispute' })
+  @IsString()
+  @MaxLength(2000)
+  reason: string;
+}
+
+export class RejectReturnDto {
+  @ApiProperty({ description: 'Reason for rejecting the return (e.g., damage found)' })
   @IsString()
   @MaxLength(2000)
   reason: string;

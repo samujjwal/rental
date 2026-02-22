@@ -10,13 +10,13 @@ export type BadgeColor =
   | 'info';
 
 const colorClasses: Record<BadgeColor, string> = {
-  default: 'bg-gray-100 text-gray-700',
-  primary: 'bg-blue-100 text-blue-700',
-  secondary: 'bg-purple-100 text-purple-700',
-  success: 'bg-green-100 text-green-700',
-  warning: 'bg-yellow-100 text-yellow-800',
-  error: 'bg-red-100 text-red-700',
-  info: 'bg-cyan-100 text-cyan-700',
+  default: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  primary: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+  secondary: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+  success: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+  error: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+  info: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
 };
 
 export interface StatusBadgeProps {

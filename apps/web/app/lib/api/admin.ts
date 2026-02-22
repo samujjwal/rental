@@ -453,15 +453,35 @@ export const adminApi = {
     });
   },
 
+  async updateDispute(
+    id: string,
+    data: {
+      status?: string;
+      resolution?: string;
+      resolvedAmount?: number;
+      adminNotes?: string;
+    }
+  ): Promise<AdminDispute> {
+    return api.patch<AdminDispute>(`/disputes/${id}`, data);
+  },
+
   async resolveDispute(
     id: string,
-    data: { resolution: string; notes?: string }
+    data: { resolution: string; notes?: string; resolvedAmount?: number }
   ): Promise<AdminDispute> {
-    return api.post<AdminDispute>(`/admin/disputes/${id}/resolve`, data);
+    return this.updateDispute(id, {
+      status: "RESOLVED",
+      resolution: data.resolution,
+      adminNotes: data.notes,
+      resolvedAmount: data.resolvedAmount,
+    });
   },
 
   async assignDispute(id: string, assigneeId?: string): Promise<AdminDispute> {
-    return api.post<AdminDispute>(`/admin/disputes/${id}/assign`, { assigneeId });
+    return this.updateDispute(id, {
+      status: "UNDER_REVIEW",
+      adminNotes: assigneeId ? `Assigned to ${assigneeId}` : "Assigned for review",
+    });
   },
 
   // ============= Review Management =============

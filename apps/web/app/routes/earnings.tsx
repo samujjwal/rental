@@ -37,3 +37,4 @@ export default function EarningsPage() {
 export function ErrorBoundary() {
   return <RouteErrorBoundary />;
 }
+

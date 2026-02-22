@@ -44,7 +44,8 @@ export class OrganizationsController {
   @ApiOperation({ summary: "Get user's organizations" })
   @ApiResponse({ status: 200, description: 'Organizations retrieved' })
   async getMyOrganizations(@CurrentUser('id') userId: string) {
-    return this.organizationsService.getUserOrganizations(userId);
+    const organizations = await this.organizationsService.getUserOrganizations(userId);
+    return { organizations, total: organizations.length };
   }
 
   @Get(':id')
@@ -118,11 +119,12 @@ export class OrganizationsController {
     if (!member) {
       throw new ForbiddenException('You are not a member of this organization');
     }
-    return this.prisma.organizationMember.findMany({
+    const members = await this.prisma.organizationMember.findMany({
       where: { organizationId: orgId },
       include: { user: { select: { id: true, firstName: true, lastName: true, email: true, profilePhotoUrl: true } } },
       orderBy: { joinedAt: 'asc' },
     });
+    return { members, total: members.length };
   }
 
   @Delete(':id')
@@ -144,8 +146,11 @@ export class OrganizationsController {
   @ApiResponse({ status: 200, description: 'Invitation accepted' })
   async acceptInvitation(
     @CurrentUser('id') userId: string,
-    @Body('organizationId') orgId: string,
+    @Body() body: { organizationId?: string; token?: string },
   ) {
+    // Frontend sends { token } where token is the organizationId
+    const orgId = body.organizationId || body.token;
+    if (!orgId) throw new NotFoundException('Organization ID or token is required');
     // Verify the user has a pending membership (invited but not yet active)
     const membership = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: orgId, userId } },
@@ -160,8 +165,11 @@ export class OrganizationsController {
   @ApiResponse({ status: 200, description: 'Invitation declined' })
   async declineInvitation(
     @CurrentUser('id') userId: string,
-    @Body('organizationId') orgId: string,
+    @Body() body: { organizationId?: string; token?: string },
   ) {
+    // Frontend sends { token } where token is the organizationId
+    const orgId = body.organizationId || body.token;
+    if (!orgId) throw new NotFoundException('Organization ID or token is required');
     await this.prisma.organizationMember.deleteMany({
       where: { organizationId: orgId, userId },
     });

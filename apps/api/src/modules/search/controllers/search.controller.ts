@@ -12,16 +12,21 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
 import { SearchService, SearchQuery } from '../services/search.service';
+import { RecommendationService } from '../services/recommendation.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { UserRole } from '@rental-portal/database';
+import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import { SearchResponseDto } from '../dto/search.dto';
 
 @ApiTags('Search')
 @Controller('search')
 export class SearchController {
-  constructor(private readonly searchService: SearchService) {}
+  constructor(
+    private readonly searchService: SearchService,
+    private readonly recommendationService: RecommendationService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Search listings' })
@@ -132,6 +137,22 @@ export class SearchController {
   async getPopularSearches(@Query('limit') limit?: number) {
     const searches = await this.searchService.getPopularSearches(limit);
     return { searches };
+  }
+
+  @Get('recommendations')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get personalized listing recommendations' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Personalized recommendations' })
+  async getRecommendations(
+    @CurrentUser('id') userId: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.recommendationService.getRecommendations(
+      userId,
+      limit ? Math.min(Number(limit), 50) : 20,
+    );
   }
 
   // Admin endpoints

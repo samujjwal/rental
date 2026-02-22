@@ -112,8 +112,8 @@ describe('BookingsService', () => {
   describe('create', () => {
     const createDto: CreateBookingDto = {
       listingId: 'listing-1',
-      startDate: new Date(),
-      endDate: new Date(),
+      startDate: new Date('2030-01-01T10:00:00.000Z'),
+      endDate: new Date('2030-01-02T10:00:00.000Z'),
       guestCount: 2,
     };
 

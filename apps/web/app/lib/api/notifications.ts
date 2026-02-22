@@ -5,6 +5,7 @@ export type NotificationType =
   | "BOOKING_CONFIRMED"
   | "BOOKING_CANCELLED"
   | "BOOKING_COMPLETED"
+  | "BOOKING_REMINDER"
   | "PAYMENT_RECEIVED"
   | "PAYOUT_PROCESSED"
   | "MESSAGE_RECEIVED"
@@ -15,8 +16,12 @@ export type NotificationType =
   | "LISTING_APPROVED"
   | "LISTING_REJECTED"
   | "ACCOUNT_VERIFIED"
+  | "VERIFICATION_COMPLETE"
   | "PROMOTION"
-  | "SYSTEM";
+  | "MARKETING"
+  | "SYSTEM"
+  | "SYSTEM_UPDATE"
+  | "SYSTEM_ANNOUNCEMENT";
 
 export interface Notification {
   id: string;
@@ -56,7 +61,7 @@ export const notificationsApi = {
     page?: number;
     limit?: number;
     unreadOnly?: boolean;
-    type?: NotificationType;
+    type?: string;
   }): Promise<NotificationsResponse> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append("page", params.page.toString());

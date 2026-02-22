@@ -1,37 +1,19 @@
 /**
  * Enhanced Form Component
- * Stepped wizard form with smart validation and auto-save
+ * Stepped wizard form with smart validation and auto-save — pure Tailwind
  */
 
 import React, { useState, useCallback, useEffect } from "react";
 import {
-  Box,
-  Paper,
-  Stepper,
-  Step,
-  StepLabel,
-  Button,
-  Typography,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormControlLabel,
-  Switch,
-  Alert,
-  Snackbar,
-  CircularProgress,
-  Chip,
-  FormHelperText,
-} from "@mui/material";
-import {
-  Save as SaveIcon,
-  Cancel as CancelIcon,
-  ArrowBack as BackIcon,
-  ArrowForward as NextIcon,
-  Check as CheckIcon,
-} from "@mui/icons-material";
+  Save,
+  X,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
+} from "lucide-react";
 import { useForm } from "@tanstack/react-form";
 
 export interface FieldConfig {
@@ -97,6 +79,12 @@ interface EnhancedFormProps {
   loading?: boolean;
 }
 
+/* ─── Input class helper ─── */
+const inputCls = (hasError: boolean) =>
+  `w-full rounded-md border px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed ${
+    hasError ? "border-destructive" : "border-input"
+  } bg-background`;
+
 export const EnhancedForm: React.FC<EnhancedFormProps> = ({
   steps,
   fields,
@@ -115,119 +103,82 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
 }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showError, setShowError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   const isViewMode = mode === "view";
   const isSteppedLayout = layout === "steps" && steps && steps.length > 0;
   const currentStepConfig = isSteppedLayout ? steps[activeStep] : null;
-  const currentFields = isSteppedLayout
-    ? currentStepConfig?.fields || []
-    : fields || [];
+  const currentFields = isSteppedLayout ? currentStepConfig?.fields || [] : fields || [];
 
-  // Form instance
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), toast.type === "success" ? 3000 : 5000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
+
   const form = useForm({
     defaultValues: initialData,
     onSubmit: async ({ value }) => {
       try {
         await onSubmit(value);
-        setShowSuccess(true);
+        setToast({ type: "success", message: "Form submitted successfully!" });
         setFormErrors({});
       } catch (error) {
-        setShowError(true);
-        setErrorMessage(
-          error instanceof Error ? error.message : "Failed to submit form"
-        );
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to submit form",
+        });
       }
     },
   });
 
-  // Validate field
   const validateField = useCallback(
     (field: FieldConfig, value: unknown): string | null => {
-      if (
-        field.required &&
-        (value === null || value === undefined || value === "")
-      ) {
+      if (field.required && (value === null || value === undefined || value === "")) {
         return `${field.label} is required`;
       }
-
       if (field.validation) {
-        const { min, max, minLength, maxLength, pattern, custom } =
-          field.validation;
-
+        const { min, max, minLength, maxLength, pattern, custom } = field.validation;
         if (typeof value === "number") {
-          if (min !== undefined && value < min) {
-            return `${field.label} must be at least ${min}`;
-          }
-          if (max !== undefined && value > max) {
-            return `${field.label} must be at most ${max}`;
-          }
+          if (min !== undefined && value < min) return `${field.label} must be at least ${min}`;
+          if (max !== undefined && value > max) return `${field.label} must be at most ${max}`;
         }
-
         if (typeof value === "string") {
-          if (minLength !== undefined && value.length < minLength) {
-            return `${field.label} must be at least ${minLength} characters`;
-          }
-          if (maxLength !== undefined && value.length > maxLength) {
-            return `${field.label} must be at most ${maxLength} characters`;
-          }
-          if (pattern && !pattern.test(value)) {
-            return `${field.label} format is invalid`;
-          }
+          if (minLength !== undefined && value.length < minLength) return `${field.label} must be at least ${minLength} characters`;
+          if (maxLength !== undefined && value.length > maxLength) return `${field.label} must be at most ${maxLength} characters`;
+          if (pattern && !pattern.test(value)) return `${field.label} format is invalid`;
         }
-
-        if (custom) {
-          return custom(value);
-        }
+        if (custom) return custom(value);
       }
-
       return null;
     },
     []
   );
 
-  // Validate current step
   const validateStep = useCallback(() => {
     const errors: Record<string, string> = {};
     const formData = form.state.values;
-
     currentFields.forEach((field) => {
-      if (field.showIf && !field.showIf(formData)) {
-        return;
-      }
-
+      if (field.showIf && !field.showIf(formData)) return;
       const value = formData[field.name];
       const error = validateField(field, value);
-      if (error) {
-        errors[field.name] = error;
-      }
+      if (error) errors[field.name] = error;
     });
-
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [currentFields, form.state.values, validateField]);
 
-  // Handle next step
-  const handleNext = useCallback(() => {
-    if (validateStep()) {
-      setActiveStep((prev) => prev + 1);
-    }
-  }, [validateStep]);
+  const handleNext = useCallback(() => { if (validateStep()) setActiveStep((prev) => prev + 1); }, [validateStep]);
+  const handleBack = useCallback(() => { setActiveStep((prev) => prev - 1); }, []);
 
-  // Handle back step
-  const handleBack = useCallback(() => {
-    setActiveStep((prev) => prev - 1);
-  }, []);
-
-  // Auto-save functionality
+  // Auto-save
   useEffect(() => {
     if (!enableAutoSave || !onAutoSave || isViewMode) return;
-
-    const autoSaveTimer = setInterval(async () => {
+    const timer = setInterval(async () => {
       const formData = form.state.values;
       if (Object.keys(formData).length > 0) {
         setAutoSaving(true);
@@ -241,25 +192,13 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
         }
       }
     }, autoSaveInterval);
+    return () => clearInterval(timer);
+  }, [enableAutoSave, onAutoSave, autoSaveInterval, form.state.values, isViewMode]);
 
-    return () => clearInterval(autoSaveTimer);
-  }, [
-    enableAutoSave,
-    onAutoSave,
-    autoSaveInterval,
-    form.state.values,
-    isViewMode,
-  ]);
-
-  // Render field
   const renderField = useCallback(
     (field: FieldConfig) => {
       const formData = form.state.values;
-
-      if (field.showIf && !field.showIf(formData)) {
-        return null;
-      }
-
+      if (field.showIf && !field.showIf(formData)) return null;
       const fieldError = formErrors[field.name];
       const isDisabled = field.disabled || isViewMode;
 
@@ -267,166 +206,179 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
         <form.Field
           key={field.name}
           name={field.name as keyof typeof form.state.values}
-          validators={{
-            onChange: ({ value }) => validateField(field, value),
-          }}
+          validators={{ onChange: ({ value }) => validateField(field, value) }}
         >
           {(fieldApi) => {
-            const commonProps = {
-              fullWidth: true,
-              size: "small" as const,
-              disabled: isDisabled,
-              error: !!fieldError,
-              helperText: fieldError || field.helperText,
-              label: field.label,
-              required: field.required,
-            };
+            const hasError = !!fieldError;
 
             switch (field.type) {
               case "select":
                 return (
-                  <FormControl {...commonProps}>
-                    <InputLabel>{field.label}</InputLabel>
-                    <Select
-                      value={fieldApi.state.value ?? (field.multiple ? [] : "")}
-                      onChange={(e) =>
-                        fieldApi.handleChange(e.target.value as unknown)
-                      }
-                      onBlur={() => fieldApi.handleBlur()}
-                      multiple={field.multiple}
-                      displayEmpty
-                      renderValue={
-                        field.multiple
-                          ? (selected) => (
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  flexWrap: "wrap",
-                                  gap: 0.5,
-                                }}
-                              >
-                                {(selected as string[]).map((value) => {
-                                  const option = field.options?.find(
-                                    (opt) => opt.value === value
-                                  );
-                                  return (
-                                    <Chip
-                                      key={value}
-                                      label={option?.label || value}
-                                      size="small"
-                                    />
-                                  );
-                                })}
-                              </Box>
-                            )
-                          : (selected) => {
-                              if (!selected) return "";
-                              const option = field.options?.find(
-                                (opt) => opt.value === selected
-                              );
-                              return option?.label || String(selected);
-                            }
-                      }
-                    >
-                      {field.options?.map((option) => (
-                        <MenuItem
-                          key={option.value}
-                          value={option.value}
-                          disabled={option.disabled}
-                        >
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    {commonProps.helperText && (
-                      <FormHelperText>{commonProps.helperText}</FormHelperText>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-0.5">*</span>}
+                    </label>
+                    {field.multiple ? (
+                      <select
+                        multiple
+                        className={inputCls(hasError)}
+                        value={Array.isArray(fieldApi.state.value) ? (fieldApi.state.value as string[]) : []}
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.selectedOptions, (o) => o.value);
+                          fieldApi.handleChange(selected as unknown);
+                        }}
+                        onBlur={() => fieldApi.handleBlur()}
+                        disabled={isDisabled}
+                      >
+                        {field.options?.map((opt) => (
+                          <option key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        className={inputCls(hasError)}
+                        value={String(fieldApi.state.value ?? "")}
+                        onChange={(e) => fieldApi.handleChange(e.target.value as unknown)}
+                        onBlur={() => fieldApi.handleBlur()}
+                        disabled={isDisabled}
+                      >
+                        <option value="">Select...</option>
+                        {field.options?.map((opt) => (
+                          <option key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</option>
+                        ))}
+                      </select>
                     )}
-                  </FormControl>
+                    {(fieldError || field.helperText) && (
+                      <p className={`text-xs mt-1 ${hasError ? "text-destructive" : "text-muted-foreground"}`}>
+                        {fieldError || field.helperText}
+                      </p>
+                    )}
+                  </div>
                 );
 
               case "boolean":
                 return (
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={!!fieldApi.state.value}
-                        onChange={(e) =>
-                          fieldApi.handleChange(e.target.checked)
-                        }
-                        disabled={isDisabled}
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!fieldApi.state.value}
+                      disabled={isDisabled}
+                      onClick={() => fieldApi.handleChange(!fieldApi.state.value)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${
+                        fieldApi.state.value ? "bg-primary" : "bg-input"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform ${
+                          fieldApi.state.value ? "translate-x-5" : "translate-x-0"
+                        }`}
                       />
-                    }
-                    label={field.label}
-                  />
+                    </button>
+                    <span className="text-sm">{field.label}</span>
+                  </label>
                 );
 
               case "date":
                 return (
-                  <TextField
-                    {...commonProps}
-                    type="date"
-                    value={
-                      fieldApi.state.value && typeof fieldApi.state.value !== 'object'
-                        ? new Date(fieldApi.state.value as string | number)
-                            .toISOString()
-                            .split("T")[0]
-                        : ""
-                    }
-                    onChange={(e) =>
-                      fieldApi.handleChange(e.target.value as unknown)
-                    }
-                    onBlur={() => fieldApi.handleBlur()}
-                    InputLabelProps={{ shrink: true }}
-                  />
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-0.5">*</span>}
+                    </label>
+                    <input
+                      type="date"
+                      className={inputCls(hasError)}
+                      value={
+                        fieldApi.state.value && typeof fieldApi.state.value !== "object"
+                          ? new Date(fieldApi.state.value as string | number).toISOString().split("T")[0]
+                          : ""
+                      }
+                      onChange={(e) => fieldApi.handleChange(e.target.value as unknown)}
+                      onBlur={() => fieldApi.handleBlur()}
+                      disabled={isDisabled}
+                    />
+                    {(fieldError || field.helperText) && (
+                      <p className={`text-xs mt-1 ${hasError ? "text-destructive" : "text-muted-foreground"}`}>
+                        {fieldError || field.helperText}
+                      </p>
+                    )}
+                  </div>
                 );
 
               case "textarea":
                 return (
-                  <TextField
-                    {...commonProps}
-                    multiline
-                    rows={field.rows || 4}
-                    value={fieldApi.state.value ?? ""}
-                    onChange={(e) =>
-                      fieldApi.handleChange(e.target.value as unknown)
-                    }
-                    onBlur={() => fieldApi.handleBlur()}
-                    placeholder={field.placeholder}
-                  />
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-0.5">*</span>}
+                    </label>
+                    <textarea
+                      className={inputCls(hasError)}
+                      rows={field.rows || 4}
+                      value={String(fieldApi.state.value ?? "")}
+                      onChange={(e) => fieldApi.handleChange(e.target.value as unknown)}
+                      onBlur={() => fieldApi.handleBlur()}
+                      placeholder={field.placeholder}
+                      disabled={isDisabled}
+                    />
+                    {(fieldError || field.helperText) && (
+                      <p className={`text-xs mt-1 ${hasError ? "text-destructive" : "text-muted-foreground"}`}>
+                        {fieldError || field.helperText}
+                      </p>
+                    )}
+                  </div>
                 );
 
               case "number":
                 return (
-                  <TextField
-                    {...commonProps}
-                    type="number"
-                    value={fieldApi.state.value ?? ""}
-                    onChange={(e) =>
-                      fieldApi.handleChange(
-                        e.target.value ? Number(e.target.value) : null
-                      )
-                    }
-                    onBlur={() => fieldApi.handleBlur()}
-                    placeholder={field.placeholder}
-                    inputProps={{
-                      min: field.validation?.min,
-                      max: field.validation?.max,
-                    }}
-                  />
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-0.5">*</span>}
+                    </label>
+                    <input
+                      type="number"
+                      className={inputCls(hasError)}
+                      value={String(fieldApi.state.value ?? "")}
+                      onChange={(e) => fieldApi.handleChange(e.target.value ? Number(e.target.value) : null)}
+                      onBlur={() => fieldApi.handleBlur()}
+                      placeholder={field.placeholder}
+                      min={field.validation?.min}
+                      max={field.validation?.max}
+                      disabled={isDisabled}
+                    />
+                    {(fieldError || field.helperText) && (
+                      <p className={`text-xs mt-1 ${hasError ? "text-destructive" : "text-muted-foreground"}`}>
+                        {fieldError || field.helperText}
+                      </p>
+                    )}
+                  </div>
                 );
 
               default:
                 return (
-                  <TextField
-                    {...commonProps}
-                    type={field.type}
-                    value={fieldApi.state.value ?? ""}
-                    onChange={(e) =>
-                      fieldApi.handleChange(e.target.value as unknown)
-                    }
-                    onBlur={() => fieldApi.handleBlur()}
-                    placeholder={field.placeholder}
-                  />
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-0.5">*</span>}
+                    </label>
+                    <input
+                      type={field.type}
+                      className={inputCls(hasError)}
+                      value={String(fieldApi.state.value ?? "")}
+                      onChange={(e) => fieldApi.handleChange(e.target.value as unknown)}
+                      onBlur={() => fieldApi.handleBlur()}
+                      placeholder={field.placeholder}
+                      disabled={isDisabled}
+                    />
+                    {(fieldError || field.helperText) && (
+                      <p className={`text-xs mt-1 ${hasError ? "text-destructive" : "text-muted-foreground"}`}>
+                        {fieldError || field.helperText}
+                      </p>
+                    )}
+                  </div>
                 );
             }
           }}
@@ -441,66 +393,61 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
   const canGoBack = isSteppedLayout && activeStep > 0;
 
   return (
-    <Paper elevation={2} sx={{ p: 3 }}>
+    <div className="rounded-lg border bg-card shadow-sm p-6">
       {/* Title and Auto-save indicator */}
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 3,
-        }}
-      >
-        {title && (
-          <Typography variant="h5" fontWeight={600}>
-            {title}
-          </Typography>
-        )}
+      <div className="flex items-center justify-between mb-6">
+        {title && <h2 className="text-xl font-semibold">{title}</h2>}
         {enableAutoSave && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {autoSaving ? (
               <>
-                <CircularProgress size={16} />
-                <Typography variant="caption" color="text.secondary">
-                  Saving...
-                </Typography>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Saving...</span>
               </>
             ) : lastSaved ? (
               <>
-                <CheckIcon fontSize="small" color="success" />
-                <Typography variant="caption" color="text.secondary">
-                  Saved {lastSaved.toLocaleTimeString()}
-                </Typography>
+                <Check className="h-3.5 w-3.5 text-green-600" />
+                <span>Saved {lastSaved.toLocaleTimeString()}</span>
               </>
             ) : null}
-          </Box>
+          </div>
         )}
-      </Box>
+      </div>
 
       {/* Stepper */}
       {isSteppedLayout && steps && (
-        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-          {steps.map((step) => (
-            <Step key={step.id}>
-              <StepLabel
-                optional={
-                  step.optional ? (
-                    <Typography variant="caption">Optional</Typography>
-                  ) : undefined
-                }
-              >
-                {step.title}
-              </StepLabel>
-            </Step>
+        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+          {steps.map((step, idx) => (
+            <React.Fragment key={step.id}>
+              {idx > 0 && <div className={`flex-1 h-0.5 min-w-[24px] ${idx <= activeStep ? "bg-primary" : "bg-border"}`} />}
+              <div className="flex items-center gap-2 shrink-0">
+                <div
+                  className={`flex items-center justify-center h-8 w-8 rounded-full text-xs font-medium ${
+                    idx < activeStep
+                      ? "bg-primary text-primary-foreground"
+                      : idx === activeStep
+                      ? "bg-primary text-primary-foreground ring-2 ring-primary/30"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {idx < activeStep ? <Check className="h-4 w-4" /> : idx + 1}
+                </div>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium leading-tight">{step.title}</p>
+                  {step.optional && <p className="text-xs text-muted-foreground">Optional</p>}
+                </div>
+              </div>
+            </React.Fragment>
           ))}
-        </Stepper>
+        </div>
       )}
 
       {/* Step description */}
       {isSteppedLayout && currentStepConfig?.description && (
-        <Alert severity="info" sx={{ mb: 3 }}>
+        <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800 px-4 py-3 text-sm text-blue-700 dark:text-blue-300 mb-4">
+          <AlertCircle className="h-4 w-4 shrink-0" />
           {currentStepConfig.description}
-        </Alert>
+        </div>
       )}
 
       {/* Form fields */}
@@ -508,90 +455,77 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
         onSubmit={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (isSteppedLayout && !isLastStep) {
-            handleNext();
-          } else {
-            form.handleSubmit();
-          }
+          if (isSteppedLayout && !isLastStep) handleNext();
+          else form.handleSubmit();
         }}
       >
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {currentFields.map(renderField)}
-        </Box>
+        <div className="flex flex-col gap-4">{currentFields.map(renderField)}</div>
 
         {/* Actions */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", mt: 4 }}>
-          <Box sx={{ display: "flex", gap: 1 }}>
+        <div className="flex justify-between mt-6">
+          <div className="flex gap-2">
             {canGoBack && (
-              <Button
-                startIcon={<BackIcon />}
+              <button
+                type="button"
                 onClick={handleBack}
                 disabled={loading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-md border hover:bg-muted disabled:opacity-50"
               >
-                Back
-              </Button>
+                <ArrowLeft className="h-4 w-4" /> Back
+              </button>
             )}
-          </Box>
-
-          <Box sx={{ display: "flex", gap: 1 }}>
+          </div>
+          <div className="flex gap-2">
             {onCancel && (
-              <Button
-                startIcon={<CancelIcon />}
+              <button
+                type="button"
                 onClick={onCancel}
                 disabled={loading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-md border hover:bg-muted disabled:opacity-50"
               >
-                {cancelLabel}
-              </Button>
+                <X className="h-4 w-4" /> {cancelLabel}
+              </button>
             )}
-
             {canGoNext ? (
-              <Button
-                variant="contained"
-                endIcon={<NextIcon />}
+              <button
+                type="button"
                 onClick={handleNext}
                 disabled={loading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                Next
-              </Button>
+                Next <ArrowRight className="h-4 w-4" />
+              </button>
             ) : (
-              <Button
+              <button
                 type="submit"
-                variant="contained"
-                startIcon={
-                  loading ? <CircularProgress size={20} /> : <SaveIcon />
-                }
                 disabled={loading || isViewMode}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {submitLabel}
-              </Button>
+              </button>
             )}
-          </Box>
-        </Box>
+          </div>
+        </div>
       </form>
 
-      {/* Success/Error Snackbars */}
-      <Snackbar
-        open={showSuccess}
-        autoHideDuration={3000}
-        onClose={() => setShowSuccess(false)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity="success" onClose={() => setShowSuccess(false)}>
-          Form submitted successfully!
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={showError}
-        autoHideDuration={5000}
-        onClose={() => setShowError(false)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity="error" onClose={() => setShowError(false)}>
-          {errorMessage}
-        </Alert>
-      </Snackbar>
-    </Paper>
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+          <div
+            className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm ${
+              toast.type === "success"
+                ? "bg-green-50 text-green-800 border border-green-200 dark:bg-green-950 dark:text-green-200"
+                : "bg-red-50 text-red-800 border border-red-200 dark:bg-red-950 dark:text-red-200"
+            }`}
+          >
+            {toast.type === "success" ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {toast.message}
+            <button type="button" onClick={() => setToast(null)} className="ml-2 p-0.5 rounded hover:bg-black/10">&times;</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

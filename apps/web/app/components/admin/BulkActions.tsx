@@ -1,232 +1,218 @@
-import { useState } from 'react';
-import {
-    Box,
-    Toolbar,
-    Typography,
-    IconButton,
-    Button,
-    Checkbox,
-    Menu,
-    MenuItem,
-} from '@mui/material';
-import { Trash2, X, Clock } from 'lucide-react';
-import { ConfirmDialog } from '~/components/ui/ConfirmDialog';
-import { FadeIn } from '~/components/animations';
+import { useState, useRef, useEffect } from "react";
+import { Trash2, X, Clock } from "lucide-react";
+import { ConfirmDialog } from "~/components/ui/ConfirmDialog";
+import { FadeIn } from "~/components/animations";
 
 export interface BulkActionsToolbarProps {
-    selectedCount: number;
-    onClearSelection: () => void;
-    onDelete?: () => void;
-    onStatusChange?: (status: string) => void;
-    availableStatuses?: Array<{ value: string; label: string; icon?: React.ReactNode }>;
-    isLoading?: boolean;
+  selectedCount: number;
+  onClearSelection: () => void;
+  onDelete?: () => void;
+  onStatusChange?: (status: string) => void;
+  availableStatuses?: Array<{ value: string; label: string; icon?: React.ReactNode }>;
+  isLoading?: boolean;
 }
 
 /**
- * BulkActionsToolbar Component
- * Toolbar for bulk operations on selected items
+ * BulkActionsToolbar Component — pure Tailwind
  */
 export function BulkActionsToolbar({
-    selectedCount,
-    onClearSelection,
-    onDelete,
-    onStatusChange,
-    availableStatuses = [],
-    isLoading = false,
+  selectedCount,
+  onClearSelection,
+  onDelete,
+  onStatusChange,
+  availableStatuses = [],
+  isLoading = false,
 }: BulkActionsToolbarProps) {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-        setAnchorEl(event.currentTarget);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
     };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-    };
+  const handleStatusChange = (status: string) => {
+    setMenuOpen(false);
+    onStatusChange?.(status);
+  };
 
-    const handleStatusChange = (status: string) => {
-        handleMenuClose();
-        onStatusChange?.(status);
-    };
+  const handleDeleteConfirm = () => {
+    onDelete?.();
+    setDeleteDialogOpen(false);
+  };
 
-    const handleDeleteClick = () => {
-        setDeleteDialogOpen(true);
-    };
+  if (selectedCount === 0) return null;
 
-    const handleDeleteConfirm = () => {
-        onDelete?.();
-        setDeleteDialogOpen(false);
-    };
+  return (
+    <FadeIn direction="down">
+      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-4 py-2 mb-3">
+        <span className="flex-1 text-sm font-medium">{selectedCount} selected</span>
 
-    if (selectedCount === 0) return null;
-
-    return (
-        <FadeIn direction="down">
-            <Toolbar
-                sx={{
-                    pl: { sm: 2 },
-                    pr: { xs: 1, sm: 1 },
-                    bgcolor: 'primary.light',
-                    color: 'primary.contrastText',
-                    borderRadius: 1,
-                    mb: 2,
-                }}
+        {onStatusChange && availableStatuses.length > 0 && (
+          <div ref={menuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen(!menuOpen)}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:bg-primary/20 disabled:opacity-50"
             >
-                <Typography sx={{ flex: '1 1 100%' }} variant="subtitle1" component="div">
-                    {selectedCount} selected
-                </Typography>
+              <Clock className="h-4 w-4" />
+              Change Status
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 z-50 mt-1 w-48 rounded-md border bg-popover shadow-lg">
+                {availableStatuses.map((status) => (
+                  <button
+                    key={status.value}
+                    type="button"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => handleStatusChange(status.value)}
+                  >
+                    {status.icon}
+                    {status.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-                {onStatusChange && availableStatuses.length > 0 && (
-                    <>
-                        <Button
-                            color="inherit"
-                            onClick={handleMenuOpen}
-                            disabled={isLoading}
-                            startIcon={<Clock size={16} />}
-                        >
-                            Change Status
-                        </Button>
-                        <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-                            {availableStatuses.map((status) => (
-                                <MenuItem key={status.value} onClick={() => handleStatusChange(status.value)}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        {status.icon}
-                                        {status.label}
-                                    </Box>
-                                </MenuItem>
-                            ))}
-                        </Menu>
-                    </>
-                )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => setDeleteDialogOpen(true)}
+            disabled={isLoading}
+            className="p-1.5 rounded-md hover:bg-destructive/20 text-destructive disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
 
-                {onDelete && (
-                    <IconButton color="inherit" onClick={handleDeleteClick} disabled={isLoading}>
-                        <Trash2 size={20} />
-                    </IconButton>
-                )}
+        <button
+          type="button"
+          onClick={onClearSelection}
+          className="p-1.5 rounded-md hover:bg-primary/20"
+        >
+          <X className="h-4 w-4" />
+        </button>
 
-                <IconButton color="inherit" onClick={onClearSelection}>
-                    <X size={20} />
-                </IconButton>
-
-                <ConfirmDialog
-                    open={deleteDialogOpen}
-                    onClose={() => setDeleteDialogOpen(false)}
-                    onConfirm={handleDeleteConfirm}
-                    title="Delete Selected Items?"
-                    message={`Are you sure you want to delete ${selectedCount} item${selectedCount > 1 ? 's' : ''}? This action cannot be undone.`}
-                    confirmText="Delete"
-                    confirmColor="error"
-                    isLoading={isLoading}
-                />
-            </Toolbar>
-        </FadeIn>
-    );
+        <ConfirmDialog
+          open={deleteDialogOpen}
+          onClose={() => setDeleteDialogOpen(false)}
+          onConfirm={handleDeleteConfirm}
+          title="Delete Selected Items?"
+          message={`Are you sure you want to delete ${selectedCount} item${selectedCount > 1 ? "s" : ""}? This action cannot be undone.`}
+          confirmText="Delete"
+          confirmColor="error"
+          isLoading={isLoading}
+        />
+      </div>
+    </FadeIn>
+  );
 }
 
 /**
  * Hook for managing bulk selection
  */
 export function useBulkSelection<T extends { id: string }>(items: T[]) {
-    const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-    const isSelected = (id: string) => selected.has(id);
+  const isSelected = (id: string) => selected.has(id);
+  const isAllSelected = items.length > 0 && selected.size === items.length;
+  const isIndeterminate = selected.size > 0 && selected.size < items.length;
 
-    const isAllSelected = items.length > 0 && selected.size === items.length;
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(items.map((item) => item.id)));
+    }
+  };
 
-    const isIndeterminate = selected.size > 0 && selected.size < items.length;
+  const handleSelect = (id: string) => {
+    const newSelected = new Set(selected);
+    if (newSelected.has(id)) newSelected.delete(id);
+    else newSelected.add(id);
+    setSelected(newSelected);
+  };
 
-    const handleSelectAll = () => {
-        if (isAllSelected) {
-            setSelected(new Set());
-        } else {
-            setSelected(new Set(items.map((item) => item.id)));
-        }
-    };
+  const clearSelection = () => setSelected(new Set());
 
-    const handleSelect = (id: string) => {
-        const newSelected = new Set(selected);
-        if (newSelected.has(id)) {
-            newSelected.delete(id);
-        } else {
-            newSelected.add(id);
-        }
-        setSelected(newSelected);
-    };
+  const getSelectedItems = () => items.filter((item) => selected.has(item.id));
 
-    const clearSelection = () => {
-        setSelected(new Set());
-    };
-
-    const getSelectedItems = () => {
-        return items.filter((item) => selected.has(item.id));
-    };
-
-    return {
-        selected,
-        selectedCount: selected.size,
-        isSelected,
-        isAllSelected,
-        isIndeterminate,
-        handleSelectAll,
-        handleSelect,
-        clearSelection,
-        getSelectedItems,
-    };
+  return {
+    selected,
+    selectedCount: selected.size,
+    isSelected,
+    isAllSelected,
+    isIndeterminate,
+    handleSelectAll,
+    handleSelect,
+    clearSelection,
+    getSelectedItems,
+  };
 }
 
 /**
- * BulkSelectCheckbox Component
- * Checkbox for selecting all items
+ * BulkSelectCheckbox — pure Tailwind
  */
 export interface BulkSelectCheckboxProps {
-    checked: boolean;
-    indeterminate?: boolean;
-    onChange: () => void;
-    disabled?: boolean;
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: () => void;
+  disabled?: boolean;
 }
 
 export function BulkSelectCheckbox({
-    checked,
-    indeterminate = false,
-    onChange,
-    disabled = false,
+  checked,
+  indeterminate = false,
+  onChange,
+  disabled = false,
 }: BulkSelectCheckboxProps) {
-    return (
-        <Checkbox
-            checked={checked}
-            indeterminate={indeterminate}
-            onChange={onChange}
-            disabled={disabled}
-            inputProps={{ 'aria-label': 'select all items' }}
-        />
-    );
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      ref={(el) => { if (el) el.indeterminate = indeterminate; }}
+      onChange={onChange}
+      disabled={disabled}
+      aria-label="select all items"
+      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-ring disabled:opacity-50"
+    />
+  );
 }
 
 /**
- * ItemSelectCheckbox Component
- * Checkbox for selecting individual items
+ * ItemSelectCheckbox — pure Tailwind
  */
 export interface ItemSelectCheckboxProps {
-    checked: boolean;
-    onChange: () => void;
-    disabled?: boolean;
-    ariaLabel?: string;
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  ariaLabel?: string;
 }
 
 export function ItemSelectCheckbox({
-    checked,
-    onChange,
-    disabled = false,
-    ariaLabel = 'select item',
+  checked,
+  onChange,
+  disabled = false,
+  ariaLabel = "select item",
 }: ItemSelectCheckboxProps) {
-    return (
-        <Checkbox
-            checked={checked}
-            onChange={onChange}
-            disabled={disabled}
-            inputProps={{ 'aria-label': ariaLabel }}
-            onClick={(e) => e.stopPropagation()}
-        />
-    );
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      onClick={(e) => e.stopPropagation()}
+      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-ring disabled:opacity-50"
+    />
+  );
 }

@@ -541,3 +541,4 @@ export default function NotificationsSettingsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

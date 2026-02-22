@@ -442,7 +442,7 @@ export default function Home() {
                 const listingTitle = safeText(listing.title, "Listing");
                 const ratingValue = listing.rating ?? listing.averageRating;
                 const reviewCount = listing.reviewCount ?? listing.totalReviews;
-                const pricePerDay = listing.pricePerDay ?? listing.basePrice ?? 0;
+                const basePrice = listing.basePrice ?? listing.basePrice ?? 0;
                 const city = listing.location?.city;
 
                 return (
@@ -452,9 +452,9 @@ export default function Home() {
                   className="group bg-card rounded-xl border border-border overflow-hidden hover:shadow-lg transition-shadow"
                 >
                   <div className="aspect-[4/3] bg-muted relative overflow-hidden">
-                    {listing.images?.[0] ? (
+                    {listing.photos?.[0] ? (
                       <img
-                        src={listing.images[0]}
+                        src={listing.photos[0]}
                         alt={listingTitle}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
@@ -476,7 +476,7 @@ export default function Home() {
                       </span>
                     </div>
                     <p className="text-primary font-semibold mt-2">
-                      ${pricePerDay}/day
+                      ${basePrice}/day
                     </p>
                     {city && (
                       <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
@@ -633,3 +633,4 @@ export default function Home() {
 
 // Error boundary for route errors
 export { RouteErrorBoundary as ErrorBoundary };
+

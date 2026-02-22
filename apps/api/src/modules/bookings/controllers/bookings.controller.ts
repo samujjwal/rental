@@ -9,18 +9,24 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
+  Header,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { BookingsService } from '../services/bookings.service';
 import {
   CreateBookingDto,
   RejectBookingDto,
+  RejectReturnDto,
   CancelBookingDto,
   InitiateDisputeDto,
   CalculatePriceDto,
 } from '../dto/booking.dto';
 import { BookingStateMachineService } from '../services/booking-state-machine.service';
 import { BookingCalculationService } from '../services/booking-calculation.service';
+import { InvoiceService } from '../services/invoice.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import { BookingStatus } from '@rental-portal/database';
@@ -34,6 +40,8 @@ export class BookingsController {
     private readonly bookingsService: BookingsService,
     private readonly stateMachine: BookingStateMachineService,
     private readonly calculation: BookingCalculationService,
+    private readonly invoiceService: InvoiceService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post()
@@ -84,6 +92,26 @@ export class BookingsController {
     @CurrentUser('id') userId: string,
   ): Promise<AsyncMethodResult<BookingsService['findById']>> {
     return this.bookingsService.findById(id, true, userId);
+  }
+
+  @Get(':id/disputes')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get disputes for a booking' })
+  @ApiResponse({ status: 200, description: 'Disputes retrieved successfully' })
+  async getBookingDisputes(
+    @Param('id') bookingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    // Verify user has access to this booking
+    await this.bookingsService.findById(bookingId, false, userId);
+    return this.prisma.dispute.findMany({
+      where: { bookingId },
+      include: {
+        initiator: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   @Post(':id/approve')
@@ -170,6 +198,21 @@ export class BookingsController {
     @CurrentUser('id') userId: string,
   ): Promise<AsyncMethodResult<BookingsService['approveReturn']>> {
     return this.bookingsService.approveReturn(id, userId);
+  }
+
+  @Post(':id/reject-return')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reject return — report issues found during inspection (owner)' })
+  @ApiResponse({ status: 200, description: 'Return rejected, booking moved to DISPUTED' })
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async rejectReturn(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: RejectReturnDto,
+  ): Promise<AsyncMethodResult<BookingsService['rejectReturn']>> {
+    return this.bookingsService.rejectReturn(id, userId, dto.reason);
   }
 
   @Post(':id/dispute')
@@ -269,5 +312,28 @@ export class BookingsController {
       role,
       availableTransitions: transitions,
     };
+  }
+
+  @Get(':id/invoice')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get booking invoice as HTML (or JSON with ?format=json)' })
+  async getInvoice(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @Query('format') format: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const data = await this.invoiceService.getInvoiceData(id, userId);
+
+    if (format === 'json') {
+      res.json(data);
+      return;
+    }
+
+    const html = this.invoiceService.generateInvoiceHtml(data);
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', `inline; filename="${data.invoiceNumber}.html"`);
+    res.send(html);
   }
 }

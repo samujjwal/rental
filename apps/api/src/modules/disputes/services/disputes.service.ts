@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
+import { CacheService } from '@/common/cache/cache.service';
 import { Dispute, DisputeStatus, UserRole } from '@rental-portal/database';
 
 export interface CreateDisputeDto {
@@ -40,6 +41,7 @@ export class DisputesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -380,6 +382,21 @@ export class DisputesService {
     if (dto.status && ['RESOLVED', 'CLOSED'].includes(dto.status)) {
       updateData.assignedTo = userId;
       updateData.resolvedAt = new Date();
+      
+      // If there's a resolved amount, trigger deposit capture
+      if (dto.resolvedAmount && dto.resolvedAmount > 0) {
+        await this.cacheService.publish('booking:deposit-capture', {
+          bookingId: dispute.bookingId,
+          amount: dto.resolvedAmount,
+          timestamp: new Date().toISOString(),
+        });
+      } else if (dto.status === 'CLOSED' && !dto.resolvedAmount) {
+        // If closed without amount, release deposit
+        await this.cacheService.publish('booking:deposit-release', {
+          bookingId: dispute.bookingId,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     return this.prisma.dispute.update({
@@ -418,6 +435,12 @@ export class DisputesService {
     if (!isAdmin && !isInitiator) {
       throw new ForbiddenException('Not authorized to close this dispute');
     }
+
+    // Release deposit if closed without resolution
+    await this.cacheService.publish('booking:deposit-release', {
+      bookingId: dispute.bookingId,
+      timestamp: new Date().toISOString(),
+    });
 
     return this.prisma.dispute.update({
       where: { id: disputeId },

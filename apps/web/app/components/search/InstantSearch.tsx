@@ -24,7 +24,7 @@ interface SearchResult {
     id: string;
     title: string;
     images?: string[];
-    pricePerDay: number;
+    basePrice: number;
     location?: {
         city?: string;
         state?: string;
@@ -268,9 +268,9 @@ export function InstantSearch({
                                     >
                                         {/* Thumbnail */}
                                         <div className="w-12 h-12 rounded-md overflow-hidden bg-muted shrink-0">
-                                            {result.images?.[0] ? (
+                                            {result.photos?.[0] ? (
                                                 <OptimizedImage
-                                                    src={result.images[0]}
+                                                    src={result.photos[0]}
                                                     alt={result.title}
                                                     aspectRatio="square"
                                                     className="w-full h-full"
@@ -288,7 +288,7 @@ export function InstantSearch({
                                                 {result.title}
                                             </p>
                                             <p className="text-sm text-muted-foreground">
-                                                {formatCurrency(result.pricePerDay)}/day
+                                                {formatCurrency(result.basePrice)}/day
                                                 {result.location?.city && ` • ${result.location.city}`}
                                             </p>
                                         </div>

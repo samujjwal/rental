@@ -8,6 +8,8 @@ import { AuthService } from './services/auth.service';
 import { PasswordService } from './services/password.service';
 import { TokenService } from './services/token.service';
 import { MfaService } from './services/mfa.service';
+import { OAuthService } from './services/oauth.service';
+import { OtpService } from './services/otp.service';
 
 import { AuthController } from './controllers/auth.controller';
 
@@ -40,6 +42,8 @@ import { WsJwtAuthGuard } from './guards/ws-jwt-auth.guard';
     PasswordService,
     TokenService,
     MfaService,
+    OAuthService,
+    OtpService,
     JwtStrategy,
     LocalStrategy,
     JwtAuthGuard,

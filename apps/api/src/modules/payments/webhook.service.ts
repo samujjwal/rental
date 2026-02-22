@@ -2,9 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { CacheService } from '@/common/cache/cache.service';
 import { EventsService } from '@/common/events/events.service';
 import { BookingStatus, PayoutStatus } from '@rental-portal/database';
 import { LedgerService } from './services/ledger.service';
+
+/** TTL for webhook idempotency keys: 48 hours covers Stripe's retry window */
+const WEBHOOK_IDEMPOTENCY_TTL = 48 * 60 * 60;
 
 @Injectable()
 export class WebhookService {
@@ -15,6 +19,7 @@ export class WebhookService {
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
+    private cacheService: CacheService,
     private eventsService: EventsService,
     private ledger: LedgerService,
   ) {
@@ -22,6 +27,22 @@ export class WebhookService {
       apiVersion: '2026-01-28.clover',
     });
     this.webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET');
+  }
+
+  /**
+   * Check if a Stripe event has already been processed (idempotency guard).
+   * Uses Redis SET with NX + TTL to atomically claim the event.
+   * Returns true if this is a duplicate (already processed).
+   */
+  private async isDuplicateEvent(eventId: string): Promise<boolean> {
+    const key = `stripe:webhook:${eventId}`;
+    const alreadyProcessed = await this.cacheService.exists(key);
+    if (alreadyProcessed) {
+      return true;
+    }
+    // Claim the event — set key with TTL so it expires after 48h
+    await this.cacheService.set(key, { processedAt: new Date().toISOString() }, WEBHOOK_IDEMPOTENCY_TTL);
+    return false;
   }
 
   /**
@@ -38,7 +59,13 @@ export class WebhookService {
       throw error;
     }
 
-    this.logger.log(`Processing webhook event: ${event.type}`);
+    // Idempotency: skip if this event was already processed
+    if (await this.isDuplicateEvent(event.id)) {
+      this.logger.warn(`Duplicate webhook event ${event.id} (${event.type}) — skipping`);
+      return;
+    }
+
+    this.logger.log(`Processing webhook event: ${event.type} [${event.id}]`);
 
     // Handle different event types
     switch (event.type) {
@@ -356,17 +383,79 @@ export class WebhookService {
   }
 
   /**
-   * Handle dispute created
+   * Handle dispute created — creates DB record, freezes deposit, notifies admin
    */
   private async handleDisputeCreated(dispute: Stripe.Dispute) {
-    const { id, amount, charge, reason } = dispute;
+    const { id, amount, charge, reason, status, evidence_details } = dispute;
 
     this.logger.warn(
       `Dispute created: ${id}, charge: ${charge}, amount: ${amount}, reason: ${reason}`,
     );
 
-    // You may want to create a dispute record in your database
-    // and notify the admin/relevant parties
+    try {
+      const chargeId = typeof charge === 'string' ? charge : charge?.id;
+
+      // Find the related payment by Stripe charge ID
+      const payment = chargeId
+        ? await this.prisma.payment.findFirst({
+            where: { stripeChargeId: chargeId },
+            include: { booking: { include: { listing: true } } },
+          })
+        : null;
+
+      if (!payment?.booking) {
+        this.logger.warn(`No linked booking found for dispute ${id}, charge ${chargeId}`);
+        return;
+      }
+
+      const booking = payment.booking;
+
+      // Create dispute record in DB (idempotent)
+      const existing = await this.prisma.dispute.findFirst({
+        where: {
+          bookingId: booking.id,
+          title: { contains: id },
+        },
+      });
+
+      if (!existing) {
+        await this.prisma.dispute.create({
+          data: {
+            bookingId: booking.id,
+            initiatorId: booking.renterId,
+            defendantId: booking.ownerId,
+            title: `Stripe Dispute ${id}`,
+            type: 'PAYMENT_ISSUE',
+            status: 'OPEN',
+            priority: 'HIGH',
+            description: `Stripe dispute (${reason || 'unknown reason'}). Amount: ${(amount / 100).toFixed(2)} ${dispute.currency?.toUpperCase()}. Evidence deadline: ${evidence_details?.due_by ? new Date(evidence_details.due_by * 1000).toISOString() : 'N/A'}.`,
+            amount: amount / 100,
+          },
+        });
+      }
+
+      // Freeze the security deposit — mark as CAPTURED to prevent release
+      await this.prisma.depositHold.updateMany({
+        where: { bookingId: booking.id, status: 'HELD' },
+        data: {
+          status: 'CAPTURED',
+          capturedAt: new Date(),
+          metadata: JSON.stringify({ reason: `Captured due to Stripe dispute ${id}: ${reason}` }),
+        },
+      });
+
+      // Notify admins via event bus
+      this.eventsService.emitDisputeCreated({
+        disputeId: id,
+        bookingId: booking.id,
+        reportedBy: booking.renterId,
+        type: 'PAYMENT_ISSUE',
+      });
+
+      this.logger.log(`Dispute ${id} recorded and deposit frozen for booking ${booking.id}`);
+    } catch (error) {
+      this.logger.error(`Error handling dispute creation: ${error.message}`, error.stack);
+    }
   }
 
   /**

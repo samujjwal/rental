@@ -13,6 +13,101 @@ import type {
 import { CircuitBreaker } from "~/lib/api-error";
 const searchCircuitBreaker = new CircuitBreaker(5, 30000);
 
+type SearchResult = {
+  id: string;
+  title: string;
+  description: string;
+  slug: string;
+  categoryName: string;
+  categorySlug: string;
+  city: string;
+  state: string;
+  country: string;
+  location?: { lat?: number; lon?: number };
+  basePrice: number;
+  currency: string;
+  photos: string[];
+  ownerName: string;
+  ownerRating: number;
+  averageRating: number;
+  totalReviews: number;
+  bookingMode?: string;
+  condition?: Listing["condition"];
+  features?: string[];
+};
+
+type SearchResponse = {
+  results: SearchResult[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+function mapSearchResponse(response: SearchResponse): ListingSearchResponse {
+  const size = response.size || 20;
+  const listings: Listing[] = response.results.map((listing) => ({
+    id: listing.id,
+    ownerId: "",
+    title: listing.title,
+    description: listing.description,
+    category: listing.categoryName || listing.categorySlug || "",
+    subcategory: null,
+    basePrice: Number(listing.basePrice || 0),
+    pricePerWeek: null,
+    pricePerMonth: null,
+    currency: listing.currency || "USD",
+    condition: listing.condition || "good",
+    location: {
+      address: "",
+      city: listing.city || "",
+      state: listing.state || "",
+      country: listing.country || "",
+      postalCode: "",
+      coordinates: {
+        lat: listing.location?.lat as number,
+        lng: listing.location?.lon as number,
+      },
+    },
+    photos: listing.photos || [],
+    availability: "available",
+    availabilitySchedule: { startDate: null, endDate: null },
+    instantBooking: listing.bookingMode === "INSTANT_BOOK",
+    deliveryOptions: { pickup: true, delivery: false, shipping: false },
+    deliveryRadius: null,
+    deliveryFee: null,
+    securityDeposit: 0,
+    minimumRentalPeriod: 1,
+    maximumRentalPeriod: null,
+    cancellationPolicy: "moderate",
+    rules: null,
+    features: listing.features || [],
+    rating: listing.averageRating ?? null,
+    totalReviews: listing.totalReviews ?? 0,
+    totalBookings: 0,
+    views: 0,
+    featured: false,
+    verified: false,
+    owner: {
+      id: "",
+      firstName: listing.ownerName?.split(" ")[0] || "",
+      lastName: listing.ownerName?.split(" ").slice(1).join(" ") || null,
+      avatar: null,
+      rating: listing.ownerRating ?? null,
+      verified: false,
+    },
+    createdAt: "",
+    updatedAt: "",
+  }));
+
+  return {
+    listings,
+    total: response.total,
+    page: response.page || 1,
+    limit: size,
+    totalPages: Math.ceil(response.total / size),
+  };
+}
+
 export const listingsApi = {
   async searchListings(
     params: ListingSearchParams
@@ -69,150 +164,60 @@ export const listingsApi = {
           queryParams.append("sort", sortMap[params.sortBy]);
         }
 
-        type SearchResult = {
-          id: string;
-          title: string;
-          description: string;
-          slug: string;
-          categoryName: string;
-          categorySlug: string;
-          city: string;
-          state: string;
-          country: string;
-          location?: { lat?: number; lon?: number };
-          basePrice: number;
-          currency: string;
-          photos: string[];
-          ownerName: string;
-          ownerRating: number;
-          averageRating: number;
-          totalReviews: number;
-          bookingMode?: string;
-          condition?: Listing["condition"];
-          features?: string[];
-        };
-
-        type SearchResponse = {
-          results: SearchResult[];
-          total: number;
-          page: number;
-          size: number;
-        };
-
         const response = await withRetry(
           () => api.get<SearchResponse>(`/search?${queryParams.toString()}`),
           { maxRetries: 2, delayMs: 500 }
         );
 
         if (response.total === 0 && effectiveQuery) {
+          // Retry without geo params as fallback
           const fallbackParams = new URLSearchParams();
-          Object.entries(params).forEach(([key, value]) => {
-            if (value === undefined || value === null) return;
-            if (key === "lat" || key === "lng" || key === "radius") return;
-            fallbackParams.append(key, String(value));
-          });
-          if (!fallbackParams.has("query")) {
-            fallbackParams.append("query", effectiveQuery);
-          }
-          return withRetry(
-            () =>
-              api.get<ListingSearchResponse>(
-                `/listings/search?${fallbackParams.toString()}`
-              ),
+          if (effectiveQuery) fallbackParams.append("query", effectiveQuery);
+          if (params.category) fallbackParams.append("categoryId", String(params.category));
+          if (params.minPrice != null) fallbackParams.append("minPrice", String(params.minPrice));
+          if (params.maxPrice != null) fallbackParams.append("maxPrice", String(params.maxPrice));
+          if (params.page != null) fallbackParams.append("page", String(params.page));
+          if (params.limit != null) fallbackParams.append("size", String(params.limit));
+
+          const fallback = await withRetry(
+            () => api.get<SearchResponse>(`/search?${fallbackParams.toString()}`),
             { maxRetries: 2, delayMs: 500 }
           );
+
+          return mapSearchResponse(fallback);
         }
 
-        const size = response.size || params.limit || 20;
-
-        const listings: Listing[] = response.results.map((listing) => ({
-          id: listing.id,
-          ownerId: "",
-          title: listing.title,
-          description: listing.description,
-          category: listing.categoryName || listing.categorySlug || "",
-          subcategory: null,
-          pricePerDay: Number(listing.basePrice || 0),
-          pricePerWeek: null,
-          pricePerMonth: null,
-          currency: listing.currency || "USD",
-          condition: listing.condition || "good",
-          location: {
-            address: "",
-            city: listing.city || "",
-            state: listing.state || "",
-            country: listing.country || "",
-            postalCode: "",
-            coordinates: {
-              lat: listing.location?.lat as number,
-              lng: listing.location?.lon as number,
-            },
-          },
-          images: listing.photos || [],
-          availability: "available",
-          availabilitySchedule: {
-            startDate: null,
-            endDate: null,
-          },
-          instantBooking: listing.bookingMode === "INSTANT_BOOK",
-          deliveryOptions: {
-            pickup: true,
-            delivery: false,
-            shipping: false,
-          },
-          deliveryRadius: null,
-          deliveryFee: null,
-          securityDeposit: 0,
-          minimumRentalPeriod: 1,
-          maximumRentalPeriod: null,
-          cancellationPolicy: "moderate",
-          rules: null,
-          features: listing.features || [],
-          rating: listing.averageRating ?? null,
-          totalReviews: listing.totalReviews ?? 0,
-          totalBookings: 0,
-          views: 0,
-          featured: false,
-          verified: false,
-          owner: {
-            id: "",
-            firstName: listing.ownerName?.split(" ")[0] || "",
-            lastName:
-              listing.ownerName?.split(" ").slice(1).join(" ") || null,
-            avatar: null,
-            rating: listing.ownerRating ?? null,
-            verified: false,
-          },
-          createdAt: "",
-          updatedAt: "",
-        }));
-
-        return {
-          listings,
-          total: response.total,
-          page: response.page || 1,
-          limit: size,
-          totalPages: Math.ceil(response.total / size),
-        };
+        return mapSearchResponse(response);
       }
 
+      // Non-geo search: also use /search
       const queryParams = new URLSearchParams();
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          queryParams.append(key, String(value));
-        }
-      });
-      if (effectiveQuery && !queryParams.has("query")) {
-        queryParams.append("query", effectiveQuery);
+      if (effectiveQuery) queryParams.append("query", effectiveQuery);
+      if (params.category) queryParams.append("categoryId", String(params.category));
+      if (params.minPrice != null) queryParams.append("minPrice", String(params.minPrice));
+      if (params.maxPrice != null) queryParams.append("maxPrice", String(params.maxPrice));
+      if (params.condition) queryParams.append("condition", String(params.condition));
+      if (params.instantBooking) queryParams.append("bookingMode", "INSTANT_BOOK");
+      if (params.delivery) queryParams.append("delivery", "true");
+      if (params.page != null) queryParams.append("page", String(params.page));
+      if (params.limit != null) queryParams.append("size", String(params.limit));
+      if (params.sortBy) {
+        const sortMap: Record<NonNullable<ListingSearchParams["sortBy"]>, string> = {
+          "price-asc": "price_asc",
+          "price-desc": "price_desc",
+          rating: "rating",
+          newest: "newest",
+          popular: "relevance",
+        };
+        queryParams.append("sort", sortMap[params.sortBy]);
       }
 
-      return withRetry(
-        () =>
-          api.get<ListingSearchResponse>(
-            `/listings/search?${queryParams.toString()}`
-          ),
+      const response = await withRetry(
+        () => api.get<SearchResponse>(`/search?${queryParams.toString()}`),
         { maxRetries: 2, delayMs: 500 }
       );
+
+      return mapSearchResponse(response);
     });
   },
 
@@ -286,7 +291,7 @@ export const listingsApi = {
   async uploadImages(id: string, files: File[]): Promise<{ urls: string[] }> {
     const formData = new FormData();
     files.forEach((file) => {
-      formData.append("images", file);
+      formData.append("photos", file);
     });
     return api.post<{ urls: string[] }>(`/listings/${id}/images`, formData, {
       headers: {

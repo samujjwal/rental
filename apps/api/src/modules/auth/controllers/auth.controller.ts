@@ -8,12 +8,16 @@ import {
   HttpCode,
   HttpStatus,
   Ip,
+  Param,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from '../services/auth.service';
+import { OAuthService } from '../services/oauth.service';
+import { OtpService } from '../services/otp.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { User, UserRole } from '@rental-portal/database';
@@ -27,12 +31,21 @@ import {
   ChangePasswordDto,
   VerifyMfaDto,
   DisableMfaDto,
+  GoogleLoginDto,
+  AppleLoginDto,
+  OtpRequestDto,
+  OtpVerifyDto,
+  PhoneVerifyDto,
 } from '../dto/auth.dto';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly oauthService: OAuthService,
+    private readonly otpService: OtpService,
+  ) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
@@ -168,5 +181,84 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid password' })
   async disableMfa(@CurrentUser('id') userId: string, @Body() dto: DisableMfaDto) {
     await this.authService.disableMfa(userId, dto.password);
+  }
+
+  // === OAuth Endpoints (6.1) ===
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login with Google' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async googleLogin(@Body() dto: GoogleLoginDto, @Ip() ipAddress: string, @Req() req: Request) {
+    const profile = await this.oauthService.verifyGoogleToken(dto.idToken);
+    return this.oauthService.authenticateOAuth(profile, ipAddress, req.headers['user-agent']);
+  }
+
+  @Post('apple')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login with Apple' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async appleLogin(@Body() dto: AppleLoginDto, @Ip() ipAddress: string, @Req() req: Request) {
+    const profile = await this.oauthService.verifyAppleToken(
+      dto.identityToken,
+      dto.authorizationCode,
+    );
+    // Apple only sends name on first login
+    if (dto.firstName) profile.firstName = dto.firstName;
+    if (dto.lastName) profile.lastName = dto.lastName;
+    return this.oauthService.authenticateOAuth(profile, ipAddress, req.headers['user-agent']);
+  }
+
+  // === OTP Endpoints (6.2) ===
+
+  @Post('otp/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request OTP for passwordless login' })
+  @Throttle({ default: { limit: 3, ttl: 3600000 } })
+  async requestOtp(@Body() dto: OtpRequestDto) {
+    return this.otpService.requestOtp(dto.email);
+  }
+
+  @Post('otp/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP and login' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async verifyOtp(@Body() dto: OtpVerifyDto, @Ip() ipAddress: string, @Req() req: Request) {
+    return this.otpService.verifyOtp(dto.email, dto.code, ipAddress, req.headers['user-agent']);
+  }
+
+  // === Verification Endpoints (6.3) ===
+
+  @Post('verify-email/send')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Send verification email' })
+  async sendVerificationEmail(@CurrentUser('id') userId: string) {
+    await this.authService.sendVerificationEmail(userId);
+  }
+
+  @Get('verify-email/:token')
+  @ApiOperation({ summary: 'Verify email with token' })
+  async verifyEmail(@Param('token') token: string) {
+    return this.authService.verifyEmail(token);
+  }
+
+  @Post('verify-phone/send')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send phone verification OTP' })
+  async sendPhoneVerification(@CurrentUser('id') userId: string) {
+    return this.authService.sendPhoneVerification(userId);
+  }
+
+  @Post('verify-phone/verify')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify phone with OTP code' })
+  async verifyPhone(@CurrentUser('id') userId: string, @Body() dto: PhoneVerifyDto) {
+    return this.authService.verifyPhone(userId, dto.code);
   }
 }

@@ -51,7 +51,7 @@ export async function clientLoader({ request }: { request: Request }) {
   const rawView = url.searchParams.get("view");
   const view = rawView === "given" ? "given" : "received";
   const rating = url.searchParams.get("rating");
-  const ratingNumber = rating ? Number.parseInt(rating, 10) : null;
+  const ratingNumber = rating ? Number.parseInt(rating, 10) : Number.NaN;
   const normalizedRating =
     Number.isInteger(ratingNumber) && ratingNumber >= 1 && ratingNumber <= 5
       ? ratingNumber
@@ -233,8 +233,8 @@ function ReviewCard({ review }: { review: Review }) {
                 className="flex items-center gap-2 p-2 bg-muted rounded-lg mb-3 hover:bg-muted/80 transition-colors"
               >
                 <div className="w-10 h-10 rounded bg-muted-foreground/20 overflow-hidden flex-shrink-0">
-                  {review.listing?.images?.[0] ? (
-                    <img src={review.listing.images[0]} alt={listingTitle} className="w-full h-full object-cover" />
+                  {review.listing?.photos?.[0] ? (
+                    <img src={review.listing.photos[0]} alt={listingTitle} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Package className="w-5 h-5 text-muted-foreground" />
@@ -468,3 +468,4 @@ export default function ReviewsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

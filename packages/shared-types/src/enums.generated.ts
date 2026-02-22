@@ -1,0 +1,403 @@
+// ==========================================================================
+// AUTO-GENERATED — DO NOT EDIT
+// Source: packages/database/prisma/schema.prisma
+// Generated: 2026-02-21T02:39:21.511Z
+// Run: pnpm --filter shared-types generate
+// ==========================================================================
+
+export enum UserRole {
+  USER = 'USER',
+  HOST = 'HOST',
+  ADMIN = 'ADMIN',
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  CUSTOMER = 'CUSTOMER',
+  OPERATIONS_ADMIN = 'OPERATIONS_ADMIN',
+  FINANCE_ADMIN = 'FINANCE_ADMIN',
+  SUPPORT_ADMIN = 'SUPPORT_ADMIN',
+}
+
+export const UserRoleValues = ['USER', 'HOST', 'ADMIN', 'SUPER_ADMIN', 'CUSTOMER', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'] as const;
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  DELETED = 'DELETED',
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
+}
+
+export const UserStatusValues = ['ACTIVE', 'SUSPENDED', 'DELETED', 'PENDING_VERIFICATION'] as const;
+
+export enum PropertyType {
+  APARTMENT = 'APARTMENT',
+  HOUSE = 'HOUSE',
+  VILLA = 'VILLA',
+  STUDIO = 'STUDIO',
+  CONDO = 'CONDO',
+  TOWNHOUSE = 'TOWNHOUSE',
+  COTTAGE = 'COTTAGE',
+  CABIN = 'CABIN',
+  LOFT = 'LOFT',
+  OTHER = 'OTHER',
+}
+
+export const PropertyTypeValues = ['APARTMENT', 'HOUSE', 'VILLA', 'STUDIO', 'CONDO', 'TOWNHOUSE', 'COTTAGE', 'CABIN', 'LOFT', 'OTHER'] as const;
+
+export enum PropertyStatus {
+  AVAILABLE = 'AVAILABLE',
+  RENTED = 'RENTED',
+  MAINTENANCE = 'MAINTENANCE',
+  UNAVAILABLE = 'UNAVAILABLE',
+  DRAFT = 'DRAFT',
+  SUSPENDED = 'SUSPENDED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export const PropertyStatusValues = ['AVAILABLE', 'RENTED', 'MAINTENANCE', 'UNAVAILABLE', 'DRAFT', 'SUSPENDED', 'ARCHIVED'] as const;
+
+export enum PropertyCondition {
+  EXCELLENT = 'EXCELLENT',
+  GOOD = 'GOOD',
+  FAIR = 'FAIR',
+  POOR = 'POOR',
+}
+
+export const PropertyConditionValues = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR'] as const;
+
+export enum VerificationStatus {
+  PENDING = 'PENDING',
+  VERIFIED = 'VERIFIED',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+export const VerificationStatusValues = ['PENDING', 'VERIFIED', 'APPROVED', 'REJECTED'] as const;
+
+export enum BookingStatus {
+  DRAFT = 'DRAFT',
+  PENDING = 'PENDING',
+  PENDING_PAYMENT = 'PENDING_PAYMENT',
+  PENDING_OWNER_APPROVAL = 'PENDING_OWNER_APPROVAL',
+  CONFIRMED = 'CONFIRMED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  CANCELLED = 'CANCELLED',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
+  DISPUTED = 'DISPUTED',
+  COMPLETED = 'COMPLETED',
+  AWAITING_RETURN_INSPECTION = 'AWAITING_RETURN_INSPECTION',
+  REFUNDED = 'REFUNDED',
+  SETTLED = 'SETTLED',
+}
+
+export const BookingStatusValues = ['DRAFT', 'PENDING', 'PENDING_PAYMENT', 'PENDING_OWNER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS', 'CANCELLED', 'PAYMENT_FAILED', 'DISPUTED', 'COMPLETED', 'AWAITING_RETURN_INSPECTION', 'REFUNDED', 'SETTLED'] as const;
+
+export enum BookingMode {
+  REQUEST = 'REQUEST',
+  INSTANT_BOOK = 'INSTANT_BOOK',
+}
+
+export const BookingModeValues = ['REQUEST', 'INSTANT_BOOK'] as const;
+
+export enum PricingMode {
+  PER_NIGHT = 'PER_NIGHT',
+  PER_MONTH = 'PER_MONTH',
+  PER_HOUR = 'PER_HOUR',
+  PER_DAY = 'PER_DAY',
+  PER_WEEK = 'PER_WEEK',
+  CUSTOM = 'CUSTOM',
+}
+
+export const PricingModeValues = ['PER_NIGHT', 'PER_MONTH', 'PER_HOUR', 'PER_DAY', 'PER_WEEK', 'CUSTOM'] as const;
+
+export enum DepositType {
+  FIXED = 'FIXED',
+  PERCENTAGE = 'PERCENTAGE',
+  NONE = 'NONE',
+}
+
+export const DepositTypeValues = ['FIXED', 'PERCENTAGE', 'NONE'] as const;
+
+export enum ListingStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  ARCHIVED = 'ARCHIVED',
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  REJECTED = 'REJECTED',
+}
+
+export const ListingStatusValues = ['DRAFT', 'PUBLISHED', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'ARCHIVED', 'PENDING_REVIEW', 'REJECTED'] as const;
+
+export enum ReviewType {
+  LISTING_REVIEW = 'LISTING_REVIEW',
+  RENTER_REVIEW = 'RENTER_REVIEW',
+  OWNER_REVIEW = 'OWNER_REVIEW',
+}
+
+export const ReviewTypeValues = ['LISTING_REVIEW', 'RENTER_REVIEW', 'OWNER_REVIEW'] as const;
+
+export enum ReviewStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  HIDDEN = 'HIDDEN',
+  FLAGGED = 'FLAGGED',
+}
+
+export const ReviewStatusValues = ['DRAFT', 'PUBLISHED', 'HIDDEN', 'FLAGGED'] as const;
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+  REFUNDED = 'REFUNDED',
+  SUCCEEDED = 'SUCCEEDED',
+}
+
+export const PaymentStatusValues = ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED', 'SUCCEEDED'] as const;
+
+export enum RefundStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+  SUCCEEDED = 'SUCCEEDED',
+}
+
+export const RefundStatusValues = ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'SUCCEEDED'] as const;
+
+export enum DepositStatus {
+  PENDING = 'PENDING',
+  AUTHORIZED = 'AUTHORIZED',
+  HELD = 'HELD',
+  RELEASED = 'RELEASED',
+  CAPTURED = 'CAPTURED',
+  FAILED = 'FAILED',
+}
+
+export const DepositStatusValues = ['PENDING', 'AUTHORIZED', 'HELD', 'RELEASED', 'CAPTURED', 'FAILED'] as const;
+
+export enum PayoutStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  IN_TRANSIT = 'IN_TRANSIT',
+  COMPLETED = 'COMPLETED',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}
+
+export const PayoutStatusValues = ['PENDING', 'PROCESSING', 'IN_TRANSIT', 'COMPLETED', 'PAID', 'FAILED', 'CANCELLED'] as const;
+
+export enum AccountType {
+  REVENUE = 'REVENUE',
+  EXPENSE = 'EXPENSE',
+  LIABILITY = 'LIABILITY',
+  ASSET = 'ASSET',
+  EQUITY = 'EQUITY',
+  CASH = 'CASH',
+  RECEIVABLE = 'RECEIVABLE',
+  PAYABLE = 'PAYABLE',
+}
+
+export const AccountTypeValues = ['REVENUE', 'EXPENSE', 'LIABILITY', 'ASSET', 'EQUITY', 'CASH', 'RECEIVABLE', 'PAYABLE'] as const;
+
+export enum LedgerSide {
+  DEBIT = 'DEBIT',
+  CREDIT = 'CREDIT',
+}
+
+export const LedgerSideValues = ['DEBIT', 'CREDIT'] as const;
+
+export enum TransactionType {
+  PLATFORM_FEE = 'PLATFORM_FEE',
+  SERVICE_FEE = 'SERVICE_FEE',
+  PAYMENT = 'PAYMENT',
+  REFUND = 'REFUND',
+  PAYOUT = 'PAYOUT',
+  DEPOSIT_HOLD = 'DEPOSIT_HOLD',
+  OWNER_EARNING = 'OWNER_EARNING',
+  DEPOSIT_RELEASE = 'DEPOSIT_RELEASE',
+  DISPUTE = 'DISPUTE',
+}
+
+export const TransactionTypeValues = ['PLATFORM_FEE', 'SERVICE_FEE', 'PAYMENT', 'REFUND', 'PAYOUT', 'DEPOSIT_HOLD', 'OWNER_EARNING', 'DEPOSIT_RELEASE', 'DISPUTE'] as const;
+
+export enum LedgerEntryStatus {
+  PENDING = 'PENDING',
+  POSTED = 'POSTED',
+  SETTLED = 'SETTLED',
+  CANCELLED = 'CANCELLED',
+}
+
+export const LedgerEntryStatusValues = ['PENDING', 'POSTED', 'SETTLED', 'CANCELLED'] as const;
+
+export enum NotificationType {
+  BOOKING_REQUEST = 'BOOKING_REQUEST',
+  BOOKING_CONFIRMED = 'BOOKING_CONFIRMED',
+  BOOKING_CANCELLED = 'BOOKING_CANCELLED',
+  BOOKING_REMINDER = 'BOOKING_REMINDER',
+  PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
+  REVIEW_RECEIVED = 'REVIEW_RECEIVED',
+  MESSAGE_RECEIVED = 'MESSAGE_RECEIVED',
+  SYSTEM_UPDATE = 'SYSTEM_UPDATE',
+  SYSTEM_ANNOUNCEMENT = 'SYSTEM_ANNOUNCEMENT',
+  MARKETING = 'MARKETING',
+  PAYOUT_PROCESSED = 'PAYOUT_PROCESSED',
+  VERIFICATION_COMPLETE = 'VERIFICATION_COMPLETE',
+  DISPUTE_OPENED = 'DISPUTE_OPENED',
+  LISTING_APPROVED = 'LISTING_APPROVED',
+}
+
+export const NotificationTypeValues = ['BOOKING_REQUEST', 'BOOKING_CONFIRMED', 'BOOKING_CANCELLED', 'BOOKING_REMINDER', 'PAYMENT_RECEIVED', 'REVIEW_RECEIVED', 'MESSAGE_RECEIVED', 'SYSTEM_UPDATE', 'SYSTEM_ANNOUNCEMENT', 'MARKETING', 'PAYOUT_PROCESSED', 'VERIFICATION_COMPLETE', 'DISPUTE_OPENED', 'LISTING_APPROVED'] as const;
+
+export enum OrganizationStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
+}
+
+export const OrganizationStatusValues = ['ACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'] as const;
+
+export enum OrganizationRole {
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  MEMBER = 'MEMBER',
+}
+
+export const OrganizationRoleValues = ['OWNER', 'ADMIN', 'MEMBER'] as const;
+
+export enum InsuranceType {
+  PROPERTY_DAMAGE = 'PROPERTY_DAMAGE',
+  LIABILITY = 'LIABILITY',
+  TRIP_CANCELLATION = 'TRIP_CANCELLATION',
+  MEDICAL = 'MEDICAL',
+}
+
+export const InsuranceTypeValues = ['PROPERTY_DAMAGE', 'LIABILITY', 'TRIP_CANCELLATION', 'MEDICAL'] as const;
+
+export enum InsuranceStatus {
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  CANCELLED = 'CANCELLED',
+  PENDING = 'PENDING',
+}
+
+export const InsuranceStatusValues = ['ACTIVE', 'EXPIRED', 'CANCELLED', 'PENDING'] as const;
+
+export enum ClaimStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  PROCESSING = 'PROCESSING',
+  PAID = 'PAID',
+  CANCELLED = 'CANCELLED',
+}
+
+export const ClaimStatusValues = ['PENDING', 'APPROVED', 'REJECTED', 'PROCESSING', 'PAID', 'CANCELLED'] as const;
+
+export enum EmailTemplateType {
+  BOOKING_CONFIRMATION = 'BOOKING_CONFIRMATION',
+  BOOKING_CANCELLATION = 'BOOKING_CANCELLATION',
+  PAYMENT_CONFIRMATION = 'PAYMENT_CONFIRMATION',
+  PAYMENT_RECEIPT = 'PAYMENT_RECEIPT',
+  WELCOME = 'WELCOME',
+  PASSWORD_RESET = 'PASSWORD_RESET',
+  EMAIL_VERIFICATION = 'EMAIL_VERIFICATION',
+  LISTING_APPROVED = 'LISTING_APPROVED',
+  LISTING_REJECTED = 'LISTING_REJECTED',
+  REVIEW_REMINDER = 'REVIEW_REMINDER',
+  PAYOUT_NOTIFICATION = 'PAYOUT_NOTIFICATION',
+  DISPUTE_OPENED = 'DISPUTE_OPENED',
+  DISPUTE_RESOLVED = 'DISPUTE_RESOLVED',
+  SYSTEM_NOTIFICATION = 'SYSTEM_NOTIFICATION',
+}
+
+export const EmailTemplateTypeValues = ['BOOKING_CONFIRMATION', 'BOOKING_CANCELLATION', 'PAYMENT_CONFIRMATION', 'PAYMENT_RECEIPT', 'WELCOME', 'PASSWORD_RESET', 'EMAIL_VERIFICATION', 'LISTING_APPROVED', 'LISTING_REJECTED', 'REVIEW_REMINDER', 'PAYOUT_NOTIFICATION', 'DISPUTE_OPENED', 'DISPUTE_RESOLVED', 'SYSTEM_NOTIFICATION'] as const;
+
+export enum ConversationType {
+  GENERAL = 'GENERAL',
+  BOOKING = 'BOOKING',
+  DISPUTE = 'DISPUTE',
+  SUPPORT = 'SUPPORT',
+}
+
+export const ConversationTypeValues = ['GENERAL', 'BOOKING', 'DISPUTE', 'SUPPORT'] as const;
+
+export enum ConversationStatus {
+  ACTIVE = 'ACTIVE',
+  ARCHIVED = 'ARCHIVED',
+  CLOSED = 'CLOSED',
+}
+
+export const ConversationStatusValues = ['ACTIVE', 'ARCHIVED', 'CLOSED'] as const;
+
+export enum MessageType {
+  TEXT = 'TEXT',
+  IMAGE = 'IMAGE',
+  DOCUMENT = 'DOCUMENT',
+  LOCATION = 'LOCATION',
+  SYSTEM = 'SYSTEM',
+}
+
+export const MessageTypeValues = ['TEXT', 'IMAGE', 'DOCUMENT', 'LOCATION', 'SYSTEM'] as const;
+
+export enum DisputeType {
+  PROPERTY_DAMAGE = 'PROPERTY_DAMAGE',
+  PAYMENT_ISSUE = 'PAYMENT_ISSUE',
+  CANCELLATION = 'CANCELLATION',
+  CLEANING_FEE = 'CLEANING_FEE',
+  RULES_VIOLATION = 'RULES_VIOLATION',
+  MISSING_ITEMS = 'MISSING_ITEMS',
+  CONDITION_MISMATCH = 'CONDITION_MISMATCH',
+  REFUND_REQUEST = 'REFUND_REQUEST',
+  OTHER = 'OTHER',
+}
+
+export const DisputeTypeValues = ['PROPERTY_DAMAGE', 'PAYMENT_ISSUE', 'CANCELLATION', 'CLEANING_FEE', 'RULES_VIOLATION', 'MISSING_ITEMS', 'CONDITION_MISMATCH', 'REFUND_REQUEST', 'OTHER'] as const;
+
+export enum DisputeStatus {
+  OPEN = 'OPEN',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  INVESTIGATING = 'INVESTIGATING',
+  RESOLVED = 'RESOLVED',
+  CLOSED = 'CLOSED',
+  DISMISSED = 'DISMISSED',
+  WITHDRAWN = 'WITHDRAWN',
+}
+
+export const DisputeStatusValues = ['OPEN', 'UNDER_REVIEW', 'INVESTIGATING', 'RESOLVED', 'CLOSED', 'DISMISSED', 'WITHDRAWN'] as const;
+
+export enum DisputePriority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  URGENT = 'URGENT',
+}
+
+export const DisputePriorityValues = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
+
+export enum ResolutionType {
+  FULL_REFUND = 'FULL_REFUND',
+  PARTIAL_REFUND = 'PARTIAL_REFUND',
+  CHARGE_BACK = 'CHARGE_BACK',
+  COMPENSATION = 'COMPENSATION',
+  DISMISSED = 'DISMISSED',
+}
+
+export const ResolutionTypeValues = ['FULL_REFUND', 'PARTIAL_REFUND', 'CHARGE_BACK', 'COMPENSATION', 'DISMISSED'] as const;
+
+export enum IdentityDocumentType {
+  DRIVERS_LICENSE = 'DRIVERS_LICENSE',
+  PASSPORT = 'PASSPORT',
+  NATIONAL_ID = 'NATIONAL_ID',
+  OTHER = 'OTHER',
+}
+
+export const IdentityDocumentTypeValues = ['DRIVERS_LICENSE', 'PASSPORT', 'NATIONAL_ID', 'OTHER'] as const;
+
+// Utility type: extract union from enum
+export type EnumValues<T extends Record<string, string>> = T[keyof T];

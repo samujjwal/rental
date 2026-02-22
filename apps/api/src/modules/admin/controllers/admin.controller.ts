@@ -249,13 +249,23 @@ export class AdminController {
 
   @Get('payments/refunds')
   @ApiOperation({ summary: 'Get all refunds' })
-  async getAllRefunds(@CurrentUser('id') adminId: string) {
+  async getAllRefunds(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+  ) {
     return this.adminService.getAllRefunds(adminId);
   }
 
   @Get('payments/payouts')
   @ApiOperation({ summary: 'Get all payouts' })
-  async getAllPayouts(@CurrentUser('id') adminId: string) {
+  async getAllPayouts(
+    @CurrentUser('id') adminId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+  ) {
     return this.adminService.getAllPayouts(adminId);
   }
 
@@ -421,51 +431,6 @@ export class AdminController {
     @Query('limit') limit?: number,
   ) {
     return this.adminService.getMessages(adminId, {
-      page: page ? parseInt(page.toString()) : undefined,
-      limit: limit ? parseInt(limit.toString()) : undefined,
-    });
-  }
-
-  // ==================== FINANCE ====================
-
-  @Get('refunds')
-  @ApiOperation({ summary: 'Get refunds' })
-  async getRefunds(
-    @CurrentUser('id') adminId: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Query('status') status?: string,
-  ) {
-    return this.adminService.getRefunds(adminId, {
-      page: page ? parseInt(page.toString()) : undefined,
-      limit: limit ? parseInt(limit.toString()) : undefined,
-      status,
-    });
-  }
-
-  @Get('payouts')
-  @ApiOperation({ summary: 'Get payouts' })
-  async getPayouts(
-    @CurrentUser('id') adminId: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Query('status') status?: string,
-  ) {
-    return this.adminService.getPayouts(adminId, {
-      page: page ? parseInt(page.toString()) : undefined,
-      limit: limit ? parseInt(limit.toString()) : undefined,
-      status,
-    });
-  }
-
-  @Get('ledger')
-  @ApiOperation({ summary: 'Get ledger entries' })
-  async getLedger(
-    @CurrentUser('id') adminId: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-  ) {
-    return this.adminService.getLedger(adminId, {
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
     });

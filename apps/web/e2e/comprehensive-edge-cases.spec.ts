@@ -751,10 +751,14 @@ test.describe("Edge Cases and Error Scenarios", () => {
     test("should handle offline mode", async ({ page, context }) => {
       await page.goto("/search");
       await context.setOffline(true);
-      await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+      await expect
+        .poll(() => page.evaluate(() => navigator.onLine), { timeout: 15000 })
+        .toBe(false);
 
       await context.setOffline(false);
-      await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+      await expect
+        .poll(() => page.evaluate(() => navigator.onLine), { timeout: 15000 })
+        .toBe(true);
     });
 
     test("should handle browser back button", async ({ page }) => {

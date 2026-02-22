@@ -15,10 +15,10 @@ export interface ConfirmDialogProps {
 }
 
 const confirmColorClasses: Record<string, string> = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
-    error: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-    warning: 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500',
-    success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
+    primary: 'bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary',
+    error: 'bg-destructive text-destructive-foreground hover:bg-destructive/90 focus:ring-destructive',
+    warning: 'bg-warning text-warning-foreground hover:bg-warning/90 focus:ring-warning',
+    success: 'bg-success text-success-foreground hover:bg-success/90 focus:ring-success',
 };
 
 /**
@@ -44,17 +44,17 @@ export function ConfirmDialog({
             <BackdropAnimation isOpen={open} onClick={onClose} />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <ModalAnimation isOpen={open} variant="scale">
-                    <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+                    <div className="w-full max-w-md rounded-xl bg-background shadow-xl border">
                         {/* Title */}
-                        <div className="flex items-center gap-2 border-b border-gray-200 px-6 py-4">
+                        <div className="flex items-center gap-2 border-b px-6 py-4">
                             {showIcon && confirmColor === 'error' && (
                                 <AlertTriangle size={24} className="text-red-500" />
                             )}
-                            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+                            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="ml-auto rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                className="ml-auto rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                             >
                                 <X size={20} />
                             </button>
@@ -62,16 +62,16 @@ export function ConfirmDialog({
 
                         {/* Content */}
                         <div className="px-6 py-4">
-                            <p className="text-gray-600">{message}</p>
+                            <p className="text-muted-foreground">{message}</p>
                         </div>
 
                         {/* Actions */}
-                        <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                        <div className="flex justify-end gap-3 border-t px-6 py-4">
                             <button
                                 type="button"
                                 onClick={onClose}
                                 disabled={isLoading}
-                                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                                className="rounded-lg border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                             >
                                 {cancelText}
                             </button>

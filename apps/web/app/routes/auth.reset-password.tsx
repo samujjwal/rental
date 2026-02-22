@@ -52,7 +52,8 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     return redirect("/auth/forgot-password");
   }
 
-  return { token: token.trim() };
+  const normalizedToken = String(token).trim();
+  return { token: normalizedToken };
 }
 
 export async function clientAction({ request }: ActionFunctionArgs) {
@@ -324,3 +325,4 @@ export default function ResetPassword() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

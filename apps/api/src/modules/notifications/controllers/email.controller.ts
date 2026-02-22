@@ -1,61 +1,41 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { EmailService } from '../services/resend.service';
+import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
+import { RolesGuard } from '@/modules/auth/guards/roles.guard';
+import { Roles } from '@/modules/auth/decorators/roles.decorator';
+import { UserRole } from '@rental-portal/database';
 
+/**
+ * Email controller — restricted to SUPER_ADMIN only.
+ * All production email sending is triggered internally by services
+ * (booking confirmation, password reset, welcome, etc.).
+ * These endpoints exist solely for admin testing/debugging.
+ */
 @ApiTags('email')
 @Controller('email')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN)
+@ApiBearerAuth()
 export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
   @Post('send')
-  @ApiOperation({ summary: 'Send email' })
+  @ApiOperation({ summary: 'Send email (Super Admin only)' })
   @ApiResponse({ status: 200, description: 'Email sent successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden — Super Admin only' })
   async sendEmail(
     @Body() emailData: { to: string | string[]; subject: string; html?: string; text?: string },
   ) {
     return this.emailService.sendEmail(emailData);
   }
 
-  @Post('send-welcome')
-  @ApiOperation({ summary: 'Send welcome email' })
-  @ApiResponse({ status: 200, description: 'Welcome email sent successfully' })
-  async sendWelcomeEmail(@Body() data: { email: string; firstName: string; lastName: string }) {
-    await this.emailService.sendWelcomeEmail(data);
-    return { status: 'sent' };
-  }
-
-  @Post('send-booking-confirmation')
-  @ApiOperation({ summary: 'Send booking confirmation email' })
-  @ApiResponse({ status: 200, description: 'Booking confirmation sent successfully' })
-  async sendBookingConfirmation(
-    @Body()
-    data: {
-      email: string;
-      firstName: string;
-      booking: {
-        id: string;
-        listingTitle: string;
-        startDate: string;
-        endDate: string;
-        totalPrice: number;
-        currency: string;
-      };
-    },
-  ) {
-    await this.emailService.sendBookingConfirmationEmail(
-      { email: data.email, firstName: data.firstName },
-      {
-        ...data.booking,
-        startDate: new Date(data.booking.startDate),
-        endDate: new Date(data.booking.endDate),
-      },
-    );
-    return { status: 'sent' };
-  }
-
   @Get('test')
-  @ApiOperation({ summary: 'Test email configuration' })
+  @ApiOperation({ summary: 'Test email configuration (Super Admin only)' })
   @ApiResponse({ status: 200, description: 'Email configuration test result' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden — Super Admin only' })
   async testEmail() {
     return this.emailService.testEmailConfiguration();
   }

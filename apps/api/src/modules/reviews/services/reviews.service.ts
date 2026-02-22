@@ -153,7 +153,6 @@ export class ReviewsService {
         cleanlinessRating: dto.cleanlinessRating,
         valueRating: dto.valueRating,
         comment: dto.comment || '',
-        content: dto.comment || '',
       },
       include: {
         reviewer: {
@@ -219,12 +218,30 @@ export class ReviewsService {
 
     const { comment, ...ratings } = dto;
 
+    // Moderate updated review content
+    if (comment) {
+      try {
+        const modResult = await this.moderationService.moderateReview({
+          content: comment,
+          rating: dto.overallRating ?? review.overallRating,
+        });
+        if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
+          throw new BadRequestException({
+            message: 'Review content violates our content policies',
+            flags: modResult.flags,
+          });
+        }
+      } catch (error) {
+        if (error instanceof BadRequestException) throw error;
+        // Log and proceed if moderation service fails
+      }
+    }
+
     const updated = await this.prisma.review.update({
       where: { id: reviewId },
       data: {
         ...ratings,
         comment: comment,
-        content: comment,
       },
       include: {
         reviewer: {

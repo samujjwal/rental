@@ -8,19 +8,31 @@ import {
   Param,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { NotificationsService, NotificationPreferences } from '../services/notifications.service';
+import { PushNotificationService } from '../services/push-notification.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
+import { RolesGuard } from '@/modules/auth/guards/roles.guard';
+import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { NotificationType } from '@rental-portal/database';
+import { NotificationType, UserRole } from '@rental-portal/database';
+import {
+  RegisterDeviceDto,
+  UnregisterDeviceDto,
+} from '../dto/notification.dto';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly pushService: PushNotificationService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get user notifications' })
@@ -80,5 +92,52 @@ export class NotificationsController {
   ) {
     await this.notificationsService.updatePreferences(userId, preferences);
     return this.notificationsService.getPreferences(userId);
+  }
+
+  // ─── Device Registration (Push Notifications) ─────────────────
+
+  @Post('devices/register')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Register device for push notifications' })
+  async registerDevice(
+    @CurrentUser('id') userId: string,
+    @Body() dto: RegisterDeviceDto,
+  ) {
+    await this.pushService.registerDeviceToken(userId, dto.token, dto.platform);
+    return { success: true };
+  }
+
+  @Post('devices/unregister')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unregister device from push notifications' })
+  async unregisterDevice(@Body() dto: UnregisterDeviceDto) {
+    await this.pushService.unregisterDeviceToken(dto.token);
+    return { success: true };
+  }
+
+  // ─── Admin: Create notification ────────────────────────────────
+
+  @Post()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Create notification (admin only)' })
+  async createNotification(
+    @Body() data: {
+      userId: string;
+      type: string;
+      title: string;
+      message: string;
+      channels?: ('EMAIL' | 'SMS' | 'PUSH' | 'IN_APP')[];
+      priority?: 'LOW' | 'NORMAL' | 'HIGH';
+    },
+  ) {
+    return this.notificationsService.sendNotification({
+      userId: data.userId,
+      type: data.type as NotificationType,
+      title: data.title,
+      message: data.message,
+      channels: data.channels,
+      priority: data.priority,
+    });
   }
 }

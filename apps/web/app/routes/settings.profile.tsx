@@ -93,7 +93,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent") as string | null;
   const allowedIntents = new Set(["update-profile", "change-password", "delete-account"]);
-  if (!allowedIntents.has(intent)) {
+  if (!intent || !allowedIntents.has(intent)) {
     return { success: false, error: "Unsupported action." };
   }
 
@@ -624,3 +624,4 @@ export default function ProfileSettings() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

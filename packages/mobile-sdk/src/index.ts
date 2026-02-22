@@ -1,3 +1,26 @@
+// Re-export from shared-types (single source of truth)
+export type {
+  AuthResponse as SharedAuthResponse,
+  UserProfile as SharedUserProfile,
+  BookingSummary as SharedBookingSummary,
+  BookingDetail as SharedBookingDetail,
+  ConversationSummary as SharedConversationSummary,
+  CreateReviewInput,
+  ReviewSummary,
+  PaymentIntentResponse as SharedPaymentIntentResponse,
+  OrganizationDetail,
+  OrganizationMemberInfo,
+  ListingSummary,
+  ListingSearchParams,
+} from '@rental-portal/shared-types';
+
+export {
+  ReviewType,
+  DisputeType,
+  DeliveryMethod,
+  SearchSortBy,
+} from '@rental-portal/shared-types';
+
 export type GeoSuggestion = {
   id: string;
   provider: string;
@@ -87,10 +110,8 @@ export type ListingDetail = {
   id: string;
   title: string;
   description?: string;
-  pricePerDay?: number;
   basePrice?: number;
   currency?: string;
-  images?: string[];
   photos?: string[];
   status?: string;
   instantBooking?: boolean;
@@ -275,13 +296,7 @@ export type UpdateMemberRolePayload = {
   role: OrganizationRole;
 };
 
-export type DisputeType =
-  | "PROPERTY_DAMAGE"
-  | "MISSING_ITEMS"
-  | "CONDITION_MISMATCH"
-  | "REFUND_REQUEST"
-  | "PAYMENT_ISSUE"
-  | "OTHER";
+// DisputeType is re-exported from shared-types above
 
 export type CreateDisputePayload = {
   bookingId: string;
@@ -383,7 +398,9 @@ export type BookingCreatePayload = {
   startDate: string;
   endDate: string;
   guestCount?: number;
-  message?: string;
+  specialRequests?: string;
+  deliveryMethod?: 'PICKUP' | 'DELIVERY' | 'SHIPPING';
+  deliveryAddress?: string;
   promoCode?: string;
 };
 
@@ -413,7 +430,7 @@ export type BookingDetail = {
   listing?: {
     id: string;
     title: string;
-    images?: string[];
+    photos?: string[];
   };
 };
 
@@ -814,6 +831,12 @@ export function createMobileClient(config: MobileClientConfig = {}) {
         method: "POST",
       }),
 
+    rejectReturn: (bookingId: string, reason: string) =>
+      request<BookingDetail>(`/bookings/${bookingId}/reject-return`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+
     checkAvailability: (listingId: string, startDate: string, endDate: string) =>
       request<BookingAvailability>(`/listings/${listingId}/check-availability`, {
         method: "POST",
@@ -854,5 +877,110 @@ export function createMobileClient(config: MobileClientConfig = {}) {
       }),
 
     getUserStats: () => request<UserStats>("/users/me/stats"),
+
+    registerDeviceToken: (token: string, platform: string) =>
+      request<void>("/notifications/devices/register", {
+        method: "POST",
+        body: JSON.stringify({ token, platform }),
+      }),
+
+    unregisterDeviceToken: (token: string) =>
+      request<void>("/notifications/devices/unregister", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      }),
+
+    // AI
+    generateDescription: (data: {
+      title: string;
+      category?: string;
+      city?: string;
+      features?: string[];
+      condition?: string;
+      basePrice?: number;
+    }) =>
+      request<{ description: string; model: string; tokens?: number }>(
+        "/ai/generate-description",
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        },
+      ),
+
+    // Price suggestion
+    getPriceSuggestion: (params?: {
+      categoryId?: string;
+      city?: string;
+      condition?: string;
+    }) => {
+      const qs = new URLSearchParams();
+      if (params?.categoryId) qs.set('categoryId', params.categoryId);
+      if (params?.city) qs.set('city', params.city);
+      if (params?.condition) qs.set('condition', params.condition);
+      const query = qs.toString();
+      return request<{
+        averagePrice: number;
+        medianPrice: number;
+        minPrice: number;
+        maxPrice: number;
+        suggestedRange: { min: number; max: number };
+        sampleSize: number;
+      }>(`/listings/price-suggestion${query ? `?${query}` : ''}`, {});
+    },
+
+    // GDPR data export
+    exportData: () => request<any>("/users/me/export"),
+
+    // OAuth
+    googleLogin: (idToken: string) =>
+      request<AuthResponse>("/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ idToken }),
+      }),
+
+    appleLogin: (identityToken: string, authorizationCode: string, firstName?: string, lastName?: string) =>
+      request<AuthResponse>("/auth/apple", {
+        method: "POST",
+        body: JSON.stringify({ identityToken, authorizationCode, firstName, lastName }),
+      }),
+
+    // OTP
+    requestOtp: (email: string) =>
+      request<{ message: string }>("/auth/otp/request", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+
+    verifyOtp: (email: string, code: string) =>
+      request<AuthResponse>("/auth/otp/verify", {
+        method: "POST",
+        body: JSON.stringify({ email, code }),
+      }),
+
+    // Verification
+    sendVerificationEmail: () =>
+      request<void>("/auth/verify-email/send", { method: "POST" }),
+
+    sendPhoneVerification: () =>
+      request<{ message: string }>("/auth/verify-phone/send", { method: "POST" }),
+
+    verifyPhone: (code: string) =>
+      request<{ message: string }>("/auth/verify-phone/verify", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      }),
+
+    // KYC
+    uploadIdentityDocument: (data: { documentType: string; documentUrl: string; expiresAt?: string }) =>
+      request<any>("/kyc/documents", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    getIdentityDocuments: () => request<any[]>("/kyc/documents"),
+
+    // Invoice
+    getBookingInvoice: (bookingId: string) =>
+      request<any>(`/bookings/${bookingId}/invoice?format=json`),
   };
 }

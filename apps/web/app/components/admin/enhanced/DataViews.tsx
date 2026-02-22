@@ -1,36 +1,10 @@
 /**
  * Data View Components
- * Multiple view modes: Table, Cards, List for different screen sizes
+ * Multiple view modes: Table, Cards, List — pure Tailwind
  */
 
 import React from "react";
-import {
-  Box,
-  Card,
-  CardContent,
-  CardActions,
-  Grid,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  Avatar,
-  IconButton,
-  Typography,
-  Chip,
-  Divider,
-  ToggleButtonGroup,
-  ToggleButton,
-  Tooltip,
-} from "@mui/material";
-import {
-  ViewList as ListIcon,
-  ViewModule as CardIcon,
-  TableChart as TableIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Visibility as ViewIcon,
-} from "@mui/icons-material";
+import { List, LayoutGrid, Table2, Eye, Pencil, Trash2 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 export type ViewMode = "table" | "cards" | "list";
@@ -47,15 +21,10 @@ interface DataViewProps<T extends DataRow> {
   onRowView?: (row: T) => void;
 }
 
-const getColumnId = <T extends DataRow>(
-  col?: ColumnDef<T>
-): string | undefined => {
+const getColumnId = <T extends DataRow>(col?: ColumnDef<T>): string | undefined => {
   if (!col) return undefined;
   if (typeof col.id === "string") return col.id;
-  if (
-    "accessorKey" in col &&
-    typeof (col as { accessorKey?: unknown }).accessorKey === "string"
-  ) {
+  if ("accessorKey" in col && typeof (col as { accessorKey?: unknown }).accessorKey === "string") {
     return (col as { accessorKey: string }).accessorKey;
   }
   return undefined;
@@ -72,40 +41,36 @@ export const ViewModeToggle: React.FC<ViewModeToggleProps> = ({
   onChange,
   availableModes = ["table", "cards", "list"],
 }) => {
+  const modes = [
+    { key: "table" as ViewMode, icon: Table2, label: "Table View" },
+    { key: "cards" as ViewMode, icon: LayoutGrid, label: "Card View" },
+    { key: "list" as ViewMode, icon: List, label: "List View" },
+  ].filter((m) => availableModes.includes(m.key));
+
   return (
-    <ToggleButtonGroup
-      value={value}
-      exclusive
-      onChange={(_, newMode) => {
-        if (newMode !== null) {
-          onChange(newMode);
-        }
-      }}
-      size="small"
-      aria-label="view mode"
-    >
-      {availableModes.includes("table") && (
-        <ToggleButton value="table" aria-label="table view">
-          <Tooltip title="Table View">
-            <TableIcon fontSize="small" />
-          </Tooltip>
-        </ToggleButton>
-      )}
-      {availableModes.includes("cards") && (
-        <ToggleButton value="cards" aria-label="card view">
-          <Tooltip title="Card View">
-            <CardIcon fontSize="small" />
-          </Tooltip>
-        </ToggleButton>
-      )}
-      {availableModes.includes("list") && (
-        <ToggleButton value="list" aria-label="list view">
-          <Tooltip title="List View">
-            <ListIcon fontSize="small" />
-          </Tooltip>
-        </ToggleButton>
-      )}
-    </ToggleButtonGroup>
+    <div className="inline-flex rounded-md border" role="group" aria-label="view mode">
+      {modes.map((m) => {
+        const Icon = m.icon;
+        const isActive = value === m.key;
+        return (
+          <button
+            key={m.key}
+            type="button"
+            onClick={() => onChange(m.key)}
+            className={`inline-flex items-center justify-center h-8 w-8 text-sm first:rounded-l-md last:rounded-r-md border-r last:border-r-0 transition-colors ${
+              isActive
+                ? "bg-accent text-accent-foreground"
+                : "bg-background hover:bg-muted text-muted-foreground"
+            }`}
+            title={m.label}
+            aria-label={m.label}
+            aria-pressed={isActive}
+          >
+            <Icon className="h-4 w-4" />
+          </button>
+        );
+      })}
+    </div>
   );
 };
 
@@ -133,114 +98,63 @@ export const CardView = <T extends DataRow>({
     return getColumnId(nameField ?? columns[0]) || "id";
   };
 
-  const getSecondaryFields = () => {
-    return columns.slice(0, 4).filter((col) => {
+  const getSecondaryFields = () =>
+    columns.slice(0, 4).filter((col) => {
       const id = getColumnId(col);
       return id !== getPrimaryField() && id !== "id" && id !== "actions";
     });
-  };
 
   return (
-    <Grid container spacing={2}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {data.map((row, index) => {
         const primaryField = getPrimaryField();
         const secondaryFields = getSecondaryFields();
-
         return (
-          <Grid
-            size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-            key={row.id ?? index}
+          <div
+            key={String(row.id ?? index)}
+            className={`flex flex-col rounded-lg border bg-card shadow-sm transition-all hover:-translate-y-1 hover:shadow-md ${
+              onRowClick ? "cursor-pointer" : ""
+            }`}
+            onClick={() => onRowClick?.(row)}
           >
-            <Card
-              sx={{
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                cursor: onRowClick ? "pointer" : "default",
-                transition: "all 0.2s ease-in-out",
-                "&:hover": {
-                  transform: "translateY(-4px)",
-                  boxShadow: 4,
-                },
-              }}
-              onClick={() => onRowClick?.(row)}
-            >
-              <CardContent sx={{ flexGrow: 1 }}>
-                <Typography variant="h6" gutterBottom noWrap>
-                  {getDisplayValue(row, primaryField)}
-                </Typography>
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 1,
-                    mt: 2,
-                  }}
-                >
-                  {secondaryFields.map((col) => {
-                    const id = getColumnId(col);
-                    if (!id) return null;
-                    const header = col.header || id;
-
-                    return (
-                      <Box key={id}>
-                        <Typography variant="caption" color="text.secondary">
-                          {String(header)}
-                        </Typography>
-                        <Typography variant="body2" noWrap>
-                          {getDisplayValue(row, id)}
-                        </Typography>
-                      </Box>
-                    );
-                  })}
-                </Box>
-              </CardContent>
-
-              <CardActions sx={{ justifyContent: "flex-end", px: 2, pb: 2 }}>
-                {onRowView && (
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRowView(row);
-                    }}
-                    aria-label="view"
-                  >
-                    <ViewIcon fontSize="small" />
-                  </IconButton>
-                )}
-                {onRowEdit && (
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRowEdit(row);
-                    }}
-                    aria-label="edit"
-                  >
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                )}
-                {onRowDelete && (
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRowDelete(row);
-                    }}
-                    aria-label="delete"
-                    color="error"
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </CardActions>
-            </Card>
-          </Grid>
+            <div className="flex-1 p-4">
+              <h3 className="text-base font-semibold truncate">
+                {getDisplayValue(row, primaryField)}
+              </h3>
+              <div className="flex flex-col gap-1.5 mt-3">
+                {secondaryFields.map((col) => {
+                  const id = getColumnId(col);
+                  if (!id) return null;
+                  return (
+                    <div key={id}>
+                      <span className="text-xs text-muted-foreground">{String(col.header || id)}</span>
+                      <p className="text-sm truncate">{getDisplayValue(row, id)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex justify-end gap-1 px-3 pb-3">
+              {onRowView && (
+                <button type="button" className="p-1.5 rounded-md hover:bg-muted" aria-label="view" onClick={(e) => { e.stopPropagation(); onRowView(row); }}>
+                  <Eye className="h-4 w-4" />
+                </button>
+              )}
+              {onRowEdit && (
+                <button type="button" className="p-1.5 rounded-md hover:bg-muted" aria-label="edit" onClick={(e) => { e.stopPropagation(); onRowEdit(row); }}>
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
+              {onRowDelete && (
+                <button type="button" className="p-1.5 rounded-md hover:bg-muted text-destructive" aria-label="delete" onClick={(e) => { e.stopPropagation(); onRowDelete(row); }}>
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
         );
       })}
-    </Grid>
+    </div>
   );
 };
 
@@ -269,11 +183,11 @@ export const ListView = <T extends DataRow>({
   };
 
   const getSecondaryField = () => {
-    const secondaryFields = columns.filter((col) => {
+    const secondary = columns.filter((col) => {
       const id = getColumnId(col);
       return id !== getPrimaryField() && id !== "id" && id !== "actions";
     });
-    return getColumnId(secondaryFields[0]);
+    return getColumnId(secondary[0]);
   };
 
   const getStatusField = () => {
@@ -285,104 +199,69 @@ export const ListView = <T extends DataRow>({
   };
 
   return (
-    <List sx={{ width: "100%", bgcolor: "background.paper" }}>
+    <ul className="w-full divide-y rounded-lg border bg-card">
       {data.map((row, index) => {
         const primaryField = getPrimaryField();
         const secondaryField = getSecondaryField();
         const statusField = getStatusField();
-
         return (
-          <React.Fragment key={row.id ?? index}>
-            <ListItem
-              sx={{
-                cursor: onRowClick ? "pointer" : "default",
-                transition: "background-color 0.2s ease-in-out",
-                "&:hover": {
-                  bgcolor: "action.hover",
-                },
-              }}
-              onClick={() => onRowClick?.(row)}
-              secondaryAction={
-                <Box sx={{ display: "flex", gap: 0.5 }}>
-                  {onRowView && (
-                    <IconButton
-                      edge="end"
-                      aria-label="view"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRowView(row);
-                      }}
-                    >
-                      <ViewIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                  {onRowEdit && (
-                    <IconButton
-                      edge="end"
-                      aria-label="edit"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRowEdit(row);
-                      }}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                  {onRowDelete && (
-                    <IconButton
-                      edge="end"
-                      aria-label="delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRowDelete(row);
-                      }}
-                      color="error"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-              }
-            >
-              <ListItemAvatar>
-                <Avatar sx={{ bgcolor: "primary.main" }}>
-                  {getDisplayValue(row, primaryField).charAt(0).toUpperCase()}
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText
-                primary={
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Typography variant="body1">
-                      {getDisplayValue(row, primaryField)}
-                    </Typography>
-                    {statusField && (
-                      <Chip
-                        label={getDisplayValue(row, statusField)}
-                        size="small"
-                        color={
-                          getDisplayValue(row, statusField).toLowerCase() ===
-                          "active"
-                            ? "success"
-                            : "default"
-                        }
-                      />
-                    )}
-                  </Box>
-                }
-                secondary={
-                  secondaryField
-                    ? getDisplayValue(row, secondaryField)
-                    : undefined
-                }
-              />
-            </ListItem>
-            {index < data.length - 1 && (
-              <Divider variant="inset" component="li" />
-            )}
-          </React.Fragment>
+          <li
+            key={String(row.id ?? index)}
+            className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 ${
+              onRowClick ? "cursor-pointer" : ""
+            }`}
+            onClick={() => onRowClick?.(row)}
+          >
+            {/* Avatar */}
+            <div className="flex-shrink-0 h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+              {getDisplayValue(row, primaryField).charAt(0).toUpperCase()}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium truncate">
+                  {getDisplayValue(row, primaryField)}
+                </span>
+                {statusField && (
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    getDisplayValue(row, statusField).toLowerCase() === "active"
+                      ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                      : "bg-muted text-muted-foreground"
+                  }`}>
+                    {getDisplayValue(row, statusField)}
+                  </span>
+                )}
+              </div>
+              {secondaryField && (
+                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  {getDisplayValue(row, secondaryField)}
+                </p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-0.5 shrink-0">
+              {onRowView && (
+                <button type="button" className="p-1.5 rounded-md hover:bg-muted" aria-label="view" onClick={(e) => { e.stopPropagation(); onRowView(row); }}>
+                  <Eye className="h-4 w-4" />
+                </button>
+              )}
+              {onRowEdit && (
+                <button type="button" className="p-1.5 rounded-md hover:bg-muted" aria-label="edit" onClick={(e) => { e.stopPropagation(); onRowEdit(row); }}>
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
+              {onRowDelete && (
+                <button type="button" className="p-1.5 rounded-md hover:bg-muted text-destructive" aria-label="delete" onClick={(e) => { e.stopPropagation(); onRowDelete(row); }}>
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </li>
         );
       })}
-    </List>
+    </ul>
   );
 };
 

@@ -1,11 +1,9 @@
 /**
  * Responsive Layout Components
- * Adaptive layouts for mobile, tablet, and desktop
+ * Adaptive layouts for mobile, tablet, and desktop — pure Tailwind
  */
 
-import React from "react";
-import { useTheme, useMediaQuery, Box } from "@mui/material";
-import type { Breakpoint } from "@mui/material";
+import React, { useState, useEffect } from "react";
 
 export type ViewMode = "mobile" | "tablet" | "desktop" | "wide";
 
@@ -17,15 +15,22 @@ interface ResponsiveLayoutProps {
 }
 
 export const useResponsiveMode = (): ViewMode => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
-  const isWide = useMediaQuery(theme.breakpoints.up("xl"));
+  const [mode, setMode] = useState<ViewMode>("desktop");
 
-  if (isMobile) return "mobile";
-  if (isTablet) return "tablet";
-  if (isWide) return "wide";
-  return "desktop";
+  useEffect(() => {
+    const check = () => {
+      const w = window.innerWidth;
+      if (w < 640) setMode("mobile");
+      else if (w < 768) setMode("tablet");
+      else if (w >= 1280) setMode("wide");
+      else setMode("desktop");
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  return mode;
 };
 
 export const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
@@ -36,114 +41,54 @@ export const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
 }) => {
   const mode = useResponsiveMode();
 
-  if (mode === "mobile" && mobileComponent) {
-    return <>{mobileComponent}</>;
-  }
-
-  if (mode === "tablet" && tabletComponent) {
-    return <>{tabletComponent}</>;
-  }
-
-  if ((mode === "desktop" || mode === "wide") && desktopComponent) {
+  if (mode === "mobile" && mobileComponent) return <>{mobileComponent}</>;
+  if (mode === "tablet" && tabletComponent) return <>{tabletComponent}</>;
+  if ((mode === "desktop" || mode === "wide") && desktopComponent)
     return <>{desktopComponent}</>;
-  }
 
   return <>{children}</>;
 };
 
-interface MobileLayoutProps {
+interface LayoutProps {
   children: React.ReactNode;
 }
 
-export const MobileLayout: React.FC<MobileLayoutProps> = ({ children }) => {
-  return (
-    <Box
-      sx={{
-        width: "100%",
-        px: 2,
-        py: 2,
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-      }}
-    >
-      {children}
-    </Box>
-  );
-};
+export const MobileLayout: React.FC<LayoutProps> = ({ children }) => (
+  <div className="w-full px-2 py-2 flex flex-col gap-2">{children}</div>
+);
 
-interface TabletLayoutProps {
-  children: React.ReactNode;
-}
+export const TabletLayout: React.FC<LayoutProps> = ({ children }) => (
+  <div className="w-full px-3 py-2 flex flex-col gap-2">{children}</div>
+);
 
-export const TabletLayout: React.FC<TabletLayoutProps> = ({ children }) => {
-  return (
-    <Box
-      sx={{
-        width: "100%",
-        px: 3,
-        py: 2,
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-      }}
-    >
-      {children}
-    </Box>
-  );
-};
-
-interface DesktopLayoutProps {
-  children: React.ReactNode;
-}
-
-export const DesktopLayout: React.FC<DesktopLayoutProps> = ({ children }) => {
-  return (
-    <Box
-      sx={{
-        width: "100%",
-        px: 4,
-        py: 3,
-        display: "flex",
-        flexDirection: "column",
-        gap: 3,
-      }}
-    >
-      {children}
-    </Box>
-  );
-};
+export const DesktopLayout: React.FC<LayoutProps> = ({ children }) => (
+  <div className="w-full px-4 py-3 flex flex-col gap-3">{children}</div>
+);
 
 interface AdaptiveContainerProps {
   children: React.ReactNode;
-  maxWidth?: Breakpoint | false;
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | false;
 }
+
+const maxWidthMap: Record<string, string> = {
+  sm: "max-w-screen-sm",
+  md: "max-w-screen-md",
+  lg: "max-w-screen-lg",
+  xl: "max-w-screen-xl",
+  "2xl": "max-w-screen-2xl",
+};
 
 export const AdaptiveContainer: React.FC<AdaptiveContainerProps> = ({
   children,
   maxWidth = "xl",
-}) => {
-  return (
-    <Box
-      sx={{
-        width: "100%",
-        maxWidth: maxWidth ? `${maxWidth}` : undefined,
-        mx: "auto",
-        px: {
-          xs: 2,
-          sm: 3,
-          md: 4,
-        },
-        py: {
-          xs: 2,
-          sm: 2,
-          md: 3,
-        },
-      }}
-    >
-      {children}
-    </Box>
-  );
-};
+}) => (
+  <div
+    className={`w-full mx-auto px-2 sm:px-3 md:px-4 py-2 sm:py-2 md:py-3 ${
+      maxWidth ? maxWidthMap[maxWidth] || "" : ""
+    }`}
+  >
+    {children}
+  </div>
+);
 
 export default ResponsiveLayout;

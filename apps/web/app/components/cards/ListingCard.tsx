@@ -14,7 +14,7 @@ export interface ListingCardData {
     title: string;
     description?: string;
     images?: string[];
-    pricePerDay: number;
+    basePrice: number;
     location?: {
         city?: string;
         state?: string;
@@ -79,9 +79,9 @@ export function ListingCard({
                         whileHover={shouldReduceMotion ? {} : { scale: 1.1 }}
                         transition={{ duration: 0.4 }}
                     >
-                        {listing.images?.[0] ? (
+                        {listing.photos?.[0] ? (
                             <OptimizedImage
-                                src={listing.images[0]}
+                                src={listing.photos[0]}
                                 alt={listing.title}
                                 aspectRatio="4/3"
                                 priority={priority}
@@ -153,7 +153,7 @@ export function ListingCard({
 
                     <div className="flex items-baseline gap-1">
                         <span className="text-2xl font-bold text-foreground">
-                            {formatCurrency(listing.pricePerDay)}
+                            {formatCurrency(listing.basePrice)}
                         </span>
                         <span className="text-sm text-muted-foreground">/day</span>
                     </div>
@@ -185,9 +185,9 @@ function ListingCardHorizontal({
             >
                 {/* Image */}
                 <div className="w-48 h-36 bg-muted relative shrink-0 overflow-hidden">
-                    {listing.images?.[0] ? (
+                    {listing.photos?.[0] ? (
                         <OptimizedImage
-                            src={listing.images[0]}
+                            src={listing.photos[0]}
                             alt={listing.title}
                             className="w-full h-full"
                         />
@@ -249,7 +249,7 @@ function ListingCardHorizontal({
                         </div>
                         <div className="flex items-baseline gap-1">
                             <span className="text-xl font-bold text-foreground">
-                                {formatCurrency(listing.pricePerDay)}
+                                {formatCurrency(listing.basePrice)}
                             </span>
                             <span className="text-sm text-muted-foreground">/day</span>
                         </div>
@@ -289,9 +289,9 @@ function ListingCardCompact({
             >
                 {/* Thumbnail */}
                 <div className="w-20 h-20 bg-muted rounded-lg shrink-0 overflow-hidden">
-                    {listing.images?.[0] ? (
+                    {listing.photos?.[0] ? (
                         <OptimizedImage
-                            src={listing.images[0]}
+                            src={listing.photos[0]}
                             alt={listing.title}
                             aspectRatio="square"
                             className="w-full h-full"
@@ -324,7 +324,7 @@ function ListingCardCompact({
                     )}
 
                     <p className="text-sm font-bold text-foreground">
-                        {formatCurrency(listing.pricePerDay)}/day
+                        {formatCurrency(listing.basePrice)}/day
                     </p>
                 </div>
 

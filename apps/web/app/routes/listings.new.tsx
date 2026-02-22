@@ -1,6 +1,6 @@
 import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useNavigate, useActionData, useSubmit } from "react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Upload, X, CheckCircle, Sparkles, TrendingUp } from "lucide-react";
@@ -16,6 +16,8 @@ import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { Card, CardContent } from "~/components/ui";
 import { getUser } from "~/utils/auth";
 import { VoiceListingAssistant } from "~/components/listings/VoiceListingAssistant";
+import { CategorySpecificFields } from "~/components/listings/CategorySpecificFields";
+import { getCategoryFields } from "~/lib/category-fields";
 const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
 const KEYWORD_PRICE_HINTS: Array<{ pattern: RegExp; price: number }> = [
   { pattern: /(camera|lens|gopro|drone)/i, price: 45 },
@@ -117,7 +119,7 @@ const STEPS = [
   {
     id: 2,
     name: "Pricing",
-    fields: ["pricePerDay", "securityDeposit", "condition"],
+    fields: ["basePrice", "securityDeposit", "condition"],
   },
   {
     id: 3,
@@ -134,7 +136,7 @@ const STEPS = [
       "features",
     ],
   },
-  { id: 5, name: "Images", fields: ["images"] },
+  { id: 5, name: "Images", fields: ["photos"] },
 ];
 
 export default function CreateListing() {
@@ -147,10 +149,11 @@ export default function CreateListing() {
   const imageUrlsRef = useRef<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvancedEditor, setShowAdvancedEditor] = useState(false);
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [categoriesError, setCategoriesError] = useState("");
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [categorySpecificData, setCategorySpecificData] = useState<Record<string, unknown>>({});
   const [priceSuggestion, setPriceSuggestion] = useState<{
     averagePrice: number;
     medianPrice: number;
@@ -183,6 +186,44 @@ export default function CreateListing() {
   });
 
   const deliveryOptions = watch("deliveryOptions");
+  const selectedCategoryId = watch("category");
+
+  // Resolve selected category slug for dynamic fields
+  const selectedCategorySlug = useMemo(() => {
+    if (!selectedCategoryId) return undefined;
+    const cat = categories.find((c) => c.id === selectedCategoryId);
+    return cat?.slug;
+  }, [selectedCategoryId, categories]);
+
+  // Reset category-specific data when category changes
+  useEffect(() => {
+    setCategorySpecificData({});
+  }, [selectedCategorySlug]);
+
+  const handleCategoryFieldChange = useCallback((key: string, value: unknown) => {
+    setCategorySpecificData((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  // Real-time listing completeness score
+  const watchedValues = watch();
+  const completenessScore = useMemo(() => {
+    const checks = [
+      { filled: !!watchedValues.title && watchedValues.title.length >= 10, weight: 10 },
+      { filled: !!watchedValues.description && watchedValues.description.length >= 50, weight: 15 },
+      { filled: !!watchedValues.category, weight: 10 },
+      { filled: typeof watchedValues.basePrice === 'number' && watchedValues.basePrice > 0, weight: 10 },
+      { filled: !!watchedValues.condition, weight: 5 },
+      { filled: !!watchedValues.location?.city, weight: 10 },
+      { filled: !!watchedValues.location?.address, weight: 5 },
+      { filled: !!watchedValues.location?.country, weight: 5 },
+      { filled: imageUrls.length >= 3, weight: 20 },
+      { filled: imageUrls.length >= 5, weight: 5 },
+      { filled: !!watchedValues.features && watchedValues.features.length > 0, weight: 5 },
+    ];
+    const total = checks.reduce((s, c) => s + c.weight, 0);
+    const earned = checks.filter((c) => c.filled).reduce((s, c) => s + c.weight, 0);
+    return Math.round((earned / total) * 100);
+  }, [watchedValues, imageUrls]);
 
   useEffect(() => {
     imageUrlsRef.current = imageUrls;
@@ -204,6 +245,7 @@ export default function CreateListing() {
           (data || []).map((category) => ({
             id: category.id,
             name: category.name,
+            slug: category.slug || category.name.toLowerCase().replace(/\s+/g, "-"),
           }))
         );
       } catch {
@@ -234,7 +276,7 @@ export default function CreateListing() {
     const fetchSuggestion = async () => {
       try {
         const categoryId = getValues("category");
-        const city = getValues("city");
+        const city = getValues("location.city");
         const condition = getValues("condition");
         if (!categoryId && !city) return;
 
@@ -273,7 +315,7 @@ export default function CreateListing() {
     const newImageUrls = validFiles.map((file) => URL.createObjectURL(file));
     setImageUrls([...imageUrls, ...newImageUrls]);
     setImageFiles([...imageFiles, ...validFiles]);
-    setValue("images", [...imageUrls, ...newImageUrls]);
+    setValue("photos", [...imageUrls, ...newImageUrls]);
   };
 
   const removeImage = (index: number) => {
@@ -284,14 +326,14 @@ export default function CreateListing() {
     const newImageFiles = imageFiles.filter((_, i) => i !== index);
     setImageUrls(newImageUrls);
     setImageFiles(newImageFiles);
-    setValue("images", newImageUrls);
+    setValue("photos", newImageUrls);
   };
 
   const onSubmit = async (data: z.input<typeof listingSchema>) => {
     setIsSubmitting(true);
     try {
       if (imageFiles.length === 0) {
-        setError("images", { type: "manual", message: "At least one image is required" });
+        setError("photos", { type: "manual", message: "At least one image is required" });
         setIsSubmitting(false);
         return;
       }
@@ -301,7 +343,7 @@ export default function CreateListing() {
       const results = await uploadApi.uploadImages(imageFiles);
       const finalImages = results.map((r) => r.url).filter(Boolean);
       if (finalImages.length === 0) {
-        setError("images", { type: "manual", message: "Image upload failed. Please try again." });
+        setError("photos", { type: "manual", message: "Image upload failed. Please try again." });
         setIsSubmitting(false);
         return;
       }
@@ -310,6 +352,7 @@ export default function CreateListing() {
       const payload = {
         ...parsed,
         images: finalImages,
+        categorySpecificData: Object.keys(categorySpecificData).length > 0 ? categorySpecificData : undefined,
       };
 
       const formData = new FormData();
@@ -407,7 +450,7 @@ export default function CreateListing() {
     setIsSubmitting(true);
     try {
       if (imageFiles.length === 0) {
-        setError("images", { type: "manual", message: "At least one image is required" });
+        setError("photos", { type: "manual", message: "At least one image is required" });
         setIsSubmitting(false);
         return;
       }
@@ -416,12 +459,12 @@ export default function CreateListing() {
       const results = await uploadApi.uploadImages(imageFiles);
       const finalImages = results.map((r) => r.url).filter(Boolean);
       if (finalImages.length === 0) {
-        setError("images", { type: "manual", message: "Image upload failed. Please try again." });
+        setError("photos", { type: "manual", message: "Image upload failed. Please try again." });
         setIsSubmitting(false);
         return;
       }
 
-      const payload = { ...parsed, images: finalImages };
+      const payload = { ...parsed, images: finalImages, categorySpecificData: Object.keys(categorySpecificData).length > 0 ? categorySpecificData : undefined };
       const formData = new FormData();
       formData.append("intent", "create");
       formData.append("data", JSON.stringify(payload));
@@ -443,7 +486,7 @@ export default function CreateListing() {
     try {
       const categoryId = getValues("category");
       const categoryName = categories.find((c) => c.id === categoryId)?.name;
-      const city = getValues("city") as string | undefined;
+      const city = getValues("location.city");
       const result = await aiApi.generateDescription({
         title,
         category: categoryName,
@@ -464,10 +507,22 @@ export default function CreateListing() {
     const description = String(values.description || "").trim();
     const category = values.category || inferCategoryId(title, description) || "";
     const condition = values.condition || inferCondition(title, description);
-    const pricePerDay =
-      typeof values.pricePerDay === "number" && Number.isFinite(values.pricePerDay)
-        ? values.pricePerDay
-        : inferDailyPrice(title, description);
+
+    // Validate required category-specific fields
+    const catSlug = categories.find((c) => c.id === category)?.slug;
+    const catFields = getCategoryFields(catSlug);
+    const missingRequired = catFields.filter(
+      (f) => f.required && (categorySpecificData[f.key] === undefined || categorySpecificData[f.key] === "" || categorySpecificData[f.key] === null)
+    );
+    if (missingRequired.length > 0) {
+      toast.error(`Please fill in required fields: ${missingRequired.map((f) => f.label).join(", ")}`);
+      return;
+    }
+
+    const basePrice =
+      typeof values.basePrice === "number" && Number.isFinite(values.basePrice)
+        ? values.basePrice
+        : priceSuggestion?.medianPrice ?? inferDailyPrice(title, description);
     const city = String(values.location?.city || "").trim();
     const coords = inferCoordinates(
       city,
@@ -483,11 +538,11 @@ export default function CreateListing() {
       ...values,
       category,
       condition,
-      pricePerDay,
+      basePrice,
       securityDeposit:
         typeof values.securityDeposit === "number" && Number.isFinite(values.securityDeposit)
           ? values.securityDeposit
-          : Math.round(pricePerDay * 2),
+          : Math.round(basePrice * 2),
       minimumRentalPeriod:
         typeof values.minimumRentalPeriod === "number" && values.minimumRentalPeriod > 0
           ? values.minimumRentalPeriod
@@ -508,12 +563,12 @@ export default function CreateListing() {
         postalCode: values.location?.postalCode || "",
         coordinates: coords,
       },
-      images: values.images || [],
+      images: values.photos || [],
     };
 
     setValue("category", aiFilled.category);
     setValue("condition", aiFilled.condition);
-    setValue("pricePerDay", aiFilled.pricePerDay);
+    setValue("basePrice", aiFilled.basePrice);
     setValue("securityDeposit", aiFilled.securityDeposit);
     setValue("minimumRentalPeriod", aiFilled.minimumRentalPeriod);
     setValue("features", aiFilled.features || []);
@@ -658,6 +713,14 @@ export default function CreateListing() {
               />
             </div>
           </div>
+
+          {/* Category-Specific Fields (Quick Create) */}
+          <CategorySpecificFields
+            categorySlug={selectedCategorySlug}
+            values={categorySpecificData}
+            onChange={handleCategoryFieldChange}
+          />
+
           <div className="mt-4">
             <div
               className="rounded-lg border-2 border-dashed border-input p-6 text-center transition-colors hover:border-primary/50"
@@ -686,7 +749,7 @@ export default function CreateListing() {
                 ))}
               </div>
             )}
-            {errors.images && <p className="mt-2 text-sm text-destructive">{errors.images.message}</p>}
+            {errors.photos && <p className="mt-2 text-sm text-destructive">{errors.photos.message}</p>}
           </div>
           <div className="mt-6 flex items-center justify-end">
             <UnifiedButton
@@ -715,6 +778,32 @@ export default function CreateListing() {
 
         {showAdvancedEditor && (
           <div>
+            {/* Completeness Progress Bar */}
+            <div className="mb-6 p-4 bg-card rounded-lg border">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-foreground">Listing Completeness</span>
+                <span className={cn(
+                  "text-sm font-bold",
+                  completenessScore >= 80 ? "text-success" : completenessScore >= 50 ? "text-warning" : "text-muted-foreground"
+                )}>
+                  {completenessScore}%
+                </span>
+              </div>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    completenessScore >= 80 ? "bg-success" : completenessScore >= 50 ? "bg-warning" : "bg-muted-foreground"
+                  )}
+                  style={{ width: `${completenessScore}%` }}
+                />
+              </div>
+              {completenessScore < 80 && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Complete more fields to improve visibility and attract more renters
+                </p>
+              )}
+            </div>
             <div className="mb-8" data-testid="step-indicator">
           <div className="flex items-center justify-between mb-2">
             {STEPS.map((step, index) => (
@@ -853,6 +942,13 @@ export default function CreateListing() {
                       </p>
                     )}
                   </div>
+
+                  {/* Category-Specific Fields (Advanced Editor) */}
+                  <CategorySpecificFields
+                    categorySlug={selectedCategorySlug}
+                    values={categorySpecificData}
+                    onChange={handleCategoryFieldChange}
+                  />
                 </div>
               )}
 
@@ -878,7 +974,7 @@ export default function CreateListing() {
                         <button
                           type="button"
                           className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                          onClick={() => setValue("pricePerDay", priceSuggestion.medianPrice)}
+                          onClick={() => setValue("basePrice", priceSuggestion.medianPrice)}
                         >
                           Use median price (${priceSuggestion.medianPrice})
                         </button>
@@ -891,16 +987,16 @@ export default function CreateListing() {
                       Price per Day * ($)
                     </label>
                     <input
-                      {...register("pricePerDay", { valueAsNumber: true })}
+                      {...register("basePrice", { valueAsNumber: true })}
                       type="number"
                       min="1"
                       step="0.01"
                       placeholder="25.00"
                       className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                     />
-                    {errors.pricePerDay && (
+                    {errors.basePrice && (
                       <p className="mt-1 text-sm text-destructive">
-                        {errors.pricePerDay.message}
+                        {errors.basePrice.message}
                       </p>
                     )}
                   </div>
@@ -1312,9 +1408,9 @@ export default function CreateListing() {
                     </div>
                   )}
 
-                  {errors.images && (
+                  {errors.photos && (
                     <p className="text-sm text-destructive">
-                      {errors.images.message}
+                      {errors.photos.message}
                     </p>
                   )}
                 </div>
@@ -1381,3 +1477,4 @@ export default function CreateListing() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

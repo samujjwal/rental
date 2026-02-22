@@ -6,12 +6,13 @@ export interface Booking {
   startDate: string;
   endDate: string;
   totalDays: number;
-  pricePerDay: number;
+  basePrice: number;
   subtotal: number;
   serviceFee: number;
   deliveryFee: number;
   securityDeposit: number;
   totalAmount: number;
+  totalPrice?: number;
   status:
     | "DRAFT"
     | "PENDING"
@@ -42,7 +43,7 @@ export interface Booking {
     title: string;
     description?: string;
     images: string[];
-    pricePerDay: number;
+    basePrice: number;
     location?: {
       city: string;
       state: string;
@@ -89,7 +90,7 @@ export interface BookingCalculation {
   startDate: string;
   endDate: string;
   totalDays: number;
-  pricePerDay: number;
+  basePrice: number;
   subtotal: number;
   serviceFee: number;
   deliveryFee: number;

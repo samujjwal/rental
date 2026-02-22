@@ -7,12 +7,14 @@ import {
 import { DisputesService } from './disputes.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
+import { CacheService } from '@/common/cache/cache.service';
 import { DisputeStatus, UserRole } from '@rental-portal/database';
 
 describe('DisputesService', () => {
   let service: DisputesService;
   let prisma: any;
   let emailService: { sendEmail: jest.Mock };
+  let cacheService: { publish: jest.Mock; subscribe: jest.Mock };
 
   const renterId = 'renter-1';
   const ownerId = 'owner-1';
@@ -42,6 +44,7 @@ describe('DisputesService', () => {
 
   beforeEach(async () => {
     emailService = { sendEmail: jest.fn().mockResolvedValue(undefined) };
+    cacheService = { publish: jest.fn().mockResolvedValue(undefined), subscribe: jest.fn().mockResolvedValue(undefined) };
 
     prisma = {
       booking: { findUnique: jest.fn() },
@@ -61,6 +64,7 @@ describe('DisputesService', () => {
         DisputesService,
         { provide: PrismaService, useValue: prisma },
         { provide: EmailService, useValue: emailService },
+        { provide: CacheService, useValue: cacheService },
       ],
     }).compile();
 

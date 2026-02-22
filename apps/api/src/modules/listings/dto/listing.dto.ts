@@ -45,9 +45,10 @@ export class VideoDto {
 }
 
 export class CreateListingDto {
-  @ApiProperty({ description: 'Category ID' })
+  @ApiProperty({ description: 'Category ID', required: false })
+  @IsOptional()
   @IsString()
-  categoryId: string;
+  categoryId?: string;
 
   @ApiProperty({ description: 'Organization ID', required: false })
   @IsOptional()
@@ -77,15 +78,17 @@ export class CreateListingDto {
   @MaxLength(200)
   addressLine2?: string;
 
-  @ApiProperty({ description: 'City' })
+  @ApiProperty({ description: 'City', required: false })
+  @IsOptional()
   @IsString()
   @MaxLength(100)
-  city: string;
+  city?: string;
 
-  @ApiProperty({ description: 'State' })
+  @ApiProperty({ description: 'State', required: false })
+  @IsOptional()
   @IsString()
   @MaxLength(100)
-  state: string;
+  state?: string;
 
   @ApiProperty({ description: 'Postal code', required: false })
   @IsOptional()
@@ -93,18 +96,21 @@ export class CreateListingDto {
   @MaxLength(20)
   postalCode?: string;
 
-  @ApiProperty({ description: 'Country' })
+  @ApiProperty({ description: 'Country', required: false })
+  @IsOptional()
   @IsString()
   @MaxLength(100)
-  country: string;
+  country?: string;
 
-  @ApiProperty({ description: 'Latitude' })
+  @ApiProperty({ description: 'Latitude', required: false })
+  @IsOptional()
   @IsLatitude()
-  latitude: number;
+  latitude?: number;
 
-  @ApiProperty({ description: 'Longitude' })
+  @ApiProperty({ description: 'Longitude', required: false })
+  @IsOptional()
   @IsLongitude()
-  longitude: number;
+  longitude?: number;
 
   // Media
   @ApiProperty({ description: 'Photos', required: false, type: [PhotoDto] })
@@ -120,9 +126,10 @@ export class CreateListingDto {
   videos?: VideoDto[];
 
   // Pricing
-  @ApiProperty({ description: 'Pricing mode (e.g., DAILY, HOURLY)' })
+  @ApiProperty({ description: 'Pricing mode (e.g., DAILY, HOURLY)', required: false })
+  @IsOptional()
   @IsString()
-  pricingMode: string;
+  pricingMode?: string;
 
   @ApiProperty({ description: 'Base price', minimum: 0 })
   @IsNumber()
@@ -177,9 +184,10 @@ export class CreateListingDto {
   depositType?: string;
 
   // Booking settings
-  @ApiProperty({ description: 'Booking mode (e.g., INSTANT, REQUEST)' })
+  @ApiProperty({ description: 'Booking mode (e.g., INSTANT, REQUEST)', required: false })
+  @IsOptional()
   @IsString()
-  bookingMode: string;
+  bookingMode?: string;
 
   @ApiProperty({ description: 'Minimum booking hours', required: false })
   @IsOptional()
@@ -212,9 +220,10 @@ export class CreateListingDto {
   capacity?: number;
 
   // Category-specific
-  @ApiProperty({ description: 'Category-specific data' })
+  @ApiProperty({ description: 'Category-specific data', required: false })
+  @IsOptional()
   @IsObject()
-  categorySpecificData: Record<string, any>;
+  categorySpecificData?: Record<string, any>;
 
   // Extra fields
   @ApiProperty({ description: 'Item condition', required: false })
@@ -250,6 +259,94 @@ export class CreateListingDto {
   @IsString()
   @MaxLength(160)
   metaDescription?: string;
+
+  // ── Frontend-compatible aliases ───────────────────────────────
+  // The SPA sends a nested `location` object and flat image URLs.
+  // Accept them so the ValidationPipe doesn't reject the request.
+
+  @ApiProperty({ description: 'Category (alias for categoryId)', required: false })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @ApiProperty({ description: 'Subcategory', required: false })
+  @IsOptional()
+  @IsString()
+  subcategory?: string;
+
+  @ApiProperty({ description: 'Nested location object from frontend', required: false })
+  @IsOptional()
+  @IsObject()
+  location?: Record<string, any>;
+
+  @ApiProperty({ description: 'Image URLs (frontend format)', required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
+  @ApiProperty({ description: 'Enable instant booking (frontend alias)', required: false })
+  @IsOptional()
+  @IsBoolean()
+  instantBooking?: boolean;
+
+  @ApiProperty({ description: 'Security deposit (frontend alias)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  securityDeposit?: number;
+
+  @ApiProperty({ description: 'Delivery options (frontend format)', required: false })
+  @IsOptional()
+  @IsObject()
+  deliveryOptions?: Record<string, boolean>;
+
+  @ApiProperty({ description: 'Delivery radius in km', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  deliveryRadius?: number;
+
+  @ApiProperty({ description: 'Delivery fee', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  deliveryFee?: number;
+
+  @ApiProperty({ description: 'Minimum rental period in days', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  minimumRentalPeriod?: number;
+
+  @ApiProperty({ description: 'Maximum rental period in days', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maximumRentalPeriod?: number;
+
+  @ApiProperty({ description: 'Cancellation policy', required: false })
+  @IsOptional()
+  @IsString()
+  cancellationPolicy?: string;
+
+  @ApiProperty({ description: 'Price per day (alias)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pricePerDay?: number;
+
+  @ApiProperty({ description: 'Price per week (frontend alias)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pricePerWeek?: number;
+
+  @ApiProperty({ description: 'Price per month (frontend alias)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pricePerMonth?: number;
 }
 
 export class UpdateListingDto {
@@ -392,4 +489,90 @@ export class UpdateListingDto {
   @IsString()
   @MaxLength(160)
   metaDescription?: string;
+
+  // ── Frontend-compatible aliases ───────────────────────────────
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsObject()
+  location?: Record<string, any>;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  photos?: string[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  instantBooking?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  securityDeposit?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsObject()
+  deliveryOptions?: Record<string, boolean>;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  deliveryRadius?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  deliveryFee?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  minimumRentalPeriod?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maximumRentalPeriod?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  cancellationPolicy?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pricePerWeek?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  pricePerMonth?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  subcategory?: string;
 }

@@ -13,7 +13,7 @@ export const listingSchema = z.object({
     .max(2000, "Description must be less than 2000 characters"),
   category: z.string().min(1, "Category is required"),
   subcategory: z.string().optional(),
-  pricePerDay: z
+  basePrice: z
     .number()
     .min(1, "Price per day must be at least $1")
     .max(10000, "Price per day must be less than $10,000"),
@@ -88,6 +88,7 @@ export const listingSchema = z.object({
     .max(1000, "Rules must be less than 1000 characters")
     .optional(),
   features: z.array(z.string()).optional().default([]),
+  categorySpecificData: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
 export const searchSchema = z.object({

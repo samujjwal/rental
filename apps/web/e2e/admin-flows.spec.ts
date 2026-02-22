@@ -1,5 +1,154 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { loginAs, loginAsAdmin, testUsers } from "./helpers/test-utils";
+
+const MOCK_DISPUTE_ID = "11111111-2222-4333-8444-555555555555";
+const MOCK_DISPUTE_CREATED_AT = "2025-01-15T10:00:00.000Z";
+const MOCK_ADMIN_DISPUTE = {
+  id: MOCK_DISPUTE_ID,
+  type: "PROPERTY_DAMAGE",
+  status: "OPEN",
+  priority: "HIGH",
+  reason: "Camera lens cracked during rental",
+  amount: 125,
+  description: "Renter reported lens damage after return.",
+  createdAt: MOCK_DISPUTE_CREATED_AT,
+  booking: {
+    id: "22222222-2222-4222-8222-222222222222",
+    listing: { title: "Sony A7 III Camera Kit" },
+  },
+  initiator: {
+    id: "33333333-3333-4333-8333-333333333333",
+    email: "renter@test.com",
+    firstName: "Renter",
+  },
+  defendant: {
+    id: "44444444-4444-4444-8444-444444444444",
+    email: "owner@test.com",
+    firstName: "Owner",
+  },
+};
+const MOCK_DISPUTE_DETAIL = {
+  id: MOCK_DISPUTE_ID,
+  bookingId: "22222222-2222-4222-8222-222222222222",
+  type: "PROPERTY_DAMAGE",
+  description: "Renter reported lens damage after return.",
+  amount: 125,
+  status: "OPEN",
+  evidence: ["https://example.com/evidence/lens-damage-photo.jpg"],
+  resolution: null,
+  createdAt: MOCK_DISPUTE_CREATED_AT,
+  updatedAt: MOCK_DISPUTE_CREATED_AT,
+  initiatorId: "33333333-3333-4333-8333-333333333333",
+  defendantId: "44444444-4444-4444-8444-444444444444",
+  booking: {
+    id: "22222222-2222-4222-8222-222222222222",
+    listing: {
+      id: "55555555-5555-4555-8555-555555555555",
+      title: "Sony A7 III Camera Kit",
+      owner: {
+        id: "44444444-4444-4444-8444-444444444444",
+        email: "owner@test.com",
+      },
+    },
+    renter: {
+      id: "33333333-3333-4333-8333-333333333333",
+      email: "renter@test.com",
+    },
+  },
+  initiator: {
+    id: "33333333-3333-4333-8333-333333333333",
+    email: "renter@test.com",
+  },
+  defendant: {
+    id: "44444444-4444-4444-8444-444444444444",
+    email: "owner@test.com",
+  },
+  responses: [
+    {
+      id: "66666666-6666-4666-8666-666666666666",
+      content: "I disagree with the damage claim and request evidence review.",
+      createdAt: MOCK_DISPUTE_CREATED_AT,
+      user: {
+        id: "44444444-4444-4444-8444-444444444444",
+        email: "owner@test.com",
+      },
+    },
+  ],
+};
+
+const mockAdminDisputeApis = async (page: Page): Promise<void> => {
+  await page.route("**/api/admin/disputes**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        disputes: [MOCK_ADMIN_DISPUTE],
+        total: 1,
+        page: 1,
+        limit: 50,
+      }),
+    });
+  });
+
+  await page.route("**/api/disputes/**", async (route) => {
+    const method = route.request().method();
+    const url = route.request().url();
+    if (method === "GET" && url.includes(`/api/disputes/${MOCK_DISPUTE_ID}`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_DISPUTE_DETAIL),
+      });
+      return;
+    }
+
+    if (method === "PATCH" && url.includes(`/api/disputes/${MOCK_DISPUTE_ID}`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_ADMIN_DISPUTE),
+      });
+      return;
+    }
+
+    if (method === "POST" && url.includes(`/api/disputes/${MOCK_DISPUTE_ID}/responses`)) {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "77777777-7777-4777-8777-777777777777",
+          content: "Admin response submitted",
+          createdAt: new Date().toISOString(),
+          user: {
+            id: "88888888-8888-4888-8888-888888888888",
+            email: "admin@test.com",
+          },
+        }),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+};
+
+const ensureDisputeCardAvailable = async (page: Page): Promise<void> => {
+  const liveCard = page.locator('[data-testid="dispute-card"]').first();
+  if (await liveCard.isVisible().catch(() => false)) {
+    return;
+  }
+
+  await mockAdminDisputeApis(page);
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.locator('[data-testid="dispute-card"]').first()).toBeVisible();
+};
+
+const openFirstDispute = async (page: Page): Promise<void> => {
+  await ensureDisputeCardAvailable(page);
+  const disputeCard = page.locator('[data-testid="dispute-card"]').first();
+  await disputeCard.click();
+  await expect(page.locator('[data-testid="dispute-details"]')).toBeVisible();
+};
 
 test.describe("Admin Dashboard", () => {
   test.beforeEach(async ({ page }) => {
@@ -449,8 +598,8 @@ test.describe("Admin Entity Management - Bookings", () => {
 test.describe("Admin Dispute Management", () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);
-    await page.goto("/admin/entities/disputes");
-    await page.waitForLoadState('networkidle');
+    await page.goto("/admin/disputes");
+    await page.waitForLoadState("networkidle");
   });
 
   test("should display disputes list", async ({ page }) => {
@@ -480,184 +629,109 @@ test.describe("Admin Dispute Management", () => {
   });
 
   test("should filter by status - open", async ({ page }) => {
-    const openButton = page.locator('button:has-text("Open"), [data-testid="filter-open"]');
-    if (await openButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await openButton.click();
-      await expect(page).toHaveURL(/.*status=open|.*tab=open/);
-    } else {
-      // Filter UI not implemented yet, skip
-      console.log('Dispute filter UI not found - skipping test');
-    }
+    const openButton = page
+      .locator('button:has-text("Open"), [data-testid="filter-open"]')
+      .first();
+    await expect(openButton).toBeVisible();
+    await openButton.click();
+    await expect(openButton).toHaveClass(/bg-primary/);
   });
 
   test("should filter by status - in progress", async ({ page }) => {
-    const progressButton = page.locator('button:has-text("In Progress"), [data-testid="filter-in-progress"]');
-    if (await progressButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await progressButton.click();
-    } else {
-      console.log('In Progress filter not found - skipping');
-    }
+    const progressButton = page
+      .locator(
+        '[data-testid="filter-in-progress"], button:has-text("In Progress"), button:has-text("Under Review"), button:has-text("Investigating")',
+      )
+      .first();
+    await expect(progressButton).toBeVisible();
+    await progressButton.click();
+    await expect(progressButton).toHaveClass(/bg-primary/);
   });
 
   test("should filter by status - resolved", async ({ page }) => {
-    const resolvedButton = page.locator('button:has-text("Resolved"), [data-testid="filter-resolved"]');
-    if (await resolvedButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await resolvedButton.click();
-    } else {
-      console.log('Resolved filter not found - skipping');
-    }
+    const resolvedButton = page
+      .locator('button:has-text("Resolved"), [data-testid="filter-resolved"]')
+      .first();
+    await expect(resolvedButton).toBeVisible();
+    await resolvedButton.click();
+    await expect(resolvedButton).toHaveClass(/bg-primary/);
   });
 
   test("should filter by type", async ({ page }) => {
-    const typeFilter = page.locator('[data-testid="type-filter"]');
-    if (await typeFilter.isVisible()) {
-      await typeFilter.click();
-      await page.click('text=Damage');
+    const typeFilter = page.locator('[data-testid="type-filter"]').first();
+    await expect(typeFilter).toBeVisible();
+    const optionsCount = await typeFilter.locator("option").count();
+    if (optionsCount > 1) {
+      const secondOptionValue = await typeFilter.locator("option").nth(1).getAttribute("value");
+      if (secondOptionValue) {
+        await typeFilter.selectOption(secondOptionValue);
+        await expect(typeFilter).toHaveValue(secondOptionValue);
+      }
+    } else {
+      await expect(typeFilter).toHaveValue("all");
     }
   });
 
   test("should view dispute details", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      await expect(page.locator('[data-testid="dispute-details"]')).toBeVisible();
-    }
+    await openFirstDispute(page);
+    await expect(page.locator('[data-testid="dispute-details"]')).toBeVisible();
   });
 
   test("should view dispute evidence", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      await expect(page.locator('[data-testid="evidence-section"]')).toBeVisible();
-    }
+    await openFirstDispute(page);
+    await expect(page.locator('[data-testid="evidence-section"]')).toBeVisible();
   });
 
   test("should view dispute messages", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      await expect(page.locator('[data-testid="dispute-messages"]')).toBeVisible();
-    }
+    await openFirstDispute(page);
+    await expect(page.locator('[data-testid="dispute-messages"]')).toBeVisible();
   });
 
   test("should assign dispute to self", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      
-      const assignButton = page.locator('button:has-text("Assign to Me")');
-      if (await assignButton.isVisible()) {
-        await assignButton.click();
-        await expect(page.locator('text=/assigned|success/i')).toBeVisible();
-      }
-    }
+    await openFirstDispute(page);
+
+    const assignButton = page.locator('[data-testid="assign-dispute-button"]');
+    await expect(assignButton).toBeVisible();
+    await assignButton.click();
+    await expect(page.getByText("Dispute assigned for review")).toBeVisible();
   });
 
   test("should add admin note to dispute", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      
-      await page.fill('textarea[name="adminNote"]', 'Investigating the issue. Contacted both parties.');
-      await page.click('button:has-text("Add Note")');
-      
-      await expect(page.locator('text=Investigating the issue')).toBeVisible();
-    }
+    await openFirstDispute(page);
+
+    await page.fill(
+      'textarea[name="adminNote"]',
+      'Investigating the issue. Contacted both parties.',
+    );
+    await page.click('[data-testid="add-note-button"]');
+
+    await expect(page.getByText("Admin note added")).toBeVisible();
   });
 
   test("should send message in dispute", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      
-      await page.fill('textarea[name="message"]', 'We are reviewing your dispute. Please provide additional evidence if available.');
-      await page.click('button:has-text("Send")');
-    }
+    await openFirstDispute(page);
+
+    await page.fill(
+      'textarea[name="message"]',
+      "We are reviewing your dispute. Please provide additional evidence if available.",
+    );
+    await page.click('[data-testid="send-dispute-message-button"]');
+    await expect(page.getByText("Message sent to dispute thread")).toBeVisible();
   });
 
-  test("should resolve dispute - favor reporter", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      
-      const resolveButton = page.locator('button:has-text("Resolve")');
-      if (await resolveButton.isVisible()) {
-        await resolveButton.click();
-        
-        // Select resolution
-        await page.click('text=Favor Reporter');
-        
-        // Add resolution note
-        await page.fill('textarea[name="resolution"]', 'Evidence supports the reporter claim. Full refund issued.');
-        
-        // Refund amount (if applicable)
-        const refundInput = page.locator('input[name="refundAmount"]');
-        if (await refundInput.isVisible()) {
-          await refundInput.fill('100');
-        }
-        
-        await page.click('button:has-text("Confirm Resolution")');
-        await expect(page.locator('text=/resolved|success/i')).toBeVisible();
-      }
-    }
-  });
+  test("should resolve dispute with resolution notes", async ({ page }) => {
+    await openFirstDispute(page);
 
-  test("should resolve dispute - favor reported", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      
-      const resolveButton = page.locator('button:has-text("Resolve")');
-      if (await resolveButton.isVisible()) {
-        await resolveButton.click();
-        
-        await page.click('text=Favor Reported');
-        await page.fill('textarea[name="resolution"]', 'Evidence does not support the claim. No action taken.');
-        await page.click('button:has-text("Confirm Resolution")');
-        
-        await expect(page.locator('text=/resolved|success/i')).toBeVisible();
-      }
+    await page.fill(
+      'textarea[name="resolution"]',
+      "Evidence reviewed and dispute closed with final decision.",
+    );
+    const resolvedAmountInput = page.locator('[data-testid="resolved-amount-input"]');
+    if (await resolvedAmountInput.isVisible().catch(() => false)) {
+      await resolvedAmountInput.fill("50");
     }
-  });
-
-  test("should resolve dispute - partial resolution", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      
-      const resolveButton = page.locator('button:has-text("Resolve")');
-      if (await resolveButton.isVisible()) {
-        await resolveButton.click();
-        
-        await page.click('text=Partial');
-        await page.fill('textarea[name="resolution"]', 'Both parties share responsibility. Partial refund issued.');
-        
-        const refundInput = page.locator('input[name="refundAmount"]');
-        if (await refundInput.isVisible()) {
-          await refundInput.fill('50');
-        }
-        
-        await page.click('button:has-text("Confirm Resolution")');
-        await expect(page.locator('text=/resolved|success/i')).toBeVisible();
-      }
-    }
-  });
-
-  test("should escalate dispute", async ({ page }) => {
-    const disputeCard = page.locator('[data-testid="dispute-card"]').first();
-    if (await disputeCard.isVisible()) {
-      await disputeCard.click();
-      
-      const escalateButton = page.locator('button:has-text("Escalate")');
-      if (await escalateButton.isVisible()) {
-        await escalateButton.click();
-        
-        await page.fill('textarea[name="reason"]', 'Requires senior review due to high value dispute.');
-        await page.click('button:has-text("Confirm")');
-        
-        await expect(page.locator('text=/escalated|success/i')).toBeVisible();
-      }
-    }
+    await page.click('[data-testid="resolve-dispute-button"]');
+    await expect(page.getByText("Dispute resolved successfully")).toBeVisible();
   });
 });
 

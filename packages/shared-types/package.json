@@ -12,7 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "generate": "node scripts/generate-enums.mjs",
+    "build": "node scripts/generate-enums.mjs && tsc",
     "dev": "tsc --watch"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { Message } from '@rental-portal/database';
 
 export interface SendMessageDto {
@@ -10,7 +11,12 @@ export interface SendMessageDto {
 
 @Injectable()
 export class MessagesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(MessagesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private moderationService: ContentModerationService,
+  ) {}
 
   /**
    * Send a message
@@ -34,6 +40,20 @@ export class MessagesService {
 
     if (!isParticipant) {
       throw new ForbiddenException('Not a participant in this conversation');
+    }
+
+    // Moderate message content
+    try {
+      const modResult = await this.moderationService.moderateMessage(content);
+      if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
+        throw new BadRequestException({
+          message: 'Message content violates our content policies',
+          flags: modResult.flags,
+        });
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.warn('Message moderation check failed, proceeding', error);
     }
 
     // Create message

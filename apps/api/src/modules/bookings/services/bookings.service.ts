@@ -625,6 +625,18 @@ export class BookingsService {
     return this.findById(bookingId);
   }
 
+  async rejectReturn(bookingId: string, ownerId: string, reason: string): Promise<Booking> {
+    const booking = (await this.findById(bookingId)) as any;
+
+    if (booking.listing.ownerId !== ownerId) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    await this.stateMachine.transition(bookingId, 'REJECT_RETURN', ownerId, 'OWNER', { reason });
+
+    return this.findById(bookingId);
+  }
+
   async initiateDispute(bookingId: string, userId: string, reason: string): Promise<Booking> {
     const booking = (await this.findById(bookingId)) as any;
 

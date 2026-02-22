@@ -69,6 +69,10 @@ model User {
   idVerificationStatus     String? // API expects idVerificationStatus
   idVerificationUrl        String? // API expects idVerificationUrl
   governmentIdNumber       String? // API expects governmentIdNumber
+  loginAttempts            Int        @default(0)
+  lockedUntil              DateTime?
+  googleId                 String?    @unique
+  appleId                  String?    @unique
   addressLine1             String? // API expects addressLine1
   addressLine2             String? // API expects addressLine2
   city                     String? // API expects city
@@ -103,7 +107,9 @@ model User {
   disputesDefended           Dispute[]                 @relation("DisputeDefendant")
   disputesAssigned           Dispute[]                 @relation("DisputeAssignee")
   disputeResponses           DisputeResponse[]
+  identityDocuments          IdentityDocument[]
 
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -169,8 +175,7 @@ model Listing {
   cancellationPolicy CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id])
   organization       Organization?       @relation(fields: [organizationId], references: [id])
   bookings           Booking[]           @relation("BookingListing")
-  reviews            Review[]
-  reviewListings     Review[]            @relation("ReviewListing")
+  reviews            Review[]            @relation("ReviewListing")
   favorites          FavoriteListing[]
   conditionReports   ConditionReport[]
   insurancePolicies  InsurancePolicy[]
@@ -178,6 +183,9 @@ model Listing {
   conversations      Conversation[]      @relation("PropertyConversations")
   availability       Availability[]      @relation("PropertyAvailability")
 
+  @@index([ownerId, status])
+  @@index([categoryId, status])
+  @@index([deletedAt])
   @@map("properties") // Table name stays properties but API will see it as listing
 }
 
@@ -309,6 +317,8 @@ model Booking {
   ledgerEntries     LedgerEntry[]
   stateHistory      BookingStateHistory[]
 
+  @@index([renterId, status])
+  @@index([ownerId, status])
   @@unique([listingId, startDate, endDate])
   @@map("bookings")
 }
@@ -317,8 +327,7 @@ model Booking {
 model Review {
   id                  String       @id @default(cuid())
   bookingId           String?
-  propertyId          String?
-  listingId           String? // API expects listingId (alias for propertyId)
+  listingId           String?
   reviewerId          String
   revieweeId          String
   type                ReviewType
@@ -332,14 +341,12 @@ model Review {
   checkInRating       Int?
   comment             String?
   response            String?
-  content             String? // API expects content (alias for comment)
   status              ReviewStatus @default(PUBLISHED)
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
   // Relations
   booking  Booking?  @relation(fields: [bookingId], references: [id])
-  property Listing?  @relation(fields: [propertyId], references: [id])
   listing  Listing?  @relation("ReviewListing", fields: [listingId], references: [id])
   reviewer User      @relation("ReviewGiven", fields: [reviewerId], references: [id])
   reviewee User      @relation("ReviewReceived", fields: [revieweeId], references: [id])
@@ -373,6 +380,7 @@ model Payment {
   // Relations
   booking Booking @relation(fields: [bookingId], references: [id])
 
+  @@index([bookingId, status])
   @@map("payments")
 }
 
@@ -460,6 +468,8 @@ model LedgerEntry {
   // Relations
   booking Booking? @relation(fields: [bookingId], references: [id])
 
+  @@index([bookingId])
+  @@index([accountId, accountType])
   @@map("ledger_entries")
 }
 
@@ -554,6 +564,26 @@ model DeviceToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("device_tokens")
+}
+
+// Identity Documents (KYC)
+model IdentityDocument {
+  id               String                 @id @default(cuid())
+  userId           String
+  documentType     IdentityDocumentType
+  documentUrl      String
+  status           VerificationStatus     @default(PENDING)
+  rejectionReason  String?
+  verifiedAt       DateTime?
+  verifiedBy       String?
+  expiresAt        DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("identity_documents")
 }
 
 // User Preferences
@@ -891,6 +921,9 @@ enum UserRole {
   ADMIN
   SUPER_ADMIN
   CUSTOMER
+  OPERATIONS_ADMIN
+  FINANCE_ADMIN
+  SUPPORT_ADMIN
 }
 
 enum UserStatus {
@@ -933,6 +966,7 @@ enum PropertyCondition {
 enum VerificationStatus {
   PENDING
   VERIFIED
+  APPROVED
   REJECTED
 }
 
@@ -1194,4 +1228,11 @@ enum ResolutionType {
   CHARGE_BACK
   COMPENSATION
   DISMISSED
+}
+
+enum IdentityDocumentType {
+  DRIVERS_LICENSE
+  PASSPORT
+  NATIONAL_ID
+  OTHER
 }

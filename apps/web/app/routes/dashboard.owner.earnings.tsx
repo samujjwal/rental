@@ -1,6 +1,6 @@
 import type { MetaFunction } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData, redirect } from "react-router";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   DollarSign,
   Clock,
@@ -9,10 +9,12 @@ import {
   ArrowDownRight,
   CreditCard,
   Loader2,
+  Download,
 } from "lucide-react";
 import { paymentsApi, type Transaction, type PayoutResponse } from "~/lib/api/payments";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { getUser } from "~/utils/auth";
+import { exportToCsv } from "~/utils/export";
 
 export const meta: MetaFunction = () => {
   return [
@@ -45,12 +47,24 @@ export async function clientLoader({ request }: { request: Request }) {
   }
 
   try {
-    const [balanceRes, earningsRes, transactionsRes, payoutsRes] = await Promise.all([
+    const results = await Promise.allSettled([
       paymentsApi.getBalance(),
       paymentsApi.getEarnings(),
       paymentsApi.getTransactions({ limit: 20 }),
       paymentsApi.getPayouts({ limit: 10 }),
     ]);
+
+    const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
+      r.status === 'fulfilled' ? r.value : fallback;
+
+    const balanceRes = settled(results[0], { balance: 0, currency: 'USD' } as any);
+    const earningsRes = settled(results[1], { amount: 0 } as any);
+    const transactionsRes = settled(results[2], { transactions: [] } as any);
+    const payoutsRes = settled(results[3], { payouts: [] } as any);
+
+    const failedSections = results
+      .map((r, i) => r.status === 'rejected' ? ['balance', 'earnings', 'transactions', 'payouts'][i] : null)
+      .filter(Boolean) as string[];
 
     return {
       balance: {
@@ -62,7 +76,7 @@ export async function clientLoader({ request }: { request: Request }) {
         ? transactionsRes.transactions
         : [],
       payouts: Array.isArray(payoutsRes.payouts) ? payoutsRes.payouts : [],
-      error: null,
+      error: failedSections.length > 0 ? `Failed to load: ${failedSections.join(', ')}` : null,
     };
   } catch (error: unknown) {
     return {
@@ -143,6 +157,35 @@ export default function OwnerEarningsPage() {
   const isSubmitting = navigation.state === "submitting";
   const availableAmount = safeNumber(available);
   const totalBalance = safeNumber(balance.total);
+
+  const handleExportTransactions = useCallback(() => {
+    if (transactions.length === 0) return;
+    exportToCsv(
+      transactions,
+      [
+        { header: 'Date', accessor: (t) => safeDateLabel(t.createdAt) },
+        { header: 'Type', accessor: (t) => t.type },
+        { header: 'Description', accessor: (t) => t.description || `Booking #${shortId(t.booking?.id)}` },
+        { header: 'Amount', accessor: (t) => safeNumber(t.amount).toFixed(2) },
+        { header: 'Status', accessor: (t) => t.status },
+      ],
+      'transactions',
+    );
+  }, [transactions]);
+
+  const handleExportPayouts = useCallback(() => {
+    if (payouts.length === 0) return;
+    exportToCsv(
+      payouts,
+      [
+        { header: 'Date', accessor: (p) => safeDateLabel(p.createdAt) },
+        { header: 'Amount', accessor: (p) => safeNumber(p.amount).toFixed(2) },
+        { header: 'Status', accessor: (p) => p.status },
+        { header: 'Account', accessor: (p) => p.accountLast4 ? `****${p.accountLast4}` : 'Bank Account' },
+      ],
+      'payouts',
+    );
+  }, [payouts]);
 
   const getTransactionIcon = (type: string) => {
     if (type === "PAYOUT") return <ArrowUpRight className="w-4 h-4 text-red-500" />;
@@ -237,8 +280,15 @@ export default function OwnerEarningsPage() {
         <div className="bg-card border rounded-xl overflow-hidden mb-8">
           <div className="p-4 border-b flex items-center justify-between">
             <h3 className="text-lg font-semibold text-foreground">Transaction History</h3>
-            <div className="text-sm text-muted-foreground">
-              Showing the latest 20 transactions
+            <div className="flex items-center gap-3">
+              {transactions.length > 0 && (
+                <UnifiedButton variant="outline" size="sm" onClick={handleExportTransactions}>
+                  <Download className="w-4 h-4 mr-1" /> Export CSV
+                </UnifiedButton>
+              )}
+              <div className="text-sm text-muted-foreground">
+                Showing the latest 20 transactions
+              </div>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -295,8 +345,13 @@ export default function OwnerEarningsPage() {
 
         {/* Recent Payouts */}
         <div className="bg-card border rounded-xl overflow-hidden">
-          <div className="p-4 border-b">
+          <div className="p-4 border-b flex items-center justify-between">
             <h3 className="text-lg font-semibold text-foreground">Recent Payouts</h3>
+            {payouts.length > 0 && (
+              <UnifiedButton variant="outline" size="sm" onClick={handleExportPayouts}>
+                <Download className="w-4 h-4 mr-1" /> Export CSV
+              </UnifiedButton>
+            )}
           </div>
           <div className="divide-y divide-border">
             {payouts.map((payout) => (
@@ -390,3 +445,4 @@ export default function OwnerEarningsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

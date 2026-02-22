@@ -5,30 +5,20 @@ import { requireAdmin } from "~/utils/auth";
 import { getAdminAnalytics } from "~/utils/adminAnalytics";
 import { adminApi } from "~/lib/api/admin";
 import {
-  Box,
-  Typography,
-  Paper,
-  Card,
-  CardContent,
-  Button,
-  Alert,
-  AlertTitle,
-  Tabs,
-  Tab,
-} from "@mui/material";
-import {
-  ArrowForward as ArrowRightIcon,
-  Group as UsersIcon,
-  House as HomeIcon,
-  Event as CalendarIcon,
-  AttachMoney as MoneyIcon,
-  Security as ShieldIcon,
-  TrendingUp as TrendingUpIcon,
-  CheckCircle as CheckCircleIcon,
-  Dashboard as DashboardIcon,
-  Gavel as DisputeIcon,
-  Assessment as ReportsIcon,
-} from "@mui/icons-material";
+  ArrowRight,
+  Users,
+  Home,
+  Calendar,
+  DollarSign,
+  Shield,
+  TrendingUp,
+  CheckCircle,
+  LayoutDashboard,
+  Gavel,
+  BarChart3,
+  AlertTriangle,
+  AlertCircle,
+} from "lucide-react";
 import { ActivityFeed, type ActivityItem } from "~/components/admin/ActivityFeed";
 import { RouteErrorBoundary } from "~/components/ui";
 
@@ -40,7 +30,6 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       adminApi.getAuditLogs({ limit: 20 }),
     ]);
 
-    // Transform audit logs to activity items
     const auditItems = Array.isArray(auditLogs?.logs) ? auditLogs.logs : [];
     const activities = auditItems.map((log) => {
       const entity = String(log.entity || "").toLowerCase();
@@ -49,7 +38,6 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       ).includes(entity as ActivityItem["type"])
         ? (entity as ActivityItem["type"])
         : "system";
-
       return {
         id: log.id,
         type,
@@ -78,40 +66,47 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 
 function determineSeverity(action: unknown): "success" | "error" | "warning" | "info" {
   const normalized = String(action || "").toLowerCase();
-  if (normalized.includes("delete") || normalized.includes("suspend") || normalized.includes("reject")) {
-    return "error";
-  }
-  if (normalized.includes("flag") || normalized.includes("warning")) {
-    return "warning";
-  }
-  if (normalized.includes("create") || normalized.includes("approve") || normalized.includes("complete")) {
-    return "success";
-  }
+  if (normalized.includes("delete") || normalized.includes("suspend") || normalized.includes("reject")) return "error";
+  if (normalized.includes("flag") || normalized.includes("warning")) return "warning";
+  if (normalized.includes("create") || normalized.includes("approve") || normalized.includes("complete")) return "success";
   return "info";
 }
 
 function getEntityLink(entity: unknown): string | undefined {
-  const entityMap: Record<string, string> = {
+  const m: Record<string, string> = {
     user: "/admin/entities/users",
     listing: "/admin/entities/listings",
     booking: "/admin/entities/bookings",
     dispute: "/admin/disputes",
     payment: "/admin/entities/payments",
   };
-  return entityMap[String(entity || "").toLowerCase()];
+  return m[String(entity || "").toLowerCase()];
 }
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  }).format(value);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(value);
 }
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
 }
+
+const iconMap: Record<string, React.ReactNode> = {
+  "/admin/entities/users": <Users className="h-5 w-5" />,
+  "/admin/entities/listings": <Home className="h-5 w-5" />,
+  "/admin/entities/bookings": <Calendar className="h-5 w-5" />,
+  "/admin/disputes": <Shield className="h-5 w-5" />,
+  "/admin/entities/payments": <DollarSign className="h-5 w-5" />,
+  "/admin/entities/organizations": <Shield className="h-5 w-5" />,
+  "/admin/entities/categories": <Shield className="h-5 w-5" />,
+  "/admin/system/power-operations": <Shield className="h-5 w-5" />,
+};
+
+const tabItems = [
+  { label: "Overview", icon: LayoutDashboard, href: "#" },
+  { label: "Disputes", icon: Gavel, href: "/admin/disputes" },
+  { label: "Reports", icon: BarChart3, href: "#" },
+];
 
 export default function AdminDashboard() {
   const { user, analytics, activities, error } = useLoaderData<typeof clientLoader>();
@@ -119,326 +114,168 @@ export default function AdminDashboard() {
 
   if (error || !analytics) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          <AlertTitle>Unable to load admin dashboard</AlertTitle>
-          {error || "Failed to load admin dashboard data"}
-        </Alert>
-      </Box>
+      <div className="p-6">
+        <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 p-4">
+          <p className="font-semibold text-red-800 dark:text-red-200">Unable to load admin dashboard</p>
+          <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error || "Failed to load admin dashboard data"}</p>
+        </div>
+      </div>
     );
   }
+
   const { summary, alerts } = analytics;
-
-  const quickLinks = [
-    {
-      href: "/admin/entities/users",
-      label: "User Directory",
-      description: "Review accounts & roles",
-      icon: <UsersIcon />,
-    },
-    {
-      href: "/admin/entities/listings",
-      label: "Listings",
-      description: "Moderate submissions",
-      icon: <HomeIcon />,
-    },
-    {
-      href: "/admin/entities/bookings",
-      label: "Bookings",
-      description: "Resolve issues fast",
-      icon: <CalendarIcon />,
-    },
-    {
-      href: "/admin/disputes",
-      label: "Disputes",
-      description: "Review and resolve disputes",
-      icon: <ShieldIcon />,
-    },
-    {
-      href: "/admin/entities/payments",
-      label: "Payments",
-      description: "Audit payouts & refunds",
-      icon: <MoneyIcon />,
-    },
-    {
-      href: "/admin/entities/organizations",
-      label: "Organizations",
-      description: "Manage business accounts",
-      icon: <ShieldIcon />,
-    },
-    {
-      href: "/admin/entities/categories",
-      label: "Categories",
-      description: "Configure property types",
-      icon: <ShieldIcon />,
-    },
-    {
-      href: "/admin/system/power-operations",
-      label: "Power Operations",
-      description: "System maintenance",
-      icon: <ShieldIcon />,
-    },
-  ];
-
   const criticalAlerts = alerts.filter((a) => a.severity === "critical");
   const warningAlerts = alerts.filter((a) => a.severity === "warning");
 
+  const quickLinks = [
+    { href: "/admin/entities/users", label: "User Directory", description: "Review accounts & roles" },
+    { href: "/admin/entities/listings", label: "Listings", description: "Moderate submissions" },
+    { href: "/admin/entities/bookings", label: "Bookings", description: "Resolve issues fast" },
+    { href: "/admin/disputes", label: "Disputes", description: "Review and resolve disputes" },
+    { href: "/admin/entities/payments", label: "Payments", description: "Audit payouts & refunds" },
+    { href: "/admin/entities/organizations", label: "Organizations", description: "Manage business accounts" },
+    { href: "/admin/entities/categories", label: "Categories", description: "Configure property types" },
+    { href: "/admin/system/power-operations", label: "Power Operations", description: "System maintenance" },
+  ];
+
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Top Navigation Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs 
-          value={activeTab} 
-          onChange={(_, newValue) => setActiveTab(newValue)}
-          aria-label="Admin dashboard tabs"
-        >
-          <Tab icon={<DashboardIcon />} label="Overview" iconPosition="start" />
-          <Tab icon={<DisputeIcon />} label="Disputes" iconPosition="start" component={Link} to="/admin/disputes" />
-          <Tab icon={<ReportsIcon />} label="Reports" iconPosition="start" />
-        </Tabs>
-      </Box>
-
-      {/* Welcome Section */}
-      <Paper
-        sx={{
-          p: 4,
-          mb: 4,
-          background:
-            "linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(25, 118, 210, 0.1) 100%)",
-          border: "1px solid rgba(25, 118, 210, 0.2)",
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 2,
-          }}
-        >
-          <Box>
-            <Typography
-              variant="overline"
-              sx={{ color: "primary.main", fontWeight: 600, letterSpacing: 1 }}
-            >
-              ADMIN CONTROL CENTER
-            </Typography>
-            <Typography variant="h4" gutterBottom>
-              Welcome back, {user.firstName ?? user.email}
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Keep the marketplace healthy by monitoring activity, triaging
-              issues, and guiding partners.
-            </Typography>
-          </Box>
-          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-            <Button
-              variant="outlined"
-              component={Link}
-              to="/admin/system/power-operations"
-              sx={{ borderRadius: 2 }}
-            >
-              System Operations
-            </Button>
-            <Button
-              variant="contained"
-              component={Link}
-              to="/admin/analytics"
-              endIcon={<ArrowRightIcon />}
-              sx={{ borderRadius: 2 }}
-            >
-              Full Analytics
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
-
-      {/* Critical Alerts */}
-      {(criticalAlerts.length > 0 || warningAlerts.length > 0) && (
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Active Alerts
-          </Typography>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {criticalAlerts.map((alert) => (
-              <Alert
-                key={alert.id}
-                severity="error"
-                action={
-                  alert.action && (
-                    <Button
-                      component={Link}
-                      to={alert.action.to}
-                      size="small"
-                      color="inherit"
-                    >
-                      {alert.action.label}
-                    </Button>
-                  )
-                }
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Tabs */}
+      <div className="border-b">
+        <div className="flex gap-1" role="tablist">
+          {tabItems.map((tab, idx) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === idx;
+            return tab.href !== "#" ? (
+              <Link
+                key={tab.label}
+                to={tab.href}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors"
               >
-                <AlertTitle>{alert.title}</AlertTitle>
-                {alert.description}
-              </Alert>
-            ))}
-            {warningAlerts.map((alert) => (
-              <Alert
-                key={alert.id}
-                severity="warning"
-                action={
-                  alert.action && (
-                    <Button
-                      component={Link}
-                      to={alert.action.to}
-                      size="small"
-                      color="inherit"
-                    >
-                      {alert.action.label}
-                    </Button>
-                  )
-                }
+                <Icon className="h-4 w-4" /> {tab.label}
+              </Link>
+            ) : (
+              <button
+                key={tab.label}
+                type="button"
+                role="tab"
+                onClick={() => setActiveTab(idx)}
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  isActive ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                }`}
               >
-                <AlertTitle>{alert.title}</AlertTitle>
-                {alert.description}
-              </Alert>
-            ))}
-          </Box>
-        </Box>
-      )}
-
-      {/* Live KPI Cards */}
-      <Box sx={{ mb: 4 }} data-testid="platform-stats">
-        <Typography variant="h6" gutterBottom>
-          Key Metrics (Last 30 Days)
-        </Typography>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-          {summary.kpis.map((kpi) => {
-            const trendColor =
-              kpi.trend === "up"
-                ? "success"
-                : kpi.trend === "down"
-                  ? "error"
-                  : "default";
-            const Icon =
-              kpi.trend === "up"
-                ? TrendingUpIcon
-                : kpi.trend === "down"
-                  ? TrendingUpIcon
-                  : CheckCircleIcon;
-            const formattedValue =
-              kpi.unit === "currency"
-                ? formatCurrency(kpi.value)
-                : formatNumber(kpi.value);
-            
-            // Map KPI IDs to test IDs for compatibility
-            const testIdMap: Record<string, string> = {
-              activeUsers: "total-users",
-              listings: "total-listings",
-              bookings: "total-bookings",
-              revenue: "total-revenue",
-              disputes: "active-disputes",
-            };
-            const testId = testIdMap[kpi.id] || kpi.id;
-
-            return (
-              <Card key={kpi.id} sx={{ flex: "1 1 250px", minWidth: 200 }} data-testid={testId}>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-                    <Icon sx={{ color: `${trendColor}.main`, mr: 1 }} />
-                    <Typography
-                      variant="overline"
-                      sx={{ color: `${trendColor}.main` }}
-                    >
-                      {kpi.trend === "up"
-                        ? "↑"
-                        : kpi.trend === "down"
-                          ? "↓"
-                          : "→"}
-                    </Typography>
-                  </Box>
-                  <Typography variant="h4" gutterBottom>
-                    {formattedValue}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {kpi.label}
-                  </Typography>
-                </CardContent>
-              </Card>
+                <Icon className="h-4 w-4" /> {tab.label}
+              </button>
             );
           })}
-        </Box>
-      </Box>
+        </div>
+      </div>
+
+      {/* Welcome */}
+      <div className="rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-primary">Admin Control Center</p>
+            <h1 className="text-2xl font-bold mt-1">Welcome back, {user.firstName ?? user.email}</h1>
+            <p className="text-muted-foreground mt-1">Keep the marketplace healthy by monitoring activity, triaging issues, and guiding partners.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/admin/system/power-operations" className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg border hover:bg-muted">System Operations</Link>
+            <Link to="/admin/analytics" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
+              Full Analytics <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {(criticalAlerts.length > 0 || warningAlerts.length > 0) && (
+        <div className="space-y-2">
+          <h2 className="text-lg font-semibold">Active Alerts</h2>
+          {criticalAlerts.map((alert) => (
+            <div key={alert.id} className="flex items-start gap-3 rounded-md border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 px-4 py-3">
+              <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-red-800 dark:text-red-200">{alert.title}</p>
+                <p className="text-sm text-red-700 dark:text-red-300">{alert.description}</p>
+              </div>
+              {alert.action && (
+                <Link to={alert.action.to} className="text-sm font-medium text-red-700 dark:text-red-300 hover:underline shrink-0">{alert.action.label}</Link>
+              )}
+            </div>
+          ))}
+          {warningAlerts.map((alert) => (
+            <div key={alert.id} className="flex items-start gap-3 rounded-md border border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800 px-4 py-3">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-yellow-800 dark:text-yellow-200">{alert.title}</p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">{alert.description}</p>
+              </div>
+              {alert.action && (
+                <Link to={alert.action.to} className="text-sm font-medium text-yellow-700 dark:text-yellow-300 hover:underline shrink-0">{alert.action.label}</Link>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* KPI Cards */}
+      <div data-testid="platform-stats">
+        <h2 className="text-lg font-semibold mb-3">Key Metrics (Last 30 Days)</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {summary.kpis.map((kpi) => {
+            const trendColor = kpi.trend === "up" ? "text-green-600" : kpi.trend === "down" ? "text-red-600" : "text-muted-foreground";
+            const trendArrow = kpi.trend === "up" ? "\u2191" : kpi.trend === "down" ? "\u2193" : "\u2192";
+            const formattedValue = kpi.unit === "currency" ? formatCurrency(kpi.value) : formatNumber(kpi.value);
+            const testIdMap: Record<string, string> = { activeUsers: "total-users", listings: "total-listings", bookings: "total-bookings", revenue: "total-revenue", disputes: "active-disputes" };
+            return (
+              <div key={kpi.id} className="rounded-lg border bg-card p-4 shadow-sm" data-testid={testIdMap[kpi.id] || kpi.id}>
+                <div className="flex items-center gap-1 mb-1">
+                  {kpi.trend === "up" ? <TrendingUp className={`h-4 w-4 ${trendColor}`} /> : <CheckCircle className={`h-4 w-4 ${trendColor}`} />}
+                  <span className={`text-xs font-medium ${trendColor}`}>{trendArrow}</span>
+                </div>
+                <p className="text-2xl font-bold">{formattedValue}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{kpi.label}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Quick Actions */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Quick Actions
-        </Typography>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+      <div>
+        <h2 className="text-lg font-semibold mb-3">Quick Actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {quickLinks.map((link) => (
-            <Card
+            <Link
               key={link.href}
-              sx={{
-                flex: "1 1 280px",
-                cursor: "pointer",
-                transition: "all 0.2s",
-                "&:hover": {
-                  transform: "translateY(-2px)",
-                  boxShadow: 3,
-                },
-              }}
-              component={Link}
               to={link.href}
+              className="flex items-start gap-3 rounded-lg border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
-              <CardContent>
-                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                  <Box
-                    sx={{
-                      p: 1,
-                      borderRadius: 1,
-                      bgcolor: "primary.100",
-                      color: "primary.main",
-                      mr: 2,
-                    }}
-                  >
-                    {link.icon}
-                  </Box>
-                  <Typography variant="h6">{link.label}</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  {link.description}
-                </Typography>
-              </CardContent>
-            </Card>
+              <div className="rounded-md bg-primary/10 text-primary p-2">{iconMap[link.href]}</div>
+              <div>
+                <p className="font-semibold">{link.label}</p>
+                <p className="text-sm text-muted-foreground">{link.description}</p>
+              </div>
+            </Link>
           ))}
-        </Box>
-      </Box>
+        </div>
+      </div>
 
-      {/* Activity Feed Section */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-          <Typography variant="h6">
-            Recent Activity
-          </Typography>
-          <Button
-            variant="text"
-            component={Link}
-            to="/admin/system/audit"
-            endIcon={<ArrowRightIcon />}
-          >
-            View All
-          </Button>
-        </Box>
-        <Paper sx={{ p: 2 }}>
-          <ActivityFeed 
-            activities={activities}
-            maxItems={5}
-            showViewAll={false}
-          />
-        </Paper>
-      </Box>
-    </Box>
+      {/* Activity Feed */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Recent Activity</h2>
+          <Link to="/admin/system/audit" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+            View All <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <div className="rounded-lg border bg-card p-4 shadow-sm">
+          <ActivityFeed activities={activities} maxItems={5} showViewAll={false} />
+        </div>
+      </div>
+    </div>
   );
 }
 export { RouteErrorBoundary as ErrorBoundary };
+

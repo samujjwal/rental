@@ -69,14 +69,29 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   }
 
   try {
-    const [rawListings, rawBookings, rawEarnings, rawStats, unreadNotifs, unreadMsgs] = await Promise.all([
+    const results = await Promise.allSettled([
       listingsApi.getMyListings(),
       bookingsApi.getOwnerBookings(),
       paymentsApi.getEarnings(),
       usersApi.getUserStats(),
-      notificationsApi.getUnreadCount().catch(() => ({ count: 0 })),
-      messagingApi.getUnreadCount().catch(() => ({ count: 0 })),
+      notificationsApi.getUnreadCount(),
+      messagingApi.getUnreadCount(),
     ]);
+
+    const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
+      r.status === 'fulfilled' ? r.value : fallback;
+
+    const rawListings = settled(results[0], []);
+    const rawBookings = settled(results[1], []);
+    const rawEarnings = settled(results[2], { amount: 0 });
+    const rawStats = settled(results[3], { averageRating: 0, totalReviews: 0 } as any);
+    const unreadNotifs = settled(results[4], { count: 0 });
+    const unreadMsgs = settled(results[5], { count: 0 });
+
+    const failedSections = results
+      .map((r, i) => r.status === 'rejected' ? ['listings', 'bookings', 'earnings', 'stats', 'notifications', 'messages'][i] : null)
+      .filter(Boolean) as string[];
+
     const listings = Array.isArray(rawListings) ? rawListings : [];
     const bookings = Array.isArray(rawBookings) ? rawBookings : [];
 
@@ -143,6 +158,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       userStats: rawStats,
       unreadNotifications: typeof unreadNotifs?.count === "number" ? unreadNotifs.count : 0,
       unreadMessages: typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
+      failedSections,
     };
   } catch (error) {
     console.error("Failed to load owner dashboard:", error);
@@ -161,6 +177,8 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       listings: [],
       recentBookings: [],
       userStats: null,
+      unreadNotifications: 0,
+      unreadMessages: 0,
       error: "Failed to load owner dashboard data",
     };
   }
@@ -274,9 +292,9 @@ function ListingCard({ listing }: { listing: Listing }) {
       className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow block"
     >
       <div className="aspect-video bg-muted relative">
-        {listing.images?.[0] ? (
+        {listing.photos?.[0] ? (
           <img
-            src={listing.images[0]}
+            src={listing.photos[0]}
             alt={listingTitle}
             className="w-full h-full object-cover"
           />
@@ -302,7 +320,7 @@ function ListingCard({ listing }: { listing: Listing }) {
         </h3>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
-            ${listing.pricePerDay}/day
+            ${listing.basePrice}/day
           </span>
           {listing.rating && listing.rating > 0 && (
             <div className="flex items-center">
@@ -322,7 +340,7 @@ function ListingCard({ listing }: { listing: Listing }) {
 }
 
 export default function OwnerDashboardRoute() {
-  const { stats, listings, recentBookings, unreadNotifications, unreadMessages, error } = useLoaderData<typeof clientLoader>();
+  const { stats, listings, recentBookings, unreadNotifications, unreadMessages, error, failedSections } = useLoaderData<typeof clientLoader>();
   const pendingEarnings = safeNumber(stats.pendingEarnings);
   const totalEarnings = safeNumber(stats.totalEarnings);
   const averageRating = safeNumber(stats.averageRating);
@@ -347,6 +365,16 @@ export default function OwnerDashboardRoute() {
         {error ? (
           <div className="mb-6 bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
             {error}
+          </div>
+        ) : null}
+        {failedSections && failedSections.length > 0 && !error ? (
+          <div className="mb-6 bg-warning/10 border border-warning/20 rounded-lg p-4">
+            <p className="text-sm text-warning-foreground">
+              Some sections failed to load: {failedSections.join(', ')}.{' '}
+              <button onClick={() => window.location.reload()} className="underline font-medium">
+                Retry
+              </button>
+            </p>
           </div>
         ) : null}
         {/* Header */}
@@ -571,3 +599,4 @@ export default function OwnerDashboardRoute() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

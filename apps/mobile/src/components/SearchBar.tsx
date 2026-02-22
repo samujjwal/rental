@@ -51,6 +51,8 @@ export function SearchBar({ value, onChange, onSubmit }: SearchBarProps) {
         setOpen(false);
         onSubmit(item);
       }}
+      accessibilityRole="button"
+      accessibilityLabel={`Search suggestion: ${item}`}
     >
       <Text style={styles.suggestionText}>{item}</Text>
     </Pressable>
@@ -65,6 +67,9 @@ export function SearchBar({ value, onChange, onSubmit }: SearchBarProps) {
         style={styles.input}
         returnKeyType="search"
         onSubmitEditing={() => onSubmit(value)}
+        accessibilityRole="search"
+        accessibilityLabel="Search for items"
+        accessibilityHint="Type to search for rental items"
       />
       {open && results.length > 0 && (
         <FlatList

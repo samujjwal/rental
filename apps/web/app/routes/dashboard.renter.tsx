@@ -77,13 +77,27 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   }
 
   try {
-    const [bookingsResponse, favoritesResponse, recommendationsResponse, unreadNotifs, unreadMsgs] = await Promise.all([
+    const results = await Promise.allSettled([
       bookingsApi.getMyBookings(),
       getFavorites(),
       listingsApi.searchListings({ limit: 4 }),
-      notificationsApi.getUnreadCount().catch(() => ({ count: 0 })),
-      messagingApi.getUnreadCount().catch(() => ({ count: 0 })),
+      notificationsApi.getUnreadCount(),
+      messagingApi.getUnreadCount(),
     ]);
+
+    const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
+      r.status === 'fulfilled' ? r.value : fallback;
+
+    const bookingsResponse = settled(results[0], []);
+    const favoritesResponse = settled(results[1], { favorites: [] } as any);
+    const recommendationsResponse = settled(results[2], { listings: [] } as any);
+    const unreadNotifs = settled(results[3], { count: 0 });
+    const unreadMsgs = settled(results[4], { count: 0 });
+
+    const failedSections = results
+      .map((r, i) => r.status === 'rejected' ? ['bookings', 'favorites', 'recommendations', 'notifications', 'messages'][i] : null)
+      .filter(Boolean) as string[];
+
     const bookings = Array.isArray(bookingsResponse) ? bookingsResponse : [];
     const favoritesRaw = Array.isArray(favoritesResponse.favorites)
       ? favoritesResponse.favorites
@@ -143,6 +157,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       recommendations: recommendations.slice(0, 4),
       unreadNotifications: typeof unreadNotifs?.count === "number" ? unreadNotifs.count : 0,
       unreadMessages: typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
+      failedSections,
     };
   } catch (error) {
     console.error("Failed to load renter dashboard:", error);
@@ -157,6 +172,8 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       recentBookings: [],
       favorites: [],
       recommendations: [],
+      unreadNotifications: 0,
+      unreadMessages: 0,
       error: "Failed to load renter dashboard data",
     };
   }
@@ -254,9 +271,9 @@ function BookingCard({ booking }: { booking: Booking }) {
       <div className="flex gap-4">
         {/* Image */}
         <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-          {booking.listing?.images?.[0] ? (
+          {booking.listing?.photos?.[0] ? (
             <img
-              src={booking.listing.images[0]}
+              src={booking.listing.photos[0]}
               alt={listingTitle}
               className="w-full h-full object-cover"
             />
@@ -327,9 +344,9 @@ function ListingCard({
       className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow block"
     >
       <div className="aspect-video bg-muted relative">
-        {listing.images?.[0] ? (
+        {listing.photos?.[0] ? (
           <img
-            src={listing.images[0]}
+            src={listing.photos[0]}
             alt={listingTitle}
             className="w-full h-full object-cover"
           />
@@ -354,7 +371,7 @@ function ListingCard({
         </p>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
-            ${listing.pricePerDay}/day
+            ${listing.basePrice}/day
           </span>
           {listing.rating && listing.rating > 0 && (
             <div className="flex items-center">
@@ -371,7 +388,7 @@ function ListingCard({
 }
 
 export default function RenterDashboardRoute() {
-  const { stats, recentBookings, favorites, recommendations, unreadNotifications, unreadMessages, error } =
+  const { stats, recentBookings, favorites, recommendations, unreadNotifications, unreadMessages, error, failedSections } =
     useLoaderData<typeof clientLoader>();
   const totalSpent = safeNumber(stats.totalSpent);
 
@@ -395,6 +412,16 @@ export default function RenterDashboardRoute() {
         {error ? (
           <div className="mb-6 bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
             {error}
+          </div>
+        ) : null}
+        {failedSections && failedSections.length > 0 && !error ? (
+          <div className="mb-6 bg-warning/10 border border-warning/20 rounded-lg p-4">
+            <p className="text-sm text-warning-foreground">
+              Some sections failed to load: {failedSections.join(', ')}.{' '}
+              <button onClick={() => window.location.reload()} className="underline font-medium">
+                Retry
+              </button>
+            </p>
           </div>
         ) : null}
         {/* Header */}
@@ -569,9 +596,9 @@ export default function RenterDashboardRoute() {
                                 className="flex gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
                               >
                                 <div className="w-16 h-16 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-                                  {listing.images?.[0] ? (
+                                  {listing.photos?.[0] ? (
                                     <img
-                                      src={listing.images[0]}
+                                      src={listing.photos[0]}
                                       alt={listingTitle}
                                       className="w-full h-full object-cover"
                                     />
@@ -586,7 +613,13 @@ export default function RenterDashboardRoute() {
                                     {listingTitle}
                                   </h4>
                                   <p className="text-sm text-muted-foreground">
-                                    ${listing.pricePerDay}/day
+                                    $
+                                    {safeNumber(
+                                      (listing as { pricePerDay?: unknown; basePrice?: unknown })
+                                        .basePrice ??
+                                        (listing as { basePrice?: unknown }).basePrice
+                                    )}
+                                    /day
                                   </p>
                                 </div>
                               </Link>
@@ -615,3 +648,4 @@ export default function RenterDashboardRoute() {
 
 // Error boundary for route errors
 export { RouteErrorBoundary as ErrorBoundary };
+

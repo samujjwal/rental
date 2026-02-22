@@ -1,29 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import {
-  Box,
-  Typography,
-  Paper,
-  TextField,
-  Alert,
-  Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  LinearProgress,
-  Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-} from "@mui/material";
-import {
-  Backup as BackupIcon,
-  Storage as DatabaseIcon,
-  QueryStats as QueryIcon,
-  Warning as WarningIcon,
-  ExpandMore as ExpandMoreIcon,
-} from "@mui/icons-material";
+  Database,
+  HardDrive,
+  Search,
+  AlertTriangle,
+  ChevronDown,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  X,
+} from "lucide-react";
 import { Link } from "react-router";
 import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton } from "~/components/ui";
@@ -53,20 +40,14 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 }
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === "string") {
-    return error.message;
-  }
-
+  if (error instanceof Error && typeof error.message === "string") return error.message;
   if (typeof error === "object" && error !== null) {
     const record = error as Record<string, unknown>;
     const response = record.response as Record<string, unknown> | undefined;
     const data = response?.data as Record<string, unknown> | undefined;
     const message = data?.message;
-    if (typeof message === "string" && message.trim().length > 0) {
-      return message;
-    }
+    if (typeof message === "string" && message.trim().length > 0) return message;
   }
-
   return "Unknown error";
 }
 
@@ -76,29 +57,18 @@ export default function PowerOperationsPage() {
   const [operationProgress, setOperationProgress] = useState(0);
   const [query, setQuery] = useState("");
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    operation: Operation | null;
-  }>({ open: false, operation: null });
-  const [notification, setNotification] = useState<{
-    open: boolean;
-    message: string;
-    severity: "success" | "error" | "warning" | "info";
-  }>({ open: false, message: "", severity: "info" });
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; operation: Operation | null }>({ open: false, operation: null });
+  const [toast, setToast] = useState<{ message: string; severity: "success" | "error" | "warning" | "info" } | null>(null);
 
-  const showNotification = (
-    message: string,
-    severity: "success" | "error" | "warning" | "info"
-  ) => {
-    setNotification({ open: true, message, severity });
-  };
+  useEffect(() => {
+    if (toast) { const t = setTimeout(() => setToast(null), 6000); return () => clearTimeout(t); }
+  }, [toast]);
+
+  const showNotification = (message: string, severity: "success" | "error" | "warning" | "info") => setToast({ message, severity });
 
   const executeOperation = async (operation: Operation) => {
-    if (operation.requiresConfirmation) {
-      setConfirmDialog({ open: true, operation });
-      return;
-    }
-
+    if (operation.requiresConfirmation) { setConfirmDialog({ open: true, operation }); return; }
     await performOperation(operation);
   };
 
@@ -106,28 +76,16 @@ export default function PowerOperationsPage() {
     setLoading(true);
     setActiveOperation(operation.id);
     setOperationProgress(0);
-
     try {
-      // Start progress indicator
-      const progressInterval = setInterval(() => {
-        setOperationProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
+      const interval = setInterval(() => {
+        setOperationProgress((prev) => { if (prev >= 90) { clearInterval(interval); return 90; } return prev + 10; });
       }, 200);
-
       await operation.action();
-
-      clearInterval(progressInterval);
+      clearInterval(interval);
       setOperationProgress(100);
-
       showNotification(`${operation.name} completed successfully`, "success");
     } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error);
-      showNotification(`${operation.name} failed: ${errorMessage}`, "error");
+      showNotification(`${operation.name} failed: ${getErrorMessage(error)}`, "error");
     } finally {
       setLoading(false);
       setActiveOperation(null);
@@ -138,346 +96,213 @@ export default function PowerOperationsPage() {
 
   const operations: Operation[] = [
     {
-      id: "backup-database",
-      name: "Backup Database",
-      description:
-        "Create a complete backup of the database including all tables and data",
-      icon: <BackupIcon />,
-      action: async () => {
-        const backup = await adminApi.createBackup("full");
-        if (backup?.downloadUrl) {
-          window.open(backup.downloadUrl, "_blank", "noopener,noreferrer");
-        }
-      },
+      id: "backup-database", name: "Backup Database",
+      description: "Create a complete backup of the database including all tables and data",
+      icon: <HardDrive className="h-4 w-4" />,
+      action: async () => { const b = await adminApi.createBackup("full"); if (b?.downloadUrl) window.open(b.downloadUrl, "_blank", "noopener,noreferrer"); },
     },
     {
-      id: "optimize-database",
-      name: "Optimize Database",
+      id: "optimize-database", name: "Optimize Database",
       description: "Optimize database performance and clean up unused data",
-      icon: <DatabaseIcon />,
-      action: async () => {
-        await adminApi.runDatabaseVacuum();
-        await adminApi.runDatabaseAnalyze();
-      },
+      icon: <Database className="h-4 w-4" />,
+      action: async () => { await adminApi.runDatabaseVacuum(); await adminApi.runDatabaseAnalyze(); },
     },
     {
-      id: "clear-cache",
-      name: "Clear Cache",
+      id: "clear-cache", name: "Clear Cache",
       description: "Clear all application caches and temporary data",
-      icon: <DatabaseIcon />,
-      action: async () => {
-        await adminApi.clearCache("all");
-      },
+      icon: <Database className="h-4 w-4" />,
+      action: async () => { await adminApi.clearCache("all"); },
     },
   ];
 
   const executeQuery = async () => {
-    if (!query.trim()) {
-      showNotification("Please enter a log search term", "warning");
-      return;
-    }
-
+    if (!query.trim()) { showNotification("Please enter a log search term", "warning"); return; }
     setLoading(true);
     setActiveOperation("execute-query");
-
     try {
       const startedAt = performance.now();
       const logs = await adminApi.getSystemLogs({ limit: 50, search: query.trim() });
       const endedAt = performance.now();
-
-      const result: QueryResult = {
+      setQueryResult({
         columns: ["timestamp", "level", "message"],
         rows: logs.logs.map((log) => [log.timestamp, log.level, log.message]),
         executionTime: Math.round(endedAt - startedAt),
         rowCount: logs.logs.length,
-      };
-
-      setQueryResult(result);
+      });
       showNotification("Logs fetched successfully", "success");
     } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error);
-      showNotification(`Failed to fetch logs: ${errorMessage}`, "error");
+      showNotification(`Failed to fetch logs: ${getErrorMessage(error)}`, "error");
       setQueryResult(null);
-    } finally {
-      setLoading(false);
-      setActiveOperation(null);
-    }
+    } finally { setLoading(false); setActiveOperation(null); }
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Power Operations
-      </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        Advanced administrative operations for system maintenance and management
-      </Typography>
+    <div className="p-4 md:p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Power Operations</h1>
+        <p className="text-muted-foreground mt-1">Advanced administrative operations for system maintenance and management</p>
+      </div>
 
       {/* Progress Bar */}
       {loading && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="body2" gutterBottom>
-            {activeOperation === "execute-query"
-              ? "Executing Query..."
-              : operations.find((op) => op.id === activeOperation)?.name ||
-              "Processing..."}
-          </Typography>
-          <LinearProgress
-            variant="determinate"
-            value={operationProgress}
-            sx={{ height: 8, borderRadius: 4 }}
-          />
-        </Box>
+        <div>
+          <p className="text-sm mb-1">
+            {activeOperation === "execute-query" ? "Executing Query..." : operations.find((op) => op.id === activeOperation)?.name || "Processing..."}
+          </p>
+          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-primary rounded-full transition-all duration-200" style={{ width: `${operationProgress}%` }} />
+          </div>
+        </div>
       )}
 
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Database Operations */}
-        <Box sx={{ flex: "1 1 500px", minWidth: 300 }}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Database Operations
-            </Typography>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {operations.slice(0, 2).map((operation) => (
-                <Box key={operation.id}>
-                  <UnifiedButton
-                    fullWidth
-                    variant={operation.danger ? "destructive" : "primary"}
-                    leftIcon={operation.icon}
-                    onClick={() => executeOperation(operation)}
-                    disabled={loading}
-                  >
-                    {operation.name}
-                  </UnifiedButton>
-                  <Typography variant="caption" color="text.secondary">
-                    {operation.description}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          </Paper>
-        </Box>
+        <div className="rounded-lg border bg-card p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-3">Database Operations</h2>
+          <div className="space-y-3">
+            {operations.slice(0, 2).map((op) => (
+              <div key={op.id}>
+                <UnifiedButton fullWidth variant={op.danger ? "destructive" : "primary"} leftIcon={op.icon} onClick={() => executeOperation(op)} disabled={loading}>
+                  {op.name}
+                </UnifiedButton>
+                <p className="text-xs text-muted-foreground mt-1">{op.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* System Operations */}
-        <Box sx={{ flex: "1 1 500px", minWidth: 300 }}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              System Operations
-            </Typography>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {operations.slice(2).map((operation) => (
-                <Box key={operation.id}>
-                  <UnifiedButton
-                    fullWidth
-                    variant={operation.danger ? "destructive" : "primary"}
-                    leftIcon={operation.icon}
-                    onClick={() => executeOperation(operation)}
-                    disabled={loading}
-                  >
-                    {operation.name}
-                  </UnifiedButton>
-                  <Typography variant="caption" color="text.secondary">
-                    {operation.description}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          </Paper>
-        </Box>
-
-        {/* System Logs */}
-        <Box sx={{ flex: "1 1 100%", minWidth: 300 }}>
-          <Paper sx={{ p: 3 }}>
-            <Typography
-              variant="h6"
-              gutterBottom
-              sx={{ display: "flex", alignItems: "center", gap: 1 }}
-            >
-              <QueryIcon />
-              System Logs
-            </Typography>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <TextField
-                multiline
-                rows={4}
-                placeholder="Search logs (message contains)…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                disabled={loading}
-                fullWidth
-                sx={{ fontFamily: "monospace" }}
-              />
-              <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                <UnifiedButton
-                  variant="primary"
-                  leftIcon={<DatabaseIcon />}
-                  onClick={executeQuery}
-                  disabled={loading || !query.trim()}
-                >
-                  Fetch Logs
+        <div className="rounded-lg border bg-card p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-3">System Operations</h2>
+          <div className="space-y-3">
+            {operations.slice(2).map((op) => (
+              <div key={op.id}>
+                <UnifiedButton fullWidth variant={op.danger ? "destructive" : "primary"} leftIcon={op.icon} onClick={() => executeOperation(op)} disabled={loading}>
+                  {op.name}
                 </UnifiedButton>
-                <UnifiedButton
-                  variant="outline"
-                  onClick={() => {
-                    setQuery("");
-                    setQueryResult(null);
-                  }}
-                  disabled={loading}
-                >
-                  Clear
-                </UnifiedButton>
-                {queryResult && (
-                  <Chip
-                    label={`${queryResult.rowCount} rows (${queryResult.executionTime}ms)`}
-                    color="success"
-                    size="small"
-                  />
-                )}
-              </Box>
-            </Box>
+                <p className="text-xs text-muted-foreground mt-1">{op.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
-            {/* Logs Results */}
+      {/* System Logs */}
+      <div className="rounded-lg border bg-card p-4 shadow-sm">
+        <h2 className="flex items-center gap-2 text-lg font-semibold mb-3">
+          <Search className="h-5 w-5" /> System Logs
+        </h2>
+        <div className="space-y-3">
+          <textarea
+            rows={4}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            placeholder="Search logs (message contains)..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            disabled={loading}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <UnifiedButton variant="primary" leftIcon={<Database className="h-4 w-4" />} onClick={executeQuery} disabled={loading || !query.trim()}>
+              Fetch Logs
+            </UnifiedButton>
+            <UnifiedButton variant="outline" onClick={() => { setQuery(""); setQueryResult(null); }} disabled={loading}>Clear</UnifiedButton>
             {queryResult && (
-              <Box sx={{ mt: 3 }}>
-                <Accordion>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="subtitle1">
-                      Log Results ({queryResult.rowCount} rows)
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Box sx={{ overflowX: "auto" }}>
-                      <table
-                        style={{ width: "100%", borderCollapse: "collapse" }}
-                      >
-                        <thead>
-                          <tr style={{ backgroundColor: "#f5f5f5" }}>
-                            {queryResult.columns.map((col, index) => (
-                              <th
-                                key={index}
-                                style={{
-                                  padding: "8px",
-                                  textAlign: "left",
-                                  borderBottom: "1px solid #ddd",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                {col}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {queryResult.rows.map((row, rowIndex) => (
-                            <tr key={rowIndex}>
-                              {row.map((cell, cellIndex) => (
-                                <td
-                                  key={cellIndex}
-                                  style={{
-                                    padding: "8px",
-                                    borderBottom: "1px solid #eee",
-                                    fontFamily: "monospace",
-                                  }}
-                                >
-                                  {String(cell ?? "")}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </Box>
-                  </AccordionDetails>
-                </Accordion>
-              </Box>
+              <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2.5 py-0.5 text-xs font-medium">
+                {queryResult.rowCount} rows ({queryResult.executionTime}ms)
+              </span>
             )}
-          </Paper>
-        </Box>
+          </div>
+        </div>
 
-        {/* Backup/Restore */}
-        <Box sx={{ flex: "1 1 100%", minWidth: 300 }}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Backup & Restore
-            </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
-              <Box sx={{ flex: "1 1 300px" }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Manage Backups
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Create, download, and restore backups from the dedicated backups console.
-                </Typography>
-                <UnifiedButton asChild variant="primary" disabled={loading}>
-                  <Link to="/admin/system/backups">Open Backup Management</Link>
-                </UnifiedButton>
-              </Box>
-            </Box>
-          </Paper>
-        </Box>
-      </Box>
+        {queryResult && (
+          <div className="mt-4 border rounded-lg overflow-hidden">
+            <button type="button" onClick={() => setLogsOpen(!logsOpen)} className="flex items-center justify-between w-full px-4 py-3 text-sm font-medium hover:bg-muted">
+              Log Results ({queryResult.rowCount} rows)
+              <ChevronDown className={`h-4 w-4 transition-transform ${logsOpen ? "rotate-180" : ""}`} />
+            </button>
+            {logsOpen && (
+              <div className="overflow-x-auto border-t">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50">
+                      {queryResult.columns.map((col, i) => (
+                        <th key={i} className="px-3 py-2 text-left font-semibold border-b">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y font-mono">
+                    {queryResult.rows.map((row, ri) => (
+                      <tr key={ri}>
+                        {row.map((cell, ci) => (
+                          <td key={ci} className="px-3 py-2">{String(cell ?? "")}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Backup & Restore */}
+      <div className="rounded-lg border bg-card p-4 shadow-sm">
+        <h2 className="text-lg font-semibold mb-3">Backup & Restore</h2>
+        <div>
+          <p className="text-sm font-medium">Manage Backups</p>
+          <p className="text-sm text-muted-foreground mt-1 mb-3">Create, download, and restore backups from the dedicated backups console.</p>
+          <UnifiedButton asChild variant="primary" disabled={loading}>
+            <Link to="/admin/system/backups">Open Backup Management</Link>
+          </UnifiedButton>
+        </div>
+      </div>
 
       {/* Confirmation Dialog */}
-      <Dialog
-        open={confirmDialog.open}
-        onClose={() => setConfirmDialog({ open: false, operation: null })}
-      >
-        <DialogTitle>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <WarningIcon color="error" />
-            Confirm Dangerous Operation
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Typography>
-            You are about to perform a potentially dangerous operation:
-          </Typography>
-          <Typography variant="subtitle1" sx={{ mt: 2, fontWeight: "bold" }}>
-            {confirmDialog.operation?.name}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {confirmDialog.operation?.description}
-          </Typography>
-          <Alert severity="error" sx={{ mt: 2 }}>
-            This action cannot be undone. Please confirm you want to proceed.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <UnifiedButton
-            onClick={() => setConfirmDialog({ open: false, operation: null })}
-            variant="outline"
-          >
-            Cancel
-          </UnifiedButton>
-          <UnifiedButton
-            variant="destructive"
-            onClick={() =>
-              confirmDialog.operation &&
-              performOperation(confirmDialog.operation)
-            }
-            disabled={loading}
-          >
-            Proceed
-          </UnifiedButton>
-        </DialogActions>
-      </Dialog>
+      {confirmDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setConfirmDialog({ open: false, operation: null })}>
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-6 py-4 border-b">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <h3 className="text-lg font-semibold">Confirm Dangerous Operation</h3>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <p className="text-sm">You are about to perform a potentially dangerous operation:</p>
+              <p className="font-semibold">{confirmDialog.operation?.name}</p>
+              <p className="text-sm text-muted-foreground">{confirmDialog.operation?.description}</p>
+              <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                This action cannot be undone. Please confirm you want to proceed.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t">
+              <UnifiedButton onClick={() => setConfirmDialog({ open: false, operation: null })} variant="outline">Cancel</UnifiedButton>
+              <UnifiedButton variant="destructive" onClick={() => confirmDialog.operation && performOperation(confirmDialog.operation)} disabled={loading}>Proceed</UnifiedButton>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Notification */}
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={6000}
-        onClose={() => setNotification((prev) => ({ ...prev, open: false }))}
-      >
-        <Alert
-          onClose={() => setNotification((prev) => ({ ...prev, open: false }))}
-          severity={notification.severity}
-          sx={{ width: "100%" }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm ${
+            toast.severity === "success" ? "bg-green-50 text-green-800 border border-green-200 dark:bg-green-950 dark:text-green-200" :
+            toast.severity === "error" ? "bg-red-50 text-red-800 border border-red-200 dark:bg-red-950 dark:text-red-200" :
+            toast.severity === "warning" ? "bg-yellow-50 text-yellow-800 border border-yellow-200 dark:bg-yellow-950 dark:text-yellow-200" :
+            "bg-blue-50 text-blue-800 border border-blue-200 dark:bg-blue-950 dark:text-blue-200"
+          }`}>
+            {toast.severity === "success" ? <CheckCircle className="h-4 w-4" /> :
+             toast.severity === "error" ? <AlertCircle className="h-4 w-4" /> :
+             toast.severity === "warning" ? <AlertTriangle className="h-4 w-4" /> :
+             <AlertCircle className="h-4 w-4" />}
+            {toast.message}
+            <button type="button" onClick={() => setToast(null)} className="ml-2 p-0.5 rounded hover:bg-black/10"><X className="h-3.5 w-3.5" /></button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

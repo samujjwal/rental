@@ -257,9 +257,9 @@ export default function FavoritesPage() {
                   >
                     <div className="relative aspect-[4/3]">
                       <Link to={listingId ? `/listings/${listingId}` : "/listings"}>
-                        {listing.images?.[0] ? (
+                        {listing.photos?.[0] ? (
                           <img
-                            src={listing.images[0]}
+                            src={listing.photos[0]}
                             alt={listingTitle}
                             className="w-full h-full object-cover"
                           />
@@ -328,9 +328,9 @@ export default function FavoritesPage() {
                   >
                     <div className="relative w-48 h-32 flex-shrink-0">
                       <Link to={listingId ? `/listings/${listingId}` : "/listings"}>
-                        {listing.images?.[0] ? (
+                        {listing.photos?.[0] ? (
                           <img
-                            src={listing.images[0]}
+                            src={listing.photos[0]}
                             alt={listingTitle}
                             className="w-full h-full object-cover"
                           />
@@ -428,3 +428,4 @@ export default function FavoritesPage() {
 
 // Error boundary for route errors
 export { RouteErrorBoundary as ErrorBoundary };
+

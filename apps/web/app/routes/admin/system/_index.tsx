@@ -74,8 +74,20 @@ export default function SystemSettingsPage() {
       href: "/admin/system/general",
       status: "active",
       stats: [
-        { label: "Site Name", value: generalSettings?.siteName || "Rental Portal" },
-        { label: "Maintenance", value: generalSettings?.maintenanceMode ? "ON" : "OFF" },
+        {
+          label: "Site Name",
+          value:
+            typeof generalSettings?.siteName === "string" && generalSettings.siteName.trim()
+              ? generalSettings.siteName
+              : "Rental Portal",
+        },
+        {
+          label: "Maintenance",
+          value:
+            Boolean((generalSettings as { maintenanceMode?: unknown } | null)?.maintenanceMode)
+              ? "ON"
+              : "OFF",
+        },
       ],
     },
     {
@@ -308,3 +320,4 @@ export default function SystemSettingsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

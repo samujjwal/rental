@@ -150,6 +150,10 @@ export class PrismaWrapper {
     return this.prisma.bookingStateHistory;
   }
 
+  get identityDocument() {
+    return this.prisma.identityDocument;
+  }
+
   // Provide direct access to underlying client for advanced usage
   get client() {
     return this.prisma;

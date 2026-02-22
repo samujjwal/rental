@@ -1,33 +1,18 @@
 /**
  * Filter Chips Component
- * Visual filter representation with easy removal
+ * Visual filter representation with easy removal — pure Tailwind
  */
 
 import React, { useState, useCallback, useMemo } from "react";
 import {
-  Box,
-  Chip,
-  MenuItem,
-  TextField,
-  Button,
-  Typography,
-  Select,
-  FormControl,
-  InputLabel,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-} from "@mui/material";
-import {
-  Add as AddIcon,
-  FilterList as FilterIcon,
-  Close as CloseIcon,
-  CalendarToday as DateIcon,
-  TextFields as TextIcon,
-  List as SelectIcon,
-  Numbers as NumberIcon,
-} from "@mui/icons-material";
+  Plus,
+  Filter,
+  X,
+  Calendar,
+  Type,
+  List,
+  Hash,
+} from "lucide-react";
 
 export interface FilterChip {
   id: string;
@@ -56,6 +41,15 @@ interface FilterChipsProps {
   maxFilters?: number;
 }
 
+const chipColorMap: Record<string, string> = {
+  primary: "border-primary/40 bg-primary/5 text-primary",
+  secondary: "border-secondary/40 bg-secondary/5 text-secondary-foreground",
+  success: "border-green-400/40 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
+  warning: "border-yellow-400/40 bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300",
+  error: "border-red-400/40 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+  info: "border-blue-400/40 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+};
+
 export const FilterChips: React.FC<FilterChipsProps> = ({
   filters,
   onFilterAdd,
@@ -66,17 +60,12 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
 }) => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedField, setSelectedField] = useState<string>("");
-  const [filterValue, setFilterValue] = useState<
-    string | number | [string, string]
-  >("");
-  const [filterOperator, setFilterOperator] =
-    useState<FilterChip["operator"]>("equals");
+  const [filterValue, setFilterValue] = useState<string | number | [string, string]>("");
+  const [filterOperator, setFilterOperator] = useState<FilterChip["operator"]>("equals");
 
-  // Create a map of unique identifiers to fields for handling duplicates
   const fieldMap = useMemo(() => {
     const map = new Map<string, AvailableField>();
     availableFields.forEach((field) => {
-      // Create unique identifier using field and label combination
       const uniqueId = `${field.field}_${field.label.toLowerCase().replace(/\s+/g, "_")}`;
       map.set(uniqueId, field);
     });
@@ -86,8 +75,6 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
   const handleAddFilter = useCallback(() => {
     const field = fieldMap.get(selectedField);
     if (!field) return;
-
-    // Create a unique ID that includes field and label to handle duplicates
     const uniqueFieldId = `${field.field}_${field.label.toLowerCase().replace(/\s+/g, "_")}`;
     const newFilter: FilterChip = {
       id: `filter_${uniqueFieldId}_${Date.now()}`,
@@ -98,7 +85,6 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
       operator: filterOperator,
       color: "primary",
     };
-
     onFilterAdd(newFilter);
     setAddDialogOpen(false);
     setSelectedField("");
@@ -108,346 +94,219 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
 
   const getFilterIcon = (type: FilterChip["type"]) => {
     switch (type) {
-      case "text":
-        return <TextIcon fontSize="small" />;
-      case "date":
-        return <DateIcon fontSize="small" />;
-      case "select":
-        return <SelectIcon fontSize="small" />;
-      case "number":
-        return <NumberIcon fontSize="small" />;
-      default:
-        return <FilterIcon fontSize="small" />;
+      case "text": return <Type className="h-3 w-3" />;
+      case "date": return <Calendar className="h-3 w-3" />;
+      case "select": return <List className="h-3 w-3" />;
+      case "number": return <Hash className="h-3 w-3" />;
+      default: return <Filter className="h-3 w-3" />;
     }
   };
 
   const getOperatorLabel = (operator?: FilterChip["operator"]) => {
     switch (operator) {
-      case "contains":
-        return "contains";
-      case "gt":
-        return ">";
-      case "lt":
-        return "<";
-      case "gte":
-        return "≥";
-      case "lte":
-        return "≤";
-      case "between":
-        return "between";
-      default:
-        return "=";
+      case "contains": return "contains";
+      case "gt": return ">";
+      case "lt": return "<";
+      case "gte": return "\u2265";
+      case "lte": return "\u2264";
+      case "between": return "between";
+      default: return "=";
     }
   };
 
   return (
-    <Box
-      sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}
-    >
+    <div className="flex gap-1.5 flex-wrap items-center">
       {filters.length > 0 && (
-        <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-          Filters:
-        </Typography>
+        <span className="text-xs text-muted-foreground mr-1">Filters:</span>
       )}
 
       {filters.map((filter) => (
-        <Chip
+        <span
           key={filter.id}
-          icon={
-            (filter.icon || getFilterIcon(filter.type)) as React.ReactElement
-          }
-          label={
-            filter.operator && filter.operator !== "equals"
+          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs border ${
+            chipColorMap[filter.color || "primary"] || chipColorMap.primary
+          }`}
+        >
+          {filter.icon || getFilterIcon(filter.type)}
+          <span>
+            {filter.operator && filter.operator !== "equals"
               ? `${filter.label} (${getOperatorLabel(filter.operator)})`
-              : filter.label
-          }
-          onDelete={() => onFilterRemove(filter.id)}
-          color={filter.color || "primary"}
-          variant="outlined"
-          size="small"
-          sx={{
-            borderRadius: 1,
-            "& .MuiChip-deleteIcon": {
-              fontSize: "1rem",
-            },
-          }}
-        />
+              : filter.label}
+          </span>
+          <button
+            type="button"
+            onClick={() => onFilterRemove(filter.id)}
+            className="ml-0.5 p-0.5 rounded-sm hover:bg-black/10 dark:hover:bg-white/10"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
       ))}
 
       {filters.length < maxFilters && (
-        <Chip
-          icon={<AddIcon fontSize="small" />}
-          label="Add Filter"
+        <button
+          type="button"
           onClick={() => setAddDialogOpen(true)}
-          variant="outlined"
-          size="small"
-          clickable
-          sx={{
-            borderRadius: 1,
-            borderStyle: "dashed",
-            "&:hover": {
-              borderStyle: "solid",
-              backgroundColor: "action.hover",
-            },
-          }}
-        />
+          className="inline-flex items-center gap-1 rounded border border-dashed px-2 py-0.5 text-xs text-muted-foreground hover:border-solid hover:bg-accent"
+        >
+          <Plus className="h-3 w-3" />
+          Add Filter
+        </button>
       )}
 
       {filters.length > 0 && (
-        <Button
-          size="small"
-          startIcon={<CloseIcon fontSize="small" />}
+        <button
+          type="button"
           onClick={() => filters.forEach((f) => onFilterRemove(f.id))}
-          sx={{ ml: 1 }}
+          className="inline-flex items-center gap-1 ml-1 text-xs text-muted-foreground hover:text-foreground"
         >
+          <X className="h-3 w-3" />
           Clear All
-        </Button>
+        </button>
       )}
 
-      <Dialog
-        open={addDialogOpen}
-        onClose={() => setAddDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            boxShadow: 3,
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{ pb: 2, borderBottom: "1px solid", borderColor: "divider" }}
-        >
-          Add Filter
-        </DialogTitle>
-        <DialogContent sx={{ pt: 3 }}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <FormControl fullWidth>
-              <InputLabel sx={{ mb: 1 }}>Field</InputLabel>
-              <Select
-                value={selectedField}
-                onChange={(e) => {
-                  setSelectedField(e.target.value);
-                  setFilterValue("");
-                }}
-                label="Field"
-                size="medium"
-              >
-                {Array.from(fieldMap.entries()).map(([uniqueId, field]) => (
-                  <MenuItem key={uniqueId} value={uniqueId}>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1.5,
-                        py: 0.5,
-                      }}
+      {/* Add Filter Dialog */}
+      {addDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAddDialogOpen(false)}>
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b">
+              <h3 className="text-lg font-semibold">Add Filter</h3>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              {/* Field select */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Field</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={selectedField}
+                  onChange={(e) => { setSelectedField(e.target.value); setFilterValue(""); }}
+                >
+                  <option value="">Select field...</option>
+                  {Array.from(fieldMap.entries()).map(([uniqueId, field]) => (
+                    <option key={uniqueId} value={uniqueId}>{field.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedField && (
+                <>
+                  {/* Operator select */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Operator</label>
+                    <select
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={filterOperator}
+                      onChange={(e) => setFilterOperator(e.target.value as FilterChip["operator"])}
                     >
-                      {getFilterIcon(field.type)}
-                      <span>{field.label}</span>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                      <option value="equals">Equals</option>
+                      <option value="contains">Contains</option>
+                      <option value="gt">Greater Than</option>
+                      <option value="gte">Greater Than or Equal</option>
+                      <option value="lt">Less Than</option>
+                      <option value="lte">Less Than or Equal</option>
+                      <option value="between">Between</option>
+                    </select>
+                  </div>
 
-            {selectedField && (
-              <>
-                <FormControl fullWidth>
-                  <InputLabel sx={{ mb: 1 }}>Operator</InputLabel>
-                  <Select
-                    value={filterOperator}
-                    onChange={(e) =>
-                      setFilterOperator(
-                        e.target.value as FilterChip["operator"]
-                      )
+                  {/* Value input — varies by field type */}
+                  {(() => {
+                    const field = fieldMap.get(selectedField);
+                    if (!field) return null;
+
+                    if (field.type === "select" && field.options) {
+                      return (
+                        <div>
+                          <label className="block text-sm font-medium mb-1.5">Value</label>
+                          <select
+                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            value={String(filterValue)}
+                            onChange={(e) => setFilterValue(e.target.value)}
+                          >
+                            <option value="">Select value...</option>
+                            {field.options.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
                     }
-                    label="Operator"
-                    size="medium"
-                  >
-                    <MenuItem value="equals">Equals</MenuItem>
-                    <MenuItem value="not_equals">Not Equals</MenuItem>
-                    <MenuItem value="contains">Contains</MenuItem>
-                    <MenuItem value="starts_with">Starts With</MenuItem>
-                    <MenuItem value="ends_with">Ends With</MenuItem>
-                    <MenuItem value="gt">Greater Than</MenuItem>
-                    <MenuItem value="gte">Greater Than or Equal</MenuItem>
-                    <MenuItem value="lt">Less Than</MenuItem>
-                    <MenuItem value="lte">Less Than or Equal</MenuItem>
-                    <MenuItem value="in">In (List)</MenuItem>
-                    <MenuItem value="not_in">Not In (List)</MenuItem>
-                    <MenuItem value="between">Between</MenuItem>
-                    <MenuItem value="is_null">Is Null</MenuItem>
-                    <MenuItem value="is_not_null">Is Not Null</MenuItem>
-                  </Select>
-                </FormControl>
 
-                {(() => {
-                  const field = availableFields.find(
-                    (f) => f.field === selectedField
-                  );
-                  if (!field) return null;
+                    if (field.type === "number" && filterOperator === "between") {
+                      const rangeValue = Array.isArray(filterValue) ? filterValue : ["", ""];
+                      return (
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium mb-1.5">Min Value</label>
+                            <input type="number" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={rangeValue[0] || ""} onChange={(e) => setFilterValue([e.target.value, rangeValue[1] || ""])} />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium mb-1.5">Max Value</label>
+                            <input type="number" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={rangeValue[1] || ""} onChange={(e) => setFilterValue([rangeValue[0] || "", e.target.value])} />
+                          </div>
+                        </div>
+                      );
+                    }
 
-                  if (field.type === "select" && field.options) {
+                    if (field.type === "date" && filterOperator === "between") {
+                      const rangeValue = Array.isArray(filterValue) ? filterValue : ["", ""];
+                      return (
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium mb-1.5">Start Date</label>
+                            <input type="date" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={rangeValue[0] || ""} onChange={(e) => setFilterValue([e.target.value, rangeValue[1] || ""])} />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium mb-1.5">End Date</label>
+                            <input type="date" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={rangeValue[1] || ""} onChange={(e) => setFilterValue([rangeValue[0] || "", e.target.value])} />
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
-                      <FormControl fullWidth>
-                        <InputLabel sx={{ mb: 1 }}>Value</InputLabel>
-                        <Select
-                          value={filterValue}
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Value</label>
+                        <input
+                          type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          value={String(filterValue)}
                           onChange={(e) => setFilterValue(e.target.value)}
-                          label="Value"
-                          size="medium"
-                        >
-                          {field.options.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                          placeholder="Enter filter value..."
+                        />
+                      </div>
                     );
-                  }
+                  })()}
+                </>
+              )}
+            </div>
 
-                  if (field.type === "number") {
-                    const rangeValue = Array.isArray(filterValue)
-                      ? filterValue
-                      : ["", ""];
-                    if (filterOperator === "between") {
-                      return (
-                        <Box sx={{ display: "flex", gap: 2 }}>
-                          <TextField
-                            fullWidth
-                            type="number"
-                            label="Min Value"
-                            value={rangeValue[0] || ""}
-                            onChange={(e) =>
-                              setFilterValue([
-                                e.target.value,
-                                rangeValue[1] || "",
-                              ])
-                            }
-                            size="medium"
-                          />
-                          <TextField
-                            fullWidth
-                            type="number"
-                            label="Max Value"
-                            value={rangeValue[1] || ""}
-                            onChange={(e) =>
-                              setFilterValue([
-                                rangeValue[0] || "",
-                                e.target.value,
-                              ])
-                            }
-                            size="medium"
-                          />
-                        </Box>
-                      );
-                    }
-                    return (
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="Value"
-                        value={filterValue}
-                        onChange={(e) => setFilterValue(e.target.value)}
-                        size="medium"
-                      />
-                    );
-                  }
-
-                  if (field.type === "date") {
-                    const rangeValue = Array.isArray(filterValue)
-                      ? filterValue
-                      : ["", ""];
-                    if (filterOperator === "between") {
-                      return (
-                        <Box sx={{ display: "flex", gap: 2 }}>
-                          <TextField
-                            fullWidth
-                            type="date"
-                            label="Start Date"
-                            value={rangeValue[0] || ""}
-                            onChange={(e) =>
-                              setFilterValue([
-                                e.target.value,
-                                rangeValue[1] || "",
-                              ])
-                            }
-                            InputLabelProps={{ shrink: true }}
-                            size="medium"
-                          />
-                          <TextField
-                            fullWidth
-                            type="date"
-                            label="End Date"
-                            value={rangeValue[1] || ""}
-                            onChange={(e) =>
-                              setFilterValue([
-                                rangeValue[0] || "",
-                                e.target.value,
-                              ])
-                            }
-                            InputLabelProps={{ shrink: true }}
-                            size="medium"
-                          />
-                        </Box>
-                      );
-                    }
-                    return (
-                      <TextField
-                        fullWidth
-                        type="date"
-                        label="Value"
-                        value={filterValue}
-                        onChange={(e) => setFilterValue(e.target.value)}
-                        InputLabelProps={{ shrink: true }}
-                        size="medium"
-                      />
-                    );
-                  }
-
-                  return (
-                    <TextField
-                      fullWidth
-                      label="Value"
-                      value={filterValue}
-                      onChange={(e) => setFilterValue(e.target.value)}
-                      placeholder="Enter filter value..."
-                      size="medium"
-                    />
-                  );
-                })()}
-              </>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions
-          sx={{ px: 3, py: 2, borderTop: "1px solid", borderColor: "divider" }}
-        >
-          <Button onClick={() => setAddDialogOpen(false)} size="medium">
-            Cancel
-          </Button>
-          <Button
-            onClick={handleAddFilter}
-            variant="contained"
-            disabled={
-              !selectedField ||
-              !filterValue ||
-              (filterOperator === "between" &&
-                (!Array.isArray(filterValue) ||
-                  filterValue.length !== 2 ||
-                  !filterValue[0] ||
-                  !filterValue[1]))
-            }
-            size="medium"
-          >
-            Add Filter
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t">
+              <button
+                type="button"
+                onClick={() => setAddDialogOpen(false)}
+                className="px-4 py-2 text-sm rounded-md hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddFilter}
+                disabled={
+                  !selectedField ||
+                  !filterValue ||
+                  (filterOperator === "between" &&
+                    (!Array.isArray(filterValue) || filterValue.length !== 2 || !filterValue[0] || !filterValue[1]))
+                }
+                className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                Add Filter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

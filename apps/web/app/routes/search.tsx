@@ -340,9 +340,9 @@ export default function SearchPage() {
       return {
         id: listing.id,
         title: listing.title,
-        price: listing.pricePerDay,
+        price: listing.basePrice,
         currency: listing.currency || "USD",
-        imageUrl: listing.images?.[0],
+        imageUrl: listing.photos?.[0],
         category:
           typeof listing.category === "string"
             ? listing.category
@@ -981,9 +981,9 @@ function ListingCard({ listing }: { listing: Listing }) {
     >
       {/* Image */}
       <div className="aspect-[4/3] bg-muted relative">
-        {listing.images?.[0] ? (
+        {listing.photos?.[0] ? (
           <img
-            src={listing.images[0]}
+            src={listing.photos[0]}
             alt={listingTitle}
             className="w-full h-full object-cover"
           />
@@ -1026,7 +1026,7 @@ function ListingCard({ listing }: { listing: Listing }) {
         </div>
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold text-foreground">
-            ${listing.pricePerDay}
+            ${listing.basePrice}
           </span>
           <span className="text-sm text-muted-foreground">/day</span>
         </div>
@@ -1048,9 +1048,9 @@ function ListingListItem({ listing }: { listing: Listing }) {
     >
       {/* Image */}
       <div className="w-48 h-36 bg-muted relative shrink-0">
-        {listing.images?.[0] ? (
+        {listing.photos?.[0] ? (
           <img
-            src={listing.images[0]}
+            src={listing.photos[0]}
             alt={listingTitle}
             className="w-full h-full object-cover"
           />
@@ -1097,7 +1097,7 @@ function ListingListItem({ listing }: { listing: Listing }) {
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-xl font-bold text-foreground">
-              ${listing.pricePerDay}
+              ${listing.basePrice}
             </span>
             <span className="text-sm text-muted-foreground">/day</span>
           </div>
@@ -1128,9 +1128,9 @@ function ListingCompactCard({
     >
       {/* Thumbnail */}
       <div className="w-20 h-20 bg-muted rounded-lg shrink-0 overflow-hidden">
-        {listing.images?.[0] ? (
+        {listing.photos?.[0] ? (
           <img
-            src={listing.images[0]}
+            src={listing.photos[0]}
             alt={listingTitle}
             className="w-full h-full object-cover"
           />
@@ -1156,7 +1156,7 @@ function ListingCompactCard({
           </p>
         )}
         <p className="text-sm font-bold text-foreground">
-          ${listing.pricePerDay}/day
+          ${listing.basePrice}/day
         </p>
       </div>
     </Link>
@@ -1178,3 +1178,4 @@ function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: num
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusKm * c;
 }
+

@@ -124,7 +124,7 @@ function transformConversation(conv: ApiConversation, currentUserId: string): Tr
     listing: conv.listing ? {
       id: conv.listing.id,
       title: listingTitle,
-      image: conv.listing.images?.[0] || "",
+      image: conv.listing.photos?.[0] || "",
     } : undefined,
     unreadCount: conv.unreadCount ?? conv._count?.messages ?? 0,
   };
@@ -1007,3 +1007,4 @@ export default function Messages() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

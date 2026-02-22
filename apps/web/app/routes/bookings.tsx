@@ -163,16 +163,17 @@ export default function BookingsPage() {
   const isLoading = navigation.state === "loading";
 
   // Optimistic status overrides: bookingId -> optimistic status
-  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, string>>({});
+  const [optimisticStatuses, setOptimisticStatuses] = useState<
+    Partial<Record<string, Booking["status"]>>
+  >({});
 
   // Apply optimistic statuses to bookings
   const bookings = useMemo(
     () =>
-      serverBookings.map((b: Booking) =>
-        optimisticStatuses[b.id]
-          ? { ...b, status: optimisticStatuses[b.id] }
-          : b
-      ),
+      serverBookings.map((b: Booking) => {
+        const optimisticStatus = optimisticStatuses[b.id];
+        return optimisticStatus ? { ...b, status: optimisticStatus } : b;
+      }),
     [serverBookings, optimisticStatuses]
   );
 
@@ -493,9 +494,9 @@ export default function BookingsPage() {
                         to={listingId ? `/listings/${listingId}` : "/listings"}
                         className="w-24 h-24 bg-muted rounded-lg overflow-hidden shrink-0"
                       >
-                        {booking.listing.images?.[0] ? (
+                        {booking.listing.photos?.[0] ? (
                           <img
-                            src={booking.listing.images[0]}
+                            src={booking.listing.photos[0]}
                             alt={listingTitle}
                             className="w-full h-full object-cover"
                           />
@@ -736,3 +737,4 @@ export default function BookingsPage() {
 
 // Error boundary for route errors
 export { RouteErrorBoundary as ErrorBoundary };
+

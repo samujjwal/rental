@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
+import { EmbeddingService } from '../../ai/services/embedding.service';
 import {
   Listing as Property,
   PropertyStatus,
@@ -19,21 +20,21 @@ import { PropertyValidationService } from './listing-validation.service';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 
 export interface CreatePropertyDto {
-  categoryId: string;
+  categoryId?: string;
   organizationId?: string;
   title: string;
   description: string;
   addressLine1?: string;
   addressLine2?: string;
-  city: string;
-  state: string;
+  city?: string;
+  state?: string;
   postalCode?: string;
-  country: string;
-  latitude: number;
-  longitude: number;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
   photos?: Array<{ url: string; order: number; caption?: string }>;
   videos?: Array<{ url: string; type: string; thumbnailUrl?: string }>;
-  pricingMode: string;
+  pricingMode?: string;
   basePrice: number;
   hourlyPrice?: number;
   dailyPrice?: number;
@@ -43,13 +44,13 @@ export interface CreatePropertyDto {
   requiresDeposit?: boolean;
   depositAmount?: number;
   depositType?: string;
-  bookingMode: string;
+  bookingMode?: string;
   minBookingHours?: number;
   maxBookingDays?: number;
   leadTime?: number;
   advanceNotice?: number;
   capacity?: number;
-  categorySpecificData: Record<string, any>;
+  categorySpecificData?: Record<string, any>;
   condition?: string;
   features?: string[];
   amenities?: any[];
@@ -94,6 +95,7 @@ export class PropertysService {
     private readonly templateService: CategoryTemplateService,
     private readonly validationService: PropertyValidationService,
     private readonly moderationService: ContentModerationService,
+    private readonly embeddingService: EmbeddingService,
   ) {}
 
   private async resolveCategoryId(input: any): Promise<string> {
@@ -146,6 +148,12 @@ export class PropertysService {
     if (input.minimumRentalPeriod != null) metadata.minimumRentalPeriod = input.minimumRentalPeriod;
     if (input.maximumRentalPeriod != null) metadata.maximumRentalPeriod = input.maximumRentalPeriod;
     if (input.cancellationPolicy) metadata.cancellationPolicy = input.cancellationPolicy;
+    if (input.subcategory) metadata.subcategory = input.subcategory;
+
+    // Store category-specific data
+    if (input.categorySpecificData && typeof input.categorySpecificData === 'object' && Object.keys(input.categorySpecificData).length > 0) {
+      metadata.categorySpecificData = input.categorySpecificData;
+    }
 
     return Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : undefined;
   }
@@ -282,6 +290,11 @@ export class PropertysService {
         category: true,
       },
     });
+
+    // Generate embedding asynchronously (fire-and-forget)
+    this.embeddingService.updateListingEmbedding(listing.id).catch((err) =>
+      this.logger.warn(`Failed to generate embedding for listing ${listing.id}`, err),
+    );
 
     return listing;
   }
@@ -497,11 +510,49 @@ export class PropertysService {
     if ((dto as any).rules) {
       mapped.rules = this.normalizeRules((dto as any).rules);
     }
-    const metadata = this.buildMetadata(dto);
-    if (metadata) mapped.metadata = metadata;
+
+    // Merge new metadata with existing to avoid overwriting categorySpecificData
+    let existingMetadata: Record<string, any> = {};
+    if (listing.metadata) {
+      try {
+        existingMetadata = JSON.parse(listing.metadata as string);
+      } catch {
+        existingMetadata = {};
+      }
+    }
+    const newMetadata = this.buildMetadata(dto);
+    if (newMetadata) {
+      const parsed = JSON.parse(newMetadata);
+      mapped.metadata = JSON.stringify({ ...existingMetadata, ...parsed });
+    } else if (dto.categorySpecificData && typeof dto.categorySpecificData === 'object' && Object.keys(dto.categorySpecificData).length > 0) {
+      // Only categorySpecificData changed, merge it into existing metadata
+      existingMetadata.categorySpecificData = dto.categorySpecificData;
+      mapped.metadata = JSON.stringify(existingMetadata);
+    }
 
     if ((dto as any).category || (dto as any).categoryId) {
       mapped.categoryId = await this.resolveCategoryId(dto);
+    }
+
+    // Moderate updated content if title or description changed
+    if (mapped.title || mapped.description) {
+      try {
+        const modResult = await this.moderationService.moderateListing({
+          title: mapped.title || listing.title,
+          description: mapped.description || listing.description,
+          photos: mapped.photos || [],
+          userId,
+        });
+        if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
+          throw new BadRequestException({
+            message: 'Updated listing content violates our content policies',
+            flags: modResult.flags,
+          });
+        }
+      } catch (error) {
+        if (error instanceof BadRequestException) throw error;
+        this.logger.warn('Listing update moderation check failed, proceeding', error);
+      }
     }
 
     const updated = await this.prisma.listing.update({
@@ -525,6 +576,13 @@ export class PropertysService {
     // Invalidate cache
     await this.cacheService.del(`listing:${id}`);
     await this.cacheService.del(`listing:slug:${listing.slug}`);
+
+    // Regenerate embedding asynchronously if content changed
+    if (mapped.title || mapped.description) {
+      this.embeddingService.updateListingEmbedding(id).catch((err) =>
+        this.logger.warn(`Failed to regenerate embedding for listing ${id}`, err),
+      );
+    }
 
     return updated;
   }

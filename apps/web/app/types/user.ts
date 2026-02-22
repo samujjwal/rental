@@ -4,6 +4,7 @@ export interface User {
   firstName: string;
   lastName: string | null;
   avatar: string | null;
+  profilePhotoUrl?: string | null;
   phone: string | null;
   role: "renter" | "owner" | "admin";
   status: "active" | "suspended" | "pending" | "deleted";
@@ -11,6 +12,7 @@ export interface User {
   phoneVerified: boolean;
   identityVerified: boolean;
   averageRating: number | null;
+  rating?: number | null;
   totalReviews: number;
   totalBookings: number;
   totalListings?: number;
@@ -58,7 +60,7 @@ export interface UserProfile extends User {
     id: string;
     title: string;
     images: string[];
-    pricePerDay: number;
+    basePrice: number;
     rating: number;
   }[];
   reviews?: {

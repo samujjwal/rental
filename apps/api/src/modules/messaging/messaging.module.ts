@@ -4,9 +4,10 @@ import { MessagesService } from './services/messages.service';
 import { MessagingGateway } from './gateways/messaging.gateway';
 import { MessagingController } from './controllers/messaging.controller';
 import { AuthModule } from '../auth/auth.module';
+import { ModerationModule } from '../moderation/moderation.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, ModerationModule],
   controllers: [MessagingController],
   providers: [ConversationsService, MessagesService, MessagingGateway],
   exports: [ConversationsService, MessagesService, MessagingGateway],

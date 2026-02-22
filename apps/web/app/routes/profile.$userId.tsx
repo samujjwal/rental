@@ -186,9 +186,9 @@ function ListingCard({ listing }: { listing: Listing }) {
       className="bg-card rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
     >
       <div className="aspect-video bg-muted relative">
-        {listing.images?.[0] ? (
+        {listing.photos?.[0] ? (
           <img
-            src={listing.images[0]}
+            src={listing.photos[0]}
             alt={listingTitle}
             className="w-full h-full object-cover"
           />
@@ -212,7 +212,7 @@ function ListingCard({ listing }: { listing: Listing }) {
         </p>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
-            ${listing.pricePerDay}/day
+            ${listing.basePrice}/day
           </span>
           {(listing.averageRating || 0) > 0 && (
             <div className="flex items-center">
@@ -414,3 +414,4 @@ export default function ProfileRoute() {
   );
 }
 export { RouteErrorBoundary as ErrorBoundary };
+

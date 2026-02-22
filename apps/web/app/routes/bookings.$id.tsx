@@ -483,9 +483,9 @@ export default function BookingDetail() {
                 Listing Details
               </h2>
               <div className="flex gap-4">
-                {booking.listing?.images?.[0] && (
+                {booking.listing?.photos?.[0] && (
                   <img
-                    src={booking.listing.images[0]}
+                    src={booking.listing.photos[0]}
                     alt={listingTitle}
                     className="w-32 h-32 object-cover rounded-lg"
                   />
@@ -969,3 +969,4 @@ export default function BookingDetail() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

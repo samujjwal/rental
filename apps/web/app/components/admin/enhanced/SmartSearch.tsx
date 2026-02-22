@@ -3,23 +3,8 @@
  * Enhanced search with autocomplete, suggestions, and recent searches
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from "react";
-import {
-  TextField,
-  Autocomplete,
-  Box,
-  InputAdornment,
-  IconButton,
-  Paper,
-  Typography,
-  Divider,
-} from "@mui/material";
-import {
-  Search as SearchIcon,
-  Clear as ClearIcon,
-  History as HistoryIcon,
-  TrendingUp as TrendingIcon,
-} from "@mui/icons-material";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { Search, X, History, TrendingUp } from "lucide-react";
 
 interface SmartSearchProps {
   placeholder?: string;
@@ -49,16 +34,14 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
 }) => {
   const [inputValue, setInputValue] = useState(value);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [showRecent, setShowRecent] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Load recent searches from localStorage
   useEffect(() => {
     if (!externalRecentSearches) {
       try {
         const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
-        if (stored) {
-          setRecentSearches(JSON.parse(stored));
-        }
+        if (stored) setRecentSearches(JSON.parse(stored));
       } catch (error) {
         console.error("Failed to load recent searches:", error);
       }
@@ -67,142 +50,129 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
     }
   }, [externalRecentSearches]);
 
-  // Save search to recent searches
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
   const saveRecentSearch = useCallback((search: string) => {
     if (!search.trim()) return;
-
     setRecentSearches((prev) => {
       const filtered = prev.filter((s) => s !== search);
       const updated = [search, ...filtered].slice(0, MAX_RECENT_SEARCHES);
-
       try {
         localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
       } catch (error) {
         console.error("Failed to save recent search:", error);
       }
-
       return updated;
     });
   }, []);
 
-  // Handle search change
   const handleSearchChange = useCallback(
     (newValue: string) => {
       setInputValue(newValue);
       onChange(newValue);
-
-      if (newValue.trim()) {
-        saveRecentSearch(newValue);
-      }
+      if (newValue.trim()) saveRecentSearch(newValue);
     },
     [onChange, saveRecentSearch]
   );
 
-  // Handle clear
   const handleClear = useCallback(() => {
     setInputValue("");
     onChange("");
   }, [onChange]);
 
-  // Combine suggestions with recent searches
   const options = useMemo(() => {
     const combined = [...new Set([...recentSearches, ...suggestions])];
+    if (inputValue) {
+      return combined.filter((o) =>
+        o.toLowerCase().includes(inputValue.toLowerCase())
+      );
+    }
     return combined;
-  }, [recentSearches, suggestions]);
+  }, [recentSearches, suggestions, inputValue]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const inputPadding = size === "small" ? "py-1.5 px-3" : "py-2.5 px-4";
 
   return (
-    <Autocomplete
-      freeSolo
-      fullWidth={fullWidth}
-      options={options}
-      value={inputValue}
-      inputValue={inputValue}
-      onInputChange={(_, newValue) => setInputValue(newValue)}
-      onChange={(_, newValue) => {
-        if (typeof newValue === "string") {
-          handleSearchChange(newValue);
-          if (recentSearches.includes(newValue)) {
-            onRecentSearchClick?.(newValue);
-          }
-        }
-      }}
-      onFocus={() => setShowRecent(true)}
-      onBlur={() => setTimeout(() => setShowRecent(false), 200)}
-      renderInput={(params) => (
-        <TextField
-          {...params}
+    <div ref={containerRef} className={`relative ${fullWidth ? "w-full" : "w-64"}`}>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          type="text"
           name="search"
+          className={`${inputPadding} pl-9 pr-9 w-full rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
           placeholder={placeholder}
-          size={size}
-          autoFocus={autoFocus}
-          InputProps={{
-            ...params.InputProps,
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" color="action" />
-              </InputAdornment>
-            ),
-            endAdornment: (
-              <>
-                {inputValue && (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={handleClear}
-                      edge="end"
-                      aria-label="clear search"
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                )}
-                {params.InputProps.endAdornment}
-              </>
-            ),
+          value={inputValue}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            onChange(e.target.value);
           }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && inputValue.trim()) {
+              saveRecentSearch(inputValue);
+              setIsOpen(false);
+            }
+            if (e.key === "Escape") setIsOpen(false);
+          }}
+          autoFocus={autoFocus}
         />
-      )}
-      renderOption={(props, option) => {
-        const isRecent = recentSearches.includes(option);
-        const isSuggestion = suggestions.includes(option);
+        {inputValue && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-sm hover:bg-muted"
+            aria-label="clear search"
+          >
+            <X className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        )}
+      </div>
 
-        return (
-          <li {...props}>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                width: "100%",
-              }}
-            >
-              {isRecent && <HistoryIcon fontSize="small" color="action" />}
-              {isSuggestion && !isRecent && (
-                <TrendingIcon fontSize="small" color="action" />
-              )}
-              <Typography variant="body2">{option}</Typography>
-            </Box>
-          </li>
-        );
-      }}
-      PaperComponent={({ children, ...paperProps }) => (
-        <Paper {...paperProps} elevation={3}>
-          {showRecent && recentSearches.length > 0 && !inputValue && (
-            <Box sx={{ p: 1 }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ px: 2, py: 1 }}
-              >
-                Recent Searches
-              </Typography>
-              <Divider />
-            </Box>
+      {isOpen && options.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-60 overflow-auto">
+          {!inputValue && recentSearches.length > 0 && (
+            <div className="px-3 py-1.5 text-xs text-muted-foreground border-b">
+              Recent Searches
+            </div>
           )}
-          {children}
-        </Paper>
+          {options.map((option) => {
+            const isRecent = recentSearches.includes(option);
+            return (
+              <button
+                key={option}
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground text-left"
+                onClick={() => {
+                  handleSearchChange(option);
+                  if (isRecent) onRecentSearchClick?.(option);
+                  setIsOpen(false);
+                }}
+              >
+                {isRecent ? (
+                  <History className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                ) : (
+                  <TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                )}
+                <span className="truncate">{option}</span>
+              </button>
+            );
+          })}
+        </div>
       )}
-    />
+    </div>
   );
 };
 

@@ -373,3 +373,4 @@ export default function OwnerInsightsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

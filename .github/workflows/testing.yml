@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
   schedule:
     - cron: '0 0 * * 0' # Weekly on Sunday
 
@@ -121,10 +122,7 @@ jobs:
 
       - name: Run Core E2E Tests (Production Ready)
         run: |
-          cd apps/web
-          npx playwright test e2e/smoke.spec.ts e2e/auth.spec.ts e2e/admin-flows.spec.ts \
-            --project=chromium \
-            --reporter=list,html
+          pnpm --filter @rental-portal/web run e2e:core:chromium
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379
@@ -150,6 +148,114 @@ jobs:
           name: test-videos
           path: apps/web/test-results/
           retention-days: 7
+
+  e2e-comprehensive:
+    name: E2E Comprehensive (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - comprehensive-edge-cases.spec.ts
+          - comprehensive-form-validation.spec.ts
+          - comprehensive-user-journeys.spec.ts
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: cd apps/web && npx playwright install --with-deps
+
+      - name: Build application
+        run: pnpm build
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Run database migrations
+        run: cd packages/database && npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+
+      - name: Seed test data
+        run: cd packages/database && npx prisma db seed
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        continue-on-error: true
+
+      - name: Start API server
+        run: cd apps/api && pnpm start &
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          EMAIL_ENABLED: "false"
+
+      - name: Start web server
+        run: cd apps/web && pnpm dev &
+        env:
+          NODE_ENV: test
+
+      - name: Wait for servers
+        run: |
+          npx wait-on http://localhost:3000 http://localhost:5000 --timeout 60000
+
+      - name: Run comprehensive suite
+        run: |
+          pnpm --filter @rental-portal/web exec playwright test e2e/${{ matrix.suite }} \
+            --project=chromium \
+            --reporter=list,html
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload comprehensive test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report-comprehensive-${{ matrix.suite }}
+          path: apps/web/playwright-report/
+          retention-days: 14
 
   lighthouse:
     name: Lighthouse Performance

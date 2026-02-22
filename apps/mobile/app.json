@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "GharBatai",
+    "slug": "gharbatai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "gharbatai",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#3B82F6"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gharbatai.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "GharBatai needs camera access to take photos of your items",
+        "NSPhotoLibraryUsageDescription": "GharBatai needs photo library access to upload item photos"
+      }
+    },
+    "android": {
+      "package": "com.gharbatai.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#3B82F6"
+      },
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-image-picker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#3B82F6"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "gharbatai-mobile"
+      }
+    }
+  }
+}

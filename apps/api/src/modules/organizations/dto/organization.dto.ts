@@ -5,6 +5,7 @@ import {
   IsEnum,
   MaxLength,
   IsObject,
+  IsUrl,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { OrganizationRole } from '@rental-portal/database';
@@ -97,6 +98,12 @@ export class UpdateOrganizationDto {
   @IsString()
   @MaxLength(2000)
   description?: string;
+
+  @ApiProperty({ description: 'Organization website URL', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  website?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()

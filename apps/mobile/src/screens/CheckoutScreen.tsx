@@ -1,125 +1,317 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Linking } from "react-native";
-import { mobileClient } from "../api/client";
-import { useAuth } from "../api/authContext";
-import type { BookingDetail } from "@rental-portal/mobile-sdk";
-import { WEB_BASE_URL } from "../config";
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+} from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../App';
+import { mobileClient } from '../api/client';
+import { useAuth } from '../api/authContext';
+import type { BookingDetail } from '@rental-portal/mobile-sdk';
+import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { FormButton } from '../components/FormInput';
+import { DetailPageSkeleton } from '../components/LoadingSkeleton';
+import { showSuccess, showError, showApiError } from '../components/Toast';
 
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../../App";
+// Stripe imports — wrapped in try/catch for environments where it's not available
+let useStripe: any;
+let StripeProvider: any;
+try {
+  const stripe = require('@stripe/stripe-react-native');
+  useStripe = stripe.useStripe;
+  StripeProvider = stripe.StripeProvider;
+} catch {
+  // Stripe not available — will fall back to web checkout
+}
 
-type Props = NativeStackScreenProps<RootStackParamList, "Checkout">;
+type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 
-export function CheckoutScreen({ route }: Props) {
-  const [bookingId, setBookingId] = useState(route.params?.bookingId || "");
-  const [status, setStatus] = useState("");
-  const [booking, setBooking] = useState<BookingDetail | null>(null);
+const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
+
+function formatDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+function CheckoutContent({ route, navigation }: Props) {
+  const { bookingId } = route.params;
   const { user } = useAuth();
+  const [booking, setBooking] = useState<BookingDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
+
+  const stripe = useStripe?.();
+
+  const fetchBooking = useCallback(async () => {
+    try {
+      const data = await mobileClient.getBooking(bookingId);
+      setBooking(data);
+    } catch {
+      setBooking(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [bookingId]);
 
   useEffect(() => {
-    if (!user || !bookingId) return;
-    const load = async () => {
-      try {
-        const data = await mobileClient.getBooking(bookingId);
-        setBooking(data);
-      } catch (err) {
-        setBooking(null);
-      }
-    };
-    load();
-  }, [bookingId, user]);
+    if (!user) return;
+    fetchBooking();
+  }, [user, fetchBooking]);
 
-  const handlePay = async () => {
-    if (!user) {
-      setStatus("Sign in to complete checkout.");
-      return;
-    }
-    if (!bookingId) {
-      setStatus("Booking ID is required.");
-      return;
-    }
+  const handleNativePayment = useCallback(async () => {
+    if (!stripe || !bookingId || paying) return;
 
-    setStatus("");
-    const checkoutUrl = `${WEB_BASE_URL}/checkout/${bookingId}`;
+    setPaying(true);
     try {
-      const supported = await Linking.canOpenURL(checkoutUrl);
-      if (!supported) {
-        setStatus("Secure checkout is unavailable on this device.");
+      // Create payment intent on backend
+      const intent = await mobileClient.createPaymentIntent(bookingId);
+
+      if (!intent.clientSecret) {
+        showError('Payment setup failed. Please try again.');
         return;
       }
-      await Linking.openURL(checkoutUrl);
+
+      // Initialize payment sheet
+      const { error: initError } = await stripe.initPaymentSheet({
+        paymentIntentClientSecret: intent.clientSecret,
+        merchantDisplayName: 'GharBatai',
+        allowsDelayedPaymentMethods: false,
+        returnURL: 'gharbatai://checkout/complete',
+      });
+
+      if (initError) {
+        showError(initError.message || 'Could not initialize payment');
+        return;
+      }
+
+      // Present payment sheet
+      const { error: presentError } = await stripe.presentPaymentSheet();
+
+      if (presentError) {
+        if (presentError.code === 'Canceled') {
+          // User cancelled — do nothing
+          return;
+        }
+        showError(presentError.message || 'Payment failed');
+        return;
+      }
+
+      // Payment succeeded
+      showSuccess('Payment successful!');
+      navigation.navigate('BookingDetail', { bookingId });
     } catch (err) {
-      setStatus("Unable to open secure checkout.");
+      showApiError(err);
+    } finally {
+      setPaying(false);
     }
-  };
+  }, [stripe, bookingId, paying, navigation]);
+
+  const handleWebFallback = useCallback(async () => {
+    const { Linking } = require('react-native');
+    const WEB_BASE_URL = require('../config').WEB_BASE_URL;
+    const checkoutUrl = `${WEB_BASE_URL}/checkout/${bookingId}`;
+    try {
+      await Linking.openURL(checkoutUrl);
+    } catch {
+      Alert.alert('Error', 'Unable to open checkout page.');
+    }
+  }, [bookingId]);
+
+  if (!user) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.emptyTitle}>Sign In Required</Text>
+        <Text style={styles.emptySubtitle}>Sign in to complete checkout.</Text>
+        <FormButton title="Sign In" onPress={() => navigation.navigate('Login')} />
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={{ padding: spacing.md }}>
+          <DetailPageSkeleton />
+        </View>
+      </View>
+    );
+  }
+
+  if (!booking) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.emptyTitle}>Booking Not Found</Text>
+        <FormButton title="Go Back" variant="outline" onPress={() => navigation.goBack()} />
+      </View>
+    );
+  }
+
+  const hasStripe = !!stripe && !!STRIPE_PUBLISHABLE_KEY;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Checkout</Text>
-      {booking ? (
-        <View style={styles.summary}>
-          <Text style={styles.summaryTitle}>Booking Summary</Text>
-          <Text style={styles.summaryText}>
-            {booking.listing?.title || "Listing"}
-          </Text>
-          <Text style={styles.summaryText}>
-            {booking.startDate} → {booking.endDate}
-          </Text>
-          {booking.totalAmount != null ? (
-            <Text style={styles.summaryText}>Total: ${booking.totalAmount}</Text>
-          ) : null}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.heading}>Checkout</Text>
+
+        {/* Booking summary card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Booking Summary</Text>
+          <View style={styles.row}>
+            <Text style={styles.label}>Item</Text>
+            <Text style={styles.value}>{booking.listing?.title || 'Listing'}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.row}>
+            <Text style={styles.label}>Dates</Text>
+            <Text style={styles.value}>
+              {formatDate(booking.startDate)} {'\u2192'} {formatDate(booking.endDate)}
+            </Text>
+          </View>
+          {booking.totalAmount != null && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                <Text style={styles.label}>Total</Text>
+                <Text style={styles.totalValue}>${booking.totalAmount.toFixed(2)}</Text>
+              </View>
+            </>
+          )}
         </View>
-      ) : null}
-      <Pressable style={styles.primaryButton} onPress={handlePay}>
-        <Text style={styles.primaryButtonText}>Open secure checkout</Text>
-      </Pressable>
-      {status ? <Text style={styles.status}>{status}</Text> : null}
+
+        {/* Payment buttons */}
+        <View style={styles.paymentSection}>
+          {hasStripe ? (
+            <FormButton
+              title={paying ? 'Processing...' : 'Pay with Card'}
+              onPress={handleNativePayment}
+              loading={paying}
+              disabled={paying}
+            />
+          ) : (
+            <FormButton
+              title="Open Secure Checkout"
+              onPress={handleWebFallback}
+            />
+          )}
+
+          {hasStripe && (
+            <View style={styles.webFallbackRow}>
+              <FormButton
+                title="Pay via Web Instead"
+                variant="ghost"
+                onPress={handleWebFallback}
+              />
+            </View>
+          )}
+        </View>
+
+        {/* Security note */}
+        <Text style={styles.securityNote}>
+          {'\uD83D\uDD12'} Your payment is securely processed by Stripe.
+          We never store your card details.
+        </Text>
+      </ScrollView>
     </View>
   );
+}
+
+export function CheckoutScreen(props: Props) {
+  if (StripeProvider && STRIPE_PUBLISHABLE_KEY) {
+    return (
+      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+        <CheckoutContent {...props} />
+      </StripeProvider>
+    );
+  }
+  return <CheckoutContent {...props} />;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.background,
+  },
+  scrollContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl * 2,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+    backgroundColor: colors.background,
   },
   heading: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 16,
+    ...typography.h1,
+    marginBottom: spacing.lg,
   },
-  summary: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: 12,
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginBottom: 16,
+    borderColor: colors.border,
+    marginBottom: spacing.lg,
+    ...shadows.sm,
   },
-  summaryTitle: {
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 6,
+  cardTitle: {
+    ...typography.h3,
+    marginBottom: spacing.md,
   },
-  summaryText: {
-    color: "#6B7280",
-    marginBottom: 4,
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
   },
-  primaryButton: {
-    marginTop: 12,
-    backgroundColor: "#111827",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
+  label: {
+    ...typography.body,
+    color: colors.textSecondary,
   },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
+  value: {
+    ...typography.body,
+    fontWeight: '600',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: spacing.md,
   },
-  status: {
-    marginTop: 10,
-    color: "#6B7280",
+  totalValue: {
+    ...typography.h3,
+    color: colors.primary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginVertical: spacing.xs,
+  },
+  paymentSection: {
+    marginBottom: spacing.lg,
+  },
+  webFallbackRow: {
+    marginTop: spacing.sm,
+  },
+  securityNote: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    marginBottom: spacing.xs,
+  },
+  emptySubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
 });

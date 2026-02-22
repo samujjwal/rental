@@ -2,23 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { User, UserRole, UserStatus, VerificationStatus } from '@rental-portal/database';
-
-export interface UpdateProfileDto {
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  bio?: string;
-  profilePhotoUrl?: string;
-  addressLine1?: string;
-  addressLine2?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  country?: string;
-  timezone?: string;
-  preferredLanguage?: string;
-  preferredCurrency?: string;
-}
+import { UpdateProfileDto } from '../dto/update-profile.dto';
 
 @Injectable()
 export class UsersService {

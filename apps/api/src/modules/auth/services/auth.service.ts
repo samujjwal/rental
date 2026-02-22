@@ -100,6 +100,17 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check account lock (6.4)
+    const userAny = user as any;
+    if (userAny.lockedUntil && userAny.lockedUntil > new Date()) {
+      const minutesLeft = Math.ceil(
+        (userAny.lockedUntil.getTime() - Date.now()) / 60000,
+      );
+      throw new UnauthorizedException(
+        `Account is temporarily locked. Try again in ${minutesLeft} minute${minutesLeft > 1 ? 's' : ''}.`,
+      );
+    }
+
     // Check status
     if (user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Account is suspended or banned');
@@ -109,7 +120,30 @@ export class AuthService {
     const isPasswordValid = await this.passwordService.verify(dto.password, user.passwordHash);
 
     if (!isPasswordValid) {
+      // Increment login attempts
+      const newAttempts = ((user as any).loginAttempts || 0) + 1;
+      const lockData: any = { loginAttempts: newAttempts };
+
+      // Lock after 5 failed attempts for 15 minutes
+      if (newAttempts >= 5) {
+        lockData.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+        lockData.loginAttempts = 0;
+      }
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: lockData,
+      });
+
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Reset login attempts on successful login
+    if ((user as any).loginAttempts > 0) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { loginAttempts: 0, lockedUntil: null } as any,
+      });
     }
 
     // Check MFA if enabled
@@ -464,5 +498,99 @@ export class AuthService {
   private sanitizeUser(user: User): Omit<User, 'passwordHash' | 'mfaSecret'> {
     const { passwordHash, mfaSecret, ...sanitized } = user;
     return sanitized;
+  }
+
+  /**
+   * Send verification email with token (6.3).
+   */
+  async sendVerificationEmail(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new BadRequestException('User not found');
+    if (user.emailVerified) throw new BadRequestException('Email already verified');
+
+    const token = require('crypto').randomBytes(32).toString('hex');
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { emailVerificationToken: token },
+    });
+
+    const baseUrl = this.configService.get<string>('WEB_URL') || 'http://localhost:3401';
+    const verifyUrl = `${baseUrl}/auth/verify-email?token=${token}`;
+
+    await this.emailService.sendEmail(
+      user.email,
+      'Verify Your Email',
+      `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Verify Your Email</h2>
+          <p>Click the button below to verify your email address:</p>
+          <a href="${verifyUrl}" style="display:inline-block; padding:12px 24px; background:#4A90D9; color:#fff; text-decoration:none; border-radius:8px;">
+            Verify Email
+          </a>
+          <p style="margin-top:20px; color:#666;">If you didn't create an account, ignore this email.</p>
+        </div>
+      `,
+    );
+  }
+
+  /**
+   * Verify email using token (6.3).
+   */
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findFirst({
+      where: { emailVerificationToken: token },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+      },
+    });
+
+    return { message: 'Email verified successfully' };
+  }
+
+  /**
+   * Send phone verification OTP (6.3).
+   */
+  async sendPhoneVerification(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new BadRequestException('User not found');
+
+    const phone = user.phoneNumber || user.phone;
+    if (!phone) throw new BadRequestException('No phone number on file');
+    if (user.phoneVerified) throw new BadRequestException('Phone already verified');
+
+    const otp = require('crypto').randomInt(100000, 999999).toString();
+    await this.cacheService.set(`phone_verify:${userId}`, otp, 300); // 5 min
+
+    // In production, integrate with Twilio/SNS. For now, log it.
+    const logger = new (require('@nestjs/common').Logger)('PhoneVerification');
+    logger.log(`Phone OTP for ${phone}: ${otp} (integrate SMS provider for production)`);
+
+    return { message: 'Verification code sent to your phone' };
+  }
+
+  /**
+   * Verify phone with OTP (6.3).
+   */
+  async verifyPhone(userId: string, code: string): Promise<{ message: string }> {
+    const stored = await this.cacheService.get<string>(`phone_verify:${userId}`);
+    if (!stored) throw new BadRequestException('Code expired. Request a new one.');
+    if (stored !== code) throw new BadRequestException('Invalid verification code');
+
+    await this.cacheService.del(`phone_verify:${userId}`);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { phoneVerified: true },
+    });
+
+    return { message: 'Phone verified successfully' };
   }
 }

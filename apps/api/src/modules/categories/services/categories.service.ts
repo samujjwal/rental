@@ -2,40 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { Category, PricingMode } from '@rental-portal/database';
-
-export interface CreateCategoryDto {
-  name: string;
-  slug: string;
-  description?: string;
-  iconUrl?: string;
-  order?: number;
-  templateSchema: Record<string, any>;
-  searchableFields?: string[];
-  requiredFields?: string[];
-  defaultPricingMode?: PricingMode;
-  allowInstantBook?: boolean;
-  requiresDepositDefault?: boolean;
-  defaultDepositPercentage?: number;
-  insuranceRequired?: boolean;
-  minimumInsuranceAmount?: number;
-}
-
-export interface UpdateCategoryDto {
-  name?: string;
-  description?: string;
-  iconUrl?: string;
-  order?: number;
-  templateSchema?: Record<string, any>;
-  searchableFields?: string[];
-  requiredFields?: string[];
-  active?: boolean;
-  defaultPricingMode?: PricingMode;
-  allowInstantBook?: boolean;
-  requiresDepositDefault?: boolean;
-  defaultDepositPercentage?: number;
-  insuranceRequired?: boolean;
-  minimumInsuranceAmount?: number;
-}
+import { CreateCategoryDto, UpdateCategoryDto } from '../dto/category.dto';
 
 export interface CategoryStatsResult {
   category: Category;

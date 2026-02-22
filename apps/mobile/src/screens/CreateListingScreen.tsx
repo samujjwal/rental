@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
 import type { Category } from "@rental-portal/mobile-sdk";
+import { ImagePicker, SelectedImage } from "../components/ImagePicker";
+import { showSuccess, showError, showApiError } from "../components/Toast";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateListing">;
 
@@ -20,8 +22,10 @@ export function CreateListingScreen({ navigation }: Props) {
   const [lon, setLon] = useState("");
   const [price, setPrice] = useState("");
   const [bookingMode, setBookingMode] = useState<"REQUEST" | "INSTANT">("REQUEST");
+  const [images, setImages] = useState<SelectedImage[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [generatingDesc, setGeneratingDesc] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -96,6 +100,12 @@ export function CreateListingScreen({ navigation }: Props) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Create Listing</Text>
+      <ImagePicker
+        images={images}
+        onImagesChange={setImages}
+        maxImages={10}
+        label="Photos"
+      />
       <TextInput
         value={title}
         onChangeText={setTitle}
@@ -107,7 +117,42 @@ export function CreateListingScreen({ navigation }: Props) {
         onChangeText={setDescription}
         placeholder="Description"
         style={styles.input}
+        multiline
+        numberOfLines={4}
       />
+      <Pressable
+        style={[styles.aiButton, generatingDesc && styles.aiButtonDisabled]}
+        onPress={async () => {
+          if (!title.trim()) {
+            showError('Enter a title first');
+            return;
+          }
+          setGeneratingDesc(true);
+          try {
+            const result = await mobileClient.generateDescription({
+              title,
+              category: selectedCategory?.name,
+              city: city || undefined,
+              basePrice: price ? Number(price) : undefined,
+            });
+            setDescription(result.description);
+            showSuccess('Description generated');
+          } catch {
+            showError('Failed to generate description');
+          } finally {
+            setGeneratingDesc(false);
+          }
+        }}
+        disabled={generatingDesc}
+        accessibilityRole="button"
+        accessibilityLabel="Generate description with AI"
+      >
+        {generatingDesc ? (
+          <ActivityIndicator size="small" color="#4A90D9" />
+        ) : (
+          <Text style={styles.aiButtonText}>{'\u2728'} Generate with AI</Text>
+        )}
+      </Pressable>
       <Text style={styles.label}>Category</Text>
       <View style={styles.categoryRow}>
         {categories.length === 0 ? (
@@ -318,5 +363,26 @@ const styles = StyleSheet.create({
   },
   toggleTextActive: {
     color: "#FFFFFF",
+  },
+  aiButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#4A90D9",
+    backgroundColor: "#EFF6FF",
+    marginBottom: 12,
+    alignSelf: "flex-start",
+  },
+  aiButtonDisabled: {
+    opacity: 0.6,
+  },
+  aiButtonText: {
+    color: "#4A90D9",
+    fontWeight: "600",
+    fontSize: 13,
   },
 });

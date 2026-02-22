@@ -1,6 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link, useNavigate } from "react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   MapPin,
   Shield,
@@ -8,11 +8,17 @@ import {
   Truck,
   CheckCircle,
   ChevronLeft,
+  Info,
 } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
 import { bookingsApi } from "~/lib/api/bookings";
 import { reviewsApi } from "~/lib/api/reviews";
 import type { BookingCalculation } from "~/types/booking";
+import {
+  getCategoryFields,
+  groupCategoryFields,
+  formatFieldValue,
+} from "~/lib/category-fields";
 import type { Review } from "~/types/review";
 import { useAuthStore } from "~/lib/store/auth";
 import { cn } from "~/lib/utils";
@@ -101,7 +107,9 @@ export default function ListingDetail() {
     delivery: false,
     shipping: false,
   };
-  const galleryImages = Array.isArray(listing.images) ? listing.images : [];
+  const galleryImages = Array.isArray(listing.photos) && listing.photos.length > 0
+    ? listing.photos
+    : Array.isArray(listing.images) ? listing.images : [];
   const locationCity = safeText(listing.location?.city, "Location");
   const locationState = safeText(listing.location?.state);
   const conditionLabel = safeText(listing.condition).replace("-", " ");
@@ -353,7 +361,7 @@ export default function ListingDetail() {
                   </div>
                   <div className="text-right">
                     <div className="text-3xl font-bold text-primary">
-                      ${listing.pricePerDay}
+                      ${listing.basePrice}
                     </div>
                     <div className="text-sm text-muted-foreground">per day</div>
                     {listing.pricePerWeek && (
@@ -361,11 +369,26 @@ export default function ListingDetail() {
                         ${listing.pricePerWeek}/week
                       </div>
                     )}
+                    {listing.pricePerMonth && (
+                      <div className="text-sm text-muted-foreground">
+                        ${listing.pricePerMonth}/month
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Badges */}
                 <div className="flex flex-wrap gap-2 mb-6">
+                  {typeof listing.category === 'string' && listing.category !== 'Uncategorized' && (
+                    <Badge variant="secondary">
+                      {listing.category}
+                    </Badge>
+                  )}
+                  {listing.subcategory && (
+                    <Badge variant="outline">
+                      {listing.subcategory}
+                    </Badge>
+                  )}
                   {listing.instantBooking && (
                     <Badge
                       variant="success"
@@ -425,6 +448,12 @@ export default function ListingDetail() {
                   </div>
                 )}
 
+                {/* Category-Specific Details */}
+                <CategorySpecificDetails
+                  categorySlug={listing.categorySlug}
+                  data={listing.categorySpecificData}
+                />
+
                 {/* Rental Terms */}
                 <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
                   <div>
@@ -443,6 +472,16 @@ export default function ListingDetail() {
                       {listing.minimumRentalPeriod} day(s)
                     </div>
                   </div>
+                  {listing.maximumRentalPeriod && (
+                    <div>
+                      <div className="text-sm text-muted-foreground">
+                        Max Rental Period
+                      </div>
+                      <div className="font-semibold text-foreground">
+                        {listing.maximumRentalPeriod} day(s)
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <div className="text-sm text-muted-foreground">
                       Cancellation Policy
@@ -465,6 +504,26 @@ export default function ListingDetail() {
                         .join(", ")}
                     </div>
                   </div>
+                  {listing.deliveryFee != null && listing.deliveryFee > 0 && (
+                    <div>
+                      <div className="text-sm text-muted-foreground">
+                        Delivery Fee
+                      </div>
+                      <div className="font-semibold text-foreground">
+                        ${listing.deliveryFee}
+                      </div>
+                    </div>
+                  )}
+                  {listing.deliveryRadius != null && listing.deliveryRadius > 0 && (
+                    <div>
+                      <div className="text-sm text-muted-foreground">
+                        Delivery Radius
+                      </div>
+                      <div className="font-semibold text-foreground">
+                        {listing.deliveryRadius} miles
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Reviews */}
@@ -592,7 +651,7 @@ export default function ListingDetail() {
               <CardContent className="p-6">
                 <div className="mb-6">
                   <div className="text-3xl font-bold text-foreground mb-1">
-                    ${listing.pricePerDay}
+                    ${listing.basePrice}
                     <span className="text-base font-normal text-muted-foreground">
                       {" "}
                       / day
@@ -748,7 +807,7 @@ export default function ListingDetail() {
                       <div className="mb-4 p-4 bg-muted rounded-lg space-y-2">
                         <div className="flex justify-between text-sm">
                           <span>
-                            ${calculation.pricePerDay} × {calculation.totalDays}{" "}
+                            ${calculation.basePrice} × {calculation.totalDays}{" "}
                             days
                           </span>
                           <span>${calculation.subtotal}</span>
@@ -826,4 +885,61 @@ export default function ListingDetail() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Category-Specific Details display component
+// ---------------------------------------------------------------------------
+
+function CategorySpecificDetails({
+  categorySlug,
+  data,
+}: {
+  categorySlug?: string | null;
+  data?: Record<string, unknown>;
+}) {
+  const fields = useMemo(() => getCategoryFields(categorySlug), [categorySlug]);
+  const groups = useMemo(() => groupCategoryFields(fields), [fields]);
+
+  if (!data || Object.keys(data).length === 0 || fields.length === 0) return null;
+
+  // Only display fields that have values
+  const nonEmptyGroups = groups
+    .map((group) => ({
+      ...group,
+      fields: group.fields.filter((field) => {
+        const val = data[field.key];
+        return val !== undefined && val !== null && val !== "" && !(Array.isArray(val) && val.length === 0);
+      }),
+    }))
+    .filter((g) => g.fields.length > 0);
+
+  if (nonEmptyGroups.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-xl font-semibold text-foreground mb-3 flex items-center gap-2">
+        <Info className="w-5 h-5 text-primary" />
+        Specifications
+      </h2>
+      {nonEmptyGroups.map((group) => (
+        <div key={group.label} className="mb-4 last:mb-0">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            {group.label}
+          </h3>
+          <div className="grid grid-cols-2 gap-3 p-4 bg-muted rounded-lg">
+            {group.fields.map((field) => (
+              <div key={field.key}>
+                <div className="text-sm text-muted-foreground">{field.label}</div>
+                <div className="font-semibold text-foreground">
+                  {formatFieldValue(field, data[field.key])}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export { RouteErrorBoundary as ErrorBoundary };
+

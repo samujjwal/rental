@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
-import { DevController } from './controllers/dev.controller';
-import { PrismaService } from '@/common/prisma/prisma.service';
 
-@Module({
-  controllers: [DevController],
-  providers: [PrismaService],
-})
+/**
+ * @deprecated DevModule removed for security — admin creation now via seed scripts only.
+ * Kept as empty module to avoid import errors during transition.
+ */
+@Module({})
 export class DevModule {}

@@ -258,7 +258,7 @@ export default function NotificationsPage() {
         </div>
         <div className="flex items-center gap-2">
           <UnifiedButton
-            variant={isFilteringUnread ? "default" : "outline"}
+            variant={isFilteringUnread ? "primary" : "outline"}
             size="sm"
             onClick={handleFilterUnread}
           >
@@ -321,3 +321,4 @@ export default function NotificationsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

@@ -32,6 +32,7 @@ import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import { SearchService, SearchQuery } from '@/modules/search/services/search.service';
+import { ListingCompletenessService } from '../services/listing-completeness.service';
 
 type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
 
@@ -41,6 +42,7 @@ export class ListingsController {
   constructor(
     private readonly listingsService: PropertysService,
     private readonly availabilityService: AvailabilityService,
+    private readonly completenessService: ListingCompletenessService,
     @Inject(forwardRef(() => SearchService))
     private readonly searchService: SearchService,
   ) {}
@@ -58,100 +60,6 @@ export class ListingsController {
     @Body() dto: CreateListingDto,
   ): Promise<AsyncMethodResult<PropertysService['create']>> {
     return this.listingsService.create(userId, dto);
-  }
-
-  @Get('search')
-  @ApiOperation({ summary: 'Search listings' })
-  @ApiQuery({ name: 'query', required: false, type: String })
-  @ApiQuery({ name: 'category', required: false, type: String })
-  @ApiQuery({ name: 'location', required: false, type: String })
-  @ApiQuery({ name: 'minPrice', required: false, type: Number })
-  @ApiQuery({ name: 'maxPrice', required: false, type: Number })
-  @ApiQuery({ name: 'delivery', required: false, type: Boolean })
-  @ApiQuery({ name: 'sortBy', required: false, type: String })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
-  async searchListings(
-    @Query('query') query?: string,
-    @Query('category') categoryId?: string,
-    @Query('location') location?: string,
-    @Query('minPrice') minPrice?: number,
-    @Query('maxPrice') maxPrice?: number,
-    @Query('condition') condition?: string,
-    @Query('instantBooking') instantBooking?: boolean,
-    @Query('delivery') delivery?: string | boolean,
-    @Query('sortBy') sortBy?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-  ) {
-    const searchQuery: SearchQuery = {
-      query,
-      categoryId,
-      page: page || 1,
-      size: limit || 20,
-      sort: sortBy as any,
-    };
-
-    if (location) {
-      searchQuery.location = { city: location };
-    }
-
-    if (minPrice || maxPrice) {
-      searchQuery.priceRange = { min: minPrice, max: maxPrice };
-    }
-
-    const deliveryEnabled = delivery === true || delivery === 'true' || delivery === '1';
-
-    if (condition || instantBooking || deliveryEnabled) {
-      searchQuery.filters = {
-        condition,
-        bookingMode: instantBooking ? 'INSTANT_BOOK' : undefined,
-        delivery: deliveryEnabled,
-      };
-    }
-
-    const result = await this.searchService.search(searchQuery);
-    
-    // Transform to match frontend expectation
-    return {
-      listings: result.results.map((listing) => ({
-        id: listing.id,
-        title: listing.title,
-        description: listing.description,
-        slug: listing.slug,
-        category: listing.categoryName,
-        categorySlug: listing.categorySlug,
-        images: listing.photos,
-        location: {
-          city: listing.city,
-          state: listing.state,
-          country: listing.country,
-          lat: listing.location?.lat,
-          lon: listing.location?.lon,
-        },
-        pricePerDay: Number(listing.basePrice),
-        currency: listing.currency,
-        rating: listing.averageRating,
-        totalReviews: listing.totalReviews,
-        owner: {
-          name: listing.ownerName,
-          rating: listing.ownerRating,
-        },
-        instantBooking: listing.bookingMode === 'INSTANT_BOOK',
-        condition: listing.condition,
-        features: listing.features || [],
-        deliveryOptions: {
-          pickup: true,
-          delivery: false,
-          shipping: false,
-        },
-      })),
-      total: result.total,
-      page: result.page,
-      limit: result.size,
-      totalPages: Math.ceil(result.total / result.size),
-    };
   }
 
   @Get()
@@ -227,6 +135,15 @@ export class ListingsController {
     return this.listingsService.getPriceSuggestion({ categoryId, city, condition });
   }
 
+  @Get(':id/completeness')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get listing completeness score' })
+  @ApiResponse({ status: 200, description: 'Completeness score retrieved' })
+  async getCompleteness(@Param('id') id: string) {
+    return this.completenessService.getCompleteness(id);
+  }
+
   @Get('slug/:slug')
   @ApiOperation({ summary: 'Get listing by slug' })
   @ApiResponse({ status: 200, description: 'Listing retrieved successfully' })
@@ -270,6 +187,8 @@ export class ListingsController {
       title: listing.title,
       description: listing.description,
       category: listing.category?.name || 'Uncategorized',
+      categoryId: listing.categoryId || listing.category?.id || null,
+      subcategory: metadata.subcategory || null,
       pricePerDay: Number(listing.basePrice),
       basePrice: Number(listing.basePrice),
       currency: listing.currency,
@@ -286,6 +205,13 @@ export class ListingsController {
         },
       },
       images: listing.photos || listing.images || [],
+      photos: listing.photos || listing.images || [],
+      pricePerWeek: listing.weeklyDiscount
+        ? Math.round(Number(listing.basePrice) * 7 * (1 - listing.weeklyDiscount / 100))
+        : null,
+      pricePerMonth: listing.monthlyDiscount
+        ? Math.round(Number(listing.basePrice) * 30 * (1 - listing.monthlyDiscount / 100))
+        : null,
       status: listing.status,
       availability,
       features: listing.features || [],
@@ -313,6 +239,8 @@ export class ListingsController {
         listing.cancellationPolicy?.name?.toLowerCase() ||
         'flexible',
       rules: Array.isArray(listing.rules) ? listing.rules.join('\n') : listing.rules || '',
+      categorySlug: listing.category?.slug || null,
+      categorySpecificData: metadata.categorySpecificData || {},
       owner: {
         id: listing.owner?.id,
         firstName: listing.owner?.firstName,

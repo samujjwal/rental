@@ -115,3 +115,58 @@ export class DisableMfaDto {
   @IsString()
   password: string;
 }
+
+// OAuth DTOs (6.1)
+export class GoogleLoginDto {
+  @ApiProperty({ description: 'Google ID token from client' })
+  @IsString()
+  idToken: string;
+}
+
+export class AppleLoginDto {
+  @ApiProperty({ description: 'Apple identity token' })
+  @IsString()
+  identityToken: string;
+
+  @ApiProperty({ description: 'Apple authorization code' })
+  @IsString()
+  authorizationCode: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+}
+
+// OTP DTOs (6.2)
+export class OtpRequestDto {
+  @ApiProperty({ example: 'john.doe@example.com' })
+  @IsEmail()
+  email: string;
+}
+
+export class OtpVerifyDto {
+  @ApiProperty({ example: 'john.doe@example.com' })
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(6)
+  code: string;
+}
+
+// Phone verification DTO (6.3)
+export class PhoneVerifyDto {
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(6)
+  code: string;
+}

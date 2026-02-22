@@ -484,7 +484,7 @@ export default function OwnerListingsPage() {
                 >
                   <div className="relative aspect-[4/3]">
                     <Link to={listingId ? `/listings/${listingId}` : "/listings"}>
-                      <ListingThumbnail src={listing.images?.[0]} alt={listingTitle} size="full" />
+                      <ListingThumbnail src={listing.photos?.[0]} alt={listingTitle} size="full" />
                     </Link>
                     <div className="absolute top-2 left-2">
                       <Badge className={statusConfig.color}>
@@ -650,7 +650,7 @@ export default function OwnerListingsPage() {
                     <tr key={listing.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <ListingThumbnail src={listing.images?.[0]} alt={listingTitle} size="small" />
+                          <ListingThumbnail src={listing.photos?.[0]} alt={listingTitle} size="small" />
                           <div>
                             <Link
                               to={listingId ? `/listings/${listingId}` : "/listings"}
@@ -774,3 +774,4 @@ export default function OwnerListingsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

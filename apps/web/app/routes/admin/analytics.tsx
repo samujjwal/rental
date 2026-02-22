@@ -5,18 +5,7 @@ import {
   type AnalyticsRange,
   type AdminAnalyticsPayload,
 } from "~/utils/adminAnalytics";
-import {
-  Box,
-  Typography,
-  Paper,
-  Card,
-  CardContent,
-  Grid,
-  Button,
-  Alert,
-  AlertTitle,
-  Divider,
-} from "@mui/material";
+import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { RouteErrorBoundary } from "~/components/ui";
 
 const RANGE_OPTIONS: AnalyticsRange[] = ["7d", "30d", "90d", "365d"];
@@ -33,216 +22,178 @@ const safeNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(safeNumber(value));
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(safeNumber(value));
 }
-
-function formatNumber(value: number): string {
+function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(safeNumber(value));
 }
-
-function formatPercent(value: number): string {
+function formatPercent(value: number) {
   return `${safeNumber(value).toFixed(1)}%`;
 }
-
 function formatKpiValue(value: number, unit: "count" | "currency" | "percent") {
   if (unit === "currency") return formatCurrency(value);
   if (unit === "percent") return formatPercent(value);
   return formatNumber(value);
 }
 
+function AlertBanner({ severity, title, children, action }: { severity: "error" | "warning" | "info"; title: string; children: React.ReactNode; action?: React.ReactNode }) {
+  const styles = {
+    error: "border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 text-red-800 dark:text-red-200",
+    warning: "border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200",
+    info: "border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800 text-blue-800 dark:text-blue-200",
+  };
+  const icons = { error: AlertCircle, warning: AlertTriangle, info: Info };
+  const Icon = icons[severity];
+  return (
+    <div className={`rounded-md border px-4 py-3 ${styles[severity]}`}>
+      <div className="flex items-start gap-2">
+        <Icon className="h-5 w-5 shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <p className="font-semibold">{title}</p>
+          <div className="text-sm mt-0.5">{children}</div>
+          {action && <div className="mt-2">{action}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
   const url = new URL(request.url);
   const rangeParam = url.searchParams.get("range") as AnalyticsRange | null;
-  const range = RANGE_OPTIONS.includes(rangeParam as AnalyticsRange)
-    ? (rangeParam as AnalyticsRange)
-    : "30d";
+  const range = RANGE_OPTIONS.includes(rangeParam as AnalyticsRange) ? (rangeParam as AnalyticsRange) : "30d";
   try {
     const analytics = await getAdminAnalytics(request, range);
     return { analytics, range, error: null };
   } catch (error: unknown) {
     return {
-      analytics: null,
-      range,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load analytics",
+      analytics: null, range,
+      error: error && typeof error === "object" && "message" in error ? String((error as { message?: string }).message) : "Failed to load analytics",
     };
   }
 }
 
 export default function AdminAnalytics() {
   const { analytics, range, error } = useLoaderData<typeof clientLoader>() as {
-    analytics: AdminAnalyticsPayload | null;
-    range: AnalyticsRange;
-    error: string | null;
+    analytics: AdminAnalyticsPayload | null; range: AnalyticsRange; error: string | null;
   };
 
   if (error || !analytics) {
     return (
-      <Box sx={{ p: { xs: 2, md: 4 } }}>
-        <Alert severity="error">{error || "Failed to load analytics"}</Alert>
-      </Box>
+      <div className="p-4 md:p-8">
+        <AlertBanner severity="error" title="Error">{error || "Failed to load analytics"}</AlertBanner>
+      </div>
     );
   }
 
-  const periodLabel = RANGE_LABELS[range];
   const { summary, alerts } = analytics;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 } }}>
-      <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, gap: 2, justifyContent: "space-between" }}>
-        <Box>
-          <Typography variant="h4" fontWeight={700} gutterBottom>
-            Analytics
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Operational pulse for {periodLabel}
-          </Typography>
-        </Box>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+    <div className="p-4 md:p-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Analytics</h1>
+          <p className="text-muted-foreground">Operational pulse for {RANGE_LABELS[range]}</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
           {RANGE_OPTIONS.map((option) => (
-            <Button
+            <Link
               key={option}
-              component={Link}
               to={`/admin/analytics?range=${option}`}
-              variant={option === range ? "contained" : "outlined"}
-              size="small"
+              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+                option === range
+                  ? "bg-primary text-primary-foreground"
+                  : "border hover:bg-muted"
+              }`}
             >
               {RANGE_LABELS[option]}
-            </Button>
+            </Link>
           ))}
-        </Box>
-      </Box>
+        </div>
+      </div>
 
-      <Grid container spacing={3} sx={{ mt: 1 }}>
+      {/* KPI Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {summary.kpis.map((kpi) => (
-          <Grid key={kpi.id} item xs={12} sm={6} md={3}>
-            <Card variant="outlined" sx={{ height: "100%" }}>
-              <CardContent>
-                <Typography variant="overline" color="text.secondary">
-                  {kpi.label}
-                </Typography>
-                <Typography variant="h5" fontWeight={700} sx={{ mt: 1 }}>
-                  {formatKpiValue(kpi.value, kpi.unit)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  {kpi.description}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
+          <div key={kpi.id} className="rounded-lg border bg-card p-4">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">{kpi.label}</p>
+            <p className="text-xl font-bold mt-1">{formatKpiValue(kpi.value, kpi.unit)}</p>
+            <p className="text-sm text-muted-foreground mt-1">{kpi.description}</p>
+          </div>
         ))}
-      </Grid>
+      </div>
 
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12} md={4}>
-          <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Bookings
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">Total</Typography>
-            <Typography variant="h6" fontWeight={700}>
-              {formatNumber(summary.bookings.total)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Confirmed: {formatNumber(summary.bookings.confirmed)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Cancelled: {formatNumber(summary.bookings.cancelled)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Disputes: {formatNumber(summary.bookings.disputes)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Avg. duration: {safeNumber(summary.bookings.avgDurationDays).toFixed(1)} days
-            </Typography>
-          </Paper>
-        </Grid>
+      {/* Detail Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Bookings */}
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="text-lg font-semibold mb-2">Bookings</h3>
+          <hr className="mb-3" />
+          <p className="text-sm text-muted-foreground">Total</p>
+          <p className="text-lg font-bold">{formatNumber(summary.bookings.total)}</p>
+          <div className="space-y-0.5 mt-2 text-sm text-muted-foreground">
+            <p>Confirmed: {formatNumber(summary.bookings.confirmed)}</p>
+            <p>Cancelled: {formatNumber(summary.bookings.cancelled)}</p>
+            <p>Disputes: {formatNumber(summary.bookings.disputes)}</p>
+            <p>Avg. duration: {safeNumber(summary.bookings.avgDurationDays).toFixed(1)} days</p>
+          </div>
+        </div>
 
-        <Grid item xs={12} md={4}>
-          <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Revenue
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">Gross</Typography>
-            <Typography variant="h6" fontWeight={700}>
-              {formatCurrency(summary.revenue.gross)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Net: {formatCurrency(summary.revenue.net)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Take rate: {formatPercent(summary.revenue.takeRate)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Payout volume: {formatCurrency(summary.revenue.payoutVolume)}
-            </Typography>
-          </Paper>
-        </Grid>
+        {/* Revenue */}
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="text-lg font-semibold mb-2">Revenue</h3>
+          <hr className="mb-3" />
+          <p className="text-sm text-muted-foreground">Gross</p>
+          <p className="text-lg font-bold">{formatCurrency(summary.revenue.gross)}</p>
+          <div className="space-y-0.5 mt-2 text-sm text-muted-foreground">
+            <p>Net: {formatCurrency(summary.revenue.net)}</p>
+            <p>Take rate: {formatPercent(summary.revenue.takeRate)}</p>
+            <p>Payout volume: {formatCurrency(summary.revenue.payoutVolume)}</p>
+          </div>
+        </div>
 
-        <Grid item xs={12} md={4}>
-          <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Operations
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">
-              Open disputes: {formatNumber(summary.operations.openDisputes)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Moderation backlog: {formatNumber(summary.operations.moderationBacklog)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Support SLA: {formatPercent(summary.operations.supportSla)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Fraud signals: {formatNumber(summary.operations.fraudSignals)}
-            </Typography>
-          </Paper>
-        </Grid>
-      </Grid>
+        {/* Operations */}
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="text-lg font-semibold mb-2">Operations</h3>
+          <hr className="mb-3" />
+          <div className="space-y-0.5 text-sm text-muted-foreground">
+            <p>Open disputes: {formatNumber(summary.operations.openDisputes)}</p>
+            <p>Moderation backlog: {formatNumber(summary.operations.moderationBacklog)}</p>
+            <p>Support SLA: {formatPercent(summary.operations.supportSla)}</p>
+            <p>Fraud signals: {formatNumber(summary.operations.fraudSignals)}</p>
+          </div>
+        </div>
+      </div>
 
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
-          Alerts
-        </Typography>
+      {/* Alerts */}
+      <div>
+        <h2 className="text-lg font-semibold mb-3">Alerts</h2>
         {alerts.length === 0 ? (
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              No alerts for this period.
-            </Typography>
-          </Paper>
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">No alerts for this period.</p>
+          </div>
         ) : (
-          <Box sx={{ display: "grid", gap: 2 }}>
+          <div className="space-y-2">
             {alerts.map((alert) => (
-              <Alert key={alert.id} severity={alert.severity} variant="outlined">
-                <AlertTitle>{alert.title}</AlertTitle>
+              <AlertBanner
+                key={alert.id}
+                severity={alert.severity === "critical" ? "error" : alert.severity}
+                title={alert.title}
+                action={alert.action ? (
+                  <Link to={alert.action.to} className="text-sm font-medium hover:underline">{alert.action.label}</Link>
+                ) : undefined}
+              >
                 {alert.description} <strong>{alert.impact}</strong>
-                {alert.action ? (
-                  <Button
-                    component={Link}
-                    to={alert.action.to}
-                    size="small"
-                    sx={{ mt: 1 }}
-                  >
-                    {alert.action.label}
-                  </Button>
-                ) : null}
-              </Alert>
+              </AlertBanner>
             ))}
-          </Box>
+          </div>
         )}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }
 export { RouteErrorBoundary as ErrorBoundary };
+

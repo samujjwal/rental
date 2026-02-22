@@ -4,7 +4,7 @@ import type {
   ActionFunctionArgs,
 } from "react-router";
 import { Form, useNavigate, useLoaderData, useActionData } from "react-router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -17,17 +17,21 @@ import {
   FileText,
   Image as ImageIcon,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 import { listingSchema, type ListingInput } from "~/lib/validation/listing";
 import type { z } from "zod";
 import { listingsApi } from "~/lib/api/listings";
 import { uploadApi } from "~/lib/api/upload";
+import { aiApi } from "~/lib/api/ai";
 import { redirect } from "react-router";
 import { toast } from "~/lib/toast";
 import type { Listing, UpdateListingRequest } from "~/types/listing";
 import { getUser } from "~/utils/auth";
 import { RouteErrorBoundary, Dialog, DialogFooter } from "~/components/ui";
 import { VoiceListingAssistant } from "~/components/listings/VoiceListingAssistant";
+import { CategorySpecificFields } from "~/components/listings/CategorySpecificFields";
+import { getCategoryFields } from "~/lib/category-fields";
 const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
 
 export const meta: MetaFunction = () => {
@@ -123,7 +127,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
   // Handle update
   try {
     const location = parseJsonField<ListingInput["location"]>("location");
-    const images = parseJsonField<string[]>("images");
+    const images = parseJsonField<string[]>("photos");
     const deliveryOptions =
       parseJsonField<ListingInput["deliveryOptions"]>("deliveryOptions");
     const features = parseJsonField<ListingInput["features"]>("features");
@@ -140,7 +144,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
       description: String(formData.get("description") ?? "").trim(),
       category: String(formData.get("category") ?? "").trim(),
       subcategory: String(formData.get("subcategory") ?? "").trim() || undefined,
-      pricePerDay: Number(formData.get("pricePerDay")),
+      basePrice: Number(formData.get("basePrice")),
       pricePerWeek: formData.get("pricePerWeek")
         ? Number(formData.get("pricePerWeek"))
         : undefined,
@@ -167,25 +171,29 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
         formData.get("cancellationPolicy") as ListingInput["cancellationPolicy"],
       rules: String(formData.get("rules") ?? "").trim() || undefined,
       features,
+      categorySpecificData: parseJsonField<Record<string, unknown>>("categorySpecificData") || undefined,
     };
 
     if (!listingData.title || !listingData.description || !listingData.category) {
       return { error: "Title, description, and category are required" };
     }
-    if (!Array.isArray(listingData.images) || listingData.images.length === 0) {
+    if (!Array.isArray(images) || images.length === 0) {
       return { error: "At least one image is required" };
     }
+    const basePrice = Number(listingData.basePrice);
+    const securityDeposit = Number(listingData.securityDeposit);
+    const minimumRentalPeriod = Number(listingData.minimumRentalPeriod);
     if (
-      !Number.isFinite(listingData.pricePerDay) ||
-      !Number.isFinite(listingData.securityDeposit) ||
-      !Number.isFinite(listingData.minimumRentalPeriod)
+      !Number.isFinite(basePrice) ||
+      !Number.isFinite(securityDeposit) ||
+      !Number.isFinite(minimumRentalPeriod)
     ) {
       return { error: "Invalid pricing values" };
     }
     if (
-      listingData.pricePerDay < 0 ||
-      listingData.securityDeposit < 0 ||
-      listingData.minimumRentalPeriod < 1
+      basePrice < 0 ||
+      securityDeposit < 0 ||
+      minimumRentalPeriod < 1
     ) {
       return { error: "Pricing values must be positive." };
     }
@@ -250,7 +258,7 @@ export default function EditListing() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [imageItems, setImageItems] = useState<Array<{ url: string; file?: File }>>(
-    (listing.images || []).map((url) => ({ url }))
+    ((listing.photos && listing.photos.length > 0 ? listing.photos : listing.images) || []).map((url) => ({ url }))
   );
   const imageItemsRef = useRef(imageItems);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -258,6 +266,7 @@ export default function EditListing() {
   const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [categoriesError, setCategoriesError] = useState("");
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
 
   const {
     register,
@@ -276,12 +285,12 @@ export default function EditListing() {
           ? listing.category
           : listing.category.id,
       subcategory: listing.subcategory || undefined,
-      pricePerDay: listing.pricePerDay,
+      basePrice: listing.basePrice,
       pricePerWeek: listing.pricePerWeek || undefined,
       pricePerMonth: listing.pricePerMonth || undefined,
       condition: listing.condition,
       location: listing.location,
-      images: listing.images,
+      images: (listing.photos && listing.photos.length > 0 ? listing.photos : listing.images) || [],
       instantBooking: listing.instantBooking,
       deliveryOptions: listing.deliveryOptions,
       deliveryRadius: listing.deliveryRadius || undefined,
@@ -296,6 +305,23 @@ export default function EditListing() {
   });
 
   const deliveryOptions = watch("deliveryOptions");
+  const selectedCategoryId = watch("category");
+
+  // Category-specific data state — initialized from listing
+  const [categorySpecificData, setCategorySpecificData] = useState<Record<string, unknown>>(
+    listing.categorySpecificData || {}
+  );
+
+  // Resolve selected category slug for dynamic fields
+  const selectedCategorySlug = useMemo(() => {
+    if (!selectedCategoryId) return listing.categorySlug || undefined;
+    const cat = categories.find((c) => c.id === selectedCategoryId);
+    return cat?.slug || listing.categorySlug || undefined;
+  }, [selectedCategoryId, categories, listing.categorySlug]);
+
+  const handleCategoryFieldChange = useCallback((key: string, value: unknown) => {
+    setCategorySpecificData((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -338,7 +364,7 @@ export default function EditListing() {
 
   useEffect(() => {
     setValue(
-      "images",
+      "photos",
       imageItems.map((item) => item.url)
     );
   }, [imageItems, setValue]);
@@ -416,13 +442,17 @@ export default function EditListing() {
           if (typeof value === "object") {
             formData.append(
               key,
-              JSON.stringify(key === "images" ? finalImages : value)
+              JSON.stringify(key === "photos" ? finalImages : value)
             );
           } else {
             formData.append(key, String(value));
           }
         }
       });
+      // Append category-specific data
+      if (Object.keys(categorySpecificData).length > 0) {
+        formData.append("categorySpecificData", JSON.stringify(categorySpecificData));
+      }
       formData.append("intent", "update");
 
       const form = document.createElement("form");
@@ -597,9 +627,43 @@ export default function EditListing() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Description *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const title = String(getValues("title") || "").trim();
+                      if (!title || title.length < 3) {
+                        toast.error("Enter a title first to generate a description");
+                        return;
+                      }
+                      setIsGeneratingDescription(true);
+                      try {
+                        const categoryId = getValues("category");
+                        const categoryName = categories.find((c) => c.id === categoryId)?.name;
+                        const city = getValues("location.city");
+                        const result = await aiApi.generateDescription({
+                          title,
+                          category: categoryName,
+                          city: typeof city === "string" ? city : undefined,
+                        });
+                        setValue("description", result.description, { shouldValidate: true });
+                        toast.success("Description generated");
+                      } catch {
+                        toast.error("Failed to generate description. Please write one manually.");
+                      } finally {
+                        setIsGeneratingDescription(false);
+                      }
+                    }}
+                    disabled={isGeneratingDescription}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${isGeneratingDescription ? "animate-spin" : ""}`} />
+                    {isGeneratingDescription ? "Generating\u2026" : "Generate with AI"}
+                  </button>
+                </div>
                 <textarea
                   {...register("description")}
                   rows={6}
@@ -658,6 +722,13 @@ export default function EditListing() {
                   />
                 </div>
               </div>
+
+              {/* Category-Specific Fields */}
+              <CategorySpecificFields
+                categorySlug={selectedCategorySlug}
+                values={categorySpecificData}
+                onChange={handleCategoryFieldChange}
+              />
             </div>
           )}
 
@@ -678,13 +749,13 @@ export default function EditListing() {
                   </label>
                   <input
                     type="number"
-                    {...register("pricePerDay", { valueAsNumber: true })}
+                    {...register("basePrice", { valueAsNumber: true })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     placeholder="50"
                   />
-                  {errors.pricePerDay && (
+                  {errors.basePrice && (
                     <p className="mt-1 text-sm text-red-600">
-                      {errors.pricePerDay.message}
+                      {errors.basePrice.message}
                     </p>
                   )}
                 </div>
@@ -1081,9 +1152,9 @@ export default function EditListing() {
                     </span>
                   </label>
                 </div>
-                {errors.images && (
+                {errors.photos && (
                   <p className="mt-1 text-sm text-red-600">
-                    {errors.images.message}
+                    {errors.photos.message}
                   </p>
                 )}
               </div>
@@ -1193,3 +1264,4 @@ export default function EditListing() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
+

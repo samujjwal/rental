@@ -1,26 +1,10 @@
 /**
  * Keyboard Shortcuts System
- * Global keyboard shortcuts for power users
+ * Global keyboard shortcuts for power users — pure Tailwind
  */
 
 import React, { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  Box,
-  Typography,
-  Chip,
-  Divider,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
-} from "@mui/material";
-import {
-  Close as CloseIcon,
-  Keyboard as KeyboardIcon,
-} from "@mui/icons-material";
+import { X, Keyboard } from "lucide-react";
 
 export interface KeyboardShortcut {
   key: string;
@@ -52,7 +36,6 @@ export const useKeyboardShortcuts = (
         const shiftMatch = shortcut.shiftKey ? event.shiftKey : !event.shiftKey;
         const altMatch = shortcut.altKey ? event.altKey : !event.altKey;
         const metaMatch = shortcut.metaKey ? event.metaKey : !event.metaKey;
-
         return keyMatch && ctrlMatch && shiftMatch && altMatch && metaMatch;
       });
 
@@ -79,7 +62,6 @@ export const KeyboardShortcutsHelp: React.FC<{
         setOpen(true);
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
@@ -87,9 +69,7 @@ export const KeyboardShortcutsHelp: React.FC<{
   const groupedShortcuts = shortcuts.reduce(
     (acc, shortcut) => {
       const category = shortcut.category || "General";
-      if (!acc[category]) {
-        acc[category] = [];
-      }
+      if (!acc[category]) acc[category] = [];
       acc[category].push(shortcut);
       return acc;
     },
@@ -99,75 +79,67 @@ export const KeyboardShortcutsHelp: React.FC<{
   const formatShortcut = (shortcut: KeyboardShortcut) => {
     const keys: string[] = [];
     if (shortcut.ctrlKey) keys.push("Ctrl");
-    if (shortcut.metaKey) keys.push("⌘");
+    if (shortcut.metaKey) keys.push("\u2318");
     if (shortcut.altKey) keys.push("Alt");
     if (shortcut.shiftKey) keys.push("Shift");
     keys.push(shortcut.key.toUpperCase());
-    return keys.join(" + ");
+    return keys;
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <KeyboardIcon />
-            <Typography variant="h6">Keyboard Shortcuts</Typography>
-          </Box>
-          <IconButton onClick={() => setOpen(false)} size="small">
-            <CloseIcon />
-          </IconButton>
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        {Object.entries(groupedShortcuts).map(
-          ([category, categoryShortcuts]) => (
-            <Box key={category} sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                {category}
-              </Typography>
-              <List dense>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
+      <div
+        className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-auto mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div className="flex items-center gap-2">
+            <Keyboard className="h-5 w-5" />
+            <h2 className="text-lg font-semibold">Keyboard Shortcuts</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="p-1 rounded-md hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 py-4 space-y-6">
+          {Object.entries(groupedShortcuts).map(([category, categoryShortcuts]) => (
+            <div key={category}>
+              <h3 className="text-sm font-semibold mb-2">{category}</h3>
+              <ul className="space-y-2">
                 {categoryShortcuts.map((shortcut, index) => (
-                  <ListItem key={index}>
-                    <ListItemText
-                      primary={shortcut.description}
-                      secondary={
-                        <Box sx={{ display: "flex", gap: 0.5, mt: 0.5 }}>
-                          {formatShortcut(shortcut)
-                            .split(" + ")
-                            .map((key, i) => (
-                              <React.Fragment key={i}>
-                                {i > 0 && (
-                                  <Typography variant="caption">+</Typography>
-                                )}
-                                <Chip
-                                  label={key}
-                                  size="small"
-                                  variant="outlined"
-                                />
-                              </React.Fragment>
-                            ))}
-                        </Box>
-                      }
-                    />
-                  </ListItem>
+                  <li key={index} className="flex items-center justify-between py-1">
+                    <span className="text-sm">{shortcut.description}</span>
+                    <div className="flex items-center gap-1">
+                      {formatShortcut(shortcut).map((key, i) => (
+                        <React.Fragment key={i}>
+                          {i > 0 && <span className="text-xs text-muted-foreground">+</span>}
+                          <kbd className="inline-flex h-6 min-w-[24px] items-center justify-center rounded border bg-muted px-1.5 text-xs font-medium">
+                            {key}
+                          </kbd>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </li>
                 ))}
-              </List>
-              <Divider />
-            </Box>
-          )
-        )}
-        <Typography variant="caption" color="text.secondary">
-          Press Shift + ? to show this dialog
-        </Typography>
-      </DialogContent>
-    </Dialog>
+              </ul>
+              <hr className="mt-3" />
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            Press Shift + ? to show this dialog
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 

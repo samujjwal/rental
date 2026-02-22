@@ -62,12 +62,63 @@ describe('Messaging (integration)', () => {
 
   const waitForSocketEvent = (socket: Socket, event: string, timeout = 5000): Promise<any> =>
     new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`Timeout waiting for socket event: ${event}`)), timeout);
-      socket.once(event, (data: any) => {
+      let settled = false;
+      const handler = (data: any) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
+        socket.off(event, handler);
         resolve(data);
-      });
+      };
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        socket.off(event, handler);
+        reject(new Error(`Timeout waiting for socket event: ${event}`));
+      }, timeout);
+
+      socket.on(event, handler);
     });
+
+  const joinConversation = async (
+    socket: Socket,
+    conversationIdToJoin: string,
+    options: { attempts?: number; timeout?: number } = {},
+  ): Promise<void> => {
+    const attempts = options.attempts ?? 2;
+    const timeout = options.timeout ?? 7000;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      if (!socket.connected) {
+        throw new Error('Socket is disconnected before joining conversation');
+      }
+
+      const joinedPromise = waitForSocketEvent(socket, 'joined_conversation', timeout);
+      const errorPromise = waitForSocketEvent(socket, 'error', timeout).then((payload) => {
+        const message =
+          payload && typeof payload.message === 'string'
+            ? payload.message
+            : 'Socket emitted error during join';
+        throw new Error(message);
+      });
+
+      socket.emit('join_conversation', { conversationId: conversationIdToJoin });
+
+      try {
+        const joined = await Promise.race([joinedPromise, errorPromise]);
+        if (joined?.conversationId === conversationIdToJoin) {
+          return;
+        }
+      } catch (error) {
+        if (attempt === attempts) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error(`Failed to join conversation ${conversationIdToJoin}`);
+  };
 
   const connectSocket = async (userId: string, token: string): Promise<Socket> => {
     const address = app.getHttpServer().address();
@@ -428,11 +479,10 @@ describe('Messaging (integration)', () => {
       socketRenter = await connectSocket(renterId, renterToken);
       socketOwner = await connectSocket(ownerId, ownerToken);
 
-      const renterJoinedPromise = waitForSocketEvent(socketRenter, 'joined_conversation');
-      const ownerJoinedPromise = waitForSocketEvent(socketOwner, 'joined_conversation');
-      socketRenter.emit('join_conversation', { conversationId });
-      socketOwner.emit('join_conversation', { conversationId });
-      await Promise.all([renterJoinedPromise, ownerJoinedPromise]);
+      await Promise.all([
+        joinConversation(socketRenter, conversationId),
+        joinConversation(socketOwner, conversationId),
+      ]);
 
       const newMessagePromise = waitForSocketEvent(socketOwner, 'new_message');
       socketRenter.emit('send_message', {
@@ -456,14 +506,10 @@ describe('Messaging (integration)', () => {
       socketRenter = await connectSocket(renterId, renterToken);
       socketOwner = await connectSocket(ownerId, ownerToken);
 
-      const ownerJoinedPromise = waitForSocketEvent(socketOwner, 'joined_conversation');
-      socketOwner.emit('join_conversation', { conversationId });
-      await ownerJoinedPromise;
+      await joinConversation(socketOwner, conversationId);
 
       const readPromise = waitForSocketEvent(socketOwner, 'messages_read');
-      const renterJoinedPromise = waitForSocketEvent(socketRenter, 'joined_conversation');
-      socketRenter.emit('join_conversation', { conversationId });
-      await renterJoinedPromise;
+      await joinConversation(socketRenter, conversationId);
       const readPayload = await readPromise;
 
       expect(readPayload.conversationId).toBe(conversationId);

@@ -1,26 +1,10 @@
 /**
  * Export Data Component
- * Export table data to CSV, Excel, JSON formats
+ * Export table data to CSV, Excel, JSON formats — pure Tailwind
  */
 
-import React, { useState, useCallback } from "react";
-import {
-  IconButton,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Tooltip,
-  CircularProgress,
-  Snackbar,
-  Alert,
-} from "@mui/material";
-import {
-  Download as DownloadIcon,
-  TableChart as ExcelIcon,
-  Description as CsvIcon,
-  Code as JsonIcon,
-} from "@mui/icons-material";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { Download, FileSpreadsheet, FileText, Code, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 
 export type ExportFormat = "csv" | "excel" | "json";
 
@@ -37,30 +21,34 @@ export const ExportData: React.FC<ExportDataProps> = ({
   filename = "export",
   onExport,
 }) => {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showError, setShowError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const open = Boolean(anchorEl);
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), toast.type === "success" ? 3000 : 5000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
 
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
+  // Close menu on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  // Convert data to CSV
   const exportToCSV = useCallback(() => {
     try {
-      const headers =
-        columns?.map((col) => col.header) || Object.keys(data[0] || {});
-      const columnIds =
-        columns?.map((col) => col.id) || Object.keys(data[0] || {});
-
+      const headers = columns?.map((col) => col.header) || Object.keys(data[0] || {});
+      const columnIds = columns?.map((col) => col.id) || Object.keys(data[0] || {});
       const csvContent = [
         headers.join(","),
         ...data.map((row) =>
@@ -76,22 +64,18 @@ export const ExportData: React.FC<ExportDataProps> = ({
             .join(",")
         ),
       ].join("\n");
-
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = `${filename}.csv`;
       link.click();
       URL.revokeObjectURL(link.href);
-
-      setShowSuccess(true);
+      setToast({ type: "success", message: "Export completed successfully!" });
     } catch {
-      setErrorMessage("Failed to export CSV");
-      setShowError(true);
+      setToast({ type: "error", message: "Failed to export CSV" });
     }
   }, [data, columns, filename]);
 
-  // Convert data to JSON
   const exportToJSON = useCallback(() => {
     try {
       const jsonContent = JSON.stringify(data, null, 2);
@@ -101,43 +85,30 @@ export const ExportData: React.FC<ExportDataProps> = ({
       link.download = `${filename}.json`;
       link.click();
       URL.revokeObjectURL(link.href);
-
-      setShowSuccess(true);
+      setToast({ type: "success", message: "Export completed successfully!" });
     } catch {
-      setErrorMessage("Failed to export JSON");
-      setShowError(true);
+      setToast({ type: "error", message: "Failed to export JSON" });
     }
   }, [data, filename]);
 
-  // Handle export
   const handleExport = useCallback(
     async (format: ExportFormat) => {
-      handleClose();
+      setMenuOpen(false);
       setExporting(true);
-
       try {
         if (onExport) {
           await onExport(format);
         } else {
           switch (format) {
-            case "csv":
-              exportToCSV();
-              break;
-            case "json":
-              exportToJSON();
-              break;
+            case "csv": exportToCSV(); break;
+            case "json": exportToJSON(); break;
             case "excel":
-              // Excel export would require a library like xlsx
-              setErrorMessage("Excel export requires additional setup");
-              setShowError(true);
+              setToast({ type: "error", message: "Excel export requires additional setup" });
               break;
           }
         }
       } catch (error) {
-        setErrorMessage(
-          error instanceof Error ? error.message : "Export failed"
-        );
-        setShowError(true);
+        setToast({ type: "error", message: error instanceof Error ? error.message : "Export failed" });
       } finally {
         setExporting(false);
       }
@@ -147,72 +118,73 @@ export const ExportData: React.FC<ExportDataProps> = ({
 
   return (
     <>
-      <Tooltip title="Export">
-        <IconButton
-          onClick={handleClick}
+      <div ref={menuRef} className="relative inline-block">
+        <button
+          type="button"
+          onClick={() => setMenuOpen(!menuOpen)}
           disabled={exporting || data.length === 0}
-          size="small"
+          className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+          title="Export"
         >
-          {exporting ? <CircularProgress size={20} /> : <DownloadIcon />}
-        </IconButton>
-      </Tooltip>
+          {exporting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+        </button>
 
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "right",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "right",
-        }}
-      >
-        <MenuItem onClick={() => handleExport("csv")}>
-          <ListItemIcon>
-            <CsvIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Export as CSV</ListItemText>
-        </MenuItem>
+        {menuOpen && (
+          <div className="absolute right-0 z-50 mt-1 w-44 rounded-md border bg-popover shadow-lg">
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+              onClick={() => handleExport("csv")}
+            >
+              <FileText className="h-4 w-4" />
+              Export as CSV
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+              onClick={() => handleExport("json")}
+            >
+              <Code className="h-4 w-4" />
+              Export as JSON
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground cursor-not-allowed opacity-50"
+              disabled
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Export as Excel
+            </button>
+          </div>
+        )}
+      </div>
 
-        <MenuItem onClick={() => handleExport("json")}>
-          <ListItemIcon>
-            <JsonIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Export as JSON</ListItemText>
-        </MenuItem>
-
-        <MenuItem onClick={() => handleExport("excel")} disabled>
-          <ListItemIcon>
-            <ExcelIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Export as Excel</ListItemText>
-        </MenuItem>
-      </Menu>
-
-      <Snackbar
-        open={showSuccess}
-        autoHideDuration={3000}
-        onClose={() => setShowSuccess(false)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity="success" onClose={() => setShowSuccess(false)}>
-          Export completed successfully!
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={showError}
-        autoHideDuration={5000}
-        onClose={() => setShowError(false)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity="error" onClose={() => setShowError(false)}>
-          {errorMessage}
-        </Alert>
-      </Snackbar>
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+          <div
+            className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm ${
+              toast.type === "success"
+                ? "bg-green-50 text-green-800 border border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800"
+                : "bg-red-50 text-red-800 border border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800"
+            }`}
+          >
+            {toast.type === "success" ? (
+              <CheckCircle className="h-4 w-4" />
+            ) : (
+              <AlertCircle className="h-4 w-4" />
+            )}
+            {toast.message}
+            <button type="button" onClick={() => setToast(null)} className="ml-2 p-0.5 rounded hover:bg-black/10">
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };
