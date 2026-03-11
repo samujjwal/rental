@@ -30,15 +30,22 @@ function sleep(ms: number): Promise<void> {
  * Check if error is retryable
  */
 function isRetryableError(error: unknown, retryableStatuses: number[]): boolean {
-  const response =
-    error && typeof error === "object" && "response" in error
-      ? (error as { response?: { status?: number } }).response
-      : undefined;
-  if (!response) {
-    // Network errors are retryable
-    return true;
+  // Only retry actual Axios errors — not TypeError, ReferenceError, etc.
+  if (
+    !error ||
+    typeof error !== "object" ||
+    !("isAxiosError" in error) ||
+    !(error as { isAxiosError?: boolean }).isAxiosError
+  ) {
+    return false;
   }
-  return retryableStatuses.includes(response.status ?? 0);
+
+  const axiosErr = error as { response?: { status?: number }; code?: string };
+  if (!axiosErr.response) {
+    // Network-level failures (no response received)
+    return axiosErr.code === "ERR_NETWORK" || axiosErr.code === "ECONNABORTED";
+  }
+  return retryableStatuses.includes(axiosErr.response.status ?? 0);
 }
 
 /**

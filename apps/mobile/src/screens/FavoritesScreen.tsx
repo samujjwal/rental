@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList, Image } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from "../../App";
 import { useAuth } from "../api/authContext";
 import { mobileClient } from "../api/client";
-import type { ListingDetail } from "@rental-portal/mobile-sdk";
+import type { ListingDetail } from '~/types';
+import { formatCurrency } from '../utils/currency';
 
 type Props = NativeStackScreenProps<RootStackParamList, "Favorites">;
 
@@ -14,18 +16,28 @@ export function FavoritesScreen({ navigation }: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      try {
-        const data = await mobileClient.getFavorites();
-        setFavorites(data || []);
-      } catch (err) {
-        setStatus("Unable to load favorites.");
-      }
-    };
-    load();
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      if (!user) return;
+      const load = async () => {
+        try {
+          const data = await mobileClient.getFavorites();
+          if (isMounted) {
+            setFavorites(data || []);
+          }
+        } catch (err) {
+          if (isMounted) {
+            setStatus("Unable to load favorites.");
+          }
+        }
+      };
+      load();
+      return () => {
+        isMounted = false;
+      };
+    }, [user])
+  );
 
   const filtered = useMemo(() => {
     const lower = query.trim().toLowerCase();
@@ -73,8 +85,8 @@ export function FavoritesScreen({ navigation }: Props) {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            {item.images?.[0] ? (
-              <Image source={{ uri: item.images[0] }} style={styles.image} />
+            {(item.photos?.[0] || item.images?.[0]) ? (
+              <Image source={{ uri: item.photos?.[0] || item.images?.[0] }} style={styles.image} />
             ) : null}
             <View style={styles.cardBody}>
               <Text style={styles.title}>{item.title}</Text>
@@ -82,7 +94,7 @@ export function FavoritesScreen({ navigation }: Props) {
                 {item.location?.city || "Location"} {item.location?.state || ""}
               </Text>
               <Text style={styles.subtitle}>
-                {item.basePrice ? `$${item.basePrice}` : "Price"} {item.currency || ""}
+                {item.basePrice ? formatCurrency(item.basePrice, item.currency) : "Price"}
               </Text>
               <View style={styles.cardActions}>
                 <Pressable

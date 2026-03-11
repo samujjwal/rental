@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsService } from './notifications.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { PushNotificationService } from './push-notification.service';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
@@ -36,6 +37,13 @@ describe('NotificationsService', () => {
               if (key === 'SMTP_PORT') return 587;
               return 'test-value';
             }),
+          },
+        },
+        {
+          provide: PushNotificationService,
+          useValue: {
+            sendPushNotification: jest.fn().mockResolvedValue(undefined),
+            registerDeviceToken: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

@@ -42,7 +42,7 @@ export function FavoriteButton({
         e.stopPropagation();
 
         if (!isAuthenticated) {
-            navigate('/auth/login?redirect=' + encodeURIComponent(window.location.pathname));
+            navigate('/auth/login?redirectTo=' + encodeURIComponent(window.location.pathname));
             return;
         }
 
@@ -105,7 +105,7 @@ export function CompactFavoriteButton({
             listingId={listingId}
             size="small"
             showTooltip={false}
-            className={`absolute top-2 right-2 bg-white/90 backdrop-blur-sm hover:bg-white shadow-md ${className}`}
+            className={`bg-white/90 backdrop-blur-sm hover:bg-white shadow-md rounded-full ${className}`}
         />
     );
 }

@@ -1,6 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+// import { i18nNotFound } from '@/common/errors/i18n-exceptions';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PricingMode, DepositType, toNumber } from '@rental-portal/database';
+import { roundForCurrency } from '@rental-portal/shared-types';
+import { PolicyEngineService } from '../../policy-engine/services/policy-engine.service';
+import { PolicyContext } from '../../policy-engine/interfaces/policy.interfaces';
 
 export interface PriceCalculation {
   subtotal: number;
@@ -19,10 +24,27 @@ export interface PriceCalculation {
 
 @Injectable()
 export class BookingCalculationService {
-  private readonly PLATFORM_FEE_PERCENTAGE = 0.15; // 15% platform fee
-  private readonly SERVICE_FEE_PERCENTAGE = 0.05; // 5% service fee for renters
+  private readonly platformFeeRate: number;
+  private readonly serviceFeeRate: number;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    @Optional() private readonly policyEngine?: PolicyEngineService,
+  ) {
+    this.platformFeeRate = (this.config.get<number>('fees.platformFeePercent', 10)) / 100;
+    this.serviceFeeRate = (this.config.get<number>('fees.serviceFeePercent', 5)) / 100;
+  }
+
+  /** Public accessor for the service fee rate (e.g. 0.05 = 5%) */
+  getServiceFeeRate(): number {
+    return this.serviceFeeRate;
+  }
+
+  /** Public accessor for the platform fee rate (e.g. 0.10 = 10%) */
+  getPlatformFeeRate(): number {
+    return this.platformFeeRate;
+  }
 
   async calculatePrice(
     listingId: string,
@@ -31,10 +53,11 @@ export class BookingCalculationService {
   ): Promise<PriceCalculation> {
     const listing = await this.prisma.listing.findUnique({
       where: { id: listingId },
+      include: { category: true },
     });
 
     if (!listing) {
-      throw new Error('Listing not found');
+      throw new NotFoundException('Listing not found');
     }
 
     const duration = this.calculateDuration(startDate, endDate);
@@ -45,12 +68,66 @@ export class BookingCalculationService {
     const discountTotal = discounts.reduce((sum, d) => sum + d.amount, 0);
 
     const subtotal = basePrice - discountTotal;
-    const platformFee = subtotal * this.PLATFORM_FEE_PERCENTAGE;
-    const serviceFee = subtotal * this.SERVICE_FEE_PERCENTAGE;
+
+    // Try PolicyEngine for jurisdiction-aware fees; fall back to config rates
+    let platformFee: number;
+    let serviceFee: number;
+
+    if (this.policyEngine) {
+      try {
+        const feeContext: Partial<PolicyContext> = {
+          country: listing.country || this.config.get('platform.country', ''),
+          state: listing.state || null,
+          city: listing.city || null,
+          currency: listing.currency || this.config.get('platform.defaultCurrency', 'USD'),
+          locale: this.config.get('platform.defaultLocale', 'en'),
+          timezone: this.config.get('platform.defaultTimezone', 'UTC'),
+          listingId,
+          listingCategory: listing.category?.slug || null,
+          listingCountry: listing.country || null,
+          listingState: listing.state || null,
+          listingCity: listing.city || null,
+          bookingValue: subtotal,
+          bookingDuration: duration.value,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          requestTimestamp: new Date().toISOString(),
+          evaluationDate: new Date().toISOString().split('T')[0],
+          platform: 'api',
+        } as any;
+
+        const feeBreakdown = await this.policyEngine.calculateFees(
+          feeContext as PolicyContext,
+          subtotal,
+          'Listing',
+          listingId,
+        );
+
+        if (feeBreakdown.totalFees > 0) {
+          const platformLine = feeBreakdown.baseFees.find((f) => f.feeType === 'PLATFORM_FEE');
+          const serviceLine = feeBreakdown.baseFees.find((f) => f.feeType === 'SERVICE_FEE');
+          platformFee = platformLine?.amount ?? subtotal * this.platformFeeRate;
+          serviceFee = serviceLine?.amount ?? subtotal * this.serviceFeeRate;
+        } else {
+          // No FEE rules matched — use config defaults
+          platformFee = subtotal * this.platformFeeRate;
+          serviceFee = subtotal * this.serviceFeeRate;
+        }
+      } catch {
+        // PolicyEngine unavailable — use config defaults
+        platformFee = subtotal * this.platformFeeRate;
+        serviceFee = subtotal * this.serviceFeeRate;
+      }
+    } else {
+      platformFee = subtotal * this.platformFeeRate;
+      serviceFee = subtotal * this.serviceFeeRate;
+    }
+
     const depositAmount = this.calculateDeposit(listing, subtotal);
 
-    const total = subtotal + serviceFee + depositAmount;
-    const ownerEarnings = subtotal - platformFee;
+    const currency = listing.currency || this.config.get('platform.defaultCurrency', 'USD');
+    const total = roundForCurrency(subtotal + serviceFee + depositAmount, currency);
+    const ownerEarnings = roundForCurrency(subtotal - platformFee, currency);
 
     return {
       subtotal,
@@ -207,13 +284,14 @@ export class BookingCalculationService {
         listing: {
           include: {
             cancellationPolicy: true,
+            category: true,
           },
         },
       },
     });
 
     if (!booking) {
-      throw new Error('Booking not found');
+      throw new NotFoundException('Booking not found');
     }
 
     const now = cancellationDate;
@@ -222,39 +300,132 @@ export class BookingCalculationService {
 
     let refundPercentage = 0;
     let reason = '';
+    let refundServiceFee = true;
+    let refundPlatformFee = true;
+    let alwaysRefundDeposit = true;
+    let flatPenalty = 0;
 
-    // Default cancellation policy if none specified
-    if (!booking.listing.cancellationPolicy) {
-      if (hoursUntilStart >= 48) {
-        refundPercentage = 1.0; // Full refund
-        reason = 'Cancelled more than 48 hours before start';
-      } else if (hoursUntilStart >= 24) {
-        refundPercentage = 0.5; // 50% refund
-        reason = 'Cancelled 24-48 hours before start';
-      } else {
-        refundPercentage = 0; // No refund
-        reason = 'Cancelled less than 24 hours before start';
+    // Try PolicyEngine CANCELLATION rules first
+    if (this.policyEngine) {
+      try {
+        const cancelContext: Partial<PolicyContext> = {
+          country: booking.listing.country || this.config.get('platform.country', ''),
+          state: booking.listing.state || null,
+          city: booking.listing.city || null,
+          currency: booking.currency || this.config.get('platform.defaultCurrency', 'USD'),
+          locale: this.config.get('platform.defaultLocale', 'en'),
+          timezone: this.config.get('platform.defaultTimezone', 'UTC'),
+          listingId: booking.listingId,
+          listingCategory: booking.listing.category?.slug || null,
+          listingCountry: booking.listing.country || null,
+          listingState: booking.listing.state || null,
+          listingCity: booking.listing.city || null,
+          bookingValue: toNumber(booking.totalPrice),
+          bookingDuration: null,
+          startDate: booking.startDate.toISOString(),
+          endDate: booking.endDate.toISOString(),
+          requestTimestamp: new Date().toISOString(),
+          evaluationDate: new Date().toISOString().split('T')[0],
+          platform: 'api',
+        } as any;
+
+        const cancellation = await this.policyEngine.evaluateCancellation(
+          cancelContext as PolicyContext,
+          'Booking',
+          bookingId,
+        );
+
+        if (cancellation.tiers.length > 0) {
+          // Find the matching tier based on hoursUntilStart
+          const matchedTier = cancellation.tiers.find((tier) => {
+            const aboveMin = hoursUntilStart >= tier.minHoursBefore;
+            const belowMax =
+              tier.maxHoursBefore === null || hoursUntilStart < tier.maxHoursBefore;
+            return aboveMin && belowMax;
+          });
+
+          if (matchedTier) {
+            refundPercentage = matchedTier.refundPercentage;
+            reason = matchedTier.label || `Cancellation policy tier (${matchedTier.refundPercentage * 100}% refund)`;
+          } else {
+            // hoursUntilStart didn't match any tier — use shortest tier (most restrictive)
+            const lastTier = cancellation.tiers[cancellation.tiers.length - 1];
+            refundPercentage = lastTier.refundPercentage;
+            reason = lastTier.label || 'No matching cancellation tier';
+          }
+
+          refundServiceFee = cancellation.refundServiceFee;
+          refundPlatformFee = cancellation.refundPlatformFee;
+          alwaysRefundDeposit = cancellation.alwaysRefundDeposit;
+          flatPenalty = cancellation.flatPenalty;
+        } else {
+          // No CANCELLATION rules — fall through to hardcoded defaults
+          this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
+            refundPercentage = pct;
+            reason = msg;
+          });
+        }
+      } catch {
+        // PolicyEngine error — fall back to hardcoded defaults
+        this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
+          refundPercentage = pct;
+          reason = msg;
+        });
       }
     } else {
-      // Use listing's cancellation policy
-      // Implementation depends on policy structure
-      refundPercentage = 1.0;
-      reason = 'Per cancellation policy';
+      this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
+        refundPercentage = pct;
+        reason = msg;
+      });
     }
 
-    const subtotalRefund = toNumber(booking.basePrice) * refundPercentage;
-    const platformFeeRefund = toNumber(booking.platformFee) * refundPercentage;
-    const serviceFeeRefund = toNumber(booking.serviceFee) * refundPercentage;
-    const depositRefund = toNumber(booking.securityDeposit || 0);
-    const penalty = toNumber(booking.basePrice) - subtotalRefund;
+    // Use basePrice (the listing price only) to avoid double-counting fees/deposit/tax.
+    // totalPrice = basePrice + serviceFee + platformFee + taxAmount + securityDeposit,
+    // so using totalPrice here would double-count when we add serviceFeeRefund/depositRefund below.
+    const baseAmount = toNumber(booking.basePrice);
+    const bookingCurrency = booking.currency || this.config.get('platform.defaultCurrency', 'USD');
+    const subtotalRefund = roundForCurrency(baseAmount * refundPercentage, bookingCurrency);
+    const platformFeeRefund = refundPlatformFee
+      ? roundForCurrency(toNumber(booking.platformFee) * refundPercentage, bookingCurrency)
+      : 0;
+    const serviceFeeRefund = refundServiceFee
+      ? roundForCurrency(toNumber(booking.serviceFee) * refundPercentage, bookingCurrency)
+      : 0;
+    const depositRefund = alwaysRefundDeposit
+      ? roundForCurrency(toNumber(booking.securityDeposit || 0), bookingCurrency)
+      : 0;
+    const totalRefund = subtotalRefund + serviceFeeRefund + depositRefund;
+    const penalty = roundForCurrency(baseAmount - subtotalRefund + flatPenalty, bookingCurrency);
 
     return {
-      refundAmount: subtotalRefund + serviceFeeRefund + depositRefund,
+      refundAmount: totalRefund,
       platformFeeRefund,
       serviceFeeRefund,
       depositRefund,
       penalty,
       reason,
     };
+  }
+
+  /**
+   * Default hardcoded cancellation tiers (fallback when PolicyEngine has no rules).
+   * @deprecated Will be removed once all jurisdictions have CANCELLATION PolicyRules.
+   */
+  private applyDefaultCancellationPolicy(
+    hoursUntilStart: number,
+    booking: any,
+    apply: (refundPercentage: number, reason: string) => void,
+  ): void {
+    if (!booking.listing.cancellationPolicy) {
+      if (hoursUntilStart >= 48) {
+        apply(1.0, 'Cancelled more than 48 hours before start');
+      } else if (hoursUntilStart >= 24) {
+        apply(0.5, 'Cancelled 24-48 hours before start');
+      } else {
+        apply(0, 'Cancelled less than 24 hours before start');
+      }
+    } else {
+      apply(1.0, 'Per cancellation policy');
+    }
   }
 }

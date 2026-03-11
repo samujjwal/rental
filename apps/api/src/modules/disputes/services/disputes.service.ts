@@ -3,11 +3,27 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
 import { CacheService } from '@/common/cache/cache.service';
-import { Dispute, DisputeStatus, UserRole } from '@rental-portal/database';
+import { escapeHtml } from '@/common/utils/sanitize';
+import { Dispute, DisputeStatus, UserRole, NotificationType } from '@rental-portal/database';
+import { NotificationsService } from '@/modules/notifications/services/notifications.service';
+import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
+
+/** Valid forward transitions for each dispute status */
+const DISPUTE_VALID_TRANSITIONS: Record<string, DisputeStatus[]> = {
+  [DisputeStatus.OPEN]:         [DisputeStatus.UNDER_REVIEW, DisputeStatus.WITHDRAWN, DisputeStatus.CLOSED],
+  [DisputeStatus.UNDER_REVIEW]: [DisputeStatus.INVESTIGATING, DisputeStatus.RESOLVED, DisputeStatus.DISMISSED],
+  [DisputeStatus.INVESTIGATING]:[DisputeStatus.RESOLVED, DisputeStatus.DISMISSED],
+  [DisputeStatus.RESOLVED]:     [DisputeStatus.CLOSED],
+  [DisputeStatus.CLOSED]:       [],
+  [DisputeStatus.DISMISSED]:    [],
+  [DisputeStatus.WITHDRAWN]:    [],
+};
 
 export interface CreateDisputeDto {
   bookingId: string;
@@ -38,10 +54,14 @@ export interface AddEvidenceDto {
 
 @Injectable()
 export class DisputesService {
+  private readonly logger = new Logger(DisputesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly cacheService: CacheService,
+    private readonly notificationsService: NotificationsService,
+    private readonly stateMachine: BookingStateMachineService,
   ) {}
 
   /**
@@ -60,12 +80,12 @@ export class DisputesService {
     });
 
     if (!booking) {
-      throw new NotFoundException('Booking not found');
+      throw i18nNotFound('booking.notFound');
     }
 
     // Verify authorization (renter or owner)
     if (booking.renterId !== userId && booking.listing.ownerId !== userId) {
-      throw new ForbiddenException('Not authorized to create dispute for this booking');
+      throw i18nForbidden('dispute.unauthorized');
     }
 
     // Check if there's already an active dispute
@@ -77,7 +97,7 @@ export class DisputesService {
     );
 
     if (activeDispute) {
-      throw new BadRequestException('An active dispute already exists for this booking');
+      throw i18nBadRequest('dispute.alreadyExists');
     }
 
     // Determine defendant (opposite party)
@@ -94,6 +114,18 @@ export class DisputesService {
         description,
         amount,
         status: DisputeStatus.OPEN,
+        // Persist evidence files if provided
+        ...(evidence && evidence.length > 0
+          ? {
+              evidence: {
+                create: evidence.map((url) => ({
+                  type: 'document',
+                  url,
+                  uploadedBy: userId,
+                })),
+              },
+            }
+          : {}),
       },
       include: {
         booking: {
@@ -126,13 +158,27 @@ export class DisputesService {
     if (targetUser) {
       await this.emailService.sendEmail(
         targetUser.email,
-        `New Dispute Created: ${title}`,
-        `<p>A dispute has been opened for booking #${booking.id}. ${description}. Please log in to view details.</p>`,
+        `New Dispute Created: ${escapeHtml(title)}`,
+        `<p>A dispute has been opened for booking #${escapeHtml(booking.id)}. ${escapeHtml(description)}. Please log in to view details.</p>`,
       );
     }
 
     // Notify Admin (hardcoded or configured email)
     // await this.emailService.sendEmail('admin@rentals.com', 'New Dispute Created', ...);
+
+    // Transition booking to DISPUTED state
+    try {
+      const role = booking.renterId === userId ? 'RENTER' : 'OWNER';
+      await this.stateMachine.transition(
+        booking.id,
+        'INITIATE_DISPUTE',
+        userId,
+        role as 'RENTER' | 'OWNER',
+        { disputeId: dispute.id },
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to transition booking ${booking.id} to DISPUTED`, err);
+    }
 
     return dispute;
   }
@@ -193,7 +239,7 @@ export class DisputesService {
     });
 
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw i18nNotFound('dispute.notFound');
     }
 
     // Verify authorization
@@ -201,11 +247,12 @@ export class DisputesService {
       where: { id: userId },
     });
 
-    const isAdmin = user?.role === UserRole.ADMIN;
+    const adminRoles = [UserRole.ADMIN, 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'] as string[];
+    const isAdmin = adminRoles.includes(user?.role as string);
     const isParty = dispute.initiatorId === userId || dispute.defendantId === userId;
 
     if (!isAdmin && !isParty) {
-      throw new ForbiddenException('Not authorized to view this dispute');
+      throw i18nForbidden('dispute.unauthorized');
     }
 
     return dispute;
@@ -301,7 +348,7 @@ export class DisputesService {
     });
 
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw i18nNotFound('dispute.notFound');
     }
 
     // Verify authorization
@@ -313,36 +360,52 @@ export class DisputesService {
     const isParty = dispute.initiatorId === userId || dispute.defendantId === userId;
 
     if (!isAdmin && !isParty) {
-      throw new ForbiddenException('Not authorized to respond to this dispute');
+      throw i18nForbidden('dispute.unauthorized');
     }
 
-    // Create response
-    const disputeResponse = await this.prisma.disputeResponse.create({
-      data: {
-        disputeId,
-        userId, // Use the authenticated user's ID
-        content: response.message,
-        type: 'statement', // Default type
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
+    // Create response and update status atomically in a transaction
+    const disputeResponse = await this.prisma.$transaction(async (tx: any) => {
+      const response_ = await tx.disputeResponse.create({
+        data: {
+          disputeId,
+          userId, // Use the authenticated user's ID
+          content: response.message,
+          type: 'statement', // Default type
+          attachments: response.evidence ?? [],
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+            },
           },
         },
-      },
+      });
+
+      // Update dispute status if it was OPEN
+      if (dispute.status === DisputeStatus.OPEN) {
+        await tx.dispute.update({
+          where: { id: disputeId },
+          data: { status: DisputeStatus.UNDER_REVIEW },
+        });
+      }
+
+      return response_;
     });
 
-    // Update dispute status if it was OPEN
-    if (dispute.status === DisputeStatus.OPEN) {
-      await this.prisma.dispute.update({
-        where: { id: disputeId },
-        data: { status: DisputeStatus.UNDER_REVIEW },
-      });
+    // Send notification to the other party
+    const otherPartyId = dispute.initiatorId === userId ? dispute.defendantId : dispute.initiatorId;
+    if (otherPartyId) {
+      await this.notificationsService.sendNotification({
+        userId: otherPartyId,
+        type: NotificationType.DISPUTE_UPDATED,
+        title: 'New message on your dispute',
+        message: `A new message has been added to dispute: ${dispute.title}`,
+        channels: ['IN_APP', 'EMAIL'],
+        data: { disputeId },
+      }).catch(err => this.logger.error('Failed to send dispute notification', err));
     }
-
-    // TODO: Send notification to other parties
 
     return disputeResponse;
   }
@@ -356,53 +419,99 @@ export class DisputesService {
       where: { id: userId },
     });
 
-    if (user?.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Only admins can update dispute status');
+    const adminRoles = [UserRole.ADMIN, 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'] as string[];
+    if (!user || !adminRoles.includes(user.role as string)) {
+      throw i18nForbidden('dispute.adminOnly');
     }
 
     const dispute = await this.prisma.dispute.findUnique({
       where: { id: disputeId },
+      include: { booking: { select: { currency: true } } },
     });
 
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw i18nNotFound('dispute.notFound');
     }
 
     const updateData: any = {};
 
-    if (dto.status) updateData.status = dto.status;
+    if (dto.status) {
+      // Enforce valid state machine transition
+      const allowedNext = DISPUTE_VALID_TRANSITIONS[dispute.status] ?? [];
+      if (!allowedNext.includes(dto.status)) {
+        throw i18nBadRequest('dispute.invalidTransition');
+      }
+      updateData.status = dto.status;
+    }
     // Note: resolution is a relation, not a string field - use adminNotes for text notes
     if (dto.resolvedAmount !== undefined) updateData.amount = dto.resolvedAmount;
-    if (dto.adminNotes) {
-      // Store admin notes in description or create a DisputeTimelineEvent
-      updateData.description = `${dispute.description}\n\n[Admin Note]: ${dto.adminNotes}`;
-    }
 
     // If resolving dispute
     if (dto.status && ['RESOLVED', 'CLOSED'].includes(dto.status)) {
       updateData.assignedTo = userId;
       updateData.resolvedAt = new Date();
-      
+    }
+
+    // Wrap all DB writes in a transaction
+    const updated: Dispute = await this.prisma.$transaction(async (tx: any) => {
+      if (dto.adminNotes) {
+        // Store admin notes as a response entry instead of appending to description
+        await tx.disputeResponse.create({
+          data: {
+            disputeId,
+            userId,
+            content: dto.adminNotes,
+            type: 'admin_note',
+            attachments: [],
+          },
+        });
+      }
+
+      return tx.dispute.update({
+        where: { id: disputeId },
+        data: updateData,
+      });
+    }) as any;
+
+    // Side effects (cache publish, state transitions) run after transaction commits
+    if (dto.status && ['RESOLVED', 'CLOSED'].includes(dto.status)) {
       // If there's a resolved amount, trigger deposit capture
       if (dto.resolvedAmount && dto.resolvedAmount > 0) {
         await this.cacheService.publish('booking:deposit-capture', {
           bookingId: dispute.bookingId,
           amount: dto.resolvedAmount,
+          currency: (dispute as any).booking?.currency || 'USD',
           timestamp: new Date().toISOString(),
         });
       } else if (dto.status === 'CLOSED' && !dto.resolvedAmount) {
         // If closed without amount, release deposit
         await this.cacheService.publish('booking:deposit-release', {
           bookingId: dispute.bookingId,
+          currency: (dispute as any).booking?.currency || 'USD',
           timestamp: new Date().toISOString(),
         });
       }
+
+      // Determine resolution direction: if there's a resolvedAmount > 0, the renter is being
+      // compensated (renter favor → REFUNDED).  Otherwise owner keeps earnings (owner favor → COMPLETED).
+      const transition = (dto.resolvedAmount && dto.resolvedAmount > 0)
+        ? 'RESOLVE_DISPUTE_RENTER_FAVOR' as const
+        : 'RESOLVE_DISPUTE_OWNER_FAVOR' as const;
+
+      try {
+        await this.stateMachine.transition(
+          dispute.bookingId,
+          transition,
+          userId,
+          'ADMIN',
+          { disputeId, resolution: dto.status },
+        );
+      } catch (err) {
+        this.logger.warn(`Failed to transition booking ${dispute.bookingId} after dispute resolution`, err);
+      }
     }
 
-    return this.prisma.dispute.update({
-      where: { id: disputeId },
-      data: updateData,
-    });
+    return updated;
   }
 
   /**
@@ -421,7 +530,7 @@ export class DisputesService {
     });
 
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw i18nNotFound('dispute.notFound');
     }
 
     // Can be closed by initiator or admin
@@ -433,24 +542,74 @@ export class DisputesService {
     const isInitiator = dispute.initiatorId === userId;
 
     if (!isAdmin && !isInitiator) {
-      throw new ForbiddenException('Not authorized to close this dispute');
+      throw i18nForbidden('dispute.unauthorized');
     }
 
-    // Release deposit if closed without resolution
-    await this.cacheService.publish('booking:deposit-release', {
-      bookingId: dispute.bookingId,
-      timestamp: new Date().toISOString(),
-    });
+    // Wrap DB writes in a transaction
+    const closed: Dispute = await this.prisma.$transaction(async (tx: any) => {
+      // Store close reason as a response instead of corrupting the description
+      await tx.disputeResponse.create({
+        data: {
+          disputeId,
+          userId,
+          content: reason,
+          type: 'closure',
+          attachments: [],
+        },
+      });
 
-    return this.prisma.dispute.update({
-      where: { id: disputeId },
-      data: {
-        status: DisputeStatus.CLOSED,
-        description: `${dispute.description}\n\n[Closed]: ${reason}`,
-        assignedTo: userId,
-        resolvedAt: new Date(),
-      },
-    });
+      return tx.dispute.update({
+        where: { id: disputeId },
+        data: {
+          status: DisputeStatus.CLOSED,
+          assignedTo: userId,
+          resolvedAt: new Date(),
+        },
+      });
+    }) as unknown as Dispute;
+
+    // Side effects run after transaction commits
+
+    // Only release deposit if dispute is still OPEN/UNDER_REVIEW (not already resolved)
+    if (['OPEN', 'UNDER_REVIEW'].includes(dispute.status as string)) {
+      await this.cacheService.publish('booking:deposit-release', {
+        bookingId: dispute.bookingId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Transition booking back from DISPUTED.
+    // If the initiator (non-admin) is closing/withdrawing, the dispute is effectively
+    // withdrawn — transition to COMPLETED (owner keeps earnings).
+    // If an admin closes it, they decide the outcome separately via updateDispute.
+    if (isInitiator && !isAdmin) {
+      try {
+        await this.stateMachine.transition(
+          dispute.bookingId,
+          'RESOLVE_DISPUTE_OWNER_FAVOR',
+          userId,
+          'SYSTEM',
+          { disputeId, reason, withdrawnByInitiator: true },
+        );
+      } catch (err) {
+        this.logger.warn(`Failed to transition booking ${dispute.bookingId} after dispute withdrawal`, err);
+      }
+    } else if (isAdmin) {
+      // Admin closure without explicit resolution defaults to owner favor
+      try {
+        await this.stateMachine.transition(
+          dispute.bookingId,
+          'RESOLVE_DISPUTE_OWNER_FAVOR',
+          userId,
+          'ADMIN',
+          { disputeId, reason },
+        );
+      } catch (err) {
+        this.logger.warn(`Failed to transition booking ${dispute.bookingId} after admin dispute closure`, err);
+      }
+    }
+
+    return closed;
   }
 
   /**
@@ -470,16 +629,17 @@ export class DisputesService {
       where: { id: userId },
     });
 
-    if (user?.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Admin access required');
+    const adminRolesForList = [UserRole.ADMIN, 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'] as any[];
+    if (!user || !adminRolesForList.includes(user.role)) {
+      throw i18nForbidden('dispute.adminRequired');
     }
 
     const { status, reason, page = 1, limit = 20 } = options;
 
     const where: any = {};
     if (status) where.status = status;
-    // Note: 'reason' parameter is for display - the schema uses 'type'
-    // if (reason) where.type = reason;
+    // Filter by dispute type (passed as 'reason' in the query)
+    if (reason) where.type = reason;
 
     const [disputes, total] = await Promise.all([
       this.prisma.dispute.findMany({
@@ -538,8 +698,9 @@ export class DisputesService {
       where: { id: userId },
     });
 
-    if (user?.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Admin access required');
+    const adminRolesForStats = [UserRole.ADMIN, 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'] as any[];
+    if (!user || !adminRolesForStats.includes(user.role)) {
+      throw i18nForbidden('dispute.adminRequired');
     }
 
     const [total, open, underReview, resolved, closed] = await Promise.all([

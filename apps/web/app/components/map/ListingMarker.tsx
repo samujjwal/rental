@@ -1,6 +1,7 @@
 import { Marker, Popup } from 'react-leaflet';
 import { DivIcon } from 'leaflet';
 import type { LatLngExpression } from 'leaflet';
+import { APP_LOCALE } from '~/config/locale';
 
 export interface ListingMarkerData {
     id: string;
@@ -24,7 +25,7 @@ export interface ListingMarkerProps {
 }
 
 function createCustomIcon(price: number, currency: string, isHighlighted: boolean) {
-    const priceText = new Intl.NumberFormat('en-US', {
+    const priceText = new Intl.NumberFormat(APP_LOCALE, {
         style: 'currency',
         currency: currency,
         minimumFractionDigits: 0,
@@ -86,7 +87,7 @@ export function ListingMarker({
                             <p className="text-sm text-gray-600 mb-2">{listing.category}</p>
                         )}
                         <p className="text-lg font-bold text-blue-600">
-                            {new Intl.NumberFormat('en-US', {
+                            {new Intl.NumberFormat(APP_LOCALE, {
                                 style: 'currency',
                                 currency: listing.currency,
                             }).format(listing.price)}

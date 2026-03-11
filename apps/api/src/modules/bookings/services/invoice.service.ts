@@ -1,5 +1,8 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden } from '@/common/errors/i18n-exceptions';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { formatCurrency, getCurrencySymbol } from '@rental-portal/shared-types';
 
 interface InvoiceLineItem {
   description: string;
@@ -36,13 +39,20 @@ interface InvoiceData {
   tax: number;
   total: number;
   currency: string;
+  brandName: string;
 }
 
 @Injectable()
 export class InvoiceService {
   private readonly logger = new Logger(InvoiceService.name);
+  private readonly brandName: string;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {
+    this.brandName = this.config.get('brand.name', 'Rental Portal');
+  }
 
   /**
    * Generate invoice data for a booking.
@@ -73,16 +83,17 @@ export class InvoiceService {
             email: true,
           },
         },
+        priceBreakdown: true,
       },
     });
 
     if (!booking) {
-      throw new NotFoundException('Booking not found');
+      throw i18nNotFound('booking.notFound');
     }
 
     // Only renter and owner can view invoice
     if (booking.renter.id !== userId && booking.bookingOwner?.id !== userId) {
-      throw new ForbiddenException('Not authorized to view this invoice');
+      throw i18nForbidden('booking.unauthorizedAction');
     }
 
     const startDate = new Date(booking.startDate);
@@ -91,8 +102,16 @@ export class InvoiceService {
     const basePrice = Number(booking.listing.basePrice) || 0;
     const rentalTotal = basePrice * days;
     const serviceFee = Number(booking.serviceFee) || Math.round(rentalTotal * 0.1 * 100) / 100;
-    const tax = 0; // Tax field not in schema; default to 0
-    const total = Number(booking.totalAmount) || rentalTotal + serviceFee + tax;
+
+    // Pull tax from BookingPriceBreakdown line items (TAX type) instead of hardcoding to zero
+    let tax = 0;
+    if (booking.priceBreakdown && booking.priceBreakdown.length > 0) {
+      tax = booking.priceBreakdown
+        .filter((item: any) => item.type === 'TAX' || item.type === 'VAT' || item.type === 'GST' || item.type === 'SALES_TAX')
+        .reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0);
+    }
+
+    const total = Number(booking.totalPrice) || rentalTotal + serviceFee + tax;
 
     const lineItems: InvoiceLineItem[] = [
       {
@@ -148,7 +167,8 @@ export class InvoiceService {
       serviceFee,
       tax,
       total,
-      currency: 'USD',
+      currency: booking.currency,
+      brandName: this.brandName,
     };
   }
 
@@ -162,8 +182,8 @@ export class InvoiceService {
         <tr>
           <td style="padding:8px; border-bottom:1px solid #eee;">${item.description}</td>
           <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">${item.quantity}</td>
-          <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">$${item.unitPrice.toFixed(2)}</td>
-          <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">$${item.total.toFixed(2)}</td>
+          <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">${formatCurrency(item.unitPrice, data.currency)}</td>
+          <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">${formatCurrency(item.total, data.currency)}</td>
         </tr>`,
       )
       .join('');
@@ -189,7 +209,7 @@ export class InvoiceService {
 </head>
 <body>
   <div class="header">
-    <div class="logo">GharBatai</div>
+    <div class="logo">${data.brandName || 'Rental Portal'}</div>
     <div class="invoice-info">
       <h2 style="margin:0;">Invoice ${data.invoiceNumber}</h2>
       <p>Date: ${data.date}</p>
@@ -221,7 +241,7 @@ export class InvoiceService {
       ${rows}
       <tr class="total-row">
         <td colspan="3" style="text-align:right; padding:12px 8px;">Total (${data.currency})</td>
-        <td style="text-align:right; padding:12px 8px;">$${data.total.toFixed(2)}</td>
+        <td style="text-align:right; padding:12px 8px;">${formatCurrency(data.total, data.currency)}</td>
       </tr>
     </tbody>
   </table>

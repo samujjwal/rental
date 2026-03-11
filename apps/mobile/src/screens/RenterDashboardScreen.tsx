@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, Pressable, FlatList } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { BookingSummary } from "@rental-portal/mobile-sdk";
+import type { BookingSummary } from '~/types';
+import { formatDate } from '../utils/date';
 
 type Props = NativeStackScreenProps<RootStackParamList, "RenterDashboard">;
 
@@ -18,38 +20,40 @@ export function RenterDashboardScreen({ navigation }: Props) {
   });
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    if (!user) {
-      setStatus("Sign in to view your dashboard.");
-      return;
-    }
-
-    const load = async () => {
-      try {
-        const data = await mobileClient.getMyBookings();
-        setBookings(data);
-        const now = new Date();
-        const normalize = (status: string) => status.toUpperCase();
-        const upcoming = data.filter((b) => {
-          const status = normalize(b.status || "");
-          return status === "CONFIRMED" && new Date(b.startDate) > now;
-        }).length;
-        const active = data.filter((b) => {
-          const status = normalize(b.status || "");
-          return status === "IN_PROGRESS" || status === "AWAITING_RETURN_INSPECTION";
-        }).length;
-        const completed = data.filter((b) => {
-          const status = normalize(b.status || "");
-          return status === "COMPLETED" || status === "SETTLED";
-        }).length;
-        setStats({ upcoming, active, completed });
-      } catch (err) {
-        setStatus("Unable to load dashboard data.");
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
+        setStatus("Sign in to view your dashboard.");
+        return;
       }
-    };
 
-    load();
-  }, [user]);
+      const load = async () => {
+        try {
+          const data = await mobileClient.getMyBookings();
+          setBookings(data);
+          const now = new Date();
+          const normalize = (status: string) => status.toUpperCase();
+          const upcoming = data.filter((b) => {
+            const status = normalize(b.status || "");
+            return status === "CONFIRMED" && new Date(b.startDate) > now;
+          }).length;
+          const active = data.filter((b) => {
+            const status = normalize(b.status || "");
+            return status === "IN_PROGRESS" || status === "AWAITING_RETURN_INSPECTION";
+          }).length;
+          const completed = data.filter((b) => {
+            const status = normalize(b.status || "");
+            return status === "COMPLETED" || status === "SETTLED";
+          }).length;
+          setStats({ upcoming, active, completed });
+        } catch (err) {
+          setStatus("Unable to load dashboard data.");
+        }
+      };
+
+      load();
+    }, [user])
+  );
 
   const renderBooking = ({ item }: { item: BookingSummary }) => (
     <Pressable
@@ -58,7 +62,7 @@ export function RenterDashboardScreen({ navigation }: Props) {
     >
       <Text style={styles.bookingTitle}>{item.listing?.title || "Booking"}</Text>
       <Text style={styles.bookingMeta}>
-        {item.startDate} → {item.endDate}
+        {formatDate(item.startDate)} → {formatDate(item.endDate)}
       </Text>
       <Text style={styles.bookingStatus}>{item.status}</Text>
     </Pressable>
@@ -85,13 +89,13 @@ export function RenterDashboardScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.quickRow}>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("Search")}>
+        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("Main" as any, { screen: "SearchTab" })}>
           <Text style={styles.quickText}>Search</Text>
         </Pressable>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("Bookings")}>
+        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("Main" as any, { screen: "BookingsTab" })}>
           <Text style={styles.quickText}>Bookings</Text>
         </Pressable>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("Messages")}>
+        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("Main" as any, { screen: "MessagesTab" })}>
           <Text style={styles.quickText}>Messages</Text>
         </Pressable>
         <Pressable style={styles.quickButton} onPress={() => navigation.navigate("Reviews")}>

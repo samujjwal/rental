@@ -25,6 +25,20 @@ export class SendMessageDto {
   attachments?: string[];
 }
 
+export class SendMessageBodyDto {
+  @ApiProperty({ description: 'Message content' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  content: string;
+
+  @ApiProperty({ description: 'Attachment URLs', required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachments?: string[];
+}
+
 export class CreateConversationDto {
   @ApiProperty({ description: 'Listing ID for the conversation' })
   @IsString()

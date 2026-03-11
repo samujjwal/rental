@@ -4,6 +4,11 @@ const TOKEN_KEY = 'auth_access_token';
 const REFRESH_KEY = 'auth_refresh_token';
 const USER_KEY = 'auth_user';
 
+/** Convenience named export so modules can `import { getToken }` */
+export async function getToken(): Promise<string | null> {
+  return authStore.getToken();
+}
+
 export const authStore = {
   async getToken(): Promise<string | null> {
     try {
@@ -36,7 +41,7 @@ export const authStore = {
     ]);
   },
 
-  async setUser(user: Record<string, unknown>): Promise<void> {
+  async setUser(user: object): Promise<void> {
     await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
   },
 

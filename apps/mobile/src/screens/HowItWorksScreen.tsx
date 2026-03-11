@@ -11,7 +11,7 @@ export function HowItWorksScreen({ navigation }: Props) {
       title="How It Works"
       description="Discover, book, and enjoy rentals with secure payments and trusted reviews."
       ctaLabel="Start searching"
-      onPressCta={() => navigation.navigate("Search")}
+      onPressCta={() => navigation.navigate("Main")}
     />
   );
 }

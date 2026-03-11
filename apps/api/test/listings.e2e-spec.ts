@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { UserRole } from '@rental-portal/database';
-import { cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
 
 describe('Listings (e2e)', () => {
   let app: INestApplication;
@@ -14,6 +14,11 @@ describe('Listings (e2e)', () => {
   let adminToken: string;
   let testListingId: string;
   let testCategoryId: string;
+
+  const ownerEmail = buildTestEmail('listing-owner');
+  const renterEmail = buildTestEmail('listing-renter');
+  const adminEmail = buildTestEmail('listing-admin');
+  const testEmails = [ownerEmail, renterEmail, adminEmail];
 
   const listingPayload = () => ({
     categoryId: testCategoryId,
@@ -52,7 +57,7 @@ describe('Listings (e2e)', () => {
       where: {
         owner: {
           email: {
-            in: ['owner-listings@test.com', 'renter-listings@test.com', 'admin-listings@test.com'],
+            in: testEmails,
           },
         },
       },
@@ -60,7 +65,7 @@ describe('Listings (e2e)', () => {
     await prisma.user.deleteMany({
       where: {
         email: {
-          in: ['owner-listings@test.com', 'renter-listings@test.com', 'admin-listings@test.com'],
+          in: testEmails,
         },
       },
     });
@@ -73,7 +78,7 @@ describe('Listings (e2e)', () => {
       where: {
         owner: {
           email: {
-            in: ['owner-listings@test.com', 'renter-listings@test.com', 'admin-listings@test.com'],
+            in: testEmails,
           },
         },
       },
@@ -81,7 +86,7 @@ describe('Listings (e2e)', () => {
     await prisma.user.deleteMany({
       where: {
         email: {
-          in: ['owner-listings@test.com', 'renter-listings@test.com', 'admin-listings@test.com'],
+          in: testEmails,
         },
       },
     });
@@ -89,7 +94,7 @@ describe('Listings (e2e)', () => {
     const owner = await createUserWithRole({
       app,
       prisma,
-      email: 'owner-listings@test.com',
+      email: ownerEmail,
       password: 'Password123!',
       firstName: 'Owner',
       lastName: 'User',
@@ -100,7 +105,7 @@ describe('Listings (e2e)', () => {
     const renter = await createUserWithRole({
       app,
       prisma,
-      email: 'renter-listings@test.com',
+      email: renterEmail,
       password: 'Password123!',
       firstName: 'Renter',
       lastName: 'User',
@@ -111,7 +116,7 @@ describe('Listings (e2e)', () => {
     const admin = await createUserWithRole({
       app,
       prisma,
-      email: 'admin-listings@test.com',
+      email: adminEmail,
       password: 'Password123!',
       firstName: 'Admin',
       lastName: 'User',
@@ -181,6 +186,114 @@ describe('Listings (e2e)', () => {
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.some((listing: any) => listing.id === testListingId)).toBe(true);
+    });
+  });
+
+  describe('GET /listings/:id', () => {
+    let draftListingId: string;
+    let availableListingId: string;
+    let archivedListingId: string;
+
+    beforeEach(async () => {
+      // Create listings with different statuses
+      const draftListing = await request(app.getHttpServer())
+        .post('/listings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ ...listingPayload(), status: 'DRAFT' })
+        .expect(201);
+      draftListingId = draftListing.body.id;
+
+      const availableListing = await request(app.getHttpServer())
+        .post('/listings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ ...listingPayload(), status: 'AVAILABLE' })
+        .expect(201);
+      availableListingId = availableListing.body.id;
+
+      const archivedListing = await request(app.getHttpServer())
+        .post('/listings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ ...listingPayload(), status: 'ARCHIVED' })
+        .expect(201);
+      archivedListingId = archivedListing.body.id;
+    });
+
+    it('should allow public access to AVAILABLE listing', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/listings/${availableListingId}`)
+        .expect(200);
+
+      expect(response.body.id).toBe(availableListingId);
+      expect(response.body.status).toBe('AVAILABLE');
+    });
+
+    it('should reject public access to DRAFT listing', async () => {
+      await request(app.getHttpServer())
+        .get(`/listings/${draftListingId}`)
+        .expect(404);
+    });
+
+    it('should reject public access to ARCHIVED listing', async () => {
+      await request(app.getHttpServer())
+        .get(`/listings/${archivedListingId}`)
+        .expect(404);
+    });
+
+    it('should allow owner to see their DRAFT listing', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/listings/${draftListingId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+
+      expect(response.body.id).toBe(draftListingId);
+      expect(response.body.status).toBe('DRAFT');
+    });
+
+    it('should allow owner to see their ARCHIVED listing', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/listings/${archivedListingId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+
+      expect(response.body.id).toBe(archivedListingId);
+      expect(response.body.status).toBe('ARCHIVED');
+    });
+
+    it('should allow admin to see any DRAFT listing', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/listings/${draftListingId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(response.body.id).toBe(draftListingId);
+      expect(response.body.status).toBe('DRAFT');
+    });
+
+    it('should reject non-owner from seeing DRAFT listing', async () => {
+      await request(app.getHttpServer())
+        .get(`/listings/${draftListingId}`)
+        .set('Authorization', `Bearer ${renterToken}`)
+        .expect(404);
+    });
+
+    it('should reject non-owner from seeing ARCHIVED listing', async () => {
+      await request(app.getHttpServer())
+        .get(`/listings/${archivedListingId}`)
+        .set('Authorization', `Bearer ${renterToken}`)
+        .expect(404);
+    });
+
+    it('should handle invalid JWT token gracefully', async () => {
+      await request(app.getHttpServer())
+        .get(`/listings/${availableListingId}`)
+        .set('Authorization', 'Bearer invalid.jwt.token')
+        .expect(200); // Should fall back to public access
+    });
+
+    it('should return 404 for non-existent listing', async () => {
+      await request(app.getHttpServer())
+        .get('/listings/non-existent-id')
+        .expect(404);
     });
   });
 

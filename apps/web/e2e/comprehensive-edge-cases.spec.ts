@@ -1,3 +1,19 @@
+/**
+ * Edge Cases and Error Scenarios E2E Tests
+ *
+ * NOTE ON ROUTE INTERCEPTION: This file intentionally uses `page.route()` to simulate
+ * error conditions that cannot be triggered deterministically against a live API:
+ *   - Network timeouts and 500/429/503 server errors
+ *   - Payment declines (402), insufficient funds, payment timeouts
+ *   - Race conditions (concurrent bookings returning 409)
+ *   - Price changes between requests
+ *   - Availability conflicts
+ *   - Upload failures
+ *
+ * These are the ONLY acceptable uses of route interception in E2E tests — they test
+ * frontend error-handling behaviour for scenarios that are inherently non-reproducible
+ * against a healthy backend. All happy-path and real-data tests live elsewhere.
+ */
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { testUsers } from "./helpers/fixtures";
 import { loginAs } from "./helpers/test-utils";
@@ -543,21 +559,11 @@ test.describe("Edge Cases and Error Scenarios", () => {
   });
 
   test.describe("File Upload Edge Cases", () => {
-    const mockCategories = [{ id: "cat-photo", name: "Photography" }];
-
-    const mockCategoryApi = async (page: Page) => {
-      await page.route("**/api/categories", (route: Route) =>
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(mockCategories),
-        })
-      );
-    };
-
     test("should handle file upload failure", async ({ page }) => {
       await loginAs(page, testUsers.owner);
-      await mockCategoryApi(page);
+      // Intentional mock: simulates the upload API returning an empty array (server accepted
+      // the request but failed to store the file).  This failure mode cannot be triggered
+      // deterministically against a real object-storage backend.
       await page.route("**/api/upload/images", (route) =>
         route.fulfill({
           status: 200,
@@ -582,7 +588,6 @@ test.describe("Edge Cases and Error Scenarios", () => {
 
     test("should handle corrupted file", async ({ page }) => {
       await loginAs(page, testUsers.owner);
-      await mockCategoryApi(page);
       await page.goto("/listings/new");
 
       const fileInput = page.locator('[data-testid="image-upload-area"] input[type="file"]').first();
@@ -597,7 +602,6 @@ test.describe("Edge Cases and Error Scenarios", () => {
 
     test("should handle maximum file count", async ({ page }) => {
       await loginAs(page, testUsers.owner);
-      await mockCategoryApi(page);
       await page.goto("/listings/new");
 
       const fileInput = page.locator('[data-testid="image-upload-area"] input[type="file"]').first();

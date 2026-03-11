@@ -5,6 +5,7 @@ import { testUsers, type TestUser } from "./fixtures";
 export { testUsers, type TestUser } from "./fixtures";
 
 // Extend the base test with fixtures
+/* eslint-disable react-hooks/rules-of-hooks */
 export const test = base.extend<{
   authenticatedPage: Page;
   renterPage: Page;
@@ -35,11 +36,13 @@ export const test = base.extend<{
     await use(page);
   },
 });
+/* eslint-enable react-hooks/rules-of-hooks */
 
 // Re-export expect
 export { expect };
 
 const API_BASE_URL = process.env.E2E_API_URL || "http://localhost:3400/api";
+const AUTH_STORAGE_KEY = "auth-storage";
 
 function toApiRole(role: TestUser["role"]): "USER" | "HOST" | "ADMIN" {
   if (role === "owner") return "HOST";
@@ -71,22 +74,51 @@ async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
 
   await page.goto("/");
   await page.evaluate(
-    ({ accessToken, refreshToken, authUser }) => {
+    ({ authStorageKey, accessToken, authUser }) => {
+      const rawRole =
+        authUser &&
+        typeof authUser === "object" &&
+        "role" in authUser &&
+        typeof (authUser as { role?: unknown }).role === "string"
+          ? String((authUser as { role: string }).role).toUpperCase()
+          : "";
+      const normalizedRole =
+        rawRole === "HOST"
+          ? "owner"
+          : rawRole === "ADMIN" || rawRole === "SUPER_ADMIN"
+            ? "admin"
+            : "renter";
+      const normalizedUser =
+        authUser && typeof authUser === "object"
+          ? { ...(authUser as Record<string, unknown>), role: normalizedRole }
+          : authUser;
+
+      localStorage.setItem(
+        authStorageKey,
+        JSON.stringify({
+          state: {
+            user: normalizedUser,
+            accessToken,
+          },
+          version: 0,
+        })
+      );
       localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("refreshToken", refreshToken);
-      localStorage.setItem("user", JSON.stringify(authUser));
+      localStorage.setItem("user", JSON.stringify(normalizedUser));
     },
     {
+      authStorageKey: AUTH_STORAGE_KEY,
       accessToken: payload.accessToken,
-      refreshToken: payload.refreshToken,
       authUser: payload.user,
     }
   );
 
   const destination = user.role === "admin" ? "/admin" : "/dashboard";
-  await page.goto(destination, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {
-    // Some heavy pages can exceed the default navigation budget in CI-like environments.
-  });
+  await page
+    .goto(destination, { waitUntil: "domcontentloaded", timeout: 10000 })
+    .catch(() => {
+      // Some heavy pages can exceed the default navigation budget in CI-like environments.
+    });
   return !page.url().includes("/auth/login");
 }
 
@@ -102,7 +134,8 @@ export async function loginAs(page: Page, user: TestUser): Promise<void> {
     }
   }
 
-  const expectedPattern = user.role === "admin" ? /.*admin|.*dashboard/ : /.*dashboard/;
+  const expectedPattern =
+    user.role === "admin" ? /.*admin|.*dashboard/ : /.*dashboard/;
   await page.goto("/auth/login");
   const emailInput = page.locator('input[type="email"]');
   const passwordInput = page.locator('input[type="password"]');
@@ -116,8 +149,26 @@ export async function loginAs(page: Page, user: TestUser): Promise<void> {
     if (isExpectedDestination) {
       const currentEmail = await page.evaluate(() => {
         try {
-          const raw = localStorage.getItem("user");
-          return raw ? JSON.parse(raw).email ?? null : null;
+          const authState = localStorage.getItem("auth-storage");
+          if (authState) {
+            const parsed = JSON.parse(authState) as {
+              state?: { user?: { email?: unknown } };
+            };
+            const storedEmail = parsed.state?.user?.email;
+            if (typeof storedEmail === "string") {
+              return storedEmail;
+            }
+          }
+
+          const rawUser = localStorage.getItem("user");
+          if (rawUser) {
+            const parsedUser = JSON.parse(rawUser) as { email?: unknown };
+            return typeof parsedUser.email === "string"
+              ? parsedUser.email
+              : null;
+          }
+
+          return null;
         } catch {
           return null;
         }
@@ -183,7 +234,7 @@ export async function logout(page: Page): Promise<void> {
   if (await userMenu.isVisible()) {
     await userMenu.click();
   }
-  await page.click('text=/Logout|Sign Out/i');
+  await page.click("text=/Logout|Sign Out/i");
   await page.waitForURL(/.*login|.*home|\//);
 }
 
@@ -205,7 +256,7 @@ export async function fillDatePicker(
   const date = new Date();
   date.setDate(date.getDate() + daysFromNow);
   const dateString = date.toISOString().split("T")[0];
-  
+
   await page.fill(selector, dateString);
 }
 
@@ -220,16 +271,23 @@ export async function selectDateRange(
   const dateInput = page.locator('[data-testid="date-picker"]');
   if (await dateInput.isVisible()) {
     await dateInput.click();
-    
+
     // Select available dates
-    const availableDays = page.locator('[data-testid="calendar-day"]:not([disabled])');
+    const availableDays = page.locator(
+      '[data-testid="calendar-day"]:not([disabled])'
+    );
     await availableDays.nth(startDaysFromNow).click();
     await availableDays.nth(endDaysFromNow).click();
   }
 }
 
 /**
- * Upload a file to a file input
+ * Upload a file to a file input.
+ *
+ * NOTE: The buffer contains a minimal placeholder — it is sufficient for
+ * client-side file-input selection but may be rejected by a real upload API
+ * that validates MIME magic bytes.  For tests that exercise the full upload
+ * path, provide a real image buffer instead.
  */
 export async function uploadFile(
   page: Page,
@@ -254,7 +312,8 @@ export async function waitForApiResponse(
   status: number = 200
 ): Promise<void> {
   await page.waitForResponse(
-    (response) => urlPattern.test(response.url()) && response.status() === status
+    (response) =>
+      urlPattern.test(response.url()) && response.status() === status
   );
 }
 
@@ -269,7 +328,9 @@ export async function clearSession(context: BrowserContext): Promise<void> {
  * Wait for loading to complete
  */
 export async function waitForLoading(page: Page): Promise<void> {
-  const loader = page.locator('[data-testid="loading"], [data-testid="spinner"]');
+  const loader = page.locator(
+    '[data-testid="loading"], [data-testid="spinner"]'
+  );
   if (await loader.isVisible()) {
     await loader.waitFor({ state: "hidden" });
   }
@@ -283,7 +344,9 @@ export async function fillForm(
   formData: Record<string, string>
 ): Promise<void> {
   for (const [name, value] of Object.entries(formData)) {
-    const input = page.locator(`input[name="${name}"], textarea[name="${name}"]`);
+    const input = page.locator(
+      `input[name="${name}"], textarea[name="${name}"]`
+    );
     if (await input.isVisible()) {
       await input.fill(value);
     }
@@ -305,7 +368,10 @@ export async function selectOption(
 /**
  * Check if element is in viewport
  */
-export async function isInViewport(page: Page, selector: string): Promise<boolean> {
+export async function isInViewport(
+  page: Page,
+  selector: string
+): Promise<boolean> {
   const element = page.locator(selector);
   return await element.isVisible();
 }
@@ -313,34 +379,65 @@ export async function isInViewport(page: Page, selector: string): Promise<boolea
 /**
  * Scroll to element
  */
-export async function scrollToElement(page: Page, selector: string): Promise<void> {
+export async function scrollToElement(
+  page: Page,
+  selector: string
+): Promise<void> {
   await page.locator(selector).scrollIntoViewIfNeeded();
 }
 
 /**
  * Get text content of element
  */
-export async function getText(page: Page, selector: string): Promise<string | null> {
+export async function getText(
+  page: Page,
+  selector: string
+): Promise<string | null> {
   return await page.locator(selector).textContent();
 }
 
 /**
- * Check if page has no console errors
+ * Set up console error tracking. Call at the START of a test.
+ * Returns a function to call at the END to assert no errors occurred.
  */
-export async function checkNoConsoleErrors(page: Page): Promise<void> {
+export function trackConsoleErrors(page: Page): () => void {
   const errors: string[] = [];
   page.on("console", (msg) => {
     if (msg.type() === "error") {
       errors.push(msg.text());
     }
   });
-  
+
+  return () => {
+    expect(errors).toHaveLength(0);
+  };
+}
+
+/**
+ * Check if page has no console errors.
+ * @deprecated Use trackConsoleErrors() instead — this registers a listener
+ * and immediately asserts, so it will always pass. Kept for backward compat.
+ */
+export async function checkNoConsoleErrors(page: Page): Promise<void> {
+  // Note: this function is fundamentally broken — registering a listener
+  // and asserting immediately means errors array is always empty.
+  // Use trackConsoleErrors() at the start of the test instead.
+  const errors: string[] = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      errors.push(msg.text());
+    }
+  });
+
   // At the end of test, check for errors
   expect(errors).toHaveLength(0);
 }
 
 /**
- * Mock API response
+ * @deprecated Do not use route interception in E2E tests for happy-path flows.
+ * This utility exists only for backward compatibility — error simulation tests
+ * in comprehensive-edge-cases.spec.ts use `page.route()` directly with clear
+ * documentation explaining why the mock is necessary.
  */
 export async function mockApiResponse(
   page: Page,
@@ -360,10 +457,7 @@ export async function mockApiResponse(
 /**
  * Take screenshot with timestamp
  */
-export async function takeScreenshot(
-  page: Page,
-  name: string
-): Promise<void> {
+export async function takeScreenshot(page: Page, name: string): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   await page.screenshot({ path: `screenshots/${name}-${timestamp}.png` });
 }
@@ -449,12 +543,14 @@ export async function clickFirstVisible(
 export async function checkA11y(page: Page): Promise<void> {
   // Basic accessibility checks
   // Check for alt text on images
-  const imagesWithoutAlt = await page.locator('img:not([alt])').count();
+  const imagesWithoutAlt = await page.locator("img:not([alt])").count();
   expect(imagesWithoutAlt).toBe(0);
-  
+
   // Check for form labels
-  const inputsWithoutLabel = await page.locator('input:not([aria-label]):not([id])').count();
-  expect(inputsWithoutLabel).toBeGreaterThanOrEqual(0);
+  const inputsWithoutLabel = await page
+    .locator("input:not([aria-label]):not([id])")
+    .count();
+  expect(inputsWithoutLabel).toBe(0);
   // This is a basic check - more comprehensive checks would use axe-core
 }
 

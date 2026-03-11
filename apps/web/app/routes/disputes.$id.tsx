@@ -1,5 +1,5 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Form, Link, redirect, useActionData, useLoaderData, useRevalidator } from "react-router";
+import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
@@ -16,7 +16,10 @@ import { disputesApi, type DisputeDetail } from "~/lib/api/disputes";
 import { useAuthStore } from "~/lib/store/auth";
 import { Badge, Card, CardContent, UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { cn } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
+import { useTranslation } from "react-i18next";
+import { toast } from "~/lib/toast";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Dispute Details | GharBatai Rentals" }];
@@ -91,7 +94,6 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     }
     return { dispute };
   } catch (error) {
-    console.error("Failed to load dispute:", error);
     throw redirect("/disputes");
   }
 }
@@ -109,7 +111,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "");
-  const allowedIntents = new Set(["respond", "close"]);
+  const allowedIntents = new Set(["respond", "close", "escalate"]);
   if (!allowedIntents.has(intent)) {
     return { error: "Invalid action" };
   }
@@ -121,7 +123,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     const defendantId = dispute.defendant?.id || dispute.defendantId;
     const isInitiator = initiatorId === user.id;
     const isParticipant = [initiatorId, defendantId].some((id) => id === user.id);
-    const isAdmin = user.role === "admin";
+    const isAdmin = user.role === "admin" || user.role === "SUPER_ADMIN";
 
     if (!isParticipant && !isAdmin) {
       return { error: "You are not authorized to update this dispute." };
@@ -158,6 +160,23 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
       return { success: "Dispute closed" };
     }
 
+    if (intent === "escalate") {
+      if (!isAdmin && user.role !== 'SUPER_ADMIN') {
+        return { error: "Only administrators can escalate disputes." };
+      }
+      if (["CLOSED", "RESOLVED"].includes(status)) {
+        return { error: "Closed or resolved disputes cannot be escalated." };
+      }
+      const reason = String(formData.get("reason") || "")
+        .trim()
+        .slice(0, MAX_CLOSE_REASON_LENGTH);
+      if (!reason) {
+        return { error: "Escalation reason is required" };
+      }
+      await disputesApi.escalateDispute(disputeId, reason);
+      return { success: "Dispute escalated" };
+    }
+
     return { error: "Invalid action" };
   } catch (error: unknown) {
     return {
@@ -173,9 +192,9 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
 }
 
 export default function DisputeDetailPage() {
+  const { t } = useTranslation();
   const { dispute } = useLoaderData<{ dispute: DisputeDetail }>();
   const actionData = useActionData<{ success?: string; error?: string }>();
-  const revalidator = useRevalidator();
   const { user } = useAuthStore();
   const [message, setMessage] = useState("");
   const [closeReason, setCloseReason] = useState("");
@@ -192,33 +211,42 @@ export default function DisputeDetailPage() {
   const actorId = dispute.initiator?.id || dispute.initiatorId;
   const isInitiator = Boolean(actorId && actorId === user?.id);
   const canClose = (isInitiator || user?.role === "admin") && !["CLOSED", "RESOLVED"].includes(statusKey);
+  const isAdminUser = user?.role === "admin" || user?.role === "SUPER_ADMIN";
+  const canEscalate = isAdminUser && !["CLOSED", "RESOLVED"].includes(statusKey);
+  const [escalateReason, setEscalateReason] = useState("");
 
   useEffect(() => {
     if (actionData?.success) {
-      revalidator.revalidate();
       setMessage("");
+      toast.success(actionData.success);
     }
-  }, [actionData, revalidator]);
+    if (actionData?.error) {
+      toast.error(actionData.error);
+    }
+    // React Router automatically revalidates loaders after clientAction
+    // so manual revalidation is not needed
+  }, [actionData]);
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-card border-b">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Link to="/disputes" className="text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="w-4 h-4 inline-block mr-1" />
-            Back to disputes
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Page header */}
+        <div>
+          <Link to="/disputes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3">
+            <ArrowLeft className="w-4 h-4" />
+            {t("disputes.backToDisputes")}
           </Link>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold text-foreground">
-              {dispute.title || TYPE_LABELS[String(dispute.type)] || humanizeKey(dispute.type) || "Dispute"}
+              {dispute.title || (dispute.type ? t(`disputes.types.${({PROPERTY_DAMAGE:"propertyDamage",MISSING_ITEMS:"missingItems",CONDITION_MISMATCH:"conditionMismatch",REFUND_REQUEST:"refundRequest",PAYMENT_ISSUE:"paymentIssue",OTHER:"other"} as Record<string,string>)[String(dispute.type)] || "other"}`) : humanizeKey(dispute.type)) || t("disputes.dispute")}
             </h1>
             <Badge className={cn("gap-1", statusConfig.className)}>
               <StatusIcon className="w-3 h-3" />
-              {statusConfig.label}
+              {t(`disputes.${({OPEN:"open",UNDER_REVIEW:"underReview",INVESTIGATING:"investigating",RESOLVED:"resolved",CLOSED:"closed"} as Record<string,string>)[statusKey] || "open"}`)}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            Booking{" "}
+            {t("disputes.booking")}{" "}
             <Link
               to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
               className="text-primary hover:underline"
@@ -227,9 +255,41 @@ export default function DisputeDetailPage() {
             </Link>
           </p>
         </div>
-      </header>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* "What happens next" lifecycle guidance */}
+        {['OPEN', 'UNDER_REVIEW', 'INVESTIGATING'].includes(statusKey) && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <FileText className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-sm text-blue-900">
+                  {t('disputes.whatHappensNext', 'What happens next?')}
+                </p>
+                {statusKey === 'OPEN' && (
+                  <p className="text-xs text-blue-800">
+                    {t('disputes.nextStep.open', 'Our team will begin reviewing your dispute within 1–2 business days. You may add more information by replying to this thread. Typical resolution time: 3–5 business days.')}
+                  </p>
+                )}
+                {statusKey === 'UNDER_REVIEW' && (
+                  <p className="text-xs text-blue-800">
+                    {t('disputes.nextStep.underReview', "Our team is actively reviewing your dispute and gathering information from both parties. We'll notify you of any updates. Typical resolution time: 2–3 more business days.")}
+                  </p>
+                )}
+                {statusKey === 'INVESTIGATING' && (
+                  <p className="text-xs text-blue-800">
+                    {t('disputes.nextStep.investigating', 'A specialist is investigating your case. We may reach out for additional evidence. Please check this thread regularly. Typical resolution time: 3–7 business days.')}
+                  </p>
+                )}
+                <p className="text-xs text-blue-700 font-medium pt-1">
+                  {isInitiator
+                    ? t('disputes.youCanReply', 'You can reply below to add more context or evidence.')
+                    : t('disputes.youCanReplyDefendant', 'You can reply below to provide your perspective.')}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {actionData?.error && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
             {actionData.error}
@@ -246,12 +306,12 @@ export default function DisputeDetailPage() {
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
-                Created {safeDateLabel(dispute.createdAt, "MMM d, yyyy")}
+                {t("disputes.createdOn", { date: safeDateLabel(dispute.createdAt, "MMM d, yyyy") })}
               </span>
               {typeof dispute.amount === "number" ? (
                 <span className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Amount ${safeNumber(dispute.amount).toFixed(2)}
+                  {t("disputes.disputeAmount", { amount: formatCurrency(safeNumber(dispute.amount)) })}
                 </span>
               ) : null}
               {bookingListingTitle ? (
@@ -263,7 +323,7 @@ export default function DisputeDetailPage() {
             </div>
 
             <div>
-              <h2 className="text-sm font-semibold text-foreground mb-2">Description</h2>
+              <h2 className="text-sm font-semibold text-foreground mb-2">{t("disputes.description")}</h2>
               <p className="text-sm text-muted-foreground whitespace-pre-line">
                 {disputeDescription}
               </p>
@@ -271,11 +331,11 @@ export default function DisputeDetailPage() {
 
             <div className="grid sm:grid-cols-2 gap-4 text-sm">
               <div className="bg-muted/40 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground mb-1">Initiator</p>
+                <p className="text-xs text-muted-foreground mb-1">{t("disputes.initiator")}</p>
                 <p className="font-medium text-foreground">{safeText(dispute.initiator?.email, "Unknown")}</p>
               </div>
               <div className="bg-muted/40 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground mb-1">Defendant</p>
+                <p className="text-xs text-muted-foreground mb-1">{t("disputes.defendant")}</p>
                 <p className="font-medium text-foreground">{safeText(dispute.defendant?.email, "Unknown")}</p>
               </div>
             </div>
@@ -284,9 +344,9 @@ export default function DisputeDetailPage() {
 
         <Card>
           <CardContent className="p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Conversation</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("disputes.conversation")}</h2>
             {responses.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No responses yet. Start the conversation below.</p>
+              <p className="text-sm text-muted-foreground">{t("disputes.noResponses")}</p>
             ) : (
               <div className="space-y-4">
                 {responses.map((response) => (
@@ -309,7 +369,7 @@ export default function DisputeDetailPage() {
                 onChange={(event) =>
                   setMessage(event.target.value.slice(0, MAX_DISPUTE_MESSAGE_LENGTH))
                 }
-                placeholder="Add a response..."
+                placeholder={t("disputes.addResponsePlaceholder")}
                 className="w-full border border-input rounded-lg px-3 py-2 min-h-[120px] bg-background"
                 disabled={!canRespond}
               />
@@ -319,7 +379,7 @@ export default function DisputeDetailPage() {
                 leftIcon={<Send className="w-4 h-4" />}
                 disabled={!canRespond || message.trim().length === 0}
               >
-                Send Response
+                {t("disputes.sendResponse")}
               </UnifiedButton>
             </Form>
           </CardContent>
@@ -328,9 +388,9 @@ export default function DisputeDetailPage() {
         {canClose ? (
           <Card>
             <CardContent className="p-6 space-y-3">
-              <h2 className="text-lg font-semibold text-foreground">Close Dispute</h2>
+              <h2 className="text-lg font-semibold text-foreground">{t("disputes.closeDispute")}</h2>
               <p className="text-sm text-muted-foreground">
-                Closing the dispute will lock the thread and mark it as closed.
+                {t("disputes.closeDisputeDesc")}
               </p>
               <Form method="post" className="space-y-3">
                 <input type="hidden" name="intent" value="close" />
@@ -340,7 +400,7 @@ export default function DisputeDetailPage() {
                   onChange={(event) =>
                     setCloseReason(event.target.value.slice(0, MAX_CLOSE_REASON_LENGTH))
                   }
-                  placeholder="Reason for closing the dispute"
+                  placeholder={t("disputes.closeReasonPlaceholder")}
                   className="w-full border border-input rounded-lg px-3 py-2 min-h-[100px] bg-background"
                 />
                 <UnifiedButton
@@ -348,7 +408,37 @@ export default function DisputeDetailPage() {
                   variant="destructive"
                   disabled={closeReason.trim().length === 0}
                 >
-                  Close Dispute
+                  {t("disputes.closeDispute")}
+                </UnifiedButton>
+              </Form>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {canEscalate ? (
+          <Card>
+            <CardContent className="p-6 space-y-3">
+              <h2 className="text-lg font-semibold text-foreground">{t("disputes.escalateDispute", "Escalate Dispute")}</h2>
+              <p className="text-sm text-muted-foreground">
+                {t("disputes.escalateDisputeDesc", "Escalate this dispute to the next review level. Provide a clear reason for escalation.")}
+              </p>
+              <Form method="post" className="space-y-3">
+                <input type="hidden" name="intent" value="escalate" />
+                <textarea
+                  name="reason"
+                  value={escalateReason}
+                  onChange={(event) =>
+                    setEscalateReason(event.target.value.slice(0, MAX_CLOSE_REASON_LENGTH))
+                  }
+                  placeholder={t("disputes.escalateReasonPlaceholder", "Explain why this dispute needs to be escalated...")}
+                  className="w-full border border-input rounded-lg px-3 py-2 min-h-[100px] bg-background"
+                />
+                <UnifiedButton
+                  type="submit"
+                  variant="secondary"
+                  disabled={escalateReason.trim().length === 0}
+                >
+                  {t("disputes.escalateDispute", "Escalate Dispute")}
                 </UnifiedButton>
               </Form>
             </CardContent>

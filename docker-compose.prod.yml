@@ -1,81 +1,109 @@
-version: '3.8'
-
 services:
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    ports:
-      - '3001:3000'
-    environment:
-      - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - AWS_ACCESS_KEY_ID=${DO_SPACES_KEY}
-      - AWS_SECRET_ACCESS_KEY=${DO_SPACES_SECRET}
-      - AWS_REGION=nyc3
-      - AWS_S3_BUCKET=${DO_SPACES_BUCKET}
-      - AWS_S3_ENDPOINT=${DO_SPACES_ENDPOINT}
-      - CDN_URL=${DO_SPACES_CDN}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
-      - SENTRY_DSN=${SENTRY_DSN}
+    container_name: rental-api
     restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://yourdomain.com,https://www.yourdomain.com}
+      FRONTEND_URL: ${FRONTEND_URL:-https://yourdomain.com}
+      AWS_ACCESS_KEY_ID: ${DO_SPACES_KEY}
+      AWS_SECRET_ACCESS_KEY: ${DO_SPACES_SECRET}
+      AWS_REGION: ${DO_SPACES_REGION:-nyc3}
+      AWS_S3_BUCKET: ${DO_SPACES_BUCKET}
+      AWS_S3_ENDPOINT: ${DO_SPACES_ENDPOINT}
+      CDN_URL: ${DO_SPACES_CDN}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      SENTRY_DSN: ${SENTRY_DSN}
+    expose:
+      - "3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 6
+      start_period: 45s
     logging:
-      driver: 'json-file'
+      driver: "json-file"
       options:
-        max-size: '10m'
-        max-file: '3'
+        max-size: "10m"
+        max-file: "3"
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    ports:
-      - '3000:3000'
-    environment:
-      - NODE_ENV=production
-      - API_URL=${API_URL}
-      - SENTRY_DSN=${SENTRY_DSN}
-    depends_on:
-      - api
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: rental-web
     restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3000']
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 6
+      start_period: 15s
     logging:
-      driver: 'json-file'
+      driver: "json-file"
       options:
-        max-size: '10m'
-        max-file: '3'
+        max-size: "10m"
+        max-file: "3"
 
   nginx:
     image: nginx:alpine
+    container_name: rental-nginx
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
     ports:
-      - '80:80'
-      - '443:443'
+      - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - ./nginx/logs:/var/log/nginx
-    depends_on:
-      - web
-      - api
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      start_period: 20s
     logging:
-      driver: 'json-file'
+      driver: "json-file"
       options:
-        max-size: '10m'
-        max-file: '3'
+        max-size: "10m"
+        max-file: "3"

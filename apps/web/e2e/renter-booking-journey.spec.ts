@@ -43,16 +43,16 @@ test.describe("Renter Booking Journey", () => {
   test.describe("Search and Discovery", () => {
     test("should load search page and filters", async ({ page }) => {
       await page.goto("/search");
-      await expect(page.locator('input[placeholder="Search for items..."]')).toBeVisible();
+      await expect(page.locator('input[name="query"]')).toBeVisible();
       await expectAnyVisible(page, [
         'button:has-text("Filters")',
-        'button:has(svg.lucide-sliders-horizontal)',
+        "button:has(svg.lucide-sliders-horizontal)",
       ]);
     });
 
     test("should support query input", async ({ page }) => {
       await page.goto("/search");
-      const query = page.locator('input[placeholder="Search for items..."]');
+      const query = page.locator('input[name="query"]');
       await query.fill("camera");
       await expect(query).toHaveValue("camera");
     });
@@ -96,11 +96,15 @@ test.describe("Renter Booking Journey", () => {
       ]);
     });
 
-    test("should allow entering optional message to owner", async ({ page }) => {
+    test("should allow entering optional message to owner", async ({
+      page,
+    }) => {
       const opened = await openFirstSearchListing(page);
       if (!opened) return;
 
-      const message = page.locator('textarea[placeholder*="message"], textarea').first();
+      const message = page
+        .locator('textarea[placeholder*="message"], textarea')
+        .first();
       if (await message.isVisible().catch(() => false)) {
         await message.fill("Hi, I am interested in this rental.");
         await expect(message).toHaveValue(/interested/);
@@ -109,7 +113,9 @@ test.describe("Renter Booking Journey", () => {
       }
     });
 
-    test("should redirect guest to login when booking from listing", async ({ page }) => {
+    test("should redirect guest to login when booking from listing", async ({
+      page,
+    }) => {
       await page.context().clearCookies();
       await page.goto("/search");
 
@@ -146,10 +152,14 @@ test.describe("Renter Booking Journey", () => {
 
     test("should show status filters", async ({ page }) => {
       await expect(page.locator('button:has-text("All")')).toBeVisible();
-      await expect(page.locator('button:has-text("confirmed")').first()).toBeVisible();
+      await expect(
+        page.locator('button:has-text("confirmed")').first()
+      ).toBeVisible();
     });
 
-    test("should switch to owner view toggle when available", async ({ page }) => {
+    test("should switch to owner view toggle when available", async ({
+      page,
+    }) => {
       const ownerToggle = page.locator('button:has-text("My Listings")');
       if (await ownerToggle.isVisible().catch(() => false)) {
         await ownerToggle.click();
@@ -194,7 +204,9 @@ test.describe("Renter Booking Journey", () => {
       const opened = await openFirstBookingDetails(page);
       if (!opened) return;
 
-      const clicked = await clickFirstVisible(page, ['button:has-text("Send Message")']);
+      const clicked = await clickFirstVisible(page, [
+        'button:has-text("Send Message")',
+      ]);
       if (!clicked) {
         await expect(page.locator("body")).toBeVisible();
         return;
@@ -216,17 +228,16 @@ test.describe("Renter Booking Journey", () => {
       }
     });
 
-    test("should expose review action when booking is eligible", async ({ page }) => {
+    test("should expose review action when booking is eligible", async ({
+      page,
+    }) => {
       const opened = await openFirstBookingDetails(page);
       if (!opened) return;
 
       const leaveReview = page.locator('button:has-text("Leave Review")');
       if (await leaveReview.isVisible().catch(() => false)) {
         await leaveReview.click();
-        await expectAnyVisible(page, [
-          "text=Leave a Review",
-          "text=/rating/i",
-        ]);
+        await expectAnyVisible(page, ["text=Leave a Review", "text=/rating/i"]);
       } else {
         await expect(page.locator("body")).toBeVisible();
       }

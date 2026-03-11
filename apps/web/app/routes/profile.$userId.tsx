@@ -2,6 +2,7 @@ import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
 import { useLoaderData, Link, redirect } from "react-router";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   User,
   Calendar,
@@ -12,6 +13,7 @@ import {
   Clock,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 import { usersApi } from "~/lib/api/users";
 import { listingsApi } from "~/lib/api/listings";
 import { reviewsApi } from "~/lib/api/reviews";
@@ -93,7 +95,6 @@ export async function clientLoader({ params }: LoaderFunctionArgs) {
       },
     };
   } catch (error) {
-    console.error("Failed to load user profile:", error);
     throw redirect("/");
   }
 }
@@ -178,6 +179,7 @@ function ReviewCard({ review }: { review: Review }) {
 }
 
 function ListingCard({ listing }: { listing: Listing }) {
+  const { t } = useTranslation();
   const listingTitle = safeText(listing.title, "Listing");
   const listingId = safeText(listing.id);
   return (
@@ -199,7 +201,7 @@ function ListingCard({ listing }: { listing: Listing }) {
         )}
         {listing.status === "AVAILABLE" && (
           <span className="absolute top-2 right-2 px-2 py-1 bg-success text-success-foreground text-xs font-semibold rounded">
-            Available
+            {t("profile.available")}
           </span>
         )}
       </div>
@@ -212,13 +214,13 @@ function ListingCard({ listing }: { listing: Listing }) {
         </p>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
-            ${listing.basePrice}/day
+            {formatCurrency(listing.basePrice)}{t("common.perDay")}
           </span>
-          {(listing.averageRating || 0) > 0 && (
+          {(listing.rating || 0) > 0 && (
             <div className="flex items-center">
               <Star className="w-4 h-4 text-yellow-400 fill-current" />
               <span className="ml-1 text-sm text-muted-foreground">
-                {safeNumber(listing.averageRating).toFixed(1)}
+                {safeNumber(listing.rating).toFixed(1)}
               </span>
             </div>
           )}
@@ -229,6 +231,7 @@ function ListingCard({ listing }: { listing: Listing }) {
 }
 
 export default function ProfileRoute() {
+  const { t } = useTranslation();
   const { user, listings, reviews, stats } = useLoaderData<typeof clientLoader>();
   const { user: currentUser } = useAuthStore();
   const [activeTab, setActiveTab] = useState<"listings" | "reviews">(
@@ -278,7 +281,7 @@ export default function ProfileRoute() {
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center">
                       <Calendar className="w-4 h-4 mr-1" />
-                      Member since {memberSince}
+                      {t("profile.memberSince")} {memberSince}
                     </div>
                   </div>
                 </div>
@@ -287,7 +290,7 @@ export default function ProfileRoute() {
                 {user.idVerificationStatus === "VERIFIED" && (
                   <div className="flex items-center px-3 py-1 bg-success/10 text-success rounded-full text-sm">
                     <Shield className="w-4 h-4 mr-1" />
-                    Verified
+                    {t("profile.verified")}
                   </div>
                 )}
               </div>
@@ -304,7 +307,7 @@ export default function ProfileRoute() {
                 className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center whitespace-nowrap"
               >
                 <MessageCircle className="w-5 h-5 mr-2" />
-                Contact
+                {t("profile.contact")}
               </Link>
             ) : null}
           </div>
@@ -314,13 +317,13 @@ export default function ProfileRoute() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard
             icon={Package}
-            label="Active Listings"
+            label={t("profile.activeListings")}
             value={stats.activeListings}
             color="primary"
           />
           <StatCard
             icon={Star}
-            label="Average Rating"
+            label={t("profile.averageRating")}
             value={
               safeNumber(stats.averageRating) > 0
                 ? safeNumber(stats.averageRating).toFixed(1)
@@ -330,13 +333,13 @@ export default function ProfileRoute() {
           />
           <StatCard
             icon={MessageCircle}
-            label="Response Rate"
+            label={t("profile.responseRate")}
             value={`${responseRate}%`}
             color="green"
           />
           <StatCard
             icon={Clock}
-            label="Response Time"
+            label={t("profile.responseTime")}
             value={responseTime}
             color="blue"
           />
@@ -355,7 +358,7 @@ export default function ProfileRoute() {
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
               >
-                Listings ({stats.totalListings})
+                {t("profile.listings")} ({stats.totalListings})
               </button>
               <button
                 onClick={() => setActiveTab("reviews")}
@@ -366,7 +369,7 @@ export default function ProfileRoute() {
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
               >
-                Reviews ({stats.totalReviews})
+                {t("profile.reviews")} ({stats.totalReviews})
               </button>
             </div>
           </div>
@@ -384,7 +387,7 @@ export default function ProfileRoute() {
                   <div className="text-center py-12">
                     <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">
-                      No listings available
+                      {t("profile.noListings")}
                     </p>
                   </div>
                 )}
@@ -402,7 +405,7 @@ export default function ProfileRoute() {
                 ) : (
                   <div className="text-center py-12">
                     <Star className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No reviews yet</p>
+                    <p className="text-muted-foreground">{t("reviews.noReviews")}</p>
                   </div>
                 )}
               </div>

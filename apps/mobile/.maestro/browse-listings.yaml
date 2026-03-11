@@ -1,0 +1,46 @@
+# ============================================================================
+# Browse Listings Flow — E2E Maestro Test
+# Validates listing search, browse, and detail navigation.
+# ============================================================================
+appId: com.gharbatai.rental
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Search tab
+- tapOn: "Search"
+
+# 2. Search screen should show search input
+- assertVisible:
+    id: "search-input"
+    timeout: 5000
+
+# 3. Type a search query
+- tapOn:
+    id: "search-input"
+- inputText: "camera"
+
+# 4. Wait for results to load
+- assertVisible:
+    text: ".*"
+    timeout: 8000
+
+# 5. Tap on the first listing result
+- tapOn:
+    index: 0
+    id: "listing-card"
+
+# 6. Listing detail screen should show
+- assertVisible:
+    text: "Book|Request|Contact"
+    timeout: 8000
+
+# 7. Verify price and description are visible
+- assertVisible:
+    id: "listing-price"
+    optional: true
+
+# 8. Go back to search results
+- back

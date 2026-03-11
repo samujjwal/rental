@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, Pressable, Switch } from "react-nati
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
-import type { Organization } from "@rental-portal/mobile-sdk";
+import type { Organization } from '~/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, "OrganizationSettings">;
 

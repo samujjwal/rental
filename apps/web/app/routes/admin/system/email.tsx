@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import {
   Mail,
@@ -201,6 +202,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 }
 
 export default function EmailSettingsPage() {
+  const { t } = useTranslation();
   const { settings, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -252,11 +254,11 @@ export default function EmailSettingsPage() {
           to="/admin/system"
           className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
         >
-          ← Back to System Settings
+          {t("admin.backToSystemSettings")}
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900">Email Settings</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("admin.emailSettings")}</h1>
         <p className="text-gray-600 mt-1">
-          Configure email service provider and SMTP settings
+          {t("admin.emailSettingsDesc")}
         </p>
       </div>
 
@@ -276,7 +278,7 @@ export default function EmailSettingsPage() {
       {error && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700">
           <AlertTriangle className="w-5 h-5 inline-block mr-2" />
-          Using default settings: {error}
+          {t("admin.usingDefaultSettings")}: {error}
         </div>
       )}
 
@@ -287,12 +289,12 @@ export default function EmailSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Server className="w-5 h-5 text-blue-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Email Provider</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.emailProvider")}</h2>
           </div>
 
           <div className="mb-4">
             <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-1">
-              Provider
+              {t("admin.provider")}
             </label>
             <select
               id="provider"
@@ -301,7 +303,7 @@ export default function EmailSettingsPage() {
               onChange={(e) => setFormValues({ ...formValues, provider: e.target.value as EmailSettings["provider"] })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="smtp">SMTP Server</option>
+              <option value="smtp">{t("admin.smtpServer")}</option>
               <option value="sendgrid">SendGrid</option>
               <option value="ses">Amazon SES</option>
               <option value="mailgun">Mailgun</option>
@@ -311,11 +313,11 @@ export default function EmailSettingsPage() {
           {/* SMTP Settings */}
           {formValues.provider === "smtp" && (
             <div className="border-t border-gray-200 pt-4 mt-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">SMTP Configuration</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">{t("admin.smtpConfiguration")}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label htmlFor="smtpHost" className="block text-sm font-medium text-gray-700 mb-1">
-                    SMTP Host
+                    {t("admin.smtpHost")}
                   </label>
                   <input
                     type="text"
@@ -330,7 +332,7 @@ export default function EmailSettingsPage() {
 
                 <div>
                   <label htmlFor="smtpPort" className="block text-sm font-medium text-gray-700 mb-1">
-                    SMTP Port
+                    {t("admin.smtpPort")}
                   </label>
                   <input
                     type="number"
@@ -344,7 +346,7 @@ export default function EmailSettingsPage() {
 
                 <div>
                   <label htmlFor="smtpUser" className="block text-sm font-medium text-gray-700 mb-1">
-                    SMTP Username
+                    {t("admin.smtpUsername")}
                   </label>
                   <input
                     type="text"
@@ -358,7 +360,7 @@ export default function EmailSettingsPage() {
 
                 <div>
                   <label htmlFor="smtpPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                    SMTP Password
+                    {t("admin.smtpPassword")}
                   </label>
                   <div className="relative">
                     <input
@@ -373,6 +375,7 @@ export default function EmailSettingsPage() {
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -382,8 +385,8 @@ export default function EmailSettingsPage() {
 
               <div className="mt-4 flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div>
-                  <p className="font-medium text-gray-900">Use TLS/SSL</p>
-                  <p className="text-sm text-gray-500">Enable secure connection</p>
+                  <p className="font-medium text-gray-900">{t("admin.useTlsSsl")}</p>
+                  <p className="text-sm text-gray-500">{t("admin.enableSecureConnection")}</p>
                 </div>
                 <ToggleSwitch
                   name="smtpSecure"
@@ -398,14 +401,14 @@ export default function EmailSettingsPage() {
           {formValues.provider !== "smtp" && (
             <div className="border-t border-gray-200 pt-4 mt-4">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {formValues.provider === "sendgrid" && "SendGrid Configuration"}
-                {formValues.provider === "ses" && "Amazon SES Configuration"}
-                {formValues.provider === "mailgun" && "Mailgun Configuration"}
+                {formValues.provider === "sendgrid" && t("admin.sendGridConfig")}
+                {formValues.provider === "ses" && t("admin.amazonSesConfig")}
+                {formValues.provider === "mailgun" && t("admin.mailgunConfig")}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 mb-1">
-                    API Key
+                    {t("admin.apiKeyLabel")}
                   </label>
                   <div className="relative">
                     <input
@@ -421,6 +424,7 @@ export default function EmailSettingsPage() {
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      aria-label={showApiKey ? "Hide API key" : "Show API key"}
                     >
                       {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -430,7 +434,7 @@ export default function EmailSettingsPage() {
                 {formValues.provider === "ses" && (
                   <div>
                     <label htmlFor="apiRegion" className="block text-sm font-medium text-gray-700 mb-1">
-                      AWS Region
+                      {t("admin.awsRegion")}
                     </label>
                     <select
                       id="apiRegion"
@@ -455,13 +459,13 @@ export default function EmailSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Mail className="w-5 h-5 text-green-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Sender Settings</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.senderSettings")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="fromEmail" className="block text-sm font-medium text-gray-700 mb-1">
-                From Email
+                {t("admin.fromEmail")}
               </label>
               <input
                 type="email"
@@ -476,7 +480,7 @@ export default function EmailSettingsPage() {
 
             <div>
               <label htmlFor="fromName" className="block text-sm font-medium text-gray-700 mb-1">
-                From Name
+                {t("admin.fromName")}
               </label>
               <input
                 type="text"
@@ -491,7 +495,7 @@ export default function EmailSettingsPage() {
 
             <div>
               <label htmlFor="replyToEmail" className="block text-sm font-medium text-gray-700 mb-1">
-                Reply-To Email
+                {t("admin.replyToEmail")}
               </label>
               <input
                 type="email"
@@ -506,7 +510,7 @@ export default function EmailSettingsPage() {
 
             <div>
               <label htmlFor="templateEngine" className="block text-sm font-medium text-gray-700 mb-1">
-                Template Engine
+                {t("admin.templateEngine")}
               </label>
               <select
                 id="templateEngine"
@@ -529,12 +533,12 @@ export default function EmailSettingsPage() {
             {isSubmitting && formIntent === "save" ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
+                {t("admin.saving")}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Save Email Settings
+                {t("admin.saveEmailSettings")}
               </>
             )}
           </UnifiedButton>
@@ -545,14 +549,14 @@ export default function EmailSettingsPage() {
       <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
         <div className="flex items-center gap-3 mb-4">
           <Send className="w-5 h-5 text-purple-500" />
-          <h2 className="text-xl font-semibold text-gray-900">Test Email</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t("admin.testEmail")}</h2>
         </div>
 
         <Form method="post" className="flex items-end gap-4">
           <input type="hidden" name="intent" value="test" />
           <div className="flex-1">
             <label htmlFor="testEmailRecipient" className="block text-sm font-medium text-gray-700 mb-1">
-              Send test email to
+              {t("admin.sendTestEmailTo")}
             </label>
             <input
               type="email"
@@ -566,12 +570,12 @@ export default function EmailSettingsPage() {
             {isSubmitting && formIntent === "test" ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Sending...
+                {t("admin.sending")}
               </>
             ) : (
               <>
                 <Send className="w-4 h-4 mr-2" />
-                Send Test
+                {t("admin.sendTest")}
               </>
             )}
           </UnifiedButton>

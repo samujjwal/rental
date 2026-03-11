@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, Pressable, FlatList, Image } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { Organization } from "@rental-portal/mobile-sdk";
+import type { Organization } from '~/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, "Organizations">;
 
@@ -13,18 +14,28 @@ export function OrganizationsScreen({ navigation }: Props) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      try {
-        const response = await mobileClient.getOrganizations();
-        setOrganizations(response.organizations || []);
-      } catch (err) {
-        setStatus("Unable to load organizations.");
-      }
-    };
-    load();
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      if (!user) return;
+      const load = async () => {
+        try {
+          const response = await mobileClient.getOrganizations();
+          if (isMounted) {
+            setOrganizations(response.organizations || []);
+          }
+        } catch (err) {
+          if (isMounted) {
+            setStatus("Unable to load organizations.");
+          }
+        }
+      };
+      load();
+      return () => {
+        isMounted = false;
+      };
+    }, [user])
+  );
 
   if (!user) {
     return (

@@ -2,8 +2,9 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams, Link, useRevalidator, redirect } from "react-router";
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  DollarSign,
+  Banknote,
   TrendingUp,
   Calendar,
   Download,
@@ -23,13 +24,15 @@ import type { Transaction as PaymentTransaction } from "~/lib/api/payments";
 import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { StatCardSkeleton, TableSkeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
+import { APP_CURRENCY } from "~/config/locale";
 import { getUser } from "~/utils/auth";
 import { exportToCsv } from "~/utils/export";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Payments & Earnings | GharBatai Rentals" },
-    { name: "description", content: "Manage your earnings and payouts" },
+    { title: "Payment Methods | GharBatai Rentals" },
+    { name: "description", content: "Manage your payment methods and transaction history" },
   ];
 };
 
@@ -119,9 +122,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
       r.status === 'fulfilled' ? r.value : fallback;
 
-    const balanceData = settled(results[0], { balance: 0, currency: 'USD' } as any);
-    const earningsData = settled(results[1], { amount: 0, currency: 'USD' } as any);
-    const summaryData = settled(results[2], { thisMonth: 0, lastMonth: 0, total: 0, currency: 'USD' } as any);
+    const balanceData = settled(results[0], { balance: 0, currency: APP_CURRENCY } as any);
+    const earningsData = settled(results[1], { amount: 0, currency: APP_CURRENCY } as any);
+    const summaryData = settled(results[2], { thisMonth: 0, lastMonth: 0, total: 0, currency: APP_CURRENCY } as any);
     const transactionsData = settled(results[3], { transactions: [], total: 0, page: 1, limit: 20 } as any);
 
     const failedSections = results
@@ -138,7 +141,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
         thisMonth: safeNumber(summaryData.thisMonth),
         lastMonth: safeNumber(summaryData.lastMonth),
         total: safeNumber(summaryData.total),
-        currency: summaryData.currency || "USD",
+        currency: summaryData.currency || APP_CURRENCY,
       },
       transactions: Array.isArray(transactionsData.transactions)
         ? transactionsData.transactions
@@ -151,10 +154,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 
     return data;
   } catch (error) {
-    console.error("Failed to load payments:", error);
     const data: PaymentsData = {
-      balance: { available: 0, pending: 0, currency: "USD" },
-      earnings: { thisMonth: 0, lastMonth: 0, total: 0, currency: "USD" },
+      balance: { available: 0, pending: 0, currency: APP_CURRENCY },
+      earnings: { thisMonth: 0, lastMonth: 0, total: 0, currency: APP_CURRENCY },
       transactions: [],
       totalTransactions: 0,
       page: 1,
@@ -184,6 +186,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
 };
 
 export default function PaymentsPage() {
+  const { t } = useTranslation();
   const data = useLoaderData<typeof clientLoader>();
   const revalidator = useRevalidator();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -246,9 +249,9 @@ export default function PaymentsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center">
             <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
-            <h1 className="text-2xl font-bold text-foreground mb-2">Unable to load payments</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-2">{t("payments.unableToLoad")}</h1>
             <p className="text-muted-foreground mb-6">{data.error}</p>
-            <UnifiedButton onClick={() => revalidator.revalidate()}>Try Again</UnifiedButton>
+            <UnifiedButton onClick={() => revalidator.revalidate()}>{t("common.retry")}</UnifiedButton>
           </div>
         </div>
       </div>
@@ -257,55 +260,51 @@ export default function PaymentsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Payments & Earnings</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage your earnings, payouts, and transaction history
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <UnifiedButton
-                variant="outline"
-                onClick={handleExport}
-                disabled={data.transactions.length === 0}
-                title={data.transactions.length === 0 ? "No transactions to export" : "Export transactions"}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </UnifiedButton>
-              <UnifiedButton asChild>
-                <Link to="/dashboard/owner/earnings">
-                  <Wallet className="w-4 h-4 mr-2" />
-                  Request Payout
-                </Link>
-              </UnifiedButton>
-            </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t("payments.paymentsAndEarnings")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t("payments.manageEarnings")}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <UnifiedButton
+              variant="outline"
+              onClick={handleExport}
+              disabled={data.transactions.length === 0}
+              title={data.transactions.length === 0 ? t("payments.noExportData") : t("payments.exportTransactions")}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {t("payments.export")}
+            </UnifiedButton>
+            <UnifiedButton asChild>
+              <Link to="/dashboard/owner/earnings">
+                <Wallet className="w-4 h-4 mr-2" />
+                {t("payments.requestPayout")}
+              </Link>
+            </UnifiedButton>
           </div>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Available Balance */}
           <div className="bg-card border rounded-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Available Balance</p>
+                <p className="text-sm text-muted-foreground">{t("payments.availableBalance")}</p>
                 <p className="text-2xl font-bold text-foreground mt-1">
-                  ${data.balance.available.toLocaleString()}
+                  {formatCurrency(data.balance.available)}
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-green-600" />
+                <Banknote className="w-6 h-6 text-green-600" />
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              Ready for payout
+              {t("payments.readyForPayout")}
             </p>
           </div>
 
@@ -313,9 +312,9 @@ export default function PaymentsPage() {
           <div className="bg-card border rounded-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-sm text-muted-foreground">{t("payments.pending")}</p>
                 <p className="text-2xl font-bold text-foreground mt-1">
-                  ${data.balance.pending.toLocaleString()}
+                  {formatCurrency(data.balance.pending)}
                 </p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
@@ -323,7 +322,7 @@ export default function PaymentsPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              Processing from recent bookings
+              {t("payments.processingFromRecent")}
             </p>
           </div>
 
@@ -331,9 +330,9 @@ export default function PaymentsPage() {
           <div className="bg-card border rounded-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">This Month</p>
+                <p className="text-sm text-muted-foreground">{t("payments.thisMonth")}</p>
                 <p className="text-2xl font-bold text-foreground mt-1">
-                  ${data.earnings.thisMonth.toLocaleString()}
+                  {formatCurrency(data.earnings.thisMonth)}
                 </p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -356,7 +355,7 @@ export default function PaymentsPage() {
                   </span>
                 </>
               )}
-              <span className="text-xs text-muted-foreground ml-1">vs last month</span>
+              <span className="text-xs text-muted-foreground ml-1">{t("payments.vsLastMonth")}</span>
             </div>
           </div>
 
@@ -364,9 +363,9 @@ export default function PaymentsPage() {
           <div className="bg-card border rounded-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Earnings</p>
+                <p className="text-sm text-muted-foreground">{t("payments.totalEarnings")}</p>
                 <p className="text-2xl font-bold text-foreground mt-1">
-                  ${data.earnings.total.toLocaleString()}
+                  {formatCurrency(data.earnings.total)}
                 </p>
               </div>
               <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -374,7 +373,7 @@ export default function PaymentsPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              All time
+              {t("payments.allTime")}
             </p>
           </div>
         </div>
@@ -383,14 +382,14 @@ export default function PaymentsPage() {
         <div className="bg-card border rounded-lg">
           <div className="p-6 border-b">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">Transaction History</h2>
+              <h2 className="text-lg font-semibold text-foreground">{t("payments.transactionHistory")}</h2>
               <UnifiedButton
                 variant="outline"
                 size="sm"
                 onClick={() => setShowFilters(!showFilters)}
               >
                 <Filter className="w-4 h-4 mr-2" />
-                Filters
+                {t("payments.filters")}
               </UnifiedButton>
             </div>
 
@@ -398,34 +397,34 @@ export default function PaymentsPage() {
             {showFilters && (
               <div className="mt-4 flex flex-wrap items-center gap-4">
                 <div>
-                  <label className="text-sm text-muted-foreground mr-2">Type:</label>
+                  <label className="text-sm text-muted-foreground mr-2">{t("payments.type")}:</label>
                   <select
                     value={currentType || ""}
                     onChange={(e) => handleFilterChange("type", e.target.value || null)}
                     className="border border-input rounded-md px-3 py-1.5 text-sm bg-background"
                   >
-                    <option value="">All Types</option>
-                    <option value="PAYMENT">Booking Payment</option>
-                    <option value="PAYOUT">Payout</option>
-                    <option value="REFUND">Refund</option>
-                    <option value="PLATFORM_FEE">Platform Fee</option>
-                    <option value="DEPOSIT_HOLD">Deposit Hold</option>
-                    <option value="DEPOSIT_RELEASE">Deposit Release</option>
-                    <option value="OWNER_EARNING">Owner Earning</option>
+                    <option value="">{t("payments.allTypes")}</option>
+                    <option value="PAYMENT">{t("payments.bookingPayment")}</option>
+                    <option value="PAYOUT">{t("payments.payout")}</option>
+                    <option value="REFUND">{t("payments.refund")}</option>
+                    <option value="PLATFORM_FEE">{t("payments.platformFee")}</option>
+                    <option value="DEPOSIT_HOLD">{t("payments.depositHold")}</option>
+                    <option value="DEPOSIT_RELEASE">{t("payments.depositRelease")}</option>
+                    <option value="OWNER_EARNING">{t("payments.ownerEarning")}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm text-muted-foreground mr-2">Status:</label>
+                  <label className="text-sm text-muted-foreground mr-2">{t("payments.status")}:</label>
                   <select
                     value={currentStatus || ""}
                     onChange={(e) => handleFilterChange("status", e.target.value || null)}
                     className="border border-input rounded-md px-3 py-1.5 text-sm bg-background"
                   >
-                    <option value="">All Statuses</option>
-                    <option value="PENDING">Pending</option>
-                    <option value="POSTED">Posted</option>
-                    <option value="SETTLED">Settled</option>
-                    <option value="CANCELLED">Cancelled</option>
+                    <option value="">{t("payments.allStatuses")}</option>
+                    <option value="PENDING">{t("payments.pending")}</option>
+                    <option value="POSTED">{t("payments.posted")}</option>
+                    <option value="SETTLED">{t("payments.settled")}</option>
+                    <option value="CANCELLED">{t("payments.cancelled")}</option>
                   </select>
                 </div>
                 {(currentType || currentStatus) && (
@@ -437,7 +436,7 @@ export default function PaymentsPage() {
                       setSearchParams(params);
                     }}
                   >
-                    Clear Filters
+                    {t("payments.clearFilters")}
                   </UnifiedButton>
                 )}
               </div>
@@ -448,14 +447,14 @@ export default function PaymentsPage() {
           {data.transactions.length === 0 ? (
             <div className="p-12 text-center">
               <CreditCard className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">No transactions found</p>
+              <p className="text-muted-foreground">{t("payments.noTransactions")}</p>
               {(currentType || currentStatus) && (
                 <UnifiedButton
                   variant="ghost"
                   className="mt-2"
                   onClick={() => setSearchParams(new URLSearchParams())}
                 >
-                  Clear filters to see all transactions
+                  {t("payments.clearFiltersToSeeAll")}
                 </UnifiedButton>
               )}
             </div>
@@ -518,7 +517,7 @@ export default function PaymentsPage() {
                           isNegative ? "text-red-600" : "text-green-600"
                         )}
                       >
-                        {isNegative ? "-" : "+"}${Math.abs(amountSigned).toLocaleString()}
+                        {isNegative ? "-" : "+"}{formatCurrency(Math.abs(amountSigned))}
                       </p>
                       <div className="flex items-center justify-end gap-2 mt-1">
                         <span
@@ -545,7 +544,7 @@ export default function PaymentsPage() {
           {totalPages > 1 && (
             <div className="p-4 border-t flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Showing page {currentPage} of {totalPages}
+                {t("payments.showingPage", { current: currentPage, total: totalPages })}
               </p>
               <div className="flex items-center gap-2">
                 <UnifiedButton
@@ -576,9 +575,9 @@ export default function PaymentsPage() {
             className="bg-card border rounded-lg p-6 hover:border-primary/50 transition-colors"
           >
             <CreditCard className="w-8 h-8 text-primary mb-3" />
-            <h3 className="font-semibold text-foreground">Payout Settings</h3>
+            <h3 className="font-semibold text-foreground">{t("payments.payoutSettings")}</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Update your bank account or payment method
+              {t("payments.updateBankAccount")}
             </p>
           </Link>
           <Link
@@ -586,9 +585,9 @@ export default function PaymentsPage() {
             className="bg-card border rounded-lg p-6 hover:border-primary/50 transition-colors"
           >
             <TrendingUp className="w-8 h-8 text-primary mb-3" />
-            <h3 className="font-semibold text-foreground">Performance</h3>
+            <h3 className="font-semibold text-foreground">{t("payments.performanceTitle")}</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              View detailed analytics and insights
+              {t("payments.viewAnalytics")}
             </p>
           </Link>
           <Link
@@ -596,9 +595,9 @@ export default function PaymentsPage() {
             className="bg-card border rounded-lg p-6 hover:border-primary/50 transition-colors"
           >
             <AlertCircle className="w-8 h-8 text-primary mb-3" />
-            <h3 className="font-semibold text-foreground">Help & Support</h3>
+            <h3 className="font-semibold text-foreground">{t("payments.helpAndSupport")}</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Get help with payment issues
+              {t("payments.getHelpPayment")}
             </p>
           </Link>
         </div>

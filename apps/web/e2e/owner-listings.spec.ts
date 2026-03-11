@@ -58,7 +58,7 @@ test.describe("Owner Listing Management", () => {
     });
 
     test("should display create listing page", async ({ page }) => {
-      await expect(page.locator("h1")).toContainText(/Create New Listing/i);
+      await expect(page.locator("h1")).toContainText(/Create (a|new) Listing/i);
     });
 
     test("should show quick create fields", async ({ page }) => {
@@ -135,7 +135,7 @@ test.describe("Owner Listing Management", () => {
       await openAdvancedEditor(page);
 
       await clickFirstVisible(page, ['button:has-text("Next")']);
-      await expect(page.locator('input[name="pricePerDay"]')).toBeVisible();
+      await expect(page.locator('input[name="basePrice"]')).toBeVisible();
       await expect(page.locator('input[name="securityDeposit"]')).toBeVisible();
 
       await clickFirstVisible(page, ['button:has-text("Next")']);

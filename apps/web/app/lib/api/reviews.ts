@@ -17,9 +17,12 @@ export const reviewsApi = {
     userId: string,
     type: "received" | "given",
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    rating?: number
   ): Promise<ReviewListResponse> {
-    return api.get<ReviewListResponse>(`/reviews/user/${userId}?type=${type}&page=${page}&limit=${limit}`);
+    const params = new URLSearchParams({ type, page: String(page), limit: String(limit) });
+    if (rating) params.set("rating", String(rating));
+    return api.get<ReviewListResponse>(`/reviews/user/${userId}?${params}`);
   },
 
   async getPublicUserReviews(

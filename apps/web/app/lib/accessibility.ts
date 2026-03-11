@@ -2,6 +2,7 @@
  * Accessibility Utilities
  * Provides helpers for WCAG 2.1 AA compliance
  */
+import { APP_LOCALE, APP_CURRENCY } from "~/config/locale";
 
 /**
  * Generate unique IDs for ARIA relationships
@@ -27,9 +28,10 @@ export function announceToScreenReader(
 
   document.body.appendChild(announcement);
 
+  // Allow screen readers enough time to read the announcement
   setTimeout(() => {
     document.body.removeChild(announcement);
-  }, 1000);
+  }, 5000);
 }
 
 /**
@@ -103,7 +105,7 @@ export function formatNumberForScreenReader(num: number): string {
  * Format date for screen readers
  */
 export function formatDateForScreenReader(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(APP_LOCALE, {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -116,14 +118,22 @@ export function formatDateForScreenReader(date: Date): string {
  */
 export function formatPriceForScreenReader(
   price: number,
-  currency: string = "USD"
+  currency: string = APP_CURRENCY
 ): string {
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(price);
+  // Use Intl to get localized currency name parts
+  try {
+    const parts = new Intl.NumberFormat(APP_LOCALE, {
+      style: "currency",
+      currency,
+      currencyDisplay: "name",
+    }).formatToParts(price);
 
-  return formatted.replace("$", "dollars ");
+    // Reconstruct as "1,500 Nepalese rupees"
+    return parts.map((p) => p.value).join("");
+  } catch {
+    // Fallback for unsupported currencies
+    return `${price} ${currency}`;
+  }
 }
 
 /**

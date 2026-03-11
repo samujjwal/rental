@@ -102,7 +102,7 @@ export class AnalyticsService {
       }),
       this.prisma.booking.findMany({
         where: { ownerId: userId },
-        select: { id: true, listingId: true, startDate: true, endDate: true, createdAt: true, totalAmount: true, totalPrice: true },
+        select: { id: true, listingId: true, startDate: true, endDate: true, createdAt: true, totalPrice: true },
       }),
     ]);
 
@@ -223,7 +223,7 @@ export class AnalyticsService {
         by: ['listingId'],
         where: { listingId: { in: listingIds } },
         _count: { _all: true },
-        _sum: { totalAmount: true, totalPrice: true },
+        _sum: { totalPrice: true },
       }),
       this.prisma.listing.findMany({
         where: { id: { in: listingIds } },
@@ -236,7 +236,7 @@ export class AnalyticsService {
         stat.listingId,
         {
           bookings: stat._count._all,
-          revenue: Number(stat._sum.totalAmount ?? stat._sum.totalPrice ?? 0),
+          revenue: Number(stat._sum.totalPrice ?? 0),
         },
       ]),
     );
@@ -265,10 +265,10 @@ export class AnalyticsService {
 
     const sum = await this.prisma.booking.aggregate({
       where,
-      _sum: { totalAmount: true, totalPrice: true },
+      _sum: { totalPrice: true },
     });
 
-    return Number(sum._sum.totalAmount ?? sum._sum.totalPrice ?? 0);
+    return Number(sum._sum.totalPrice ?? 0);
   }
 
   private revenueStatuses() {
@@ -282,21 +282,21 @@ export class AnalyticsService {
 
   private async getMonthlyData(userId: string, months: number) {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1));
     const bookings = await this.prisma.booking.findMany({
       where: {
         ownerId: userId,
         createdAt: { gte: start },
       },
-      select: { createdAt: true, totalAmount: true, totalPrice: true },
+      select: { createdAt: true, totalPrice: true },
     });
 
     const buckets = Array.from({ length: months }).map((_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - (months - 1 - index), 1);
-      const label = date.toLocaleString('default', { month: 'short' });
+      const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1 - index), 1));
+      const label = date.toLocaleString('en', { month: 'short', timeZone: 'UTC' });
       return {
         month: label,
-        year: date.getFullYear(),
+        year: date.getUTCFullYear(),
         bookings: 0,
         revenue: 0,
       };
@@ -304,11 +304,11 @@ export class AnalyticsService {
 
     bookings.forEach((booking) => {
       const monthIndex =
-        (booking.createdAt.getFullYear() - buckets[0].year) * 12 +
-        (booking.createdAt.getMonth() - (now.getMonth() - (months - 1)));
+        (booking.createdAt.getUTCFullYear() - buckets[0].year) * 12 +
+        (booking.createdAt.getUTCMonth() - (now.getUTCMonth() - (months - 1)));
       if (monthIndex >= 0 && monthIndex < buckets.length) {
         buckets[monthIndex].bookings += 1;
-        buckets[monthIndex].revenue += Number(booking.totalAmount ?? booking.totalPrice ?? 0);
+        buckets[monthIndex].revenue += Number(booking.totalPrice ?? 0);
       }
     });
 

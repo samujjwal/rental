@@ -4,13 +4,15 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { UserRole } from '@rental-portal/database';
-import { cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
 
 describe('Payments (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let ownerToken: string;
   let renterToken: string;
+  const ownerEmail = buildTestEmail('payment-owner');
+  const renterEmail = buildTestEmail('payment-renter');
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -33,7 +35,7 @@ describe('Payments (e2e)', () => {
   afterAll(async () => {
     await cleanupCoreRelationalData(prisma);
     await prisma.user.deleteMany({
-      where: { email: { in: ['owner@paymenttest.com', 'renter@paymenttest.com'] } },
+      where: { email: { in: [ownerEmail, renterEmail] } },
     });
     await app.close();
   });
@@ -41,13 +43,13 @@ describe('Payments (e2e)', () => {
   beforeEach(async () => {
     await cleanupCoreRelationalData(prisma);
     await prisma.user.deleteMany({
-      where: { email: { in: ['owner@paymenttest.com', 'renter@paymenttest.com'] } },
+      where: { email: { in: [ownerEmail, renterEmail] } },
     });
 
     const owner = await createUserWithRole({
       app,
       prisma,
-      email: 'owner@paymenttest.com',
+      email: ownerEmail,
       firstName: 'Test',
       lastName: 'Owner',
       role: UserRole.HOST,
@@ -57,7 +59,7 @@ describe('Payments (e2e)', () => {
     const renter = await createUserWithRole({
       app,
       prisma,
-      email: 'renter@paymenttest.com',
+      email: renterEmail,
       firstName: 'Test',
       lastName: 'Renter',
       role: UserRole.USER,

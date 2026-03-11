@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { BookingCalculationService } from './booking-calculation.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PricingMode, DepositType } from '@rental-portal/database';
@@ -21,6 +22,11 @@ describe('BookingCalculationService - Edge Cases & Comprehensive Tests', () => {
       providers: [
         BookingCalculationService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: ConfigService, useValue: { get: jest.fn((key: string, defaultVal: any) => {
+          if (key === 'fees.platformFeePercent') return 15;
+          if (key === 'fees.serviceFeePercent') return 5;
+          return defaultVal;
+        }) } },
       ],
     }).compile();
 

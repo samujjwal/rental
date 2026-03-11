@@ -1,9 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Notification, NotificationType } from '@rental-portal/database';
 import * as nodemailer from 'nodemailer';
 import { Twilio } from 'twilio';
+import { formatCurrency } from '@rental-portal/shared-types';
+import { escapeHtml } from '@/common/utils/sanitize';
+import { PushNotificationService } from './push-notification.service';
 
 export interface SendNotificationDto {
   userId: string;
@@ -37,6 +41,7 @@ export class NotificationsService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private pushService: PushNotificationService,
   ) {
     // Initialize email transporter
     this.emailTransporter = nodemailer.createTransport({
@@ -83,7 +88,7 @@ export class NotificationsService {
     });
 
     if (!user) {
-      throw new Error('User not found');
+      throw i18nNotFound('notification.userNotFound');
     }
 
     // Parse preferences
@@ -212,27 +217,20 @@ export class NotificationsService {
   }
 
   /**
-   * Send push notification
-   * Note: Currently implements a logger-based delivery simulation.
-   * Integration with FCM/APNS requires valid credentials and sdk setup.
+   * Send push notification via PushNotificationService
    */
   private async sendPushNotification(user: any, notification: Notification): Promise<void> {
-    const fcmKey = this.configService.get('FCM_SERVER_KEY');
-
-    if (!fcmKey) {
-      this.logger.log(
-        `Push notification simulation: [User ${user.id}] ${notification.title} - ${notification.message}`,
-      );
-      return;
+    try {
+      await this.pushService.sendPushNotification({
+        userId: user.id,
+        title: notification.title,
+        body: notification.message,
+        data: (typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data as Record<string, any>) || {},
+      });
+      this.logger.log(`Push notification sent to user ${user.id} for notification ${notification.id}`);
+    } catch (error) {
+      this.logger.warn(`Push notification failed for user ${user.id}: ${error.message}`);
     }
-
-    // Placeholder for actual FCM integration
-    // const fcm = new FCM(fcmKey);
-    // await fcm.send(...)
-
-    this.logger.warn(
-      `Push notification provider configured but integration not fully activated for user ${user.id}`,
-    );
   }
 
   /**
@@ -249,8 +247,8 @@ export class NotificationsService {
         return {
           subject: 'New Booking Request',
           html: `
-            <h2>${notification.title}</h2>
-            <p>${notification.message}</p>
+            <h2>${escapeHtml(notification.title)}</h2>
+            <p>${escapeHtml(notification.message)}</p>
             <p><a href="${baseUrl}/bookings/${(notification.data as any)?.bookingId}">View Booking</a></p>
           `,
         };
@@ -259,8 +257,8 @@ export class NotificationsService {
         return {
           subject: 'Booking Confirmed',
           html: `
-            <h2>${notification.title}</h2>
-            <p>${notification.message}</p>
+            <h2>${escapeHtml(notification.title)}</h2>
+            <p>${escapeHtml(notification.message)}</p>
             <p><a href="${baseUrl}/bookings/${(notification.data as any)?.bookingId}">View Booking Details</a></p>
           `,
         };
@@ -269,9 +267,9 @@ export class NotificationsService {
         return {
           subject: 'Payout Processed',
           html: `
-            <h2>${notification.title}</h2>
-            <p>${notification.message}</p>
-            <p>Amount: $${(notification.data as any)?.amount}</p>
+            <h2>${escapeHtml(notification.title)}</h2>
+            <p>${escapeHtml(notification.message)}</p>
+            <p>Amount: ${formatCurrency((notification.data as any)?.amount, (notification.data as any)?.currency)}</p>
           `,
         };
 
@@ -279,8 +277,8 @@ export class NotificationsService {
         return {
           subject: 'New Review Received',
           html: `
-            <h2>${notification.title}</h2>
-            <p>${notification.message}</p>
+            <h2>${escapeHtml(notification.title)}</h2>
+            <p>${escapeHtml(notification.message)}</p>
             <p><a href="${baseUrl}/reviews/${(notification.data as any)?.reviewId}">View Review</a></p>
           `,
         };
@@ -289,8 +287,8 @@ export class NotificationsService {
         return {
           subject: notification.title,
           html: `
-            <h2>${notification.title}</h2>
-            <p>${notification.message}</p>
+            <h2>${escapeHtml(notification.title)}</h2>
+            <p>${escapeHtml(notification.message)}</p>
           `,
         };
     }
@@ -337,7 +335,7 @@ export class NotificationsService {
     });
 
     if (!notification) {
-      throw new Error('Notification not found');
+      throw i18nNotFound('notification.notFound');
     }
 
     return this.prisma.notification.update({
@@ -373,7 +371,7 @@ export class NotificationsService {
     });
 
     if (!notification) {
-      throw new Error('Notification not found');
+      throw i18nNotFound('notification.notFound');
     }
 
     await this.prisma.notification.delete({

@@ -2,10 +2,12 @@ import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link, useRevalidator, redirect } from "react-router";
 import { useState } from "react";
 import { MapPin, Star, AlertCircle } from "lucide-react";
+import { formatCurrency } from "~/lib/utils";
 import { organizationsApi, type Organization } from "~/lib/api/organizations";
 import { UnifiedButton, Badge, PageSkeleton } from "~/components/ui";
 import { RouteErrorBoundary } from "~/components/ui/error-state";
 import { getUser } from "~/utils/auth";
+import { useTranslation } from "react-i18next";
 
 export const ErrorBoundary = RouteErrorBoundary;
 
@@ -86,6 +88,7 @@ export default function OrganizationListingsPage() {
   };
   const revalidator = useRevalidator();
   const [filter, setFilter] = useState<string>("");
+  const { t } = useTranslation();
 
   if (error || !organization) {
     return (
@@ -94,11 +97,11 @@ export default function OrganizationListingsPage() {
           <div className="text-center">
             <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
             <h1 className="text-2xl font-bold text-foreground mb-2">
-              Unable to load listings
+              {t("organizations.unableToLoadListings")}
             </h1>
             <p className="text-muted-foreground mb-6">{error}</p>
             <UnifiedButton onClick={() => revalidator.revalidate()}>
-              Try Again
+              {t("common.retry")}
             </UnifiedButton>
           </div>
         </div>
@@ -122,17 +125,17 @@ export default function OrganizationListingsPage() {
                 to={`/organizations/${organization.id}/settings`}
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
-                ← Back to Organization
+                ← {t("organizations.backToOrg")}
               </Link>
               <h1 className="text-2xl font-bold text-foreground mt-2">
-                {organization.name} Listings
+                {organization.name} {t("organizations.listings")}
               </h1>
               <p className="text-sm text-muted-foreground">
-                {listings.length} total listings
+                {t("organizations.totalListings", { count: listings.length })}
               </p>
             </div>
             <Link to="/listings/new">
-              <UnifiedButton>Add Listing</UnifiedButton>
+              <UnifiedButton>{t("organizations.addListing")}</UnifiedButton>
             </Link>
           </div>
         </div>
@@ -145,7 +148,7 @@ export default function OrganizationListingsPage() {
             size="sm"
             onClick={() => setFilter("")}
           >
-            All
+            {t("common.all")}
           </UnifiedButton>
           {LISTING_STATUS_FILTERS.map((status) => (
             <UnifiedButton
@@ -163,13 +166,13 @@ export default function OrganizationListingsPage() {
           <div className="text-center py-16 bg-card border rounded-lg">
             <AlertCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-semibold text-foreground mb-2">
-              No listings to show
+              {t("organizations.noListings")}
             </h2>
             <p className="text-muted-foreground mb-6">
-              Try adjusting your filters or add a new listing.
+              {t("organizations.noListingsDesc")}
             </p>
             <Link to="/listings/new">
-              <UnifiedButton>Create Listing</UnifiedButton>
+              <UnifiedButton>{t("organizations.createListing")}</UnifiedButton>
             </Link>
           </div>
         ) : (
@@ -224,8 +227,8 @@ export default function OrganizationListingsPage() {
                       <span>—</span>
                     </div>
                     <div className="font-semibold text-foreground">
-                      ${listing.basePrice}
-                      <span className="text-sm text-muted-foreground font-normal">/day</span>
+                      {formatCurrency(listing.basePrice)}
+                      <span className="text-sm text-muted-foreground font-normal">{t("common.perDay")}</span>
                     </div>
                   </div>
                 </div>

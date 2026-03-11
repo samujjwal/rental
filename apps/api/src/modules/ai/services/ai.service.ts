@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ConfigService } from '@nestjs/config';
 
 export interface GenerateDescriptionDto {
@@ -36,7 +37,7 @@ export class AiService {
     dto: GenerateDescriptionDto,
   ): Promise<GenerateDescriptionResult> {
     if (!dto.title || dto.title.trim().length < 3) {
-      throw new BadRequestException('Title must be at least 3 characters');
+      throw i18nBadRequest('validation.titleTooShort');
     }
 
     // If no API key, use template-based fallback

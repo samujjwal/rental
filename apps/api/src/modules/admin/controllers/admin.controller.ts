@@ -10,26 +10,37 @@ import {
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
+import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from '../services/admin.service';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@/modules/auth/guards/roles.guard';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { UserRole, ListingStatus } from '@rental-portal/database';
+import { AdminAnalyticsService } from '../services/admin-analytics.service';
+import { AdminUsersService } from '../services/admin-users.service';
+import { AdminSystemService } from '../services/admin-system.service';
+import { AdminContentService } from '../services/admin-content.service';
+import { AdminEntityService } from '../services/admin-entity.service';
+import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
+import { UserRole, ListingStatus, OrganizationStatus, DisputeStatus, BookingStatus } from '@rental-portal/database';
+import { UpdateUserRoleDto } from '../dto/admin.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth()
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.OPERATIONS_ADMIN, UserRole.FINANCE_ADMIN, UserRole.SUPPORT_ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly analyticsService: AdminAnalyticsService,
+    private readonly usersService: AdminUsersService,
+    private readonly systemService: AdminSystemService,
+    private readonly contentService: AdminContentService,
+    private readonly entityService: AdminEntityService,
+  ) {}
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Get dashboard statistics' })
   async getDashboard(@CurrentUser('id') userId: string) {
-    return this.adminService.getDashboardStats(userId);
+    return this.analyticsService.getDashboardStats(userId);
   }
 
   @Get('analytics')
@@ -38,7 +49,7 @@ export class AdminController {
     @CurrentUser('id') userId: string,
     @Query('period') period?: 'day' | 'week' | 'month' | 'year',
   ) {
-    return this.adminService.getAnalytics(userId, period);
+    return this.analyticsService.getAnalytics(userId, period);
   }
 
   @Get('users')
@@ -50,7 +61,7 @@ export class AdminController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.adminService.getAllUsers(userId, {
+    return this.usersService.getAllUsers(userId, {
       role,
       search,
       page: page ? parseInt(page.toString()) : undefined,
@@ -61,7 +72,7 @@ export class AdminController {
   @Get('users/:id')
   @ApiOperation({ summary: 'Get user by ID' })
   async getUserById(@CurrentUser('id') adminId: string, @Param('id') userId: string) {
-    return this.adminService.getUserById(adminId, userId);
+    return this.usersService.getUserById(adminId, userId);
   }
 
   @Patch('users/:id/role')
@@ -69,21 +80,21 @@ export class AdminController {
   async updateUserRole(
     @CurrentUser('id') adminId: string,
     @Param('id') userId: string,
-    @Body() body: { role: UserRole },
+    @Body() dto: UpdateUserRoleDto,
   ) {
-    return this.adminService.updateUserRole(adminId, userId, body.role);
+    return this.usersService.updateUserRole(adminId, userId, dto.role);
   }
 
   @Post('users/:id/suspend')
   @ApiOperation({ summary: 'Suspend user' })
   async suspendUser(@CurrentUser('id') adminId: string, @Param('id') userId: string) {
-    return this.adminService.toggleUserStatus(adminId, userId, true);
+    return this.usersService.toggleUserStatus(adminId, userId, true);
   }
 
   @Post('users/:id/activate')
   @ApiOperation({ summary: 'Activate user' })
   async activateUser(@CurrentUser('id') adminId: string, @Param('id') userId: string) {
-    return this.adminService.toggleUserStatus(adminId, userId, false);
+    return this.usersService.toggleUserStatus(adminId, userId, false);
   }
 
   @Get('organizations')
@@ -120,9 +131,15 @@ export class AdminController {
   async updateOrganizationStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') orgId: string,
-    @Body('status') status: any,
+    @Body('status') status: string,
   ) {
-    return this.adminService.updateOrganizationStatus(adminId, orgId, status);
+    if (!status || typeof status !== 'string') {
+      throw i18nBadRequest('validation.statusRequired');
+    }
+    if (!Object.values(OrganizationStatus).includes(status as OrganizationStatus)) {
+      throw new BadRequestException(`Invalid status. Must be one of: ${Object.values(OrganizationStatus).join(', ')}`);
+    }
+    return this.adminService.updateOrganizationStatus(adminId, orgId, status as OrganizationStatus);
   }
 
   @Get('listings')
@@ -144,12 +161,6 @@ export class AdminController {
     });
   }
 
-  @Get('listings/:id')
-  @ApiOperation({ summary: 'Get listing by ID' })
-  async getListingById(@CurrentUser('id') adminId: string, @Param('id') listingId: string) {
-    return this.adminService.getListingById(adminId, listingId);
-  }
-
   @Get('listings/categories')
   @ApiOperation({ summary: 'Get all categories' })
   async getAllCategories(@CurrentUser('id') adminId: string) {
@@ -157,13 +168,35 @@ export class AdminController {
   }
 
   @Get('listings/pending')
-  @ApiOperation({ summary: 'Get pending listings' })
+  @ApiOperation({ summary: 'Get listings pending admin approval' })
   async getPendingListings(@CurrentUser('id') adminId: string) {
     return this.adminService.getPendingListings(adminId);
   }
 
+  @Get('listings/:id')
+  @ApiOperation({ summary: 'Get listing by ID' })
+  async getListingById(@CurrentUser('id') adminId: string, @Param('id') listingId: string) {
+    return this.adminService.getListingById(adminId, listingId);
+  }
+
+  @Post('listings/:id/approve')
+  @ApiOperation({ summary: 'Approve a listing — makes it AVAILABLE and bookable' })
+  async approveListing(@CurrentUser('id') adminId: string, @Param('id') listingId: string) {
+    return this.adminService.approveListing(adminId, listingId);
+  }
+
+  @Post('listings/:id/reject')
+  @ApiOperation({ summary: 'Reject a listing — resets it to DRAFT so the owner can fix it' })
+  async rejectListing(
+    @CurrentUser('id') adminId: string,
+    @Param('id') listingId: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.adminService.rejectListing(adminId, listingId, body?.reason);
+  }
+
   @Patch('listings/:id/status')
-  @ApiOperation({ summary: 'Update listing status' })
+  @ApiOperation({ summary: 'Update listing status (generic override)' })
   async updateListingStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') listingId: string,
@@ -208,6 +241,29 @@ export class AdminController {
   @ApiOperation({ summary: 'Get booking by ID' })
   async getBookingById(@CurrentUser('id') adminId: string, @Param('id') bookingId: string) {
     return this.adminService.getBookingById(adminId, bookingId);
+  }
+
+  @Patch('bookings/:id/status')
+  @ApiOperation({
+    summary: 'Force-set booking status (admin override)',
+    description:
+      'Directly sets booking status, bypassing the state machine and Stripe. ' +
+      'Intended for admin intervention and E2E test environments.',
+  })
+  async updateBookingStatus(
+    @CurrentUser('id') adminId: string,
+    @Param('id') bookingId: string,
+    @Body('status') status: string,
+  ) {
+    if (!status || typeof status !== 'string') {
+      throw i18nBadRequest('validation.statusRequired');
+    }
+    if (!Object.values(BookingStatus).includes(status as BookingStatus)) {
+      throw new BadRequestException(
+        `Invalid status. Must be one of: ${Object.values(BookingStatus).join(', ')}`,
+      );
+    }
+    return this.adminService.forceSetBookingStatus(adminId, bookingId, status);
   }
 
   @Get('bookings/calendar')
@@ -285,37 +341,37 @@ export class AdminController {
   @Get('settings/general')
   @ApiOperation({ summary: 'Get general settings' })
   async getGeneralSettings(@CurrentUser('id') adminId: string) {
-    return this.adminService.getGeneralSettings(adminId);
+    return this.systemService.getGeneralSettings(adminId);
   }
 
   @Get('settings/api-keys')
   @ApiOperation({ summary: 'Get API keys' })
   async getApiKeys(@CurrentUser('id') adminId: string) {
-    return this.adminService.getApiKeys(adminId);
+    return this.systemService.getApiKeys(adminId);
   }
 
   @Get('settings/services')
   @ApiOperation({ summary: 'Get service configuration' })
   async getServiceConfig(@CurrentUser('id') adminId: string) {
-    return this.adminService.getServiceConfig(adminId);
+    return this.systemService.getServiceConfig(adminId);
   }
 
   @Get('settings/environment')
   @ApiOperation({ summary: 'Get environment variables' })
   async getEnvironmentConfig(@CurrentUser('id') adminId: string) {
-    return this.adminService.getEnvironmentConfig(adminId);
+    return this.systemService.getEnvironmentConfig(adminId);
   }
 
   @Get('analytics/users')
   @ApiOperation({ summary: 'Get user analytics' })
   async getUserAnalytics(@CurrentUser('id') adminId: string, @Query('period') period?: string) {
-    return this.adminService.getUserAnalytics(adminId, period);
+    return this.analyticsService.getUserAnalytics(adminId, period);
   }
 
   @Get('analytics/business')
   @ApiOperation({ summary: 'Get business analytics' })
   async getBusinessAnalytics(@CurrentUser('id') adminId: string, @Query('period') period?: string) {
-    return this.adminService.getBusinessAnalytics(adminId, period);
+    return this.analyticsService.getBusinessAnalytics(adminId, period);
   }
 
   @Get('analytics/performance')
@@ -324,25 +380,25 @@ export class AdminController {
     @CurrentUser('id') adminId: string,
     @Query('period') period?: string,
   ) {
-    return this.adminService.getPerformanceAnalytics(adminId, period);
+    return this.analyticsService.getPerformanceAnalytics(adminId, period);
   }
 
   @Get('analytics/reports')
   @ApiOperation({ summary: 'Get custom reports' })
   async getCustomReports(@CurrentUser('id') adminId: string) {
-    return this.adminService.getCustomReports(adminId);
+    return this.analyticsService.getCustomReports(adminId);
   }
 
   @Get('system/overview')
   @ApiOperation({ summary: 'Get system overview' })
   async getSystemOverview(@CurrentUser('id') adminId: string) {
-    return this.adminService.getSystemOverview(adminId);
+    return this.systemService.getSystemOverview(adminId);
   }
 
   @Get('system/health')
   @ApiOperation({ summary: 'Get system health' })
   async getSystemHealth(@CurrentUser('id') adminId: string) {
-    return this.adminService.getSystemHealth(adminId);
+    return this.systemService.getSystemHealth(adminId);
   }
 
   @Get('system/logs')
@@ -352,7 +408,7 @@ export class AdminController {
     @Query('level') level?: string,
     @Query('limit') limit?: number,
   ) {
-    return this.adminService.getSystemLogs(adminId, level, limit);
+    return this.systemService.getSystemLogs(adminId, level, limit);
   }
 
   @Get('system/audit')
@@ -375,13 +431,13 @@ export class AdminController {
   @Get('system/database')
   @ApiOperation({ summary: 'Get database information' })
   async getDatabaseInfo(@CurrentUser('id') adminId: string) {
-    return this.adminService.getDatabaseInfo(adminId);
+    return this.systemService.getDatabaseInfo(adminId);
   }
 
   @Get('system/backups')
   @ApiOperation({ summary: 'Get backup information' })
   async getBackupInfo(@CurrentUser('id') adminId: string) {
-    return this.adminService.getBackupInfo(adminId);
+    return this.systemService.getBackupInfo(adminId);
   }
 
   @Get('revenue')
@@ -391,7 +447,7 @@ export class AdminController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    return this.adminService.getRevenueReport(userId, new Date(startDate), new Date(endDate));
+    return this.analyticsService.getRevenueReport(userId, new Date(startDate), new Date(endDate));
   }
 
   // ==================== CONTENT MANAGEMENT ====================
@@ -405,7 +461,7 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('search') search?: string,
   ) {
-    return this.adminService.getReviews(adminId, {
+    return this.contentService.getReviews(adminId, {
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
       status,
@@ -420,7 +476,7 @@ export class AdminController {
     @Param('id') reviewId: string,
     @Body() body: { status: string },
   ) {
-    return this.adminService.updateReviewStatus(adminId, reviewId, body.status);
+    return this.contentService.updateReviewStatus(adminId, reviewId, body.status);
   }
 
   @Get('messages')
@@ -430,7 +486,7 @@ export class AdminController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.adminService.getMessages(adminId, {
+    return this.contentService.getMessages(adminId, {
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
     });
@@ -446,7 +502,7 @@ export class AdminController {
     @Query('limit') limit?: number,
     @Query('status') status?: string,
   ) {
-    return this.adminService.getDisputes(adminId, {
+    return this.contentService.getDisputes(adminId, {
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
       status,
@@ -457,9 +513,15 @@ export class AdminController {
   async updateDisputeStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') id: string,
-    @Body('status') status: any,
+    @Body('status') status: string,
   ) {
-    return this.adminService.updateDisputeStatus(adminId, id, status);
+    if (!status || typeof status !== 'string') {
+      throw i18nBadRequest('validation.statusRequired');
+    }
+    if (!Object.values(DisputeStatus).includes(status as DisputeStatus)) {
+      throw new BadRequestException(`Invalid status. Must be one of: ${Object.values(DisputeStatus).join(', ')}`);
+    }
+    return this.contentService.updateDisputeStatus(adminId, id, status as DisputeStatus);
   }
 
   @Patch('refunds/:id/status')
@@ -467,16 +529,19 @@ export class AdminController {
   async updateRefundStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') id: string,
-    @Body('status') status: any,
+    @Body('status') status: string,
   ) {
-    return this.adminService.updateRefundStatus(adminId, id, status);
+    if (!status || typeof status !== 'string') {
+      throw i18nBadRequest('validation.statusRequired');
+    }
+    return this.contentService.updateRefundStatus(adminId, id, status as any);
   }
   // ==================== SCHEMA ENDPOINTS FOR DYNAMIC ADMIN UI ====================
 
   @Get('schema/:entity')
   @ApiOperation({ summary: 'Get entity schema for dynamic admin UI' })
   async getEntitySchema(@CurrentUser('id') adminId: string, @Param('entity') entity: string) {
-    return this.adminService.getEntitySchema(adminId, entity);
+    return this.entityService.getEntitySchema(adminId, entity);
   }
 
   @Get(':entity')
@@ -497,11 +562,11 @@ export class AdminController {
       try {
         parsedFilters = JSON.parse(filters);
       } catch (error) {
-        throw new BadRequestException('Invalid filters format');
+        throw i18nBadRequest('admin.invalidFiltersFormat');
       }
     }
 
-    return this.adminService.getEntityData(adminId, entity, {
+    return this.entityService.getEntityData(adminId, entity, {
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
       search,

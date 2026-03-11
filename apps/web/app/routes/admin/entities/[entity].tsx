@@ -1,5 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   useParams,
   type LoaderFunctionArgs,
@@ -89,6 +90,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
  */
 
 export default function ModernDynamicEntityPage() {
+  const { t } = useTranslation();
   const { entity } = useParams<{ entity: string }>();
   const loaderData = useLoaderData<typeof clientLoader>();
   const { setAuth } = useAuthStore();
@@ -121,13 +123,11 @@ export default function ModernDynamicEntityPage() {
   useEffect(() => {
     if (
       loaderData?.user &&
-      loaderData?.accessToken &&
-      loaderData?.refreshToken
+      loaderData?.accessToken
     ) {
       setAuth(
         loaderData.user as unknown as AuthUser,
-        loaderData.accessToken,
-        loaderData.refreshToken
+        loaderData.accessToken
       );
     }
   }, [loaderData, setAuth]);
@@ -153,8 +153,8 @@ export default function ModernDynamicEntityPage() {
       const detail = await fetchDetail(id);
       setSelectedRecord((detail as EntityRecord | null) ?? record);
       setView("form");
-    } catch (err) {
-      console.error("Failed to load record:", err);
+    } catch {
+      // ignored
     }
   };
 
@@ -180,7 +180,7 @@ export default function ModernDynamicEntityPage() {
   const handleDelete = useCallback(
     async (record: EntityRecord) => {
       if (!entityConfig) return;
-      if (!window.confirm(`Are you sure you want to delete this ${entityConfig.name}?`)) {
+      if (!window.confirm(t("admin.deleteConfirm", { name: entityConfig.name }))) {
         return;
       }
       const id = getRecordId(record);
@@ -359,9 +359,9 @@ export default function ModernDynamicEntityPage() {
     <div className="p-6">
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 mb-4">
-        <RouterLink to="/admin" className="hover:text-gray-900 dark:hover:text-gray-200 hover:underline">Admin</RouterLink>
+        <RouterLink to="/admin" className="hover:text-gray-900 dark:hover:text-gray-200 hover:underline">{t("admin.admin")}</RouterLink>
         <ChevronRight className="w-4 h-4" />
-        <span className="text-gray-900 dark:text-white">{entityConfig?.pluralName || "Entity"}</span>
+        <span className="text-gray-900 dark:text-white">{entityConfig?.pluralName || t("admin.entity")}</span>
       </nav>
 
       {/* Header */}
@@ -371,9 +371,9 @@ export default function ModernDynamicEntityPage() {
             ? entityConfig?.pluralName
             : view === "form"
               ? selectedRecord
-                ? `Edit ${entityConfig?.name}`
-                : `Create ${entityConfig?.name}`
-              : `${entityConfig?.name} Details`}
+                ? t("admin.editEntity", { name: entityConfig?.name })
+                : t("admin.createEntity", { name: entityConfig?.name })
+              : t("admin.entityDetails", { name: entityConfig?.name })}
         </h1>
         {entityConfig?.description && view === "table" && (
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{entityConfig.description}</p>
@@ -471,12 +471,12 @@ export default function ModernDynamicEntityPage() {
           onCancel={handleCancel}
           title={
             view === "detail"
-              ? `${entityConfig.name} Details`
+              ? t("admin.entityDetails", { name: entityConfig.name })
               : selectedRecord
-                ? `Edit ${entityConfig.name}`
-                : `Create ${entityConfig.name}`
+                ? t("admin.editEntity", { name: entityConfig.name })
+                : t("admin.createEntity", { name: entityConfig.name })
           }
-          submitLabel={selectedRecord ? "Save Changes" : "Create"}
+          submitLabel={selectedRecord ? t("admin.saveChanges") : t("admin.create")}
           loading={loading}
           enableAutoSave={false}
         />

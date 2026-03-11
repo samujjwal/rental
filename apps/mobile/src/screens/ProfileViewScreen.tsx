@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Image, Pressable } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
-import type { ListingDetail, ReviewResponse } from "@rental-portal/mobile-sdk";
+import type { ListingDetail, ReviewResponse } from '~/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProfileView">;
 
@@ -25,21 +26,23 @@ export function ProfileViewScreen({ route, navigation }: Props) {
   const [tab, setTab] = useState<"listings" | "reviews">("listings");
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const profile = await mobileClient.getUserById(userId);
-        const listingsResponse = await mobileClient.getUserListings(userId);
-        const reviewsResponse = await mobileClient.getUserReviews(userId, "received");
-        setUser(profile);
-        setListings(listingsResponse.listings || []);
-        setReviews(reviewsResponse.reviews || []);
-      } catch (err) {
-        setStatus("Unable to load profile.");
-      }
-    };
-    load();
-  }, [userId]);
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        try {
+          const profile = await mobileClient.getUserById(userId);
+          const listingsResponse = await mobileClient.getUserListings(userId);
+          const reviewsResponse = await mobileClient.getUserReviews(userId, "received");
+          setUser(profile);
+          setListings(listingsResponse.listings || []);
+          setReviews(reviewsResponse.reviews || []);
+        } catch (err) {
+          setStatus("Unable to load profile.");
+        }
+      };
+      load();
+    }, [userId])
+  );
 
   return (
     <View style={styles.container}>

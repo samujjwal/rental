@@ -1,4 +1,4 @@
-import { Decimal } from '@prisma/client/runtime/library';
+import { Decimal } from '@prisma/client/runtime/client';
 
 /**
  * Convert Decimal to number safely
@@ -48,7 +48,11 @@ export function decimalDivide(
   a: Decimal | number | string | null | undefined,
   b: Decimal | number | string | null | undefined,
 ): number {
-  return toNumber(a) / toNumber(b);
+  const divisor = toNumber(b);
+  if (divisor === 0) {
+    return 0; // Guard against division by zero — return 0 instead of Infinity/NaN
+  }
+  return toNumber(a) / divisor;
 }
 
 export function decimalCompare(

@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { fraudApi } from "~/lib/api/fraud";
 import { Badge, UnifiedButton, RouteErrorBoundary } from "~/components/ui";
@@ -44,16 +45,17 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 }
 
 export default function FraudDashboard() {
+  const { t } = useTranslation();
   const { riskUsers, error } = useLoaderData<typeof clientLoader>();
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Fraud Detection
+          {t("admin.fraud")}
         </h1>
         <p className="text-muted-foreground">
-          Monitor and action high-risk accounts and activities.
+          {t("admin.monitorHighRisk")}
         </p>
       </div>
 
@@ -69,7 +71,7 @@ export default function FraudDashboard() {
           <div className="p-6 border-b">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-destructive" />
-              High Risk Users
+              {t("admin.highRiskUsers")}
             </h2>
           </div>
           
@@ -77,18 +79,18 @@ export default function FraudDashboard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="px-4 py-3 text-left font-medium">User</th>
-                  <th className="px-4 py-3 text-left font-medium">Risk Score</th>
-                  <th className="px-4 py-3 text-left font-medium">Level</th>
-                  <th className="px-4 py-3 text-left font-medium">Flags</th>
-                  <th className="px-4 py-3 text-right font-medium">Actions</th>
+                  <th className="px-4 py-3 text-left font-medium">{t("admin.user")}</th>
+                  <th className="px-4 py-3 text-left font-medium">{t("admin.riskScore")}</th>
+                  <th className="px-4 py-3 text-left font-medium">{t("admin.level")}</th>
+                  <th className="px-4 py-3 text-left font-medium">{t("admin.flags")}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t("admin.actions")}</th>
                 </tr>
               </thead>
               <tbody>
                 {riskUsers.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                      No high risk users detected.
+                      {t("admin.noHighRiskUsers")}
                     </td>
                   </tr>
                 ) : (
@@ -119,13 +121,13 @@ export default function FraudDashboard() {
                             </span>
                           ))}
                           {item.check.flags.length > 3 && (
-                             <span className="text-xs text-muted-foreground">+{item.check.flags.length - 3} more</span>
+                             <span className="text-xs text-muted-foreground">{t("admin.moreFlags", { count: item.check.flags.length - 3 })}</span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <UnifiedButton variant="outline" size="sm" asChild>
-                           <Link to="/admin/entities/users">Review</Link>
+                           <Link to="/admin/entities/users">{t("admin.review")}</Link>
                         </UnifiedButton>
                       </td>
                     </tr>

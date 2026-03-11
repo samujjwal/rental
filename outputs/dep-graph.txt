@@ -1,0 +1,161 @@
+=== API: Cross-Module Imports ===
+(module A → module B via direct file import)
+
+  admin → auth  (apps/api/src/modules/admin/controllers/admin.controller.ts:15:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  admin → auth  (apps/api/src/modules/admin/controllers/admin.controller.ts:16:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  admin → auth  (apps/api/src/modules/admin/controllers/admin.controller.ts:17:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  admin → auth  (apps/api/src/modules/admin/controllers/admin.controller.ts:18:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  ai → auth  (apps/api/src/modules/ai/ai.controller.ts:3:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  analytics → auth  (apps/api/src/modules/analytics/controllers/analytics.controller.ts:3:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  analytics → auth  (apps/api/src/modules/analytics/controllers/analytics.controller.ts:4:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  bookings → auth  (apps/api/src/modules/bookings/controllers/bookings.controller.ts:30:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  bookings → auth  (apps/api/src/modules/bookings/controllers/bookings.controller.ts:31:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  bookings → fraud-detection  (apps/api/src/modules/bookings/services/bookings.service.ts:14:import { FraudDetectionService } from '@/modules/fraud-detection/services/fraud-detection.service';)
+  bookings → insurance  (apps/api/src/modules/bookings/services/bookings.service.ts:15:import { InsuranceService } from '@/modules/insurance/services/insurance.service';)
+  bookings → listings  (apps/api/src/modules/bookings/services/bookings.service.ts:11:import { AvailabilityService } from '@/modules/listings/services/availability.service';)
+  bookings → moderation  (apps/api/src/modules/bookings/services/bookings.service.ts:16:import { ContentModerationService } from '@/modules/moderation/services/content-moderation.service';)
+  bookings → notifications  (apps/api/src/modules/bookings/processors/booking.processor.ts:5:import { NotificationsService } from '@/modules/notifications/services/notifications.service';)
+  bookings → notifications  (apps/api/src/modules/bookings/services/booking-state-machine.service.ts:5:import { NotificationsService } from '@/modules/notifications/services/notifications.service';)
+  categories → auth  (apps/api/src/modules/categories/controllers/categories.controller.ts:20:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  categories → auth  (apps/api/src/modules/categories/controllers/categories.controller.ts:21:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  categories → auth  (apps/api/src/modules/categories/controllers/categories.controller.ts:22:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  categories → auth  (apps/api/src/modules/categories/controllers/category-attribute.controller.ts:14:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  categories → auth  (apps/api/src/modules/categories/controllers/category-attribute.controller.ts:15:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  categories → auth  (apps/api/src/modules/categories/controllers/category-attribute.controller.ts:16:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  categories → auth  (apps/api/src/modules/categories/controllers/category-attribute.controller.ts:17:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  disputes → auth  (apps/api/src/modules/disputes/controllers/disputes.controller.ts:5:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  disputes → auth  (apps/api/src/modules/disputes/controllers/disputes.controller.ts:6:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  disputes → auth  (apps/api/src/modules/disputes/controllers/disputes.controller.ts:7:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  disputes → auth  (apps/api/src/modules/disputes/controllers/disputes.controller.ts:8:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  favorites → auth  (apps/api/src/modules/favorites/controllers/favorites.controller.ts:14:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  favorites → auth  (apps/api/src/modules/favorites/controllers/favorites.controller.ts:15:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  fraud-detection → auth  (apps/api/src/modules/fraud-detection/controllers/fraud-detection.controller.ts:4:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  fraud-detection → auth  (apps/api/src/modules/fraud-detection/controllers/fraud-detection.controller.ts:5:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  fraud-detection → auth  (apps/api/src/modules/fraud-detection/controllers/fraud-detection.controller.ts:6:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  insurance → auth  (apps/api/src/modules/insurance/controllers/insurance.controller.ts:15:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  insurance → auth  (apps/api/src/modules/insurance/controllers/insurance.controller.ts:16:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  insurance → auth  (apps/api/src/modules/insurance/controllers/insurance.controller.ts:17:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  insurance → auth  (apps/api/src/modules/insurance/controllers/insurance.controller.ts:18:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listing-content.controller.ts:14:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listing-content.controller.ts:15:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listing-content.controller.ts:16:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listing-version.controller.ts:10:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listing-version.controller.ts:11:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listing-version.controller.ts:12:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listings.controller.ts:30:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listings.controller.ts:31:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listings.controller.ts:32:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  listings → auth  (apps/api/src/modules/listings/controllers/listings.controller.ts:33:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  listings → search  (apps/api/src/modules/listings/controllers/listings.controller.ts:34:import { SearchService, SearchQuery } from '@/modules/search/services/search.service';)
+  messaging → auth  (apps/api/src/modules/messaging/controllers/messaging.controller.ts:6:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  messaging → auth  (apps/api/src/modules/messaging/controllers/messaging.controller.ts:7:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  messaging → auth  (apps/api/src/modules/messaging/gateways/messaging.gateway.ts:15:import { WsJwtAuthGuard } from '@/modules/auth/guards/ws-jwt-auth.guard';)
+  moderation → auth  (apps/api/src/modules/moderation/controllers/moderation.controller.ts:14:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  moderation → auth  (apps/api/src/modules/moderation/controllers/moderation.controller.ts:15:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  moderation → auth  (apps/api/src/modules/moderation/controllers/moderation.controller.ts:16:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  moderation → auth  (apps/api/src/modules/moderation/controllers/moderation.controller.ts:17:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/email.controller.ts:4:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/email.controller.ts:5:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/email.controller.ts:6:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/inapp-notification.controller.ts:3:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/inapp-notification.controller.ts:4:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/inapp-notification.controller.ts:5:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/inapp-notification.controller.ts:6:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/notification.controller.ts:3:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/notification.controller.ts:4:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/notifications.controller.ts:17:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/notifications.controller.ts:18:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/notifications.controller.ts:19:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/notifications.controller.ts:20:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/sms.controller.ts:4:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/sms.controller.ts:5:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  notifications → auth  (apps/api/src/modules/notifications/controllers/sms.controller.ts:6:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  organizations → auth  (apps/api/src/modules/organizations/controllers/organizations.controller.ts:16:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  organizations → auth  (apps/api/src/modules/organizations/controllers/organizations.controller.ts:17:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  payments → auth  (apps/api/src/modules/payments/controllers/payments.controller.ts:27:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  payments → auth  (apps/api/src/modules/payments/controllers/payments.controller.ts:28:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  payments → auth  (apps/api/src/modules/payments/controllers/tax.controller.ts:3:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  reviews → auth  (apps/api/src/modules/reviews/controllers/reviews.controller.ts:17:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  reviews → auth  (apps/api/src/modules/reviews/controllers/reviews.controller.ts:18:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  search → ai  (apps/api/src/modules/search/services/search.service.ts:4:import { EmbeddingService } from '@/modules/ai/services/embedding.service';)
+  search → auth  (apps/api/src/modules/search/controllers/search.controller.ts:16:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  search → auth  (apps/api/src/modules/search/controllers/search.controller.ts:17:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  search → auth  (apps/api/src/modules/search/controllers/search.controller.ts:18:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  search → auth  (apps/api/src/modules/search/controllers/search.controller.ts:20:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  users → auth  (apps/api/src/modules/users/controllers/kyc.controller.ts:14:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  users → auth  (apps/api/src/modules/users/controllers/kyc.controller.ts:15:import { RolesGuard } from '@/modules/auth/guards/roles.guard';)
+  users → auth  (apps/api/src/modules/users/controllers/kyc.controller.ts:16:import { Permission } from '@/modules/auth/guards/roles.guard';)
+  users → auth  (apps/api/src/modules/users/controllers/kyc.controller.ts:17:import { Permissions } from '@/modules/auth/decorators/permissions.decorator';)
+  users → auth  (apps/api/src/modules/users/controllers/kyc.controller.ts:18:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+  users → auth  (apps/api/src/modules/users/controllers/kyc.controller.ts:19:import { Roles } from '@/modules/auth/decorators/roles.decorator';)
+  users → auth  (apps/api/src/modules/users/controllers/users.controller.ts:6:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';)
+  users → auth  (apps/api/src/modules/users/controllers/users.controller.ts:7:import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';)
+
+=== API: common/ → modules/ Violations ===
+apps/api/src/common/auth/index.ts:2: * Re-exports auth guards, decorators, and utilities from modules/auth/
+apps/api/src/common/auth/index.ts:5: * All other modules should import from '@/common/auth/' instead of '@/modules/auth/guards' or '@/modules/auth/decorators'.
+apps/api/src/common/auth/index.ts:7:export { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
+apps/api/src/common/auth/index.ts:8:export { RolesGuard, Permission, ROLES_KEY, PERMISSIONS_KEY } from '@/modules/auth/guards/roles.guard';
+apps/api/src/common/auth/index.ts:9:export { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+apps/api/src/common/auth/index.ts:10:export { Roles } from '@/modules/auth/decorators/roles.decorator';
+apps/api/src/common/scheduler/scheduler.module.ts:4:import { AiModule } from '@/modules/ai/ai.module';
+apps/api/src/common/storage/storage.controller.ts:15:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
+apps/api/src/common/interfaces/embedding.interface.ts:3: * direct imports from modules/ai/ (which would be an upward dependency violation).
+
+=== API: Prisma Direct Access in Controllers ===
+apps/api/src/modules/bookings/controllers/bookings.controller.ts:108:    return this.prisma.dispute.findMany({
+apps/api/src/modules/organizations/controllers/organizations.controller.ts:116:    const member = await this.prisma.organizationMember.findUnique({
+apps/api/src/modules/organizations/controllers/organizations.controller.ts:122:    const members = await this.prisma.organizationMember.findMany({
+apps/api/src/modules/organizations/controllers/organizations.controller.ts:135:    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
+apps/api/src/modules/organizations/controllers/organizations.controller.ts:138:    await this.prisma.organization.update({
+apps/api/src/modules/organizations/controllers/organizations.controller.ts:155:    const membership = await this.prisma.organizationMember.findUnique({
+apps/api/src/modules/organizations/controllers/organizations.controller.ts:173:    await this.prisma.organizationMember.deleteMany({
+
+=== API: forwardRef Usage (Circular Dependency Markers) ===
+apps/api/src/modules/listings/controllers/listings.controller.ts:14:  forwardRef,
+apps/api/src/modules/listings/controllers/listings.controller.ts:46:    @Inject(forwardRef(() => SearchService))
+apps/api/src/modules/listings/listings.module.ts:1:import { Module, forwardRef } from '@nestjs/common';
+apps/api/src/modules/listings/listings.module.ts:19:  imports: [CategoriesModule, forwardRef(() => SearchModule), ModerationModule, AiModule],
+
+=== Web: shared-types Adoption ===
+Files importing from shared-types:
+apps/web/app/lib/shared-types.ts:2: * Shared Types — Re-exports from @rental-portal/shared-types
+apps/web/app/lib/shared-types.ts:34:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:44:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:55:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:67:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:76:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:88:} from '@rental-portal/shared-types';
+apps/web/app/lib/api/payments.ts:6:} from "~/lib/shared-types";
+apps/web/app/routes/bookings.tsx:16:import { BookingStatus } from "~/lib/shared-types";
+
+Files importing from local ~/types/:
+  28 import statements from ~/types/
+
+=== Duplicate Library Detection ===
+Form libraries in web:
+  react-hook-form imports: 11
+  @tanstack/react-form imports: 1
+
+=== API Module Sizes ===
+  users                     833 LoC
+  tax                       733 LoC
+  search                    1599 LoC
+  reviews                   882 LoC
+  payments                  3036 LoC
+  organizations             825 LoC
+  notifications             3277 LoC
+  moderation                1196 LoC
+  messaging                 1153 LoC
+  listings                  3615 LoC
+  insurance                 790 LoC
+  geo                       718 LoC
+  fraud-detection           571 LoC
+  favorites                 376 LoC
+  disputes                  792 LoC
+  categories                1592 LoC
+  bookings                  2845 LoC
+  auth                      1956 LoC
+  analytics                 501 LoC
+  ai                        412 LoC
+  admin                     3818 LoC

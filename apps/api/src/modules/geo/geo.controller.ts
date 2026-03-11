@@ -41,7 +41,7 @@ export class GeoController {
     @Query('layer') layer?: string,
   ) {
     if (!query || query.trim().length < 2) {
-      return { results: [] };
+      return { results: [] as any[] };
     }
     const parsedLimit = this.parseNumber(limit);
     const parsedLat = this.parseNumber(lat);

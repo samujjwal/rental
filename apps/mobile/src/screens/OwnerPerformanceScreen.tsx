@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { useFocusEffect } from '@react-navigation/native';
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { UserStats } from "@rental-portal/mobile-sdk";
+import type { UserStats } from '~/types';
 
 export function OwnerPerformanceScreen() {
   const { user } = useAuth();
@@ -10,23 +11,25 @@ export function OwnerPerformanceScreen() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      if (!user) return;
-      setLoading(true);
-      setStatus("");
-      try {
-        const data = await mobileClient.getUserStats();
-        setStats(data);
-      } catch (err) {
-        setStatus("Unable to load performance data.");
-      } finally {
-        setLoading(false);
-      }
-    };
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        if (!user) return;
+        setLoading(true);
+        setStatus("");
+        try {
+          const data = await mobileClient.getUserStats();
+          setStats(data);
+        } catch (err) {
+          setStatus("Unable to load performance data.");
+        } finally {
+          setLoading(false);
+        }
+      };
 
-    load();
-  }, [user]);
+      load();
+    }, [user])
+  );
 
   return (
     <View style={styles.container}>

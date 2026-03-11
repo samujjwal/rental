@@ -4,7 +4,11 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { BookingMode, PropertyStatus, UserRole, VerificationStatus } from '@rental-portal/database';
-import { cleanupCoreRelationalData, createUserWithRole, registerUser } from './e2e-helpers';
+import { buildTestEmail, cleanupCoreRelationalData, createUserWithRole, registerUser } from './e2e-helpers';
+
+const adminEmail = buildTestEmail('search-admin');
+const ownerEmail = buildTestEmail('search-owner');
+const userEmail = buildTestEmail('search-user');
 
 describe('Search (e2e)', () => {
   let app: INestApplication;
@@ -36,7 +40,7 @@ describe('Search (e2e)', () => {
     await cleanupCoreRelationalData(prisma);
     await prisma.listing.deleteMany({ where: { slug: { contains: 'search-stabilized-' } } });
     await prisma.category.deleteMany({ where: { slug: { contains: 'search-stabilized-' } } });
-    await prisma.user.deleteMany({ where: { email: { contains: '@searchtest.com' } } });
+    await prisma.user.deleteMany({ where: { email: { in: [adminEmail, ownerEmail, userEmail] } } });
     await app.close();
   });
 
@@ -44,12 +48,12 @@ describe('Search (e2e)', () => {
     await cleanupCoreRelationalData(prisma);
     await prisma.listing.deleteMany({ where: { slug: { contains: 'search-stabilized-' } } });
     await prisma.category.deleteMany({ where: { slug: { contains: 'search-stabilized-' } } });
-    await prisma.user.deleteMany({ where: { email: { contains: '@searchtest.com' } } });
+    await prisma.user.deleteMany({ where: { email: { in: [adminEmail, ownerEmail, userEmail] } } });
 
     const admin = await createUserWithRole({
       app,
       prisma,
-      email: 'admin@searchtest.com',
+      email: adminEmail,
       firstName: 'Admin',
       lastName: 'Search',
       role: UserRole.ADMIN,
@@ -59,7 +63,7 @@ describe('Search (e2e)', () => {
     const owner = await createUserWithRole({
       app,
       prisma,
-      email: 'owner@searchtest.com',
+      email: ownerEmail,
       firstName: 'Owner',
       lastName: 'Search',
       role: UserRole.HOST,
@@ -197,7 +201,7 @@ describe('Search (e2e)', () => {
 
     it('should reject non-admin users', async () => {
       const user = await registerUser(app, {
-        email: 'user@searchtest.com',
+        email: userEmail,
         firstName: 'Regular',
         lastName: 'User',
       });

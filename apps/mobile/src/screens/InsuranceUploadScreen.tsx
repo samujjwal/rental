@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Linking } from "react-native";
 import { useAuth } from "../api/authContext";
-import { authStore } from "../api/authStore";
-import { API_BASE_URL, WEB_BASE_URL } from "../config";
+import { authenticatedFetch } from "../api/client";
+import { WEB_BASE_URL } from "../config";
+import { formatCurrency } from '../utils/currency';
 
 export function InsuranceUploadScreen() {
   const { user } = useAuth();
@@ -25,17 +26,13 @@ export function InsuranceUploadScreen() {
       setLoading(true);
       setStatus("");
       try {
-        const token = authStore.getToken();
-        const response = await fetch(`${API_BASE_URL}/insurance/listings/${listingId}/requirement`, {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
-        if (!response.ok) throw new Error("Unable to load requirement.");
-        const data = await response.json();
+        const data = await authenticatedFetch<{
+          required: boolean;
+          reason?: string;
+          type?: string;
+          minimumCoverage?: number;
+        }>(`/insurance/listings/${listingId}/requirement`);
         setRequirement(data);
-        if (data?.type && !type) setType(data.type);
       } catch (err) {
         setRequirement(null);
         setStatus("Unable to load insurance requirements.");
@@ -45,7 +42,7 @@ export function InsuranceUploadScreen() {
     };
 
     loadRequirement();
-  }, [listingId, type]);
+  }, [listingId]);
 
   const handleSubmit = async () => {
     if (!user) {
@@ -99,7 +96,7 @@ export function InsuranceUploadScreen() {
               </Text>
               {requirement.reason ? <Text style={styles.noticeText}>{requirement.reason}</Text> : null}
               {requirement.minimumCoverage ? (
-                <Text style={styles.noticeText}>Minimum: ${requirement.minimumCoverage}</Text>
+                <Text style={styles.noticeText}>Minimum: {formatCurrency(requirement.minimumCoverage)}</Text>
               ) : null}
             </View>
           ) : null}

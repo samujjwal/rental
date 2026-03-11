@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { UserRole } from '@rental-portal/database';
-import { createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, createUserWithRole } from './e2e-helpers';
 
 describe('Admin Dashboard & Core Operations (e2e)', () => {
   let app: INestApplication;
@@ -13,6 +13,9 @@ describe('Admin Dashboard & Core Operations (e2e)', () => {
   let adminUserId: string;
   let userToken: string;
   let userId: string;
+
+  const adminEmail = buildTestEmail('admin-dashboard');
+  const userEmail = buildTestEmail('admin-dash-user');
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -29,7 +32,7 @@ describe('Admin Dashboard & Core Operations (e2e)', () => {
   afterAll(async () => {
     await prisma.user.deleteMany({
       where: {
-        email: { in: ['admin-dashboard-test@example.com', 'regular-user-test@example.com'] },
+        email: { in: [adminEmail, userEmail] },
       },
     });
     await app.close();
@@ -38,14 +41,14 @@ describe('Admin Dashboard & Core Operations (e2e)', () => {
   beforeEach(async () => {
     await prisma.user.deleteMany({
       where: {
-        email: { in: ['admin-dashboard-test@example.com', 'regular-user-test@example.com'] },
+        email: { in: [adminEmail, userEmail] },
       },
     });
 
     const admin = await createUserWithRole({
       app,
       prisma,
-      email: 'admin-dashboard-test@example.com',
+      email: adminEmail,
       password: 'TestPass123!',
       firstName: 'Admin',
       lastName: 'Tester',
@@ -57,7 +60,7 @@ describe('Admin Dashboard & Core Operations (e2e)', () => {
     const regular = await createUserWithRole({
       app,
       prisma,
-      email: 'regular-user-test@example.com',
+      email: userEmail,
       password: 'TestPass123!',
       firstName: 'Regular',
       lastName: 'User',

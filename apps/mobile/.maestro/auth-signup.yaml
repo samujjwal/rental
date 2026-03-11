@@ -1,0 +1,51 @@
+# ============================================================================
+# Auth Signup Flow — E2E Maestro Test
+# Validates the registration flow from signup screen to successful account creation.
+# ============================================================================
+appId: com.gharbatai.rental
+
+---
+
+# 1. App starts on login screen
+- assertVisible: "Sign In"
+
+# 2. Navigate to signup
+- tapOn:
+    text: "Sign Up"
+
+# 3. Fill in registration form
+- assertVisible: "Create Account"
+
+- tapOn:
+    id: "firstName-input"
+- inputText: "E2E"
+
+- tapOn:
+    id: "lastName-input"
+- inputText: "TestUser"
+
+- tapOn:
+    id: "email-input"
+- inputText: "e2e-${TIMESTAMP}@test.com"
+
+- tapOn:
+    id: "password-input"
+- inputText: "E2eTest123!@#"
+
+- tapOn:
+    id: "confirmPassword-input"
+- inputText: "E2eTest123!@#"
+
+# 4. Accept terms if present
+- tapOn:
+    id: "terms-checkbox"
+    optional: true
+
+# 5. Submit signup
+- tapOn:
+    text: "Create Account"
+
+# 6. Should navigate to home or verification screen
+- assertVisible:
+    text: "Home|Verify|Welcome"
+    timeout: 10000

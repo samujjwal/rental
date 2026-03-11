@@ -51,13 +51,19 @@ export interface UsersResponse {
 export interface AdminListing {
   id: string;
   title: string;
+  description?: string;
   status: string;
+  verificationStatus: string;
   categoryId: string;
   ownerId: string;
   basePrice: number;
   currency: string;
   moderationStatus: string;
+  photos: string[];
+  city?: string;
+  country?: string;
   createdAt: string;
+  updatedAt?: string;
   owner: {
     id: string;
     email: string;
@@ -67,7 +73,7 @@ export interface AdminListing {
   category: {
     id: string;
     name: string;
-  };
+  } | null;
 }
 
 export interface ListingsResponse {
@@ -356,6 +362,14 @@ export const adminApi = {
 
   async deleteListing(id: string): Promise<void> {
     return api.delete<void>(`/admin/listings/${id}`);
+  },
+
+  async approveListing(id: string): Promise<AdminListing> {
+    return api.post<AdminListing>(`/admin/listings/${id}/approve`);
+  },
+
+  async rejectListing(id: string, reason?: string): Promise<AdminListing> {
+    return api.post<AdminListing>(`/admin/listings/${id}/reject`, { reason });
   },
 
   // ============= Booking Management =============

@@ -2,15 +2,17 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Switch, TextInput, Pressable } from "react-native";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { NotificationPreferences } from "@rental-portal/mobile-sdk";
+import type { NotificationPreferences } from '~/types';
+import { DEFAULT_CURRENCY } from '../utils/currency';
 
 export function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
   const [emailUpdates, setEmailUpdates] = useState(true);
   const [preferredLanguage, setPreferredLanguage] = useState("en");
-  const [preferredCurrency, setPreferredCurrency] = useState("USD");
+  const [preferredCurrency, setPreferredCurrency] = useState(DEFAULT_CURRENCY);
   const [timezone, setTimezone] = useState("");
   const [status, setStatus] = useState("");
+  const [saving, setSaving] = useState(false);
   const { user, signOut } = useAuth();
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export function SettingsScreen() {
           mobileClient.getNotificationPreferences(),
         ]);
         setPreferredLanguage(profile.preferredLanguage || "en");
-        setPreferredCurrency(profile.preferredCurrency || "USD");
+        setPreferredCurrency(profile.preferredCurrency || DEFAULT_CURRENCY);
         setTimezone(profile.timezone || "");
         setNotifications(Boolean(prefs.push));
         setEmailUpdates(Boolean(prefs.email));
@@ -39,6 +41,7 @@ export function SettingsScreen() {
       return;
     }
     setStatus("Saving...");
+    setSaving(true);
     try {
       const updatePrefs: Partial<NotificationPreferences> = {
         push: notifications,
@@ -55,6 +58,8 @@ export function SettingsScreen() {
       setStatus("Saved.");
     } catch (err) {
       setStatus("Unable to save settings.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -88,7 +93,7 @@ export function SettingsScreen() {
         <Text style={styles.label}>Email updates</Text>
         <Switch value={emailUpdates} onValueChange={setEmailUpdates} />
       </View>
-      <Pressable style={styles.primaryButton} onPress={handleSave}>
+      <Pressable style={styles.primaryButton} onPress={handleSave} disabled={saving}>
         <Text style={styles.primaryButtonText}>Save</Text>
       </Pressable>
       <Pressable style={styles.secondaryButton} onPress={signOut}>

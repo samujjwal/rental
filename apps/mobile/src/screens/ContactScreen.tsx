@@ -12,7 +12,7 @@ export function ContactScreen({ navigation }: Props) {
       <Text style={styles.description}>
         Reach out to our team for support, partnerships, or general inquiries.
       </Text>
-      <Pressable style={styles.ctaButton} onPress={() => navigation.navigate("Search")}>
+      <Pressable style={styles.ctaButton} onPress={() => navigation.navigate("Main")}>
         <Text style={styles.ctaText}>Browse listings</Text>
       </Pressable>
     </View>

@@ -4,8 +4,10 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
+import { escapeHtml } from '@/common/utils/sanitize';
 import { Organization, OrganizationRole, OrganizationStatus, PropertyStatus } from '@rental-portal/database';
 
 export interface CreateOrganizationDto {
@@ -59,7 +61,7 @@ export class OrganizationsService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw i18nNotFound('auth.userNotFound');
     }
 
     // Check if user already owns an organization
@@ -70,7 +72,7 @@ export class OrganizationsService {
       },
     });
     if (existingOrg) {
-      throw new BadRequestException('User already owns an organization');
+      throw i18nBadRequest('organization.alreadyOwned');
     }
 
     const slugBase = dto.name
@@ -101,7 +103,7 @@ export class OrganizationsService {
         members: {
           create: {
             userId,
-            role: OrganizationRole.OWNER as any,
+            role: OrganizationRole.OWNER,
           },
         },
       },
@@ -119,6 +121,16 @@ export class OrganizationsService {
             },
           },
         },
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'ORGANIZATION_CREATED',
+        entityType: 'Organization',
+        entityId: organization.id,
+        newValues: JSON.stringify({ name: organization.name, slug: organization.slug }),
       },
     });
 
@@ -168,13 +180,13 @@ export class OrganizationsService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw i18nNotFound('organization.notFound');
     }
 
     // Verify user is a member
     const isMember = organization.members.some((m) => m.userId === userId);
     if (!isMember) {
-      throw new ForbiddenException('Not a member of this organization');
+      throw i18nForbidden('organization.notMember');
     }
 
     return organization;
@@ -188,16 +200,15 @@ export class OrganizationsService {
     userId: string,
     dto: UpdateOrganizationDto,
   ): Promise<Organization> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
+    await this.verifyMemberPermission(orgId, userId, [OrganizationRole.OWNER, OrganizationRole.ADMIN]);
 
     const address = [dto.addressLine1, dto.addressLine2].filter(Boolean).join(', ') || undefined;
-
     const mapped: Record<string, any> = {
       name: dto.name,
       description: dto.description,
       email: dto.email,
       phone: dto.phoneNumber,
-      website: (dto as any).website,
+      website: (dto as { website?: string }).website,
       address,
       city: dto.city,
       state: dto.state,
@@ -216,7 +227,7 @@ export class OrganizationsService {
    * Invite member to organization
    */
   async inviteMember(orgId: string, userId: string, dto: InviteMemberDto): Promise<any> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
+    await this.verifyMemberPermission(orgId, userId, [OrganizationRole.OWNER, OrganizationRole.ADMIN]);
 
     // Find user by email
     const invitedUser = await this.prisma.user.findUnique({
@@ -224,7 +235,7 @@ export class OrganizationsService {
     });
 
     if (!invitedUser) {
-      throw new NotFoundException('User not found with that email');
+      throw i18nNotFound('auth.userNotFound');
     }
 
     // Check if already a member
@@ -238,7 +249,7 @@ export class OrganizationsService {
     });
 
     if (existingMember) {
-      throw new BadRequestException('User is already a member of this organization');
+      throw i18nBadRequest('organization.memberExists');
     }
 
     // Create member
@@ -261,6 +272,16 @@ export class OrganizationsService {
       },
     });
 
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'ORGANIZATION_MEMBER_ADDED',
+        entityType: 'Organization',
+        entityId: orgId,
+        newValues: JSON.stringify({ memberId: invitedUser.id, role: dto.role }),
+      },
+    });
+
     // Send invitation email
     const organization = await this.prisma.organization.findUnique({
       where: { id: orgId },
@@ -271,7 +292,7 @@ export class OrganizationsService {
       await this.emailService.sendEmail(
         dto.email,
         'Invitation to join Organization',
-        `<p>You have been added to the organization <strong>${organization.name}</strong> as <strong>${dto.role}</strong>.</p>`,
+        `<p>You have been added to the organization <strong>${escapeHtml(organization.name)}</strong> as <strong>${escapeHtml(dto.role)}</strong>.</p>`,
       );
     }
 
@@ -282,7 +303,7 @@ export class OrganizationsService {
    * Remove member from organization
    */
   async removeMember(orgId: string, userId: string, memberUserId: string): Promise<void> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
+    await this.verifyMemberPermission(orgId, userId, [OrganizationRole.OWNER, OrganizationRole.ADMIN]);
 
     // Cannot remove owner
     const member = await this.prisma.organizationMember.findUnique({
@@ -295,11 +316,11 @@ export class OrganizationsService {
     });
 
     if (!member) {
-      throw new NotFoundException('Member not found');
+      throw i18nNotFound('organization.memberNotFound');
     }
 
     if (member.role === OrganizationRole.OWNER) {
-      throw new BadRequestException('Cannot remove organization owner');
+      throw i18nBadRequest('organization.cannotRemoveOwner');
     }
 
     await this.prisma.organizationMember.delete({
@@ -308,6 +329,16 @@ export class OrganizationsService {
           organizationId: orgId,
           userId: memberUserId,
         },
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'ORGANIZATION_MEMBER_REMOVED',
+        entityType: 'Organization',
+        entityId: orgId,
+        oldValues: JSON.stringify({ memberId: memberUserId, role: member.role }),
       },
     });
   }
@@ -321,7 +352,7 @@ export class OrganizationsService {
     memberUserId: string,
     role: OrganizationRole,
   ): Promise<any> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any]);
+    await this.verifyMemberPermission(orgId, userId, [OrganizationRole.OWNER]);
 
     const member = await this.prisma.organizationMember.findUnique({
       where: {
@@ -333,14 +364,14 @@ export class OrganizationsService {
     });
 
     if (!member) {
-      throw new NotFoundException('Member not found');
+      throw i18nNotFound('organization.memberNotFound');
     }
 
     if (member.role === OrganizationRole.OWNER) {
-      throw new BadRequestException('Cannot change owner role');
+      throw i18nBadRequest('organization.cannotChangeOwnerRole');
     }
 
-    return this.prisma.organizationMember.update({
+    const updated = await this.prisma.organizationMember.update({
       where: {
         organizationId_userId: {
           organizationId: orgId,
@@ -359,6 +390,19 @@ export class OrganizationsService {
         },
       },
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'ORGANIZATION_MEMBER_ROLE_CHANGED',
+        entityType: 'Organization',
+        entityId: orgId,
+        oldValues: JSON.stringify({ memberId: memberUserId, role: member.role }),
+        newValues: JSON.stringify({ memberId: memberUserId, role }),
+      },
+    });
+
+    return updated;
   }
 
   /**
@@ -402,11 +446,11 @@ export class OrganizationsService {
     });
 
     if (!member) {
-      throw new ForbiddenException('Not a member of this organization');
+      throw i18nForbidden('organization.notMember');
     }
 
-    if (!allowedRoles.includes(member.role as any)) {
-      throw new ForbiddenException('Insufficient permissions');
+    if (!allowedRoles.includes(member.role as OrganizationRole)) {
+      throw i18nForbidden('auth.insufficientPermissions');
     }
   }
 
@@ -414,7 +458,7 @@ export class OrganizationsService {
    * Get organization statistics
    */
   async getOrganizationStats(orgId: string, userId: string): Promise<any> {
-    await this.verifyMemberPermission(orgId, userId, ['OWNER' as any, 'ADMIN' as any]);
+    await this.verifyMemberPermission(orgId, userId, [OrganizationRole.OWNER, OrganizationRole.ADMIN]);
 
     const [totalListings, activeListings, totalBookings, revenue] = await Promise.all([
       this.prisma.listing.count({
@@ -443,6 +487,72 @@ export class OrganizationsService {
       totalBookings,
       totalRevenue: revenue._sum.totalPrice || 0,
     };
+  }
+
+  /**
+   * Get organization members (verifies requester is a member)
+   */
+  async getMembers(orgId: string, userId: string) {
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    if (!member) {
+      throw i18nForbidden('organization.notMember');
+    }
+    const members = await this.prisma.organizationMember.findMany({
+      where: { organizationId: orgId },
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true, profilePhotoUrl: true } } },
+      orderBy: { joinedAt: 'asc' },
+    });
+    return { members, total: members.length };
+  }
+
+  /**
+   * Deactivate (soft-delete) an organization — owner only
+   */
+  async deactivateOrganization(orgId: string, userId: string): Promise<void> {
+    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) throw i18nNotFound('organization.notFound');
+    if (org.ownerId !== userId) throw i18nForbidden('organization.ownerOnlyDeactivate');
+    await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { status: 'SUSPENDED' },
+    });
+  }
+
+  /**
+   * Accept an organization invitation
+   */
+  async acceptInvitation(userId: string, orgId: string) {
+    if (!orgId) throw i18nBadRequest('organization.idOrTokenRequired');
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    if (!membership) throw i18nNotFound('organization.invitationNotFound');
+    return { accepted: true, organizationId: orgId };
+  }
+
+  /**
+   * Decline an organization invitation
+   */
+  async declineInvitation(userId: string, orgId: string) {
+    if (!orgId) throw i18nBadRequest('organization.idOrTokenRequired');
+
+    // Prevent owners from deleting their own membership (would orphan the org)
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    if (!membership) {
+      return { declined: true, organizationId: orgId };
+    }
+    if (membership.role === 'OWNER') {
+      throw i18nForbidden('organization.ownerCannotDecline');
+    }
+
+    await this.prisma.organizationMember.delete({
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    return { declined: true, organizationId: orgId };
   }
 
   private async ensureUniqueSlug(baseSlug: string): Promise<string> {

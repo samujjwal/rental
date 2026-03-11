@@ -1,4 +1,5 @@
 import { type LoaderFunctionArgs, useLoaderData, Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { requireAdmin } from "~/utils/auth";
 import {
   getAdminAnalytics,
@@ -7,6 +8,7 @@ import {
 } from "~/utils/adminAnalytics";
 import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { RouteErrorBoundary } from "~/components/ui";
+import { formatCurrency, formatNumber } from "~/lib/utils";
 
 const RANGE_OPTIONS: AnalyticsRange[] = ["7d", "30d", "90d", "365d"];
 
@@ -22,12 +24,6 @@ const safeNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(safeNumber(value));
-}
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("en-US").format(safeNumber(value));
-}
 function formatPercent(value: number) {
   return `${safeNumber(value).toFixed(1)}%`;
 }
@@ -76,6 +72,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 }
 
 export default function AdminAnalytics() {
+  const { t } = useTranslation();
   const { analytics, range, error } = useLoaderData<typeof clientLoader>() as {
     analytics: AdminAnalyticsPayload | null; range: AnalyticsRange; error: string | null;
   };
@@ -83,7 +80,7 @@ export default function AdminAnalytics() {
   if (error || !analytics) {
     return (
       <div className="p-4 md:p-8">
-        <AlertBanner severity="error" title="Error">{error || "Failed to load analytics"}</AlertBanner>
+        <AlertBanner severity="error" title={t("admin.error")}>{error || t("admin.failedToLoadAnalytics")}</AlertBanner>
       </div>
     );
   }
@@ -95,8 +92,8 @@ export default function AdminAnalytics() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Analytics</h1>
-          <p className="text-muted-foreground">Operational pulse for {RANGE_LABELS[range]}</p>
+          <h1 className="text-2xl font-bold">{t("admin.analytics")}</h1>
+          <p className="text-muted-foreground">{t("admin.operationalPulse", { range: RANGE_LABELS[range] })}</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {RANGE_OPTIONS.map((option) => (
@@ -130,50 +127,50 @@ export default function AdminAnalytics() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Bookings */}
         <div className="rounded-lg border bg-card p-4">
-          <h3 className="text-lg font-semibold mb-2">Bookings</h3>
+          <h3 className="text-lg font-semibold mb-2">{t("admin.bookings")}</h3>
           <hr className="mb-3" />
-          <p className="text-sm text-muted-foreground">Total</p>
+          <p className="text-sm text-muted-foreground">{t("admin.total")}</p>
           <p className="text-lg font-bold">{formatNumber(summary.bookings.total)}</p>
           <div className="space-y-0.5 mt-2 text-sm text-muted-foreground">
-            <p>Confirmed: {formatNumber(summary.bookings.confirmed)}</p>
-            <p>Cancelled: {formatNumber(summary.bookings.cancelled)}</p>
-            <p>Disputes: {formatNumber(summary.bookings.disputes)}</p>
-            <p>Avg. duration: {safeNumber(summary.bookings.avgDurationDays).toFixed(1)} days</p>
+            <p>{t("admin.confirmed")}: {formatNumber(summary.bookings.confirmed)}</p>
+            <p>{t("admin.cancelled")}: {formatNumber(summary.bookings.cancelled)}</p>
+            <p>{t("admin.disputes")}: {formatNumber(summary.bookings.disputes)}</p>
+            <p>{t("admin.avgDuration")}: {safeNumber(summary.bookings.avgDurationDays).toFixed(1)} {t("admin.days")}</p>
           </div>
         </div>
 
         {/* Revenue */}
         <div className="rounded-lg border bg-card p-4">
-          <h3 className="text-lg font-semibold mb-2">Revenue</h3>
+          <h3 className="text-lg font-semibold mb-2">{t("admin.revenue")}</h3>
           <hr className="mb-3" />
-          <p className="text-sm text-muted-foreground">Gross</p>
+          <p className="text-sm text-muted-foreground">{t("admin.gross")}</p>
           <p className="text-lg font-bold">{formatCurrency(summary.revenue.gross)}</p>
           <div className="space-y-0.5 mt-2 text-sm text-muted-foreground">
-            <p>Net: {formatCurrency(summary.revenue.net)}</p>
-            <p>Take rate: {formatPercent(summary.revenue.takeRate)}</p>
-            <p>Payout volume: {formatCurrency(summary.revenue.payoutVolume)}</p>
+            <p>{t("admin.net")}: {formatCurrency(summary.revenue.net)}</p>
+            <p>{t("admin.takeRate")}: {formatPercent(summary.revenue.takeRate)}</p>
+            <p>{t("admin.payoutVolume")}: {formatCurrency(summary.revenue.payoutVolume)}</p>
           </div>
         </div>
 
         {/* Operations */}
         <div className="rounded-lg border bg-card p-4">
-          <h3 className="text-lg font-semibold mb-2">Operations</h3>
+          <h3 className="text-lg font-semibold mb-2">{t("admin.operations")}</h3>
           <hr className="mb-3" />
           <div className="space-y-0.5 text-sm text-muted-foreground">
-            <p>Open disputes: {formatNumber(summary.operations.openDisputes)}</p>
-            <p>Moderation backlog: {formatNumber(summary.operations.moderationBacklog)}</p>
-            <p>Support SLA: {formatPercent(summary.operations.supportSla)}</p>
-            <p>Fraud signals: {formatNumber(summary.operations.fraudSignals)}</p>
+            <p>{t("admin.openDisputes")}: {formatNumber(summary.operations.openDisputes)}</p>
+            <p>{t("admin.moderationBacklog")}: {formatNumber(summary.operations.moderationBacklog)}</p>
+            <p>{t("admin.supportSla")}: {formatPercent(summary.operations.supportSla)}</p>
+            <p>{t("admin.fraudSignals")}: {formatNumber(summary.operations.fraudSignals)}</p>
           </div>
         </div>
       </div>
 
       {/* Alerts */}
       <div>
-        <h2 className="text-lg font-semibold mb-3">Alerts</h2>
+        <h2 className="text-lg font-semibold mb-3">{t("admin.alerts")}</h2>
         {alerts.length === 0 ? (
           <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">No alerts for this period.</p>
+            <p className="text-sm text-muted-foreground">{t("admin.noAlerts")}</p>
           </div>
         ) : (
           <div className="space-y-2">

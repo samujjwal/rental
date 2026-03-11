@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { useAuth } from "../api/authContext";
@@ -17,11 +18,19 @@ export function SignupScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       await signUp({ email, password, firstName, lastName });
-      navigation.replace("Home");
+      navigation.replace("Main");
     } catch (err) {
       setError("Signup failed. Please review your details.");
     } finally {
@@ -30,7 +39,7 @@ export function SignupScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.heading}>Create account</Text>
       <TextInput
         value={firstName}
@@ -60,7 +69,7 @@ export function SignupScreen({ navigation }: Props) {
         style={styles.input}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.primaryButton} onPress={handleSignup}>
+      <Pressable style={[styles.primaryButton, loading && styles.primaryButtonDisabled]} onPress={handleSignup} disabled={loading}>
         <Text style={styles.primaryButtonText}>{loading ? "Creating..." : "Sign Up"}</Text>
       </Pressable>
       <Pressable onPress={() => navigation.navigate("Login")}
@@ -68,7 +77,7 @@ export function SignupScreen({ navigation }: Props) {
       >
         <Text style={styles.linkText}>Already have an account? Sign in</Text>
       </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -101,6 +110,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
   primaryButtonText: {
     color: "#FFFFFF",

@@ -17,9 +17,7 @@ import {
 } from '../services/categories.service';
 import { CreateCategoryDto, UpdateCategoryDto } from '../dto/category.dto';
 import { CategoryTemplateService } from '../services/category-template.service';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@/modules/auth/guards/roles.guard';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
+import { JwtAuthGuard, RolesGuard, Roles } from '@/common/auth';
 import { UserRole } from '@rental-portal/database';
 
 type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;

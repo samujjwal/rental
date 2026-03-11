@@ -12,7 +12,7 @@ export function AboutScreen({ navigation }: Props) {
       <Text style={styles.description}>
         We make it easy to rent anything from people you trust in your community.
       </Text>
-      <Pressable style={styles.ctaButton} onPress={() => navigation.navigate("Search")}>
+      <Pressable style={styles.ctaButton} onPress={() => navigation.navigate("Main" as any, { screen: "SearchTab" })}>
         <Text style={styles.ctaText}>Browse listings</Text>
       </Pressable>
     </View>

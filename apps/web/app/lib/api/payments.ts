@@ -113,6 +113,7 @@ export const paymentsApi = {
   async getBalance(): Promise<{
     balance: number;
     currency: string;
+    pendingBalance?: number;
   }> {
     return api.get("/payments/balance");
   },

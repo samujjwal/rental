@@ -1,20 +1,25 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { EventsService } from '@/common/events/events.service';
-import { BookingStatus, PayoutStatus } from '@rental-portal/database';
+import { BookingStatus, PayoutStatus, PaymentStatus, RefundStatus } from '@rental-portal/database';
+import { fromMinorUnits } from '@rental-portal/shared-types';
 import { LedgerService } from './services/ledger.service';
+import { EscrowService } from './services/escrow.service';
+import { WebhookDeadLetterQueue, DeadLetterEntry } from './utils/stripe-retry';
+import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
 
 /** TTL for webhook idempotency keys: 48 hours covers Stripe's retry window */
 const WEBHOOK_IDEMPOTENCY_TTL = 48 * 60 * 60;
 
 @Injectable()
-export class WebhookService {
+export class WebhookService implements OnModuleInit {
   private readonly logger = new Logger(WebhookService.name);
   private readonly stripe: Stripe;
   private readonly webhookSecret: string;
+  readonly deadLetter = new WebhookDeadLetterQueue();
 
   constructor(
     private configService: ConfigService,
@@ -22,27 +27,79 @@ export class WebhookService {
     private cacheService: CacheService,
     private eventsService: EventsService,
     private ledger: LedgerService,
+    private escrowService: EscrowService,
+    private bookingStateMachine: BookingStateMachineService,
   ) {
-    this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY'), {
+    const stripeKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
+
+    if (!stripeKey) {
+      throw new Error(
+        'STRIPE_SECRET_KEY is not configured. Set it in environment variables.',
+      );
+    }
+    if (!webhookSecret) {
+      throw new Error(
+        'STRIPE_WEBHOOK_SECRET is not configured. Set it in environment variables.',
+      );
+    }
+
+    this.stripe = new Stripe(stripeKey, {
       apiVersion: '2026-01-28.clover',
     });
-    this.webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET');
+    this.webhookSecret = webhookSecret;
+  }
+
+  onModuleInit() {
+    // Wire Redis into the DLQ so entries survive restarts
+    try {
+      const redis = this.cacheService.getClient();
+      this.deadLetter.setRedis(redis);
+      this.logger.log('WebhookDeadLetterQueue backed by Redis');
+    } catch (err) {
+      this.logger.warn(`DLQ Redis init failed, using in-memory fallback: ${err.message}`);
+    }
+  }
+
+  /**
+   * Release an idempotency lock so Stripe retries can reprocess a failed event.
+   * Called in catch blocks, after enqueuing to dead-letter, before re-throwing.
+   */
+  private async releaseEventLock(eventId: string): Promise<void> {
+    try {
+      await this.cacheService.del(`stripe:webhook:${eventId}`);
+    } catch (err) {
+      this.logger.warn(`Failed to release idempotency lock for event ${eventId}: ${err.message}`);
+    }
   }
 
   /**
    * Check if a Stripe event has already been processed (idempotency guard).
-   * Uses Redis SET with NX + TTL to atomically claim the event.
+   * Uses Redis SET NX (atomic set-if-not-exists) to claim the event.
    * Returns true if this is a duplicate (already processed).
+   * Falls back to allowing processing if Redis is unavailable — Stripe's
+   * own event structure and our DB-level idempotency checks provide safety.
    */
   private async isDuplicateEvent(eventId: string): Promise<boolean> {
-    const key = `stripe:webhook:${eventId}`;
-    const alreadyProcessed = await this.cacheService.exists(key);
-    if (alreadyProcessed) {
-      return true;
+    try {
+      const key = `stripe:webhook:${eventId}`;
+      // Atomically try to claim this event. Returns true if we claimed it (new event).
+      const claimed = await this.cacheService.setNx(
+        key,
+        { processedAt: new Date().toISOString() },
+        WEBHOOK_IDEMPOTENCY_TTL,
+      );
+      // If we couldn't claim it, it's a duplicate
+      return !claimed;
+    } catch (error) {
+      // Redis is down — allow processing to continue.
+      // DB-level constraints and handler-specific idempotency checks (e.g. refund dedup)
+      // provide a secondary safety net.
+      this.logger.warn(
+        `Redis unavailable for idempotency check on event ${eventId}: ${error.message}. Allowing processing.`,
+      );
+      return false;
     }
-    // Claim the event — set key with TTL so it expires after 48h
-    await this.cacheService.set(key, { processedAt: new Date().toISOString() }, WEBHOOK_IDEMPOTENCY_TTL);
-    return false;
   }
 
   /**
@@ -67,7 +124,32 @@ export class WebhookService {
 
     this.logger.log(`Processing webhook event: ${event.type} [${event.id}]`);
 
-    // Handle different event types
+    // Process event with dead-letter queue for irrecoverable processing failures
+    try {
+      await this.processEvent(event);
+    } catch (processingError) {
+      this.logger.error(
+        `Failed to process webhook ${event.id} (${event.type}): ${processingError.message}`,
+      );
+      // Release the idempotency lock so Stripe retries can reprocess this event
+      await this.releaseEventLock(event.id);
+      await this.deadLetter.enqueue({
+        eventId: event.id,
+        eventType: event.type,
+        payload: event.data.object,
+        error: processingError.message,
+        failedAt: new Date(),
+        attempts: 1,
+      });
+      // Re-throw to signal 500 to Stripe so it retries
+      throw processingError;
+    }
+  }
+
+  /**
+   * Process a verified Stripe event — dispatches to the correct handler.
+   */
+  private async processEvent(event: Stripe.Event): Promise<void> {
     switch (event.type) {
       // Payment Intent events
       case 'payment_intent.succeeded':
@@ -82,6 +164,10 @@ export class WebhookService {
         await this.handlePaymentIntentCanceled(event.data.object as Stripe.PaymentIntent);
         break;
 
+      case 'payment_intent.requires_action':
+        await this.handlePaymentIntentRequiresAction(event.data.object as Stripe.PaymentIntent);
+        break;
+
       // Charge events
       case 'charge.succeeded':
         await this.handleChargeSucceeded(event.data.object as Stripe.Charge);
@@ -93,6 +179,10 @@ export class WebhookService {
 
       case 'charge.refunded':
         await this.handleChargeRefunded(event.data.object as Stripe.Charge);
+        break;
+
+      case 'refund.updated':
+        await this.handleRefundUpdated(event.data.object as Stripe.Refund);
         break;
 
       case 'charge.dispute.created':
@@ -157,11 +247,33 @@ export class WebhookService {
         },
       });
 
-      // Update booking status to CONFIRMED
-      await this.prisma.booking.update({
-        where: { id: payment.bookingId },
-        data: { status: BookingStatus.CONFIRMED },
+      // Update booking status to CONFIRMED with state history (mirrors state machine behavior)
+      let wasTransitioned = false;
+      await this.prisma.$transaction(async (tx: any) => {
+        const updated = await tx.booking.updateMany({
+          where: { id: payment.bookingId, status: BookingStatus.PENDING_PAYMENT },
+          data: { status: BookingStatus.CONFIRMED },
+        });
+
+        if (updated.count > 0) {
+          wasTransitioned = true;
+          await tx.bookingStateHistory.create({
+            data: {
+              bookingId: payment.bookingId,
+              fromStatus: BookingStatus.PENDING_PAYMENT,
+              toStatus: BookingStatus.CONFIRMED,
+              changedBy: 'SYSTEM',
+              metadata: JSON.stringify({ paymentIntentId: id, source: 'stripe_webhook' }),
+            },
+          });
+        }
       });
+
+      // Fire CONFIRMED side effects (reminder notification + deposit hold) that the state machine
+      // would normally emit — must run after the DB transaction commits.
+      if (wasTransitioned) {
+        await this.bookingStateMachine.runConfirmedSideEffects(payment.bookingId);
+      }
 
       // Record ledger entries (idempotent)
       const existingLedger = await this.prisma.ledgerEntry.findFirst({
@@ -172,12 +284,14 @@ export class WebhookService {
         select: { id: true },
       });
 
-      const total = Number(payment.booking.totalPrice || payment.booking.totalAmount || 0);
+      const total = Number(payment.booking.totalPrice || 0);
       const serviceFee = Number(payment.booking.serviceFee || 0);
       const depositAmount = Number(payment.booking.depositAmount || 0);
       const platformFee = Number(payment.booking.platformFee || 0);
-      const subtotal = Math.max(0, total - serviceFee - depositAmount);
-      const currencyCode = payment.booking.currency || 'USD';
+      const taxAmount = Number(payment.booking.taxAmount || 0);
+      // Subtract all non-owner components: serviceFee, platformFee, deposit, and tax
+      const subtotal = Math.max(0, total - serviceFee - platformFee - depositAmount - taxAmount);
+      const currencyCode = payment.booking.currency;
 
       if (!existingLedger) {
         await this.ledger.recordBookingPayment(
@@ -213,11 +327,21 @@ export class WebhookService {
         }
       }
 
+      // Create and fund escrow for the booking payment
+      const escrow = await this.escrowService.createEscrow({
+        bookingId: payment.bookingId,
+        amount: subtotal,
+        currency: currencyCode,
+        releaseCondition: 'checkout_confirmed',
+      });
+      await this.escrowService.fundEscrow(escrow.id);
+      this.logger.log(`Escrow ${escrow.id} created and funded for booking ${payment.bookingId}`);
+
       // Emit payment succeeded event
       this.eventsService.emitPaymentSucceeded({
         paymentId: payment.id,
         bookingId: payment.bookingId,
-        amount: amount / 100, // Convert from cents
+        amount: fromMinorUnits(amount, currency), // Convert from minor units (handles zero-decimal currencies)
         currency,
         status: PayoutStatus.COMPLETED,
         renterId: payment.booking.renterId,
@@ -226,7 +350,8 @@ export class WebhookService {
 
       this.logger.log(`Payment ${payment.id} marked as completed`);
     } catch (error) {
-      this.logger.error(`Error handling payment success: ${error.message}`);
+      this.logger.error(`Error handling payment success: ${error.message}`, error.stack);
+      throw error; // Rethrow so Stripe retries on transient failures
     }
   }
 
@@ -256,10 +381,31 @@ export class WebhookService {
         },
       });
 
-      // Mark booking as payment failed (allows retry)
-      await this.prisma.booking.update({
-        where: { id: payment.bookingId },
-        data: { status: BookingStatus.PAYMENT_FAILED },
+      // Mark booking as payment failed with optimistic lock + state history
+      await this.prisma.$transaction(async (tx: any) => {
+        const updated = await tx.booking.updateMany({
+          where: {
+            id: payment.bookingId,
+            status: { in: [BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING_OWNER_APPROVAL] },
+          },
+          data: { status: BookingStatus.PAYMENT_FAILED },
+        });
+
+        if (updated.count > 0) {
+          await tx.bookingStateHistory.create({
+            data: {
+              bookingId: payment.bookingId,
+              fromStatus: payment.booking.status as BookingStatus,
+              toStatus: BookingStatus.PAYMENT_FAILED,
+              changedBy: 'SYSTEM',
+              metadata: JSON.stringify({
+                paymentIntentId: id,
+                source: 'stripe_webhook',
+                reason: last_payment_error?.message || 'Payment failed',
+              }),
+            },
+          });
+        }
       });
 
       // Emit payment failed event
@@ -277,6 +423,7 @@ export class WebhookService {
       this.logger.log(`Payment ${payment.id} marked as failed`);
     } catch (error) {
       this.logger.error(`Error handling payment failure: ${error.message}`);
+      throw error; // Rethrow so Stripe retries on transient failures
     }
   }
 
@@ -307,6 +454,56 @@ export class WebhookService {
   }
 
   /**
+   * Handle payment intent requires action (3DS/SCA authentication needed).
+   * Updates payment status and notifies the renter to complete authentication.
+   */
+  private async handlePaymentIntentRequiresAction(paymentIntent: Stripe.PaymentIntent) {
+    const { id } = paymentIntent;
+
+    try {
+      const payment = await this.prisma.payment.findFirst({
+        where: { stripePaymentIntentId: id },
+        include: { booking: true },
+      });
+
+      if (!payment) {
+        this.logger.warn(`Payment not found for requires_action PaymentIntent ${id}`);
+        return;
+      }
+
+      // Update payment status to indicate authentication is required
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: PaymentStatus.PROCESSING,
+          metadata: JSON.stringify({
+            ...(payment.metadata ? JSON.parse(payment.metadata as string) : {}),
+            requiresAction: true,
+            actionRequiredAt: new Date().toISOString(),
+          }),
+        },
+      });
+
+      // Emit action-required event (not payment-failed) so notification system can alert the renter
+      this.eventsService.emitPaymentActionRequired({
+        paymentId: payment.id,
+        bookingId: payment.bookingId,
+        amount: 0,
+        currency: payment.booking.currency,
+        status: PayoutStatus.FAILED,
+        renterId: payment.booking.renterId,
+        ownerId: payment.booking.ownerId,
+        reason: 'Additional authentication required (3DS/SCA). Please complete payment.',
+      });
+
+      this.logger.log(`Payment ${payment.id} requires additional authentication (3DS/SCA)`);
+    } catch (error) {
+      this.logger.error(`Error handling requires_action: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
    * Handle successful charge
    */
   private async handleChargeSucceeded(charge: Stripe.Charge) {
@@ -326,6 +523,10 @@ export class WebhookService {
   private async handleChargeRefunded(charge: Stripe.Charge) {
     const { id, amount_refunded, refunds } = charge;
 
+    if (!refunds?.data?.length) {
+      this.logger.warn(`Charge ${id} marked as refunded but no refund data present`);
+    }
+
     try {
       // Find payment by charge ID
       const payment = await this.prisma.payment.findFirst({
@@ -338,40 +539,105 @@ export class WebhookService {
         return;
       }
 
-      // Create refund record
-      const refund = await this.prisma.refund.create({
-        data: {
-          bookingId: payment.bookingId,
-          amount: amount_refunded / 100,
-          currency: charge.currency,
-          status: PayoutStatus.CANCELLED,
-          refundId: refunds.data[0]?.id || `refund_${Date.now()}`,
-          reason: refunds.data[0]?.reason || 'requested_by_customer',
-        },
+      // Upsert refund record: if a PENDING record was created by the refund queue processor,
+      // update it to COMPLETED.  Otherwise create a new COMPLETED record.
+      // This prevents the duplicate PENDING row bug where the webhook creates a second record.
+      const stripeRefundId = refunds.data[0]?.id;
+      if (stripeRefundId) {
+        const existingByStripeId = await this.prisma.refund.findFirst({
+          where: { refundId: stripeRefundId },
+        });
+        if (existingByStripeId) {
+          this.logger.warn(
+            `Refund ${stripeRefundId} already recorded for payment ${payment.id} — skipping duplicate`,
+          );
+          return;
+        }
+      }
+
+      // Look for a PENDING refund record created by the queue processor for this booking
+      const pendingRefund = await this.prisma.refund.findFirst({
+        where: { bookingId: payment.bookingId, status: RefundStatus.PENDING },
+        orderBy: { createdAt: 'desc' },
       });
+
+      if (pendingRefund) {
+        // Update the existing PENDING record with the real Stripe refund ID and COMPLETED status
+        await this.prisma.refund.update({
+          where: { id: pendingRefund.id },
+          data: {
+            refundId: stripeRefundId || pendingRefund.refundId,
+            status: RefundStatus.COMPLETED,
+          },
+        });
+      } else {
+        await this.prisma.refund.create({
+          data: {
+            bookingId: payment.bookingId,
+            amount: fromMinorUnits(amount_refunded, charge.currency),
+            currency: charge.currency,
+            status: RefundStatus.COMPLETED,
+            refundId: stripeRefundId || `refund_${Date.now()}`,
+            reason: refunds.data[0]?.reason || 'requested_by_customer',
+          },
+        });
+      }
 
       // Record refund in double-entry ledger
       await this.ledger.recordRefund(
         payment.bookingId,
         payment.booking.renterId,
-        amount_refunded / 100,
+        fromMinorUnits(amount_refunded, charge.currency),
         charge.currency,
       );
 
-      // Update booking status to REFUNDED
-      await this.prisma.booking.update({
-        where: { id: payment.bookingId },
-        data: { status: BookingStatus.REFUNDED },
+      // Update booking status to REFUNDED via state-machine-aligned transition.
+      // The state machine only defines CANCELLED → REFUNDED (via REFUND transition).
+      // For bookings in other states that receive a Stripe refund, we log a warning
+      // but do NOT force a status change outside the state machine's rules.
+      const validRefundFromStatuses = [
+        BookingStatus.CANCELLED,
+      ];
+
+      await this.prisma.$transaction(async (tx: any) => {
+        const updated = await tx.booking.updateMany({
+          where: {
+            id: payment.bookingId,
+            status: { in: validRefundFromStatuses },
+          },
+          data: { status: BookingStatus.REFUNDED },
+        });
+
+        if (updated.count > 0) {
+          await tx.bookingStateHistory.create({
+            data: {
+              bookingId: payment.bookingId,
+              fromStatus: payment.booking.status as BookingStatus,
+              toStatus: BookingStatus.REFUNDED,
+              changedBy: 'SYSTEM',
+              metadata: JSON.stringify({
+                chargeId: id,
+                transition: 'REFUND',
+                amountRefunded: fromMinorUnits(amount_refunded, charge.currency),
+                source: 'stripe_webhook',
+              }),
+            },
+          });
+        } else {
+          this.logger.warn(
+            `Booking ${payment.bookingId} not in valid state for refund transition (current: ${payment.booking.status}). ` +
+            `Refund record created but booking status unchanged — manual review required.`,
+          );
+        }
       });
 
       // Emit refund event
       this.eventsService.emitPaymentRefunded({
         paymentId: payment.id,
         bookingId: payment.bookingId,
-        amount: amount_refunded / 100,
+        amount: fromMinorUnits(amount_refunded, charge.currency),
         currency: charge.currency,
-        status: PayoutStatus.CANCELLED,
-        refundId: refund.id,
+        refundId: stripeRefundId ?? `refund_charge_${id}`,
         renterId: payment.booking.renterId,
         ownerId: payment.booking.ownerId,
       });
@@ -379,6 +645,7 @@ export class WebhookService {
       this.logger.log(`Refund processed for payment ${payment.id}`);
     } catch (error) {
       this.logger.error(`Error handling refund: ${error.message}`);
+      throw error; // Rethrow so Stripe retries on transient failures
     }
   }
 
@@ -419,17 +686,25 @@ export class WebhookService {
       });
 
       if (!existing) {
+        // For Stripe disputes, the initiator is the cardholder (renter) disputing
+        // the charge. On Connect platforms, the owner could also be the defendant.
+        // We default initiator to renterId since they are the one who filed the chargeback.
+        const isConnectDispute = !!dispute.payment_intent && typeof dispute.payment_intent === 'object'
+          && !!(dispute.payment_intent as Stripe.PaymentIntent).on_behalf_of;
+        const initiatorId = isConnectDispute ? (booking.ownerId || booking.renterId) : booking.renterId;
+        const defendantId = isConnectDispute ? booking.renterId : (booking.ownerId || booking.renterId);
+
         await this.prisma.dispute.create({
           data: {
             bookingId: booking.id,
-            initiatorId: booking.renterId,
-            defendantId: booking.ownerId,
+            initiatorId,
+            defendantId,
             title: `Stripe Dispute ${id}`,
             type: 'PAYMENT_ISSUE',
             status: 'OPEN',
             priority: 'HIGH',
-            description: `Stripe dispute (${reason || 'unknown reason'}). Amount: ${(amount / 100).toFixed(2)} ${dispute.currency?.toUpperCase()}. Evidence deadline: ${evidence_details?.due_by ? new Date(evidence_details.due_by * 1000).toISOString() : 'N/A'}.`,
-            amount: amount / 100,
+            description: `Stripe dispute (${reason || 'unknown reason'}). Amount: ${fromMinorUnits(amount, dispute.currency || 'USD').toFixed(2)} ${dispute.currency?.toUpperCase()}. Evidence deadline: ${evidence_details?.due_by ? new Date(evidence_details.due_by * 1000).toISOString() : 'N/A'}.`,
+            amount: fromMinorUnits(amount, dispute.currency || 'USD'),
           },
         });
       }
@@ -455,18 +730,19 @@ export class WebhookService {
       this.logger.log(`Dispute ${id} recorded and deposit frozen for booking ${booking.id}`);
     } catch (error) {
       this.logger.error(`Error handling dispute creation: ${error.message}`, error.stack);
+      throw error; // Rethrow so Stripe retries on transient failures
     }
   }
 
   /**
-   * Handle successful payout
+   * Handle successful payout — marks payout as PAID and transitions booking to SETTLED
    */
   private async handlePayoutPaid(payout: Stripe.Payout) {
     const { id, amount, destination } = payout;
 
-    this.logger.log(`Payout successful: ${id}, amount: ${amount / 100}`);
+    this.logger.log(`Payout successful: ${id}, amount: ${fromMinorUnits(amount, payout.currency)}`);
 
-    // Update payout status in DB
+    // Update payout status in DB and transition the associated booking to SETTLED
     try {
       await this.prisma.payout.updateMany({
         where: { stripeId: id },
@@ -475,8 +751,58 @@ export class WebhookService {
           paidAt: new Date(),
         },
       });
+
+      // Find the payout record to extract bookingId from its metadata
+      const payoutRecord = await this.prisma.payout.findFirst({
+        where: { stripeId: id },
+        select: { metadata: true },
+      });
+
+      if (payoutRecord?.metadata) {
+        try {
+          const meta = JSON.parse(payoutRecord.metadata);
+          const bookingId = meta?.bookingId;
+
+          if (bookingId) {
+            const booking = await this.prisma.booking.findUnique({
+              where: { id: bookingId },
+              select: { status: true },
+            });
+
+            if (booking?.status === BookingStatus.COMPLETED) {
+              await this.prisma.$transaction(async (tx: any) => {
+                const updated = await tx.booking.updateMany({
+                  where: { id: bookingId, status: BookingStatus.COMPLETED },
+                  data: { status: BookingStatus.SETTLED },
+                });
+
+                if (updated.count > 0) {
+                  await tx.bookingStateHistory.create({
+                    data: {
+                      bookingId,
+                      fromStatus: BookingStatus.COMPLETED,
+                      toStatus: BookingStatus.SETTLED,
+                      changedBy: 'SYSTEM',
+                      metadata: JSON.stringify({
+                        payoutId: id,
+                        transition: 'SETTLE',
+                        source: 'stripe_webhook',
+                      }),
+                    },
+                  });
+                }
+              });
+
+              this.logger.log(`Booking ${bookingId} transitioned to SETTLED after payout ${id}`);
+            }
+          }
+        } catch (parseErr) {
+          this.logger.warn(`Could not parse payout metadata for ${id}: ${parseErr.message}`);
+        }
+      }
     } catch (error) {
       this.logger.error(`Error updating payout ${id}: ${error.message}`);
+      throw error; // Rethrow so Stripe retries on transient failures
     }
   }
 
@@ -507,9 +833,50 @@ export class WebhookService {
   private async handleTransferCreated(transfer: Stripe.Transfer) {
     const { id, amount, destination } = transfer;
 
-    this.logger.log(`Transfer created: ${id}, amount: ${amount / 100}`);
+    this.logger.log(`Transfer created: ${id}, amount: ${fromMinorUnits(amount, transfer.currency)}`);
 
     // Track transfer to connected account
+    try {
+      const destinationAccountId = typeof destination === 'string' ? destination : destination?.id;
+      if (!destinationAccountId) {
+        this.logger.warn(`Transfer ${id} has no destination account`);
+        return;
+      }
+
+      // Find the owner with this connected account
+      const owner = await this.prisma.user.findFirst({
+        where: { stripeConnectId: destinationAccountId },
+      });
+
+      if (!owner) {
+        this.logger.warn(`No user found for Stripe Connect account ${destinationAccountId}`);
+        return;
+      }
+
+      // Record the transfer as a payout record
+      await this.prisma.payout.upsert({
+        where: { transferId: id },
+        create: {
+          ownerId: owner.id,
+          amount: fromMinorUnits(amount, transfer.currency),
+          currency: transfer.currency.toUpperCase(),
+          status: 'COMPLETED',
+          transferId: id,
+          metadata: JSON.stringify({
+            type: 'transfer',
+            destination: destinationAccountId,
+            description: transfer.description,
+          }),
+        },
+        update: {
+          status: 'COMPLETED',
+        },
+      });
+
+      this.logger.log(`Transfer ${id} tracked for owner ${owner.id}`);
+    } catch (error) {
+      this.logger.error(`Error tracking transfer ${id}: ${error.message}`, error.stack);
+    }
   }
 
   /**
@@ -537,6 +904,35 @@ export class WebhookService {
   }
 
   /**
+   * Handle refund.updated — fires for ACH bank refunds that transition asynchronously.
+   * Maps Stripe refund status (pending→succeeded/failed) to our RefundStatus enum.
+   */
+  private async handleRefundUpdated(refund: Stripe.Refund) {
+    const { id, status } = refund;
+    this.logger.log(`Refund updated: ${id}, status: ${status}`);
+
+    if (!status || status === 'pending') return;
+
+    const statusMap: Record<string, string> = {
+      succeeded: RefundStatus.COMPLETED,
+      failed: RefundStatus.FAILED,
+      canceled: RefundStatus.FAILED,
+    };
+    const mappedStatus = statusMap[status];
+    if (!mappedStatus) return;
+
+    try {
+      await this.prisma.refund.updateMany({
+        where: { refundId: id },
+        data: { status: mappedStatus as any },
+      });
+      this.logger.log(`Refund ${id} status updated to ${mappedStatus}`);
+    } catch (error) {
+      this.logger.error(`Error updating refund ${id}: ${error.message}`);
+    }
+  }
+
+  /**
    * Handle subscription events
    */
   private async handleSubscriptionEvent(event: Stripe.Event) {
@@ -546,6 +942,54 @@ export class WebhookService {
       `Subscription ${event.type}: ${subscription.id}, status: ${subscription.status}`,
     );
 
-    // Handle subscription-based features if applicable
+    // Map Stripe subscription status to internal status and persist
+    try {
+      const customerId = typeof subscription.customer === 'string'
+        ? subscription.customer
+        : subscription.customer?.id;
+
+      if (!customerId) {
+        this.logger.warn(`Subscription ${subscription.id} has no customer`);
+        return;
+      }
+
+      const user = await this.prisma.user.findFirst({
+        where: { stripeCustomerId: customerId },
+      });
+
+      if (!user) {
+        this.logger.warn(`No user found for Stripe customer ${customerId}`);
+        return;
+      }
+
+      // Update user's subscription status based on event type
+      const statusMap: Record<string, string> = {
+        active: 'ACTIVE',
+        past_due: 'PAST_DUE',
+        canceled: 'CANCELLED',
+        unpaid: 'UNPAID',
+        trialing: 'TRIALING',
+        incomplete: 'INCOMPLETE',
+        incomplete_expired: 'EXPIRED',
+        paused: 'PAUSED',
+      };
+
+      const mappedStatus = statusMap[subscription.status] || subscription.status.toUpperCase();
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          subscriptionStatus: mappedStatus,
+          subscriptionId: subscription.id,
+          subscriptionPlan: subscription.items?.data?.[0]?.price?.id || null,
+        },
+      });
+
+      this.logger.log(
+        `Updated subscription for user ${user.id}: ${mappedStatus} (${subscription.id})`,
+      );
+    } catch (error) {
+      this.logger.error(`Error handling subscription event: ${error.message}`, error.stack);
+    }
   }
 }

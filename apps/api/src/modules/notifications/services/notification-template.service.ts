@@ -16,7 +16,7 @@ export class NotificationTemplateService {
           <a href="{{bookingUrl}}" style="background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0;">
             View Booking
           </a>
-          <p>Best regards,<br/>Rental Portal Team</p>
+          <p>Best regards,<br/>{{brandName}} Team</p>
         </div>
       `,
       'booking.confirmed': `

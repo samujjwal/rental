@@ -15,11 +15,27 @@
       "dependsOn": ["build"],
       "outputs": ["coverage/**"]
     },
+    "test:smoke": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "test:security": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "test:cov": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"]
+    },
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []
     },
     "lint": {
+      "outputs": []
+    },
+    "arch-lint": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "clean": {

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { useAuth } from "../api/authContext";
@@ -15,11 +16,19 @@ export function LoginScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      setError("Password is required.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       await signIn({ email, password });
-      navigation.replace("Home");
+      navigation.replace("Main");
     } catch (err) {
       setError("Login failed. Please check your credentials.");
     } finally {
@@ -28,7 +37,7 @@ export function LoginScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.heading}>Welcome back</Text>
       <TextInput
         value={email}
@@ -46,16 +55,16 @@ export function LoginScreen({ navigation }: Props) {
         style={styles.input}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.primaryButton} onPress={handleLogin}>
+      <Pressable style={[styles.primaryButton, loading && styles.primaryButtonDisabled]} onPress={handleLogin} disabled={loading} accessibilityLabel={loading ? "Signing in" : "Sign In"} accessibilityRole="button">
         <Text style={styles.primaryButtonText}>{loading ? "Signing in..." : "Sign In"}</Text>
       </Pressable>
-      <Pressable onPress={() => navigation.navigate("ForgotPassword")} style={styles.linkButton}>
+      <Pressable onPress={() => navigation.navigate("ForgotPassword")} style={styles.linkButton} accessibilityLabel="Forgot password" accessibilityRole="link">
         <Text style={styles.linkText}>Forgot password?</Text>
       </Pressable>
-      <Pressable onPress={() => navigation.navigate("Signup")} style={styles.linkButton}>
+      <Pressable onPress={() => navigation.navigate("Signup")} style={styles.linkButton} accessibilityLabel="Create an account" accessibilityRole="link">
         <Text style={styles.linkText}>Create an account</Text>
       </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -88,6 +97,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
   primaryButtonText: {
     color: "#FFFFFF",

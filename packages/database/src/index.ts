@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaWrapper } from './prisma-wrapper';
 import { toNumber, decimalAdd, decimalSubtract, decimalCompare } from './utils';
 
@@ -12,6 +13,69 @@ export { PrismaClient, PrismaWrapper, toNumber, decimalAdd, decimalSubtract, dec
 
 // Export Prisma enums directly for type compatibility
 export { $Enums } from '@prisma/client';
+
+// Re-export Prisma enums as named exports (single source of truth — no manual definitions)
+export {
+  UserRole,
+  UserStatus,
+  PropertyType,
+  PropertyStatus,
+  PropertyCondition,
+  BookingStatus,
+  BookingMode,
+  PricingMode,
+  DepositType,
+  DepositStatus,
+  DisputeStatus,
+  DisputeType,
+  DisputePriority,
+  ReviewType,
+  ReviewStatus,
+  VerificationStatus,
+  PaymentStatus,
+  RefundStatus,
+  PayoutStatus,
+  AccountType,
+  LedgerSide,
+  TransactionType,
+  LedgerEntryStatus,
+  ListingStatus,
+  NotificationType,
+  OrganizationStatus,
+  OrganizationRole,
+  ClaimStatus,
+  InsuranceStatus,
+  InsuranceType,
+  IdentityDocumentType,
+  EmailTemplateType,
+  ConversationType,
+  ConversationStatus,
+  MessageType,
+  ResolutionType,
+  AvailabilityStatus,
+  AvailabilityMode,
+  AvailabilitySlotStatus,
+  PriceLineType,
+  PolicyType,
+  PolicyStatus,
+  PricingRuleType,
+  PricingStrategy,
+  TrustScoreType,
+  TrustTier,
+  ComplianceCheckType,
+  ComplianceStatus,
+  EscrowStatus,
+  EscalationLevel,
+  CampaignStatus,
+  AgentType,
+  AiConversationStatus,
+  ExpansionStatus,
+  SearchType,
+  ReputationTier,
+  ModerationStatus,
+  HealthStatus,
+  AnomalySeverity,
+} from '@prisma/client';
 
 // Export all types for API usage
 export type {
@@ -47,274 +111,56 @@ export type {
   AuditLog,
   Availability,
   IdentityDocument,
+  ListingContent,
+  ListingVersion,
+  CategoryAttributeDefinition,
+  ListingAttributeValue,
+  InventoryUnit,
+  AvailabilitySlot,
+  FxRateSnapshot,
+  BookingPriceBreakdown,
+  PricingRule,
+  TrustScore,
+  ComplianceRecord,
+  PlatformMetric,
+  EscrowTransaction,
+  DisputeEscalation,
+  // V5 Enterprise Models
+  MarketplaceHealthMetric,
+  HostActivationCampaign,
+  AiConversation,
+  AiConversationTurn,
+  DemandForecast,
+  DemandSignal,
+  MarketOpportunity,
+  SearchEvent,
+  UserSearchProfile,
+  PricingRecommendation,
+  FraudSignal,
+  DeviceFingerprint,
+  InventoryGraphNode,
+  InventoryGraphEdge,
+  PaymentProvider,
+  TaxPolicy,
+  CountryPolicyPack,
+  ReputationScore,
+  ModerationAction,
+  ServiceHealthCheck,
+  AnomalyDetection,
+  RegionConfig,
+  ExpansionSimulation,
 } from '@prisma/client';
 
-// Export enums as both types and values for API usage
-export enum UserRole {
-  USER = 'USER',
-  HOST = 'HOST',
-  ADMIN = 'ADMIN',
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  CUSTOMER = 'CUSTOMER',
-  OPERATIONS_ADMIN = 'OPERATIONS_ADMIN',
-  FINANCE_ADMIN = 'FINANCE_ADMIN',
-  SUPPORT_ADMIN = 'SUPPORT_ADMIN',
-}
-
-export enum UserStatus {
-  ACTIVE = 'ACTIVE',
-  SUSPENDED = 'SUSPENDED',
-  DELETED = 'DELETED',
-  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
-}
-
-export enum PropertyType {
-  APARTMENT = 'APARTMENT',
-  HOUSE = 'HOUSE',
-  VILLA = 'VILLA',
-  STUDIO = 'STUDIO',
-  CONDO = 'CONDO',
-  TOWNHOUSE = 'TOWNHOUSE',
-  COTTAGE = 'COTTAGE',
-  CABIN = 'CABIN',
-  LOFT = 'LOFT',
-  OTHER = 'OTHER',
-}
-
-export enum PropertyStatus {
-  AVAILABLE = 'AVAILABLE',
-  RENTED = 'RENTED',
-  MAINTENANCE = 'MAINTENANCE',
-  UNAVAILABLE = 'UNAVAILABLE',
-  DRAFT = 'DRAFT',
-  SUSPENDED = 'SUSPENDED',
-  ARCHIVED = 'ARCHIVED',
-}
-
-export enum BookingStatus {
-  DRAFT = 'DRAFT',
-  PENDING = 'PENDING',
-  PENDING_PAYMENT = 'PENDING_PAYMENT',
-  PENDING_OWNER_APPROVAL = 'PENDING_OWNER_APPROVAL',
-  PAYMENT_FAILED = 'PAYMENT_FAILED',
-  CONFIRMED = 'CONFIRMED',
-  IN_PROGRESS = 'IN_PROGRESS',
-  CANCELLED = 'CANCELLED',
-  DISPUTED = 'DISPUTED',
-  COMPLETED = 'COMPLETED',
-  AWAITING_RETURN_INSPECTION = 'AWAITING_RETURN_INSPECTION',
-  REFUNDED = 'REFUNDED',
-  SETTLED = 'SETTLED',
-}
-
-export enum BookingMode {
-  REQUEST = 'REQUEST',
-  INSTANT_BOOK = 'INSTANT_BOOK',
-}
-
-export enum PricingMode {
-  PER_NIGHT = 'PER_NIGHT',
-  PER_MONTH = 'PER_MONTH',
-  PER_HOUR = 'PER_HOUR',
-  PER_DAY = 'PER_DAY',
-  PER_WEEK = 'PER_WEEK',
-  CUSTOM = 'CUSTOM',
-}
-
-export enum DepositType {
-  FIXED = 'FIXED',
-  PERCENTAGE = 'PERCENTAGE',
-  NONE = 'NONE',
-}
-
-export enum DisputeStatus {
-  OPEN = 'OPEN',
-  UNDER_REVIEW = 'UNDER_REVIEW',
-  INVESTIGATING = 'INVESTIGATING',
-  RESOLVED = 'RESOLVED',
-  CLOSED = 'CLOSED',
-  WITHDRAWN = 'WITHDRAWN',
-}
-
-export enum DisputeType {
-  PROPERTY_DAMAGE = 'PROPERTY_DAMAGE',
-  PAYMENT_ISSUE = 'PAYMENT_ISSUE',
-  CANCELLATION = 'CANCELLATION',
-  CLEANING_FEE = 'CLEANING_FEE',
-  RULES_VIOLATION = 'RULES_VIOLATION',
-  MISSING_ITEMS = 'MISSING_ITEMS',
-  CONDITION_MISMATCH = 'CONDITION_MISMATCH',
-  REFUND_REQUEST = 'REFUND_REQUEST',
-  OTHER = 'OTHER',
-}
-
-export enum ReviewType {
-  LISTING_REVIEW = 'LISTING_REVIEW',
-  RENTER_REVIEW = 'RENTER_REVIEW',
-  OWNER_REVIEW = 'OWNER_REVIEW',
-}
-
-export enum VerificationStatus {
-  PENDING = 'PENDING',
-  VERIFIED = 'VERIFIED',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-}
-
-export enum DepositStatus {
-  PENDING = 'PENDING',
-  AUTHORIZED = 'AUTHORIZED',
-  HELD = 'HELD',
-  RELEASED = 'RELEASED',
-  CAPTURED = 'CAPTURED',
-  FAILED = 'FAILED',
-}
-
-export enum PayoutStatus {
-  PENDING = 'PENDING',
-  PROCESSING = 'PROCESSING',
-  IN_TRANSIT = 'IN_TRANSIT',
-  COMPLETED = 'COMPLETED',
-  PAID = 'PAID',
-  FAILED = 'FAILED',
-  CANCELLED = 'CANCELLED',
-}
-
-export enum AccountType {
-  REVENUE = 'REVENUE',
-  EXPENSE = 'EXPENSE',
-  LIABILITY = 'LIABILITY',
-  ASSET = 'ASSET',
-  EQUITY = 'EQUITY',
-  CASH = 'CASH',
-  RECEIVABLE = 'RECEIVABLE',
-  PAYABLE = 'PAYABLE',
-}
-
-export enum LedgerSide {
-  DEBIT = 'DEBIT',
-  CREDIT = 'CREDIT',
-}
-
-export enum TransactionType {
-  PLATFORM_FEE = 'PLATFORM_FEE',
-  SERVICE_FEE = 'SERVICE_FEE',
-  PAYMENT = 'PAYMENT',
-  REFUND = 'REFUND',
-  PAYOUT = 'PAYOUT',
-  DEPOSIT_HOLD = 'DEPOSIT_HOLD',
-  OWNER_EARNING = 'OWNER_EARNING',
-  DEPOSIT_RELEASE = 'DEPOSIT_RELEASE',
-  DISPUTE = 'DISPUTE',
-}
-
-export enum LedgerEntryStatus {
-  PENDING = 'PENDING',
-  POSTED = 'POSTED',
-  SETTLED = 'SETTLED',
-  CANCELLED = 'CANCELLED',
-}
-
-export enum ListingStatus {
-  DRAFT = 'DRAFT',
-  PUBLISHED = 'PUBLISHED',
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  SUSPENDED = 'SUSPENDED',
-  ARCHIVED = 'ARCHIVED',
-  PENDING_REVIEW = 'PENDING_REVIEW',
-  REJECTED = 'REJECTED',
-}
-
-export enum NotificationType {
-  BOOKING_REQUEST = 'BOOKING_REQUEST',
-  BOOKING_CONFIRMED = 'BOOKING_CONFIRMED',
-  BOOKING_CANCELLED = 'BOOKING_CANCELLED',
-  BOOKING_REMINDER = 'BOOKING_REMINDER',
-  PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
-  REVIEW_RECEIVED = 'REVIEW_RECEIVED',
-  MESSAGE_RECEIVED = 'MESSAGE_RECEIVED',
-  SYSTEM_UPDATE = 'SYSTEM_UPDATE',
-  SYSTEM_ANNOUNCEMENT = 'SYSTEM_ANNOUNCEMENT',
-  MARKETING = 'MARKETING',
-  PAYOUT_PROCESSED = 'PAYOUT_PROCESSED',
-  VERIFICATION_COMPLETE = 'VERIFICATION_COMPLETE',
-  DISPUTE_OPENED = 'DISPUTE_OPENED',
-  LISTING_APPROVED = 'LISTING_APPROVED',
-}
-
-export enum OrganizationStatus {
-  ACTIVE = 'ACTIVE',
-  SUSPENDED = 'SUSPENDED',
-  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
-}
-
-export enum OrganizationRole {
-  OWNER = 'OWNER',
-  ADMIN = 'ADMIN',
-  MEMBER = 'MEMBER',
-}
-
-export enum ClaimStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-  PROCESSING = 'PROCESSING',
-  PAID = 'PAID',
-  CANCELLED = 'CANCELLED',
-}
-
-export enum InsuranceStatus {
-  ACTIVE = 'ACTIVE',
-  EXPIRED = 'EXPIRED',
-  CANCELLED = 'CANCELLED',
-  PENDING = 'PENDING',
-}
-
-export enum InsuranceType {
-  PROPERTY_DAMAGE = 'PROPERTY_DAMAGE',
-  LIABILITY = 'LIABILITY',
-  TRIP_CANCELLATION = 'TRIP_CANCELLATION',
-  MEDICAL = 'MEDICAL',
-}
-
-export enum IdentityDocumentType {
-  DRIVERS_LICENSE = 'DRIVERS_LICENSE',
-  PASSPORT = 'PASSPORT',
-  NATIONAL_ID = 'NATIONAL_ID',
-  OTHER = 'OTHER',
-}
-
-export enum PropertyCondition {
-  EXCELLENT = 'EXCELLENT',
-  GOOD = 'GOOD',
-  FAIR = 'FAIR',
-  POOR = 'POOR',
-}
-
-export enum EmailTemplateType {
-  BOOKING_CONFIRMATION = 'BOOKING_CONFIRMATION',
-  BOOKING_CANCELLATION = 'BOOKING_CANCELLATION',
-  PAYMENT_CONFIRMATION = 'PAYMENT_CONFIRMATION',
-  PAYMENT_RECEIPT = 'PAYMENT_RECEIPT',
-  WELCOME = 'WELCOME',
-  PASSWORD_RESET = 'PASSWORD_RESET',
-  EMAIL_VERIFICATION = 'EMAIL_VERIFICATION',
-  LISTING_APPROVED = 'LISTING_APPROVED',
-  LISTING_REJECTED = 'LISTING_REJECTED',
-  REVIEW_REMINDER = 'REVIEW_REMINDER',
-  PAYOUT_NOTIFICATION = 'PAYOUT_NOTIFICATION',
-  DISPUTE_OPENED = 'DISPUTE_OPENED',
-  DISPUTE_RESOLVED = 'DISPUTE_RESOLVED',
-  SYSTEM_NOTIFICATION = 'SYSTEM_NOTIFICATION',
-}
-
-// Also export as const objects for backward compatibility
+// Const value objects for runtime enum iteration (kept for backward compatibility)
 export const UserRoleValues = {
   USER: 'USER',
   HOST: 'HOST',
   ADMIN: 'ADMIN',
   SUPER_ADMIN: 'SUPER_ADMIN',
+  CUSTOMER: 'CUSTOMER',
+  OPERATIONS_ADMIN: 'OPERATIONS_ADMIN',
+  FINANCE_ADMIN: 'FINANCE_ADMIN',
+  SUPPORT_ADMIN: 'SUPPORT_ADMIN',
 } as const;
 
 export const UserStatusValues = {
@@ -330,59 +176,46 @@ export const PropertyStatusValues = {
   MAINTENANCE: 'MAINTENANCE',
   UNAVAILABLE: 'UNAVAILABLE',
   DRAFT: 'DRAFT',
+  SUSPENDED: 'SUSPENDED',
+  ARCHIVED: 'ARCHIVED',
 } as const;
 
 export const BookingStatusValues = {
+  DRAFT: 'DRAFT',
   PENDING: 'PENDING',
+  PENDING_PAYMENT: 'PENDING_PAYMENT',
+  PENDING_OWNER_APPROVAL: 'PENDING_OWNER_APPROVAL',
   CONFIRMED: 'CONFIRMED',
+  IN_PROGRESS: 'IN_PROGRESS',
   CANCELLED: 'CANCELLED',
+  PAYMENT_FAILED: 'PAYMENT_FAILED',
   DISPUTED: 'DISPUTED',
   COMPLETED: 'COMPLETED',
+  AWAITING_RETURN_INSPECTION: 'AWAITING_RETURN_INSPECTION',
   REFUNDED: 'REFUNDED',
   SETTLED: 'SETTLED',
 } as const;
 
-// Export string values for API compatibility
-export const PROPERTY_STATUS = {
-  AVAILABLE: 'AVAILABLE',
-  RENTED: 'RENTED',
-  MAINTENANCE: 'MAINTENANCE',
-  UNAVAILABLE: 'UNAVAILABLE',
-  DRAFT: 'DRAFT',
-} as const;
+// Create a singleton instance (lazy — avoids import-time errors when DATABASE_URL is unset, e.g. in tests)
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | null };
 
-export const USER_STATUS = {
-  ACTIVE: 'ACTIVE',
-  SUSPENDED: 'SUSPENDED',
-  DELETED: 'DELETED',
-  PENDING_VERIFICATION: 'PENDING_VERIFICATION',
-} as const;
+function createPrismaClient(): PrismaClient {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    // Return a no-op placeholder; test suites provide their own mock PrismaService
+    return null as unknown as PrismaClient;
+  }
+  const adapter = new PrismaPg({ connectionString });
+  return new PrismaClient({ adapter });
+}
 
-export const BOOKING_STATUS = {
-  PENDING: 'PENDING',
-  CONFIRMED: 'CONFIRMED',
-  CANCELLED: 'CANCELLED',
-  COMPLETED: 'COMPLETED',
-  REFUNDED: 'REFUNDED',
-  SETTLED: 'SETTLED',
-} as const;
-
-export const VERIFICATION_STATUS = {
-  PENDING: 'PENDING',
-  VERIFIED: 'VERIFIED',
-  REJECTED: 'REJECTED',
-} as const;
-
-// Create a singleton instance
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-
-export const prisma = globalForPrisma.prisma || new PrismaClient();
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 // Create a singleton wrapper instance for API compatibility
-const globalForPrismaWrapper = globalThis as unknown as { prismaWrapper: PrismaWrapper };
+const globalForPrismaWrapper = globalThis as unknown as { prismaWrapper: PrismaWrapper | null };
 
-export const prismaWrapper = globalForPrismaWrapper.prismaWrapper || new PrismaWrapper();
+export const prismaWrapper = globalForPrismaWrapper.prismaWrapper ?? new PrismaWrapper();
 
 if (process.env.NODE_ENV !== 'production') globalForPrismaWrapper.prismaWrapper = prismaWrapper;

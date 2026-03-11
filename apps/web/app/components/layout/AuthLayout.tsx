@@ -1,10 +1,12 @@
 import { Link, Outlet } from "react-router";
+import { useTranslation } from "react-i18next";
 
 /**
  * Shared layout for authentication routes (login, signup, forgot-password, reset-password).
  * Provides a centered card layout with branding.
  */
 export function AuthLayout() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen flex flex-col bg-muted">
       {/* Minimal header with logo */}
@@ -14,7 +16,7 @@ export function AuthLayout() {
             to="/"
             className="text-2xl font-bold text-primary hover:text-primary/90 transition-colors"
           >
-            GharBatai
+            {t("common.appNameShort")}
           </Link>
         </div>
       </header>
@@ -29,13 +31,13 @@ export function AuthLayout() {
       {/* Minimal footer */}
       <footer className="py-6 px-4 text-center text-sm text-muted-foreground">
         <p>
-          &copy; {new Date().getFullYear()} GharBatai.{" "}
+          {t("auth.copyright", { year: new Date().getFullYear() })}{" "}
           <Link to="/terms" className="hover:text-foreground underline">
-            Terms
+            {t("common.terms")}
           </Link>{" "}
           &middot;{" "}
           <Link to="/privacy" className="hover:text-foreground underline">
-            Privacy
+            {t("common.privacy")}
           </Link>
         </p>
       </footer>

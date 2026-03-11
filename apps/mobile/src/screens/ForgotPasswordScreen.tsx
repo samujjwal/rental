@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet, Pressable } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
@@ -29,7 +30,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.heading}>Forgot password</Text>
       <Text style={styles.description}>
         Enter your email address and we will send you a reset link.
@@ -51,7 +52,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
       <Pressable onPress={() => navigation.navigate("Login")} style={styles.linkButton}>
         <Text style={styles.linkText}>Back to login</Text>
       </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 

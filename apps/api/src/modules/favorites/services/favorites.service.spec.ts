@@ -169,19 +169,21 @@ describe('FavoritesService', () => {
 
       const result = await service.getFavoriteByListingId(userId, listingId);
 
-      expect(result.listing.title).toBe('Test Listing');
+      expect(result.favorited).toBe(true);
+      if (result.favorited && 'listing' in result) {
+        expect(result.listing.title).toBe('Test Listing');
+      }
       expect(prisma.favoriteListing.findUnique).toHaveBeenCalledWith({
         where: { userId_listingId: { userId, listingId } },
         include: expect.any(Object),
       });
     });
 
-    it('should throw NotFoundException when not found', async () => {
+    it('should return favorited: false when not found', async () => {
       prisma.favoriteListing.findUnique.mockResolvedValue(null);
 
-      await expect(service.getFavoriteByListingId(userId, 'missing')).rejects.toThrow(
-        NotFoundException,
-      );
+      const result = await service.getFavoriteByListingId(userId, 'missing');
+      expect(result).toEqual({ favorited: false });
     });
   });
 

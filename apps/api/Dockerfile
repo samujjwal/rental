@@ -1,49 +1,21 @@
-# Build stage
-FROM node:18-alpine AS builder
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY pnpm-lock.yaml ./
-
-# Install pnpm
+RUN apk add --no-cache curl
 RUN npm install -g pnpm
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Avoid husky hooks in container builds.
+ENV HUSKY=0
 
-# Copy source code
 COPY . .
 
-# Generate Prisma Client
-RUN npx prisma generate
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @rental-portal/shared-types build
+RUN pnpm --filter @rental-portal/database build
+RUN pnpm --filter @rental-portal/database db:generate
+RUN pnpm --filter @rental-portal/api build
 
-# Build application
-RUN pnpm run build
-
-# Production stage
-FROM node:18-alpine AS runner
-
-WORKDIR /app
-
-# Install pnpm
-RUN npm install -g pnpm
-
-# Copy package files
-COPY package*.json ./
-COPY pnpm-lock.yaml ./
-
-# Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile
-
-# Copy built application
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-
-# Expose port
 EXPOSE 3000
 
-# Run migrations and start application
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/apps/api/main.js"]
+CMD ["sh", "-c", "pnpm --filter @rental-portal/database migrate:deploy && node apps/api/dist/main.js"]

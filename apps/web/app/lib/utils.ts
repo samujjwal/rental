@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { APP_CURRENCY, APP_LOCALE, APP_TIMEZONE } from "~/config/locale";
 
 /**
  * Utility function to merge Tailwind CSS classes with proper precedence.
@@ -14,10 +15,15 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Format a number as currency
+ * Format a number as currency using the platform's configured locale & currency.
+ * Both `locale` and `currency` can be overridden per-call.
  */
-export function formatCurrency(value: number, currency = "USD"): string {
-  return new Intl.NumberFormat("en-US", {
+export function formatCurrency(
+  value: number,
+  currency: string = APP_CURRENCY,
+  locale: string = APP_LOCALE,
+): string {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     minimumFractionDigits: 0,
@@ -26,35 +32,40 @@ export function formatCurrency(value: number, currency = "USD"): string {
 }
 
 /**
- * Format a number with commas
+ * Format a number with commas using the platform locale.
+ * Pass a locale override for dynamic i18n support.
  */
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
+export function formatNumber(value: number, locale: string = APP_LOCALE): string {
+  return new Intl.NumberFormat(locale).format(value);
 }
 
 /**
- * Format a date to a readable string
+ * Format a date to a readable string using the platform locale.
+ * Pass a locale override for dynamic i18n support.
  */
-export function formatDate(date: Date | string): string {
+export function formatDate(date: Date | string, locale: string = APP_LOCALE): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: APP_TIMEZONE,
   }).format(d);
 }
 
 /**
- * Format a date with time
+ * Format a date with time using the platform locale.
+ * Pass a locale override for dynamic i18n support.
  */
-export function formatDateTime(date: Date | string): string {
+export function formatDateTime(date: Date | string, locale: string = APP_LOCALE): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: APP_TIMEZONE,
   }).format(d);
 }
 

@@ -7,11 +7,14 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { Request } from 'express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { WebhookService } from './webhook.service';
+import { SkipCsrf } from '@/common/guards/csrf.guard';
 
 @ApiTags('webhooks')
+@SkipCsrf()
 @Controller('webhooks')
 export class WebhookController {
   private readonly logger = new Logger(WebhookController.name);
@@ -25,13 +28,13 @@ export class WebhookController {
     @Req() req: RawBodyRequest<Request>,
   ) {
     if (!signature) {
-      throw new BadRequestException('Missing stripe-signature header');
+      throw i18nBadRequest('payment.missingSignatureHeader');
     }
 
     // Get raw body for signature verification
     const rawBody = req.rawBody;
     if (!rawBody) {
-      throw new BadRequestException('Missing request body');
+      throw i18nBadRequest('payment.missingRequestBody');
     }
 
     try {
@@ -39,7 +42,12 @@ export class WebhookController {
       return { received: true };
     } catch (error) {
       this.logger.error(`Webhook error: ${error.message}`);
-      throw new BadRequestException(error.message);
+      // Signature verification failures → 400 (permanent, don't retry)
+      // Processing errors → 500 (transient, Stripe will retry)
+      if (error.message?.includes('signature') || error.message?.includes('Webhook')) {
+        throw new BadRequestException(error.message);
+      }
+      throw error; // Let NestJS return 500 for transient failures
     }
   }
 }

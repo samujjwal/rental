@@ -1,17 +1,21 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
 
 // Common modules
+import { EncryptionModule } from './common/encryption/encryption.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { CacheModule } from './common/cache/cache.module';
 import { QueueModule } from './common/queue/queue.module';
 import { EmailModule } from './common/email/email.module';
 import { StorageModule } from './common/storage/storage.module';
-import { ModerationModule as CommonModerationModule } from './common/moderation/moderation.module';
 import { EventsModule } from './common/events/events.module';
+import { TelemetryModule, RequestIdMiddleware } from './common/telemetry';
+import { FxModule } from './common/fx/fx.module';
+import { LoggerModule } from './common/logger/logger.module';
 
 // Feature modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -26,18 +30,24 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
-import { DevModule } from './modules/admin/dev.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { InsuranceModule } from './modules/insurance/insurance.module';
 import { GeoModule } from './modules/geo/geo.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
-import { TaxModule } from './modules/tax/tax.module';
 import { FraudDetectionModule } from './modules/fraud-detection/fraud-detection.module';
 import { AiModule } from './modules/ai/ai.module';
+import { PolicyEngineModule } from './modules/policy-engine/policy-engine.module';
+import { PricingModule } from './modules/pricing/pricing.module';
+import { ComplianceModule } from './modules/compliance/compliance.module';
+import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { MetricsModule } from './common/metrics/metrics.module';
+import { CleanupModule } from './common/cleanup/cleanup.module';
 
 import configuration from './config/configuration';
+import { CsrfGuard } from './common/guards/csrf.guard';
+import { ConfigCascadeModule } from './common/config/config-cascade.module';
 
 @Module({
   imports: [
@@ -47,6 +57,9 @@ import configuration from './config/configuration';
       load: [configuration],
       envFilePath: ['../../.env', '.env.local', '.env'],
     }),
+
+    // Config cascade: env → org → user preferences
+    ConfigCascadeModule,
 
     // Rate limiting
     ThrottlerModule.forRoot([
@@ -64,7 +77,7 @@ import configuration from './config/configuration';
       useFactory: () => ({
         redis: {
           host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '3479'),
+          port: parseInt(process.env.REDIS_PORT || '6379'),
           password: process.env.REDIS_PASSWORD,
         },
       }),
@@ -73,13 +86,16 @@ import configuration from './config/configuration';
     // Elasticsearch removed - now using PostgreSQL search
 
     // Common modules
+    LoggerModule,
+    EncryptionModule,
     PrismaModule,
     CacheModule,
     QueueModule,
     EmailModule,
     StorageModule,
-    CommonModerationModule,
     EventsModule,
+    TelemetryModule,
+    FxModule,
 
     // Feature modules
     AuthModule,
@@ -96,14 +112,28 @@ import configuration from './config/configuration';
     FavoritesModule,
     AnalyticsModule,
     AdminModule,
-    DevModule,
     ModerationModule,
     InsuranceModule,
     GeoModule,
     OrganizationsModule,
-    TaxModule,
     FraudDetectionModule,
     AiModule,
+    PolicyEngineModule,
+    PricingModule,
+    ComplianceModule,
+    MarketplaceModule,
+    MetricsModule,
+    CleanupModule,
+  ],
+  providers: [
+    // Global rate limiting guard
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Global CSRF guard: JWT Bearer routes are auto-exempt; webhooks use @SkipCsrf()
+    { provide: APP_GUARD, useClass: CsrfGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

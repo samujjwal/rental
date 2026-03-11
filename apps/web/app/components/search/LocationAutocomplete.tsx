@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapPin, Loader2 } from "lucide-react";
 import { cn } from "~/lib/utils";
-import { useDebounce } from "~/hooks/use-debounce";
+import { useDebounce } from "~/hooks/useDebounce";
 import { geoApi, type GeoSuggestion } from "~/lib/api/geo";
 import { Keys } from "~/lib/accessibility";
 

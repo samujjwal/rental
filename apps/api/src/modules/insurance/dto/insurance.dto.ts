@@ -52,7 +52,7 @@ export class CreatePolicyDto {
   @Min(0)
   premium: number;
 
-  @ApiProperty({ description: 'Currency code', default: 'USD' })
+  @ApiProperty({ description: 'Currency code (ISO 4217)', example: 'USD' })
   @IsOptional()
   @IsString()
   @MaxLength(3)
@@ -83,6 +83,45 @@ export class VerifyPolicyDto {
   @IsString()
   @MaxLength(1000)
   notes?: string;
+}
+
+export class UploadPolicyDto {
+  @ApiProperty({ description: 'Listing ID' })
+  @IsUUID()
+  listingId: string;
+
+  @ApiProperty({ description: 'Policy number' })
+  @IsString()
+  @MaxLength(100)
+  policyNumber: string;
+
+  @ApiProperty({ description: 'Insurance provider' })
+  @IsString()
+  @MaxLength(200)
+  provider: string;
+
+  @ApiProperty({ description: 'Insurance type' })
+  @IsString()
+  @MaxLength(50)
+  type: string;
+
+  @ApiProperty({ description: 'Coverage amount' })
+  @IsNumber()
+  @Min(0)
+  coverageAmount: number;
+
+  @ApiProperty({ description: 'Effective date' })
+  @IsDateString()
+  effectiveDate: string;
+
+  @ApiProperty({ description: 'Expiration date' })
+  @IsDateString()
+  expirationDate: string;
+
+  @ApiProperty({ description: 'Document URL' })
+  @IsString()
+  @MaxLength(2000)
+  documentUrl: string;
 }
 
 export class CreateClaimDto {

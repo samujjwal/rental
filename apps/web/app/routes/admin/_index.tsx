@@ -1,15 +1,17 @@
 import { type LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link } from "react-router";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { requireAdmin } from "~/utils/auth";
 import { getAdminAnalytics } from "~/utils/adminAnalytics";
 import { adminApi } from "~/lib/api/admin";
+import { formatCurrency, formatNumber } from "~/lib/utils";
 import {
   ArrowRight,
   Users,
   Home,
   Calendar,
-  DollarSign,
+  Banknote,
   Shield,
   TrendingUp,
   CheckCircle,
@@ -83,41 +85,34 @@ function getEntityLink(entity: unknown): string | undefined {
   return m[String(entity || "").toLowerCase()];
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(value);
-}
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
-}
-
 const iconMap: Record<string, React.ReactNode> = {
   "/admin/entities/users": <Users className="h-5 w-5" />,
   "/admin/entities/listings": <Home className="h-5 w-5" />,
   "/admin/entities/bookings": <Calendar className="h-5 w-5" />,
   "/admin/disputes": <Shield className="h-5 w-5" />,
-  "/admin/entities/payments": <DollarSign className="h-5 w-5" />,
+  "/admin/entities/payments": <Banknote className="h-5 w-5" />,
   "/admin/entities/organizations": <Shield className="h-5 w-5" />,
   "/admin/entities/categories": <Shield className="h-5 w-5" />,
   "/admin/system/power-operations": <Shield className="h-5 w-5" />,
 };
 
 const tabItems = [
-  { label: "Overview", icon: LayoutDashboard, href: "#" },
-  { label: "Disputes", icon: Gavel, href: "/admin/disputes" },
-  { label: "Reports", icon: BarChart3, href: "#" },
+  { label: "overview", icon: LayoutDashboard, href: "#" },
+  { label: "disputes", icon: Gavel, href: "/admin/disputes" },
+  { label: "reports", icon: BarChart3, href: "#" },
 ];
 
 export default function AdminDashboard() {
   const { user, analytics, activities, error } = useLoaderData<typeof clientLoader>();
   const [activeTab, setActiveTab] = useState(0);
+  const { t } = useTranslation();
 
   if (error || !analytics) {
     return (
       <div className="p-6">
         <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 p-4">
-          <p className="font-semibold text-red-800 dark:text-red-200">Unable to load admin dashboard</p>
-          <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error || "Failed to load admin dashboard data"}</p>
+          <p className="font-semibold text-red-800 dark:text-red-200">{t("admin.unableToLoadDashboard")}</p>
+          <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error || t("admin.failedToLoadDashboardData")}</p>
         </div>
       </div>
     );
@@ -128,14 +123,14 @@ export default function AdminDashboard() {
   const warningAlerts = alerts.filter((a) => a.severity === "warning");
 
   const quickLinks = [
-    { href: "/admin/entities/users", label: "User Directory", description: "Review accounts & roles" },
-    { href: "/admin/entities/listings", label: "Listings", description: "Moderate submissions" },
-    { href: "/admin/entities/bookings", label: "Bookings", description: "Resolve issues fast" },
-    { href: "/admin/disputes", label: "Disputes", description: "Review and resolve disputes" },
-    { href: "/admin/entities/payments", label: "Payments", description: "Audit payouts & refunds" },
-    { href: "/admin/entities/organizations", label: "Organizations", description: "Manage business accounts" },
-    { href: "/admin/entities/categories", label: "Categories", description: "Configure property types" },
-    { href: "/admin/system/power-operations", label: "Power Operations", description: "System maintenance" },
+    { href: "/admin/entities/users", label: t("admin.userDirectory"), description: t("admin.reviewAccountsRoles") },
+    { href: "/admin/entities/listings", label: t("admin.listings"), description: t("admin.moderateSubmissions") },
+    { href: "/admin/entities/bookings", label: t("admin.bookings"), description: t("admin.resolveIssuesFast") },
+    { href: "/admin/disputes", label: t("admin.disputes"), description: t("admin.reviewResolveDisputes") },
+    { href: "/admin/entities/payments", label: t("admin.payments"), description: t("admin.auditPayoutsRefunds") },
+    { href: "/admin/entities/organizations", label: t("admin.organizations"), description: t("admin.manageBusinessAccounts") },
+    { href: "/admin/entities/categories", label: t("admin.categories"), description: t("admin.configurePropertyTypes") },
+    { href: "/admin/system/power-operations", label: t("admin.powerOperations"), description: t("admin.systemMaintenance") },
   ];
 
   return (
@@ -152,7 +147,7 @@ export default function AdminDashboard() {
                 to={tab.href}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors"
               >
-                <Icon className="h-4 w-4" /> {tab.label}
+                <Icon className="h-4 w-4" /> {t(`admin.${tab.label}`)}
               </Link>
             ) : (
               <button
@@ -164,7 +159,7 @@ export default function AdminDashboard() {
                   isActive ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
                 }`}
               >
-                <Icon className="h-4 w-4" /> {tab.label}
+                <Icon className="h-4 w-4" /> {t(`admin.${tab.label}`)}
               </button>
             );
           })}
@@ -175,14 +170,14 @@ export default function AdminDashboard() {
       <div className="rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-primary">Admin Control Center</p>
-            <h1 className="text-2xl font-bold mt-1">Welcome back, {user.firstName ?? user.email}</h1>
-            <p className="text-muted-foreground mt-1">Keep the marketplace healthy by monitoring activity, triaging issues, and guiding partners.</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("admin.controlCenter")}</p>
+            <h1 className="text-2xl font-bold mt-1">{t("admin.welcomeBack", { name: user.firstName ?? user.email })}</h1>
+            <p className="text-muted-foreground mt-1">{t("admin.dashboardDescription")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to="/admin/system/power-operations" className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg border hover:bg-muted">System Operations</Link>
+            <Link to="/admin/system/power-operations" className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg border hover:bg-muted">{t("admin.systemOperations")}</Link>
             <Link to="/admin/analytics" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
-              Full Analytics <ArrowRight className="h-4 w-4" />
+              {t("admin.fullAnalytics")} <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
@@ -191,7 +186,7 @@ export default function AdminDashboard() {
       {/* Alerts */}
       {(criticalAlerts.length > 0 || warningAlerts.length > 0) && (
         <div className="space-y-2">
-          <h2 className="text-lg font-semibold">Active Alerts</h2>
+          <h2 className="text-lg font-semibold">{t("admin.activeAlerts")}</h2>
           {criticalAlerts.map((alert) => (
             <div key={alert.id} className="flex items-start gap-3 rounded-md border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 px-4 py-3">
               <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
@@ -221,7 +216,7 @@ export default function AdminDashboard() {
 
       {/* KPI Cards */}
       <div data-testid="platform-stats">
-        <h2 className="text-lg font-semibold mb-3">Key Metrics (Last 30 Days)</h2>
+        <h2 className="text-lg font-semibold mb-3">{t("admin.keyMetrics")}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {summary.kpis.map((kpi) => {
             const trendColor = kpi.trend === "up" ? "text-green-600" : kpi.trend === "down" ? "text-red-600" : "text-muted-foreground";
@@ -244,7 +239,7 @@ export default function AdminDashboard() {
 
       {/* Quick Actions */}
       <div>
-        <h2 className="text-lg font-semibold mb-3">Quick Actions</h2>
+        <h2 className="text-lg font-semibold mb-3">{t("admin.quickActions")}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {quickLinks.map((link) => (
             <Link
@@ -265,9 +260,9 @@ export default function AdminDashboard() {
       {/* Activity Feed */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Recent Activity</h2>
+          <h2 className="text-lg font-semibold">{t("admin.recentActivity")}</h2>
           <Link to="/admin/system/audit" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-            View All <ArrowRight className="h-4 w-4" />
+            {t("admin.viewAll")} <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
         <div className="rounded-lg border bg-card p-4 shadow-sm">

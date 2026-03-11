@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link, useRevalidator } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import {
   Activity,
@@ -15,6 +16,7 @@ import {
 import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { formatDateTime } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
   return [
@@ -25,7 +27,7 @@ export const meta: MetaFunction = () => {
 
 const safeDateTimeLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
-  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "Unknown date" : formatDateTime(date);
 };
 const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
@@ -66,6 +68,7 @@ interface LogEntry {
 }
 
 export default function SystemLogsPage() {
+  const { t } = useTranslation();
   const { logs, error } = useLoaderData<typeof clientLoader>();
   const revalidator = useRevalidator();
   const [searchQuery, setSearchQuery] = useState("");
@@ -122,7 +125,7 @@ export default function SystemLogsPage() {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold mb-2">Error Loading Logs</h3>
+          <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingLogs")}</h3>
           <p className="text-red-600">{error}</p>
         </div>
       </div>
@@ -138,21 +141,21 @@ export default function SystemLogsPage() {
             to="/admin/system"
             className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
           >
-            ← Back to System Settings
+            {t("admin.backToSystemSettings")}
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">System Logs</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{t("admin.systemLogs")}</h1>
           <p className="text-gray-600 mt-1">
-            View and search application logs
+            {t("admin.systemLogsSubtitle")}
           </p>
         </div>
         <div className="flex gap-3">
           <UnifiedButton variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
-            Export Logs
+            {t("admin.exportLogs")}
           </UnifiedButton>
           <UnifiedButton variant="outline" size="sm" onClick={() => revalidator.revalidate()}>
             <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
+            {t("admin.refresh")}
           </UnifiedButton>
         </div>
       </div>
@@ -165,9 +168,10 @@ export default function SystemLogsPage() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search logs..."
+              placeholder={t("admin.searchLogs")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label={t("admin.searchLogs")}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -201,7 +205,7 @@ export default function SystemLogsPage() {
           {filteredLogs.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <Activity className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p>No logs found matching your criteria</p>
+              <p>{t("admin.noLogsFound")}</p>
             </div>
           ) : (
             filteredLogs.map((log: LogEntry, index: number) => (
@@ -232,7 +236,7 @@ export default function SystemLogsPage() {
                     {log.meta != null && typeof log.meta === 'object' && (
                       <details className="mt-2">
                         <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-700">
-                          View metadata
+                          {t("admin.viewMetadata")}
                         </summary>
                         <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
                           {JSON.stringify(log.meta, null, 2)}
@@ -249,7 +253,7 @@ export default function SystemLogsPage() {
 
       {/* Footer Stats */}
       <div className="mt-4 text-sm text-gray-500 text-center">
-        Showing {filteredLogs.length} of {logs.length} log entries
+        {t("admin.showingLogs", { filtered: filteredLogs.length, total: logs.length })}
       </div>
     </div>
   );

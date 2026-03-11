@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Loader2, ArrowRight } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { formatCurrency } from '~/lib/utils';
-import { useDebounce } from '~/hooks/use-debounce';
+import { useDebounce } from '~/hooks/useDebounce';
 import { prefersReducedMotion, Keys } from '~/lib/accessibility';
 import { listingsApi } from '~/lib/api/listings';
 import { OptimizedImage } from '~/components/ui/OptimizedImage';
@@ -207,6 +207,7 @@ export function InstantSearch({
                         aria-controls="search-results"
                         aria-autocomplete="list"
                         aria-activedescendant={activeDescendantId}
+                        aria-label="Search"
                     />
 
                     {/* Right side icons/buttons */}
@@ -268,9 +269,9 @@ export function InstantSearch({
                                     >
                                         {/* Thumbnail */}
                                         <div className="w-12 h-12 rounded-md overflow-hidden bg-muted shrink-0">
-                                            {result.photos?.[0] ? (
+                                            {result.images?.[0] ? (
                                                 <OptimizedImage
-                                                    src={result.photos[0]}
+                                                    src={result.images[0]}
                                                     alt={result.title}
                                                     aspectRatio="square"
                                                     className="w-full h-full"

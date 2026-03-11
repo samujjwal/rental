@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
 
 @Injectable()
@@ -131,10 +132,11 @@ export class FavoritesService {
     });
 
     if (!favorite) {
-      throw new NotFoundException('Favorite not found');
+      return { favorited: false };
     }
 
     return {
+      favorited: true,
       ...favorite,
       listing: this.mapListing(favorite.listing),
     };

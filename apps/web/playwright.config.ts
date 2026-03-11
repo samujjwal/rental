@@ -10,6 +10,10 @@ const testOutputDir =
   process.env.PLAYWRIGHT_OUTPUT_DIR ||
   (process.env.CI ? "test-results" : "/tmp/rental-playwright/test-results");
 
+// Whether to use the Stripe test bypass (no real Stripe API calls).
+// Set STRIPE_TEST_BYPASS=true in CI or when running without Stripe test keys.
+const stripeTestBypass = process.env.STRIPE_TEST_BYPASS ?? "true";
+
 /**
  * Playwright configuration for E2E testing
  * @see https://playwright.dev/docs/test-configuration
@@ -27,6 +31,11 @@ export default defineConfig({
   workers: 1,
   reporter: [["html", { outputFolder: htmlReportOutput, open: "never" }]],
   outputDir: testOutputDir,
+
+  // Global setup: runs once after webServer is started, before any tests.
+  // Verifies API health and ensures test user accounts exist in the DB.
+  globalSetup: "./e2e/global-setup.ts",
+
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:3401",
     trace: "on-first-retry",
@@ -59,10 +68,26 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: "pnpm run dev --host 127.0.0.1 --port 3401",
-    url: "http://localhost:3401",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-  },
+  webServer: [
+    {
+      // The API server loads its own .env automatically via NestJS ConfigModule.
+      // We layer STRIPE_TEST_BYPASS on top so Playwright-spawned API processes
+      // skip real Stripe API calls and return synthetic PaymentIntents instead.
+      command: "pnpm --filter @rental-portal/api run start:dev",
+      url: "http://localhost:3400/api/health",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: {
+        NODE_ENV: "development",
+        STRIPE_TEST_BYPASS: stripeTestBypass,
+        ALLOW_DEV_LOGIN: "true",
+      },
+    },
+    {
+      command: "pnpm run dev --host 127.0.0.1 --port 3401",
+      url: "http://localhost:3401",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
 });

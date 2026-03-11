@@ -1,10 +1,42 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Conversation, Message } from '@rental-portal/database';
+import { Prisma } from '@prisma/client';
 
 export interface CreateConversationDto {
   listingId: string;
   participantId: string;
+}
+
+/** Participant with user profile */
+interface ParticipantWithUser {
+  userId: string;
+  user: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    profilePhotoUrl: string | null;
+  };
+}
+
+/** Conversation with participants, listing, and computed fields */
+export interface ConversationWithDetails {
+  id: string;
+  listingId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  participants: ParticipantWithUser[];
+  listing?: { id: string; title: string; photos: string[] } | null;
+  unreadCount: number;
+  lastMessage: Message | null;
+}
+
+/** List result with pagination */
+export interface ConversationListResult {
+  conversations: ConversationWithDetails[];
+  total: number;
 }
 
 @Injectable()
@@ -24,7 +56,26 @@ export class ConversationsService {
     });
 
     if (!listing) {
-      throw new NotFoundException('Listing not found');
+      throw i18nNotFound('listing.notFound');
+    }
+
+    // Verify participant exists
+    const participant = await this.prisma.user.findUnique({
+      where: { id: participantId },
+      select: { id: true, status: true },
+    });
+
+    if (!participant) {
+      throw i18nNotFound('common.notFound');
+    }
+
+    if (participant.status === 'DELETED' || participant.status === 'SUSPENDED') {
+      throw i18nBadRequest('message.cannotStartConversation');
+    }
+
+    // Prevent self-conversation
+    if (userId === participantId) {
+      throw i18nBadRequest('message.cannotMessageSelf');
     }
 
     // Check if conversation already exists
@@ -70,7 +121,7 @@ export class ConversationsService {
     });
 
     if (existing) {
-      return existing as any;
+      return existing as Conversation;
     }
 
     // Create new conversation
@@ -103,7 +154,7 @@ export class ConversationsService {
       },
     });
 
-    return conversation as any;
+    return conversation as Conversation;
   }
 
   /**
@@ -116,10 +167,10 @@ export class ConversationsService {
       limit?: number;
       search?: string;
     } = {},
-  ): Promise<{ conversations: any[]; total: number }> {
+  ): Promise<ConversationListResult> {
     const { page = 1, limit = 20, search } = options;
 
-    const where: any = {
+    const where: Prisma.ConversationWhereInput = {
       participants: {
         some: {
           userId,
@@ -196,12 +247,15 @@ export class ConversationsService {
     ]);
 
     // Format conversations with unread count
-    const formattedConversations = conversations.map((conv: any) => ({
-      ...conv,
-      unreadCount: conv._count?.messages || 0,
+    const formattedConversations: ConversationWithDetails[] = conversations.map((conv) => ({
+      id: conv.id,
+      listingId: conv.listingId,
+      createdAt: conv.createdAt,
+      updatedAt: conv.updatedAt,
+      participants: conv.participants as ParticipantWithUser[],
+      listing: conv.listing,
+      unreadCount: (conv as Record<string, any>)._count?.messages || 0,
       lastMessage: conv.messages?.[0] || null,
-      messages: undefined,
-      _count: undefined,
     }));
 
     return {
@@ -213,7 +267,7 @@ export class ConversationsService {
   /**
    * Get conversation by ID
    */
-  async getConversation(conversationId: string, userId: string): Promise<any> {
+  async getConversation(conversationId: string, userId: string): Promise<ConversationWithDetails> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       include: {
@@ -253,20 +307,25 @@ export class ConversationsService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversation not found');
+      throw i18nNotFound('message.conversationNotFound');
     }
 
     // Verify user is participant
-    const isParticipant = (conversation as any).participants.some((p: any) => p.userId === userId);
+    const isParticipant = conversation.participants.some((p) => p.userId === userId);
 
     if (!isParticipant) {
-      throw new ForbiddenException('Not a participant in this conversation');
+      throw i18nForbidden('message.unauthorized');
     }
 
     return {
-      ...conversation,
-      unreadCount: ((conversation as any)._count)?.messages || 0,
-      _count: undefined,
+      id: conversation.id,
+      listingId: conversation.listingId,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+      participants: conversation.participants as ParticipantWithUser[],
+      listing: conversation.listing,
+      unreadCount: (conversation as Record<string, any>)._count?.messages || 0,
+      lastMessage: null,
     };
   }
 
@@ -282,19 +341,34 @@ export class ConversationsService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversation not found');
+      throw i18nNotFound('message.conversationNotFound');
     }
 
     // Verify user is participant
     const isParticipant = conversation.participants.some((p) => p.userId === userId);
 
     if (!isParticipant) {
-      throw new ForbiddenException('Not a participant in this conversation');
+      throw i18nForbidden('message.unauthorized');
     }
 
-    await this.prisma.conversation.delete({
-      where: { id: conversationId },
+    // Soft-delete: remove the requesting user from participants
+    // If that was the last participant, delete the conversation
+    await this.prisma.conversationParticipant.deleteMany({
+      where: {
+        conversationId: conversationId,
+        userId: userId,
+      },
     });
+
+    // If no participants remain, actually delete the conversation
+    const remaining = await this.prisma.conversationParticipant.count({
+      where: { conversationId },
+    });
+    if (remaining === 0) {
+      await this.prisma.conversation.delete({
+        where: { id: conversationId },
+      });
+    }
   }
 
   /**
@@ -323,7 +397,7 @@ export class ConversationsService {
       },
     });
 
-    return conversations.reduce((total, conv: any) => total + (conv._count?.messages || 0), 0);
+    return conversations.reduce((total, conv) => total + ((conv as Record<string, any>)._count?.messages || 0), 0);
   }
 
   /**

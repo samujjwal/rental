@@ -1,12 +1,14 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useNavigate, redirect } from "react-router";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 import { uploadApi } from "~/lib/api/upload";
 import { getUser } from "~/utils/auth";
 import { listingsApi } from "~/lib/api/listings";
 import { insuranceApi } from "~/lib/api/insurance";
 import { RouteErrorBoundary } from "~/components/ui";
+import { useTranslation } from "react-i18next";
 
 interface InsuranceRequirement {
   required: boolean;
@@ -47,14 +49,21 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     const requirement = await insuranceApi.getListingRequirement(listingId);
     return { listingId, requirement };
   } catch (error) {
-    console.error("[insurance.upload] loader failed:", error);
     return redirect("/listings");
   }
 }
 
+export const meta: MetaFunction = () => {
+  return [
+    { title: "Upload Insurance | GharBatai Rentals" },
+    { name: "description", content: "Upload insurance policy documents for your rental listings" },
+  ];
+};
+
 export default function InsuranceUpload() {
   const { listingId, requirement } = useLoaderData<typeof clientLoader>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,7 +139,7 @@ export default function InsuranceUpload() {
       coverageAmount < requirement.minimumCoverage
     ) {
       setError(
-        `Coverage amount must be at least $${requirement.minimumCoverage.toLocaleString()}.`
+        `Coverage amount must be at least ${formatCurrency(requirement.minimumCoverage)}.`
       );
       setUploading(false);
       return;
@@ -184,7 +193,7 @@ export default function InsuranceUpload() {
       <div className="max-w-3xl mx-auto">
         <div className="bg-card shadow rounded-lg p-8">
           <h1 className="text-3xl font-bold text-foreground mb-6">
-            Upload Insurance Policy
+            {t("pages.insurance.uploadTitle")}
           </h1>
 
           {/* Requirement Notice */}
@@ -238,8 +247,8 @@ export default function InsuranceUpload() {
                   )}
                 >
                   {requirement.required
-                    ? "Insurance Required"
-                    : "Insurance Optional"}
+                    ? t("pages.insurance.insuranceRequired")
+                    : t("pages.insurance.insuranceOptional")}
                 </h3>
                 <p
                   className={cn(
@@ -254,12 +263,12 @@ export default function InsuranceUpload() {
                 {requirement.required && (
                   <div className="mt-2 text-sm text-warning-foreground/80">
                     <p>
-                      <strong>Required Type:</strong> {requirement.type}
+                      <strong>{t("pages.insurance.requiredType")}</strong> {requirement.type}
                     </p>
                     <p>
-                      <strong>Minimum Coverage:</strong> $
+                      <strong>{t("pages.insurance.minimumCoverageLabel")}</strong>{" "}
                       {requirement.minimumCoverage
-                        ? requirement.minimumCoverage.toLocaleString()
+                        ? formatCurrency(requirement.minimumCoverage)
                         : "N/A"}
                     </p>
                   </div>
@@ -281,7 +290,7 @@ export default function InsuranceUpload() {
                 htmlFor="policyNumber"
                 className="block text-sm font-medium text-foreground"
               >
-                Policy Number *
+                {t("pages.insurance.policyNumber")}
               </label>
               <input
                 type="text"
@@ -300,7 +309,7 @@ export default function InsuranceUpload() {
                 htmlFor="provider"
                 className="block text-sm font-medium text-foreground"
               >
-                Insurance Provider *
+                {t("pages.insurance.insuranceProvider")}
               </label>
               <input
                 type="text"
@@ -309,7 +318,7 @@ export default function InsuranceUpload() {
                 required
                 maxLength={MAX_PROVIDER_FIELD_LENGTH}
                 className="mt-1 block w-full rounded-md border-input shadow-sm focus:border-primary focus:ring-ring"
-                placeholder="State Farm, Geico, etc."
+                placeholder="Nepal Insurance, Sagarmatha Insurance, etc."
               />
             </div>
 
@@ -319,7 +328,7 @@ export default function InsuranceUpload() {
                 htmlFor="type"
                 className="block text-sm font-medium text-foreground"
               >
-                Insurance Type *
+                {t("pages.insurance.insuranceType")}
               </label>
               <select
                 id="type"
@@ -328,11 +337,11 @@ export default function InsuranceUpload() {
                 defaultValue={requirement.type || ""}
                 className="mt-1 block w-full rounded-md border-input shadow-sm focus:border-primary focus:ring-ring"
               >
-                <option value="">Select type...</option>
-                <option value="LIABILITY">Liability</option>
-                <option value="COMPREHENSIVE">Comprehensive</option>
-                <option value="COLLISION">Collision</option>
-                <option value="DAMAGE">Damage Protection</option>
+                <option value="">{t("pages.insurance.selectType")}</option>
+                <option value="LIABILITY">{t("pages.insurance.liability")}</option>
+                <option value="COMPREHENSIVE">{t("pages.insurance.comprehensive")}</option>
+                <option value="COLLISION">{t("pages.insurance.collision")}</option>
+                <option value="DAMAGE">{t("pages.insurance.damageProtectionType")}</option>
               </select>
             </div>
 
@@ -342,7 +351,7 @@ export default function InsuranceUpload() {
                 htmlFor="coverageAmount"
                 className="block text-sm font-medium text-foreground"
               >
-                Coverage Amount * (in dollars)
+                {t("pages.insurance.coverageAmountLabel")}
               </label>
               <input
                 type="number"
@@ -356,8 +365,7 @@ export default function InsuranceUpload() {
               />
               {requirement.minimumCoverage && (
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Minimum required: $
-                  {requirement.minimumCoverage.toLocaleString()}
+                  {t("pages.insurance.minimumRequired", { amount: formatCurrency(requirement.minimumCoverage) })}
                 </p>
               )}
             </div>
@@ -369,7 +377,7 @@ export default function InsuranceUpload() {
                   htmlFor="effectiveDate"
                   className="block text-sm font-medium text-foreground"
                 >
-                  Effective Date *
+                  {t("pages.insurance.effectiveDate")}
                 </label>
                 <input
                   type="date"
@@ -385,7 +393,7 @@ export default function InsuranceUpload() {
                   htmlFor="expirationDate"
                   className="block text-sm font-medium text-foreground"
                 >
-                  Expiration Date *
+                  {t("pages.insurance.expirationDate")}
                 </label>
                 <input
                   type="date"
@@ -403,7 +411,7 @@ export default function InsuranceUpload() {
                 htmlFor="documentUrl"
                 className="block text-sm font-medium text-foreground"
               >
-                Insurance Document * (PDF)
+                {t("pages.insurance.insuranceDocument")}
               </label>
               <div className="mt-1 flex items-center">
                 <input
@@ -416,7 +424,7 @@ export default function InsuranceUpload() {
                 />
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Upload your insurance policy document (Max 10MB)
+                {t("pages.insurance.uploadDocMax")}
               </p>
             </div>
 
@@ -427,28 +435,28 @@ export default function InsuranceUpload() {
                 onClick={() => navigate(-1)}
                 className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md shadow-sm hover:bg-muted"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="submit"
                 disabled={uploading}
                 className="px-6 py-2 text-sm font-medium text-primary-foreground bg-primary border border-transparent rounded-md shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
               >
-                {uploading ? "Uploading..." : "Submit for Verification"}
+                {uploading ? t("pages.insurance.uploading") : t("pages.insurance.submitForVerification")}
               </button>
             </div>
           </form>
 
           <div className="mt-8 pt-6 border-t border-border">
             <h3 className="text-sm font-medium text-foreground mb-2">
-              What happens next?
+              {t("pages.insurance.whatHappensNext")}
             </h3>
             <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-              <li>Your insurance policy will be reviewed by our team</li>
-              <li>Verification typically takes 24-48 hours</li>
-              <li>You'll receive an email notification once verified</li>
+              <li>{t("pages.insurance.reviewStep1")}</li>
+              <li>{t("pages.insurance.reviewStep2")}</li>
+              <li>{t("pages.insurance.reviewStep3")}</li>
               <li>
-                Your listing will become active after insurance verification
+                {t("pages.insurance.reviewStep4")}
               </li>
             </ul>
           </div>

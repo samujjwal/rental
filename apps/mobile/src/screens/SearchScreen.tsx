@@ -12,21 +12,28 @@ import {
   Keyboard,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { CompositeScreenProps } from '@react-navigation/native';
 import type { RootStackParamList } from '../../App';
+import type { TabParamList } from '../navigation/TabNavigator';
 import { mobileClient } from '../api/client';
 import { useAuth } from '../api/authContext';
 import { ListingCard } from '../components/ListingCard';
 import { CardListSkeleton } from '../components/LoadingSkeleton';
 import { showApiError, showSuccess } from '../components/Toast';
 import { FormButton } from '../components/FormInput';
-import type { SearchResult, Category } from '@rental-portal/mobile-sdk';
+import type { SearchResult, Category } from '~/types';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { getCurrencySymbol } from '../utils/currency';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Search'>;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, 'SearchTab'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 const PAGE_SIZE = 20;
 
-const CONDITION_OPTIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'WORN'] as const;
+const CONDITION_OPTIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR'] as const;
 
 export function SearchScreen({ navigation, route }: Props) {
   const { user } = useAuth();
@@ -54,6 +61,14 @@ export function SearchScreen({ navigation, route }: Props) {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   const isFirstLoad = useRef(true);
+
+  // Sync search text when navigation params change
+  useEffect(() => {
+    const newQuery = route.params?.query;
+    if (newQuery !== undefined) {
+      setSearchText(newQuery);
+    }
+  }, [route.params?.query]);
 
   // Fetch categories for filter
   useEffect(() => {
@@ -171,6 +186,7 @@ export function SearchScreen({ navigation, route }: Props) {
   );
 
   const hasActiveFilters = !!(minPrice || maxPrice || categoryId || condition || instantBooking);
+  const activeFilterCount = [!!minPrice, !!maxPrice, !!categoryId, !!condition, instantBooking].filter(Boolean).length;
 
   const renderItem = useCallback(
     ({ item }: { item: SearchResult }) => (
@@ -205,7 +221,7 @@ export function SearchScreen({ navigation, route }: Props) {
           onPress={() => setShowFilters(true)}
         >
           <Text style={styles.filterButtonText}>
-            {'\u2699\uFE0F'}{hasActiveFilters ? ' \u2022' : ''}
+            {'\u2699\uFE0F'}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
           </Text>
         </Pressable>
       </View>
@@ -273,7 +289,7 @@ export function SearchScreen({ navigation, route }: Props) {
               </View>
 
               {/* Price range */}
-              <Text style={styles.filterLabel}>Price Range ($/day)</Text>
+              <Text style={styles.filterLabel}>{`Price Range (${getCurrencySymbol()})`}</Text>
               <View style={styles.priceRow}>
                 <TextInput
                   style={styles.priceInput}

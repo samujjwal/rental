@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { MapPin, Star, Zap } from 'lucide-react';
 import { cn } from '~/lib/utils';
@@ -9,11 +10,95 @@ import { Badge } from '~/components/ui/badge';
 import { CompactFavoriteButton } from '~/components/favorites';
 import { OptimizedImage } from '~/components/ui/OptimizedImage';
 
+/**
+ * Extract 1-3 key highlights from category-specific data.
+ * Returns a concise string like "3 bed · 2 bath" or "Toyota · 2022 · Auto".
+ */
+function getCategoryHighlights(
+    categorySlug?: string,
+    data?: Record<string, unknown>,
+): string | null {
+    if (!categorySlug || !data) return null;
+    const slug = categorySlug.toLowerCase();
+    const parts: string[] = [];
+
+    // Properties / Spaces
+    if (['apartment', 'house', 'villa', 'studio', 'office-space', 'condo', 'room'].some(s => slug.includes(s)) || slug.includes('spaces')) {
+        if (data.bedrooms != null) parts.push(`${data.bedrooms} bed`);
+        if (data.bathrooms != null) parts.push(`${data.bathrooms} bath`);
+        if (data.squareFootage) parts.push(`${data.squareFootage} sq m`);
+        if (data.furnished) parts.push('Furnished');
+    }
+
+    // Vehicles
+    if (['car', 'truck', 'suv', 'van', 'vehicle'].some(s => slug.includes(s))) {
+        if (data.make) parts.push(String(data.make));
+        if (data.year) parts.push(String(data.year));
+        if (data.transmission) parts.push(String(data.transmission === 'automatic' ? 'Auto' : 'Manual'));
+    }
+
+    // Clothing / Wearables
+    if (['clothing', 'fashion', 'wearable'].some(s => slug.includes(s))) {
+        if (data.size) parts.push(`Size ${data.size}`);
+        if (data.brand) parts.push(String(data.brand));
+        if (data.color) parts.push(String(data.color));
+    }
+
+    // Instruments
+    if (['instrument', 'music'].some(s => slug.includes(s))) {
+        if (data.instrumentType) parts.push(String(data.instrumentType));
+        if (data.brand) parts.push(String(data.brand));
+    }
+
+    // Electronics
+    if (['electronic', 'camera'].some(s => slug.includes(s))) {
+        if (data.brand) parts.push(String(data.brand));
+        if (data.model) parts.push(String(data.model));
+        if (data.electronicsType) parts.push(String(data.electronicsType));
+    }
+
+    // Event spaces
+    if (['event'].some(s => slug.includes(s))) {
+        if (data.capacity) parts.push(`${data.capacity} guests`);
+        if (data.venueType) parts.push(String(data.venueType).replace(/_/g, ' '));
+    }
+
+    // Sports
+    if (['sport'].some(s => slug.includes(s))) {
+        if (data.sport) parts.push(String(data.sport));
+        if (data.brand) parts.push(String(data.brand));
+    }
+
+    // Bikes
+    if (['bike', 'bicycle'].some(s => slug.includes(s))) {
+        if (data.bikeType) parts.push(String(data.bikeType));
+        if (data.brand) parts.push(String(data.brand));
+    }
+
+    // Equipment
+    if (['equipment', 'tool'].some(s => slug.includes(s))) {
+        if (data.equipmentType) parts.push(String(data.equipmentType));
+        if (data.brand) parts.push(String(data.brand));
+    }
+
+    return parts.length > 0 ? parts.slice(0, 3).join(' · ') : null;
+}
+
+/** Convert a category slug to a human-readable label. */
+function humanizeCategorySlug(slug?: string | null): string | null {
+    if (!slug) return null;
+    return slug
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export interface ListingCardData {
     id: string;
     title: string;
     description?: string;
     images?: string[];
+    /** Photo URLs (preferred over images) */
+    photos?: string[];
     basePrice: number;
     location?: {
         city?: string;
@@ -24,6 +109,12 @@ export interface ListingCardData {
     totalReviews?: number;
     featured?: boolean;
     instantBooking?: boolean;
+    /** Human-readable category name (e.g. "Camera Equipment") */
+    categoryName?: string;
+    /** Category slug for rendering category-specific highlights */
+    categorySlug?: string;
+    /** Category-specific extra data (e.g. bedrooms, make, size) */
+    categorySpecificData?: Record<string, unknown>;
 }
 
 export interface ListingCardProps {
@@ -52,6 +143,7 @@ export function ListingCard({
     priority = false,
     className,
 }: ListingCardProps) {
+    const { t } = useTranslation();
     const shouldReduceMotion = prefersReducedMotion();
 
     if (variant === 'horizontal') {
@@ -89,7 +181,7 @@ export function ListingCard({
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                <span className="text-sm">No image</span>
+                                <span className="text-sm">{t("listings.card.noImage")}</span>
                             </div>
                         )}
                     </motion.div>
@@ -99,13 +191,13 @@ export function ListingCard({
                         {listing.featured && (
                             <Badge variant="warning" className="shadow-sm">
                                 <Star className="w-3 h-3 mr-1" />
-                                Featured
+                                {t("listings.card.featured")}
                             </Badge>
                         )}
                         {listing.instantBooking && (
                             <Badge variant="success" className="shadow-sm">
                                 <Zap className="w-3 h-3 mr-1" />
-                                Instant
+                                {t("listings.card.instant")}
                             </Badge>
                         )}
                     </div>
@@ -123,6 +215,21 @@ export function ListingCard({
                     <h3 className="font-semibold text-foreground mb-1 line-clamp-2 group-hover:text-primary transition-colors">
                         {listing.title}
                     </h3>
+
+                    {/* Category label */}
+                    {(listing.categoryName || listing.categorySlug) && (
+                        <span className="inline-block text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full mb-1.5 capitalize truncate max-w-full">
+                            {listing.categoryName ?? humanizeCategorySlug(listing.categorySlug)}
+                        </span>
+                    )}
+
+                    {/* Category-specific highlights (e.g. "3 bed · 2 bath") */}
+                    {(() => {
+                        const hints = getCategoryHighlights(listing.categorySlug, listing.categorySpecificData);
+                        return hints ? (
+                            <p className="text-xs font-medium text-primary/80 mb-1 truncate">{hints}</p>
+                        ) : null;
+                    })()}
 
                     {listing.location && (
                         <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
@@ -155,7 +262,7 @@ export function ListingCard({
                         <span className="text-2xl font-bold text-foreground">
                             {formatCurrency(listing.basePrice)}
                         </span>
-                        <span className="text-sm text-muted-foreground">/day</span>
+                        <span className="text-sm text-muted-foreground">{t("listings.card.perDay")}</span>
                     </div>
                 </div>
             </Link>
@@ -171,6 +278,7 @@ function ListingCardHorizontal({
     showFavorite = true,
     className,
 }: Omit<ListingCardProps, 'variant' | 'priority'>) {
+    const { t } = useTranslation();
     const shouldReduceMotion = prefersReducedMotion();
 
     return (
@@ -193,13 +301,13 @@ function ListingCardHorizontal({
                         />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <span className="text-xs">No image</span>
+                            <span className="text-xs">{t("listings.card.noImage")}</span>
                         </div>
                     )}
                     {listing.instantBooking && (
                         <Badge variant="success" className="absolute top-2 left-2 shadow-sm">
                             <Zap className="w-3 h-3 mr-1" />
-                            Instant
+                            {t("listings.card.instant")}
                         </Badge>
                     )}
                 </div>
@@ -212,9 +320,24 @@ function ListingCardHorizontal({
                                 {listing.title}
                             </h3>
                             {listing.featured && (
-                                <Badge variant="warning" className="shrink-0">Featured</Badge>
+                                <Badge variant="warning" className="shrink-0">{t("listings.card.featured")}</Badge>
                             )}
                         </div>
+
+                        {/* Category label */}
+                        {(listing.categoryName || listing.categorySlug) && (
+                            <span className="inline-block text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full mb-1.5 capitalize truncate max-w-full">
+                                {listing.categoryName ?? humanizeCategorySlug(listing.categorySlug)}
+                            </span>
+                        )}
+
+                        {/* Category highlights */}
+                        {(() => {
+                            const hints = getCategoryHighlights(listing.categorySlug, listing.categorySpecificData);
+                            return hints ? (
+                                <p className="text-xs font-medium text-primary/80 mb-1 truncate">{hints}</p>
+                            ) : null;
+                        })()}
 
                         {listing.location && (
                             <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
@@ -251,7 +374,7 @@ function ListingCardHorizontal({
                             <span className="text-xl font-bold text-foreground">
                                 {formatCurrency(listing.basePrice)}
                             </span>
-                            <span className="text-sm text-muted-foreground">/day</span>
+                            <span className="text-sm text-muted-foreground">{t("listings.card.perDay")}</span>
                         </div>
                     </div>
                 </div>
@@ -259,7 +382,7 @@ function ListingCardHorizontal({
                 {/* Favorite Button */}
                 {showFavorite && (
                     <div className="p-4 flex items-start">
-                        <CompactFavoriteButton listingId={listing.id} className="relative" />
+                        <CompactFavoriteButton listingId={listing.id} />
                     </div>
                 )}
             </Link>
@@ -275,6 +398,7 @@ function ListingCardCompact({
     showFavorite = false,
     className,
 }: Omit<ListingCardProps, 'variant' | 'priority'>) {
+    const { t } = useTranslation();
     const shouldReduceMotion = prefersReducedMotion();
 
     return (
@@ -298,7 +422,7 @@ function ListingCardCompact({
                         />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
-                            No img
+                            {t("listings.card.noImageShort")}
                         </div>
                     )}
                 </div>
@@ -308,6 +432,21 @@ function ListingCardCompact({
                     <h3 className="font-medium text-foreground text-sm line-clamp-1 group-hover:text-primary transition-colors">
                         {listing.title}
                     </h3>
+
+                    {/* Category label */}
+                    {(listing.categoryName || listing.categorySlug) && (
+                        <span className="inline-block text-[9px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full mb-1 capitalize truncate max-w-full">
+                            {listing.categoryName ?? humanizeCategorySlug(listing.categorySlug)}
+                        </span>
+                    )}
+
+                    {/* Category highlights */}
+                    {(() => {
+                        const hints = getCategoryHighlights(listing.categorySlug, listing.categorySpecificData);
+                        return hints ? (
+                            <p className="text-[11px] font-medium text-primary/80 truncate">{hints}</p>
+                        ) : null;
+                    })()}
 
                     {listing.location && (
                         <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
@@ -324,13 +463,13 @@ function ListingCardCompact({
                     )}
 
                     <p className="text-sm font-bold text-foreground">
-                        {formatCurrency(listing.basePrice)}/day
+                        {formatCurrency(listing.basePrice)}{t("listings.card.perDay")}
                     </p>
                 </div>
 
                 {/* Favorite Button */}
                 {showFavorite && (
-                    <CompactFavoriteButton listingId={listing.id} className="relative shrink-0" />
+                    <CompactFavoriteButton listingId={listing.id} className="shrink-0" />
                 )}
             </Link>
         </motion.div>

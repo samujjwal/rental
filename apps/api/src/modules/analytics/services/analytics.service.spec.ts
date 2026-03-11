@@ -54,9 +54,9 @@ describe('AnalyticsService', () => {
         .mockResolvedValueOnce(8) // acceptance total
         .mockResolvedValueOnce(6); // acceptance accepted
       prisma.booking.aggregate
-        .mockResolvedValueOnce({ _sum: { totalAmount: 1200, totalPrice: null } }) // all revenue
-        .mockResolvedValueOnce({ _sum: { totalAmount: 500, totalPrice: null } }) // period revenue
-        .mockResolvedValueOnce({ _sum: { totalAmount: 300, totalPrice: null } }); // prev revenue
+        .mockResolvedValueOnce({ _sum: { totalPrice: 1200 } }) // all revenue
+        .mockResolvedValueOnce({ _sum: { totalPrice: 500 } }) // period revenue
+        .mockResolvedValueOnce({ _sum: { totalPrice: 300 } }); // prev revenue
       prisma.booking.findMany.mockResolvedValue([]); // monthly data
       prisma.booking.groupBy.mockResolvedValue([]); // top listings stats
     });
@@ -95,7 +95,7 @@ describe('AnalyticsService', () => {
         .mockResolvedValueOnce(0) // acceptance total
         .mockResolvedValueOnce(0); // acceptance accepted
       prisma.booking.aggregate.mockReset();
-      prisma.booking.aggregate.mockResolvedValue({ _sum: { totalAmount: null, totalPrice: null } });
+      prisma.booking.aggregate.mockResolvedValue({ _sum: { totalPrice: null } });
       prisma.booking.groupBy.mockResolvedValue([]);
       prisma.booking.findMany.mockResolvedValue([]); // monthly data
 

@@ -27,7 +27,7 @@ while ((match = enumRegex.exec(schema)) !== null) {
   const body = match[2];
   const values = body
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) => line.replace(/\/\/.*$/, "").trim()) // strip inline comments
     .filter((line) => line && !line.startsWith("//") && !line.startsWith("@@"));
 
   enums.push({ name, values });

@@ -1,10 +1,12 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
+import { useState, useEffect } from "react";
 import { useLoaderData, Link, redirect } from "react-router";
+import { useTranslation } from "react-i18next";
 import {
   Package,
   Calendar,
-  DollarSign,
+  Banknote,
   MessageCircle,
   AlertCircle,
   Star,
@@ -30,13 +32,14 @@ import {
   Badge,
   RouteErrorBoundary,
 } from "~/components/ui";
-import { PageContainer, PageHeader, DashboardSidebar } from "~/components/layout";
-import type { SidebarSection } from "~/components/layout";
+import { PortalPageLayout } from "~/components/layout";
 import { cn } from "~/lib/utils";
-import { PageSkeleton } from "~/components/ui/skeleton";
+import { formatCurrency } from "~/lib/utils";
 import { ownerNavSections } from "~/config/navigation";
 import { notificationsApi } from "~/lib/api/notifications";
 import { messagingApi } from "~/lib/api/messaging";
+import { insuranceApi } from "~/lib/api/insurance";
+import type { InsurancePolicy } from "~/lib/api/insurance";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Owner Dashboard | GharBatai Rentals" }];
@@ -52,7 +55,9 @@ const safeStatusKey = (value: unknown, fallback = "PENDING"): string => {
 };
 const safeDateLabel = (value: unknown, pattern: string): string => {
   const date = new Date(String(value || ""));
-  return Number.isNaN(date.getTime()) ? "Date unavailable" : format(date, pattern);
+  return Number.isNaN(date.getTime())
+    ? "Date unavailable"
+    : format(date, pattern);
 };
 const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
@@ -76,21 +81,46 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       usersApi.getUserStats(),
       notificationsApi.getUnreadCount(),
       messagingApi.getUnreadCount(),
+      insuranceApi.getMyPolicies({ status: 'ACTIVE' }),
     ]);
 
     const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
-      r.status === 'fulfilled' ? r.value : fallback;
+      r.status === "fulfilled" ? r.value : fallback;
 
     const rawListings = settled(results[0], []);
     const rawBookings = settled(results[1], []);
-    const rawEarnings = settled(results[2], { amount: 0 });
-    const rawStats = settled(results[3], { averageRating: 0, totalReviews: 0 } as any);
+    const rawEarnings = settled(results[2], { amount: 0 } as any);
+    const rawStats = settled(results[3], {
+      averageRating: 0,
+      totalReviews: 0,
+    } as any);
     const unreadNotifs = settled(results[4], { count: 0 });
     const unreadMsgs = settled(results[5], { count: 0 });
+    const rawPolicies = settled(results[6], { policies: [], total: 0 } as any);
 
-    const failedSections = results
-      .map((r, i) => r.status === 'rejected' ? ['listings', 'bookings', 'earnings', 'stats', 'notifications', 'messages'][i] : null)
+    const failedSections = results.slice(0, 6)
+      .map((r, i) =>
+        r.status === "rejected"
+          ? [
+              "listings",
+              "bookings",
+              "earnings",
+              "stats",
+              "notifications",
+              "messages",
+            ][i]
+          : null
+      )
       .filter(Boolean) as string[];
+
+    // Detect soon-to-expire insurance policies (within 30 days)
+    const now = Date.now();
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    const activePolicies: InsurancePolicy[] = Array.isArray(rawPolicies?.policies) ? rawPolicies.policies : [];
+    const expiringPolicies = activePolicies.filter((p: InsurancePolicy) => {
+      const endMs = new Date(p.endDate).getTime();
+      return !Number.isNaN(endMs) && endMs - now < thirtyDays && endMs > now;
+    });
 
     const listings = Array.isArray(rawListings) ? rawListings : [];
     const bookings = Array.isArray(rawBookings) ? rawBookings : [];
@@ -138,7 +168,16 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       activeBookings,
       completedBookings,
       totalEarnings: safeNumber(rawEarnings?.amount),
-      pendingEarnings: safeNumber(rawEarnings?.amount),
+      pendingEarnings: bookings
+        .filter((b: Booking) => {
+          const status = normalizeBookingStatus(b.status);
+          return ["pending_payment", "pending_owner_approval"].includes(status);
+        })
+        .reduce(
+          (sum: number, b: Booking) =>
+            sum + safeNumber(b.totalAmount ?? b.totalPrice),
+          0
+        ),
       averageRating: safeNumber(rawStats.averageRating),
       totalReviews: safeNumber(rawStats.totalReviews),
     };
@@ -156,12 +195,15 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       listings: listings.slice(0, 6),
       recentBookings,
       userStats: rawStats,
-      unreadNotifications: typeof unreadNotifs?.count === "number" ? unreadNotifs.count : 0,
-      unreadMessages: typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
+      unreadNotifications:
+        typeof unreadNotifs?.count === "number" ? unreadNotifs.count : 0,
+      unreadMessages:
+        typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
       failedSections,
+      expiringInsurancePolicies: expiringPolicies,
+      hasInsurance: activePolicies.length > 0,
     };
   } catch (error) {
-    console.error("Failed to load owner dashboard:", error);
     return {
       stats: {
         activeListings: 0,
@@ -179,6 +221,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       userStats: null,
       unreadNotifications: 0,
       unreadMessages: 0,
+      failedSections: [],
+      expiringInsurancePolicies: [],
+      hasInsurance: true,
       error: "Failed to load owner dashboard data",
     };
   }
@@ -227,22 +272,63 @@ function StatCard({
 
 function BookingCard({ booking }: { booking: Booking }) {
   const statusConfig = {
-    PENDING_OWNER_APPROVAL: { variant: "warning" as const, icon: Clock, label: "Pending Approval" },
-    PENDING_PAYMENT: { variant: "warning" as const, icon: Clock, label: "Pending Payment" },
+    PENDING_OWNER_APPROVAL: {
+      variant: "warning" as const,
+      icon: Clock,
+      label: "Pending Approval",
+    },
+    PENDING_PAYMENT: {
+      variant: "warning" as const,
+      icon: Clock,
+      label: "Pending Payment",
+    },
     PENDING: { variant: "warning" as const, icon: Clock, label: "Pending" },
-    CONFIRMED: { variant: "success" as const, icon: CheckCircle, label: "Confirmed" },
-    IN_PROGRESS: { variant: "default" as const, icon: Package, label: "In Progress" },
-    AWAITING_RETURN_INSPECTION: { variant: "warning" as const, icon: Clock, label: "Return Requested" },
-    COMPLETED: { variant: "success" as const, icon: CheckCircle, label: "Completed" },
-    SETTLED: { variant: "success" as const, icon: CheckCircle, label: "Settled" },
-    CANCELLED: { variant: "destructive" as const, icon: XCircle, label: "Cancelled" },
-    DISPUTED: { variant: "destructive" as const, icon: XCircle, label: "Disputed" },
-    REFUNDED: { variant: "destructive" as const, icon: XCircle, label: "Refunded" },
+    CONFIRMED: {
+      variant: "success" as const,
+      icon: CheckCircle,
+      label: "Confirmed",
+    },
+    IN_PROGRESS: {
+      variant: "default" as const,
+      icon: Package,
+      label: "In Progress",
+    },
+    AWAITING_RETURN_INSPECTION: {
+      variant: "warning" as const,
+      icon: Clock,
+      label: "Return Requested",
+    },
+    COMPLETED: {
+      variant: "success" as const,
+      icon: CheckCircle,
+      label: "Completed",
+    },
+    SETTLED: {
+      variant: "success" as const,
+      icon: CheckCircle,
+      label: "Settled",
+    },
+    CANCELLED: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Cancelled",
+    },
+    DISPUTED: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Disputed",
+    },
+    REFUNDED: {
+      variant: "destructive" as const,
+      icon: XCircle,
+      label: "Refunded",
+    },
   };
 
   const statusKey = String(booking.status || "PENDING").toUpperCase();
   const config =
-    statusConfig[statusKey as keyof typeof statusConfig] || statusConfig.PENDING;
+    statusConfig[statusKey as keyof typeof statusConfig] ||
+    statusConfig.PENDING;
   const StateIcon = config.icon;
   const renterFirstName = safeText(booking.renter?.firstName, "Renter");
   const renterLastName = safeText(booking.renter?.lastName);
@@ -256,11 +342,10 @@ function BookingCard({ booking }: { booking: Booking }) {
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
-          <h3 className="font-semibold text-foreground mb-1">
-            {listingTitle}
-          </h3>
+          <h3 className="font-semibold text-foreground mb-1">{listingTitle}</h3>
           <p className="text-sm text-muted-foreground">
-            {renterFirstName}{renterLastName ? ` ${renterLastName}` : ""}
+            {renterFirstName}
+            {renterLastName ? ` ${renterLastName}` : ""}
           </p>
         </div>
         <Badge variant={config.variant} className="flex items-center">
@@ -275,7 +360,9 @@ function BookingCard({ booking }: { booking: Booking }) {
           {safeDateLabel(booking.endDate, "MMM d")}
         </div>
         <span className="font-semibold text-primary">
-          ${safeNumber(booking.totalAmount ?? booking.totalPrice).toFixed(2)}
+          {formatCurrency(
+            safeNumber(booking.totalAmount ?? booking.totalPrice)
+          )}
         </span>
       </div>
     </Link>
@@ -320,7 +407,7 @@ function ListingCard({ listing }: { listing: Listing }) {
         </h3>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
-            ${listing.basePrice}/day
+            {formatCurrency(listing.basePrice)}/day
           </span>
           {listing.rating && listing.rating > 0 && (
             <div className="flex items-center">
@@ -340,10 +427,48 @@ function ListingCard({ listing }: { listing: Listing }) {
 }
 
 export default function OwnerDashboardRoute() {
-  const { stats, listings, recentBookings, unreadNotifications, unreadMessages, error, failedSections } = useLoaderData<typeof clientLoader>();
+  const { t } = useTranslation();
+  const {
+    stats,
+    listings,
+    recentBookings,
+    unreadNotifications,
+    unreadMessages,
+    error,
+    failedSections,
+    expiringInsurancePolicies,
+    hasInsurance,
+  } = useLoaderData<typeof clientLoader>();
+  const [hasDraft, setHasDraft] = useState(false);
+  useEffect(() => {
+    try {
+      const draft = localStorage.getItem("listingDraft_v1");
+      setHasDraft(Boolean(draft));
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const pendingEarnings = safeNumber(stats.pendingEarnings);
   const totalEarnings = safeNumber(stats.totalEarnings);
   const averageRating = safeNumber(stats.averageRating);
+  const banner = error ? (
+    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
+      {error}
+    </div>
+  ) : failedSections && failedSections.length > 0 ? (
+    <div className="bg-warning/10 border border-warning/20 rounded-lg p-4">
+      <p className="text-sm text-warning-foreground">
+        Some sections failed to load: {failedSections.join(", ")}.{" "}
+        <button
+          onClick={() => window.location.reload()}
+          className="underline font-medium"
+        >
+          Retry
+        </button>
+      </p>
+    </div>
+  ) : null;
 
   // Enrich nav items with unread badges
   const navWithBadges = ownerNavSections.map((section) => ({
@@ -360,243 +485,305 @@ export default function OwnerDashboardRoute() {
   }));
 
   return (
-    <div className="min-h-screen bg-background py-8">
-      <PageContainer>
-        {error ? (
-          <div className="mb-6 bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-            {error}
-          </div>
-        ) : null}
-        {failedSections && failedSections.length > 0 && !error ? (
-          <div className="mb-6 bg-warning/10 border border-warning/20 rounded-lg p-4">
-            <p className="text-sm text-warning-foreground">
-              Some sections failed to load: {failedSections.join(', ')}.{' '}
-              <button onClick={() => window.location.reload()} className="underline font-medium">
-                Retry
-              </button>
+    <PortalPageLayout
+      title={t("dashboard.ownerPortal", "Owner Portal")}
+      description="Manage listings, bookings, earnings, and guest activity"
+      sidebarSections={navWithBadges}
+      banner={banner}
+      contentClassName="space-y-8"
+      actions={
+        <Link
+          to="/listings/new"
+          className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          {t("listings.create.newListing", "New Listing")}
+        </Link>
+      }
+    >
+      {/* Statistics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Link to="/listings" className="block">
+          <StatCard
+            icon={Package}
+            label={t("dashboard.stats.activeListings", "Active Listings")}
+            value={`${stats.activeListings}/${stats.totalListings}`}
+          />
+        </Link>
+        <StatCard
+          icon={Banknote}
+          label={t("dashboard.stats.pendingEarnings", "Pending Earnings")}
+          value={formatCurrency(pendingEarnings)}
+          variant="success"
+        />
+        <Link to="/bookings?view=owner" className="block">
+          <StatCard
+            icon={Calendar}
+            label={t("dashboard.stats.activeBookings")}
+            value={stats.activeBookings}
+            variant="info"
+          />
+        </Link>
+        <StatCard
+          icon={Star}
+          label={t("dashboard.stats.averageRating")}
+          value={averageRating.toFixed(1)}
+          trend={`${stats.totalReviews} reviews`}
+          variant="warning"
+        />
+      </div>
+
+      {/* Pending Actions */}
+      {stats.pendingBookings > 0 && (
+        <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 flex items-start">
+          <AlertCircle className="w-5 h-5 text-warning mr-3 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-foreground mb-1">
+              {t("dashboard.actionRequired", "Action Required")}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              You have {stats.pendingBookings} booking
+              {stats.pendingBookings !== 1 ? "s" : ""} waiting for your
+              approval.
             </p>
           </div>
-        ) : null}
-        {/* Header */}
-        <PageHeader
-          title="Owner Dashboard"
-          description="Manage your listings, bookings, and earnings"
-          className="mb-8"
-        />
+          <Link
+            to="/bookings?view=owner&status=pending_owner_approval"
+            className="px-4 py-2 bg-warning text-warning-foreground rounded-md hover:bg-warning/90 transition-colors text-sm font-medium"
+          >
+            {t("dashboard.reviewNow", "Review Now")}
+          </Link>
+        </div>
+      )}
 
-        <div className="flex gap-8">
-          {/* Sidebar Navigation */}
-          <DashboardSidebar sections={navWithBadges} />
+      {/* Insurance expiry alert */}
+      {Array.isArray(expiringInsurancePolicies) && expiringInsurancePolicies.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-amber-900 mb-1">
+              {t("dashboard.insuranceExpiringSoon", "Insurance Expiring Soon")}
+            </h3>
+            <p className="text-sm text-amber-800">
+              {expiringInsurancePolicies.length === 1
+                ? t("dashboard.insuranceExpiringSoonDesc1", `1 insurance policy expires within 30 days. Renew it to keep your listing protected.`)
+                : t("dashboard.insuranceExpiringSoonDescN", `${expiringInsurancePolicies.length} insurance policies expire within 30 days. Renew them to keep your listings protected.`)}
+            </p>
+          </div>
+          <Link
+            to="/insurance"
+            className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors text-sm font-medium whitespace-nowrap"
+          >
+            {t("dashboard.renewInsurance", "Renew Insurance")}
+          </Link>
+        </div>
+      )}
 
-          {/* Main Content */}
-          <div className="flex-1 space-y-8">
-            {/* Statistics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard
-                icon={Package}
-                label="Active Listings"
-                value={`${stats.activeListings}/${stats.totalListings}`}
-              />
-              <StatCard
-                icon={DollarSign}
-                label="Pending Earnings"
-                value={`$${pendingEarnings.toFixed(2)}`}
-                variant="success"
-              />
-              <StatCard
-                icon={Calendar}
-                label="Active Bookings"
-                value={stats.activeBookings}
-                variant="info"
-              />
-              <StatCard
-                icon={Star}
-                label="Avg Rating"
-                value={averageRating.toFixed(1)}
-                trend={`${stats.totalReviews} reviews`}
-                variant="warning"
-              />
-            </div>
+      {/* Insurance zero-state CTA — only shown when owner has no active policies and none expiring */}
+      {!hasInsurance && !(Array.isArray(expiringInsurancePolicies) && expiringInsurancePolicies.length > 0) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-blue-900 mb-1">
+              {t("dashboard.noInsurance", "Protect Your Listings with Insurance")}
+            </h3>
+            <p className="text-sm text-blue-800">
+              {t("dashboard.noInsuranceDesc", "You don't have any active insurance policies. Add insurance to protect your items and build renter trust.")}
+            </p>
+          </div>
+          <Link
+            to="/insurance"
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
+          >
+            {t("dashboard.setupInsurance", "Set Up Insurance")}
+          </Link>
+        </div>
+      )}
 
-            {/* Pending Actions */}
-            {stats.pendingBookings > 0 && (
-              <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 flex items-start">
-                <AlertCircle className="w-5 h-5 text-warning mr-3 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground mb-1">
-                    Action Required
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    You have {stats.pendingBookings} booking
-                    {stats.pendingBookings !== 1 ? "s" : ""} waiting for your
-                    approval.
-                  </p>
-                </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Recent Bookings */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                {t("dashboard.recentBookings", "Recent Bookings")}
+              </CardTitle>
+              <Link
+                to="/bookings"
+                className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
+              >
+                {t("common.viewAll")}
+                <ArrowUpRight className="w-4 h-4 ml-1" />
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {recentBookings.length > 0 ? (
+                  recentBookings.map((booking: Booking) => (
+                    <BookingCard key={booking.id} booking={booking} />
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">
+                      {t("bookings.empty")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* My Listings */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>{t("dashboard.myListings")}</CardTitle>
+              <div className="flex gap-3">
                 <Link
-                  to="/bookings?view=owner&status=pending_owner_approval"
-                  className="px-4 py-2 bg-warning text-warning-foreground rounded-md hover:bg-warning/90 transition-colors text-sm font-medium"
+                  to="/listings"
+                  className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
                 >
-                  Review Now
+                  {t("common.viewAll")}
+                  <ArrowUpRight className="w-4 h-4 ml-1" />
+                </Link>
+                <Link
+                  to="/listings/new"
+                  className="inline-flex items-center justify-center h-9 px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  {t("listings.create.newListing", "New Listing")}
                 </Link>
               </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Main Content */}
-              <div className="lg:col-span-2 space-y-8">
-                {/* Recent Bookings */}
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Recent Bookings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Draft listing callout */}
+              {hasDraft && (
+                <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span className="text-sm text-amber-800 font-medium">
+                      {t("listings.draftExists", "You have an unsaved draft listing")}
+                    </span>
+                  </div>
+                  <Link
+                    to="/listings/new"
+                    className="text-sm text-amber-700 font-semibold underline hover:text-amber-900"
+                  >
+                    {t("listings.resumeDraft", "Resume Draft")}
+                  </Link>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {listings.length > 0 ? (
+                  listings.map((listing: Listing) => (
+                    <ListingCard key={listing.id} listing={listing} />
+                  ))
+                ) : (
+                  <div className="col-span-2 text-center py-8">
+                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-4">
+                      {t("listings.empty", "No listings yet")}
+                    </p>
                     <Link
-                      to="/bookings"
-                      className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
+                      to="/listings/new"
+                      className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
                     >
-                      View All
-                      <ArrowUpRight className="w-4 h-4 ml-1" />
-                    </Link>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {recentBookings.length > 0 ? (
-                        recentBookings.map((booking: Booking) => (
-                          <BookingCard key={booking.id} booking={booking} />
-                        ))
-                      ) : (
-                        <div className="text-center py-8">
-                          <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                          <p className="text-muted-foreground">No bookings yet</p>
-                        </div>
+                      <Plus className="w-5 h-5 mr-2" />
+                      {t(
+                        "listings.create.firstListing",
+                        "Create Your First Listing"
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* My Listings */}
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>My Listings</CardTitle>
-                    <div className="flex gap-3">
-                      <Link
-                        to="/listings"
-                        className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
-                      >
-                        View All
-                        <ArrowUpRight className="w-4 h-4 ml-1" />
-                      </Link>
-                      <Link
-                        to="/listings/new"
-                        className="inline-flex items-center justify-center h-9 px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
-                      >
-                        <Plus className="w-4 h-4 mr-1" />
-                        New Listing
-                      </Link>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {listings.length > 0 ? (
-                        listings.map((listing: Listing) => (
-                          <ListingCard key={listing.id} listing={listing} />
-                        ))
-                      ) : (
-                        <div className="col-span-2 text-center py-8">
-                          <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                          <p className="text-muted-foreground mb-4">
-                            No listings yet
-                          </p>
-                          <Link
-                            to="/listings/new"
-                            className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                          >
-                            <Plus className="w-5 h-5 mr-2" />
-                            Create Your First Listing
-                          </Link>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Sidebar Content */}
-              <div className="space-y-6">
-                {/* Earnings Summary */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Earnings Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center pb-3 border-b">
-                        <span className="text-muted-foreground">Total Earned</span>
-                        <span className="text-xl font-bold text-success">
-                          ${totalEarnings.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center pb-3 border-b">
-                        <span className="text-muted-foreground">Pending</span>
-                        <span className="text-lg font-semibold text-warning">
-                          ${pendingEarnings.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">
-                          Completed Rentals
-                        </span>
-                        <span className="font-semibold text-foreground">
-                          {stats.completedBookings}
-                        </span>
-                      </div>
-                    </div>
-                    <Link
-                      to="/dashboard/owner/earnings"
-                      className="mt-6 w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-center block"
-                    >
-                      View Earnings Details
                     </Link>
-                  </CardContent>
-                </Card>
-
-                {/* Quick Actions */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Quick Actions</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <Link
-                        to="/listings/new"
-                        className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                      >
-                        <Plus className="w-5 h-5 mr-3 text-primary" />
-                        Create New Listing
-                      </Link>
-                      <Link
-                        to="/dashboard/owner/calendar"
-                        className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                      >
-                        <Calendar className="w-5 h-5 mr-3 text-primary" />
-                        View Calendar
-                      </Link>
-                      <Link
-                        to="/messages"
-                        className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                      >
-                        <MessageCircle className="w-5 h-5 mr-3 text-primary" />
-                        View Messages
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-      </PageContainer>
-    </div>
+
+        {/* Sidebar Content */}
+        <div className="space-y-6">
+          {/* Earnings Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {t("dashboard.earningsSummary", "Earnings Summary")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center pb-3 border-b">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.totalEarned", "Total Earned")}
+                  </span>
+                  <span className="text-xl font-bold text-success">
+                    {formatCurrency(totalEarnings)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pb-3 border-b">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.pending", "Pending")}
+                  </span>
+                  <span className="text-lg font-semibold text-warning">
+                    {formatCurrency(pendingEarnings)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.completedRentals", "Completed Rentals")}
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {stats.completedBookings}
+                  </span>
+                </div>
+              </div>
+              <Link
+                to="/dashboard/owner/earnings"
+                className="mt-6 w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-center block"
+              >
+                {t("dashboard.viewEarningsDetails", "View Earnings Details")}
+              </Link>
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {t("dashboard.quickActions", "Quick Actions")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Link
+                  to="/listings/new"
+                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                >
+                  <Plus className="w-5 h-5 mr-3 text-primary" />
+                  {t("listings.create.title")}
+                </Link>
+                <Link
+                  to="/dashboard/owner/calendar"
+                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                >
+                  <Calendar className="w-5 h-5 mr-3 text-primary" />
+                  {t("dashboard.viewCalendar", "View Calendar")}
+                </Link>
+                <Link
+                  to="/messages"
+                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                >
+                  <MessageCircle className="w-5 h-5 mr-3 text-primary" />
+                  {t("dashboard.viewMessages", "View Messages")}
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </PortalPageLayout>
   );
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

@@ -9,6 +9,7 @@ import {
   DiskHealthIndicator,
 } from '@nestjs/terminus';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { ExternalServicesHealthIndicator } from './external-services.health';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 
@@ -22,6 +23,7 @@ export class HealthController {
     private memory: MemoryHealthIndicator,
     private disk: DiskHealthIndicator,
     private prisma: PrismaService,
+    private externalServices: ExternalServicesHealthIndicator,
     @InjectQueue('bookings') private bookingsQueue: Queue,
     @InjectQueue('notifications') private notificationsQueue: Queue,
     @InjectQueue('search-indexing') private searchQueue: Queue,
@@ -125,6 +127,17 @@ export class HealthController {
           thresholdPercent: 0.5,
           path: '/',
         }),
+    ]);
+  }
+
+  @Get('external-services')
+  @HealthCheck()
+  @ApiOperation({ summary: 'External services health check (email, SMS, payments)' })
+  async checkExternalServices() {
+    return this.health.check([
+      () => this.externalServices.checkEmailProvider(),
+      () => this.externalServices.checkSmsProvider(),
+      () => this.externalServices.checkPaymentProvider(),
     ]);
   }
 

@@ -5,11 +5,14 @@ import { CacheService } from '../../../common/cache/cache.service';
 import { BookingStatus } from '@rental-portal/database';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { BookingCalculationService } from './booking-calculation.service';
+import { getQueueToken } from '@nestjs/bull';
 
 const mockPrismaService = {
+  $transaction: jest.fn().mockImplementation((fn) => fn(mockPrismaService)),
   booking: {
     findUnique: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     findMany: jest.fn(),
   },
   bookingStateHistory: {
@@ -43,6 +46,8 @@ const mockCacheService = {
   publish: jest.fn(),
 };
 
+const mockQueue = { add: jest.fn().mockResolvedValue({}), process: jest.fn() };
+
 describe('BookingStateMachineService', () => {
   let service: BookingStateMachineService;
   let prisma: PrismaService;
@@ -67,6 +72,8 @@ describe('BookingStateMachineService', () => {
             calculateRefund: jest.fn().mockResolvedValue({ refundAmount: 50 }),
           },
         },
+        { provide: getQueueToken('payments'), useValue: mockQueue },
+        { provide: getQueueToken('bookings'), useValue: mockQueue },
       ],
     }).compile();
 
@@ -90,17 +97,13 @@ describe('BookingStateMachineService', () => {
       };
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.PENDING_PAYMENT,
-      });
 
       const result = await service.transition(bookingId, 'OWNER_APPROVE', ownerId, 'OWNER');
 
       expect(result.success).toBe(true);
-      expect(mockPrismaService.booking.update).toHaveBeenCalledWith(
+      expect(mockPrismaService.booking.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: bookingId },
+          where: { id: bookingId, status: BookingStatus.PENDING_OWNER_APPROVAL },
           data: expect.objectContaining({
             status: BookingStatus.PENDING_PAYMENT,
           }),
@@ -151,12 +154,13 @@ describe('BookingStateMachineService', () => {
         paymentIntentId: null,
       };
 
-      // Mock findMany to return expired booking first, then empty for second call
+      // Mock findMany to return expired booking first, then empty for remaining calls
       mockPrismaService.booking.findMany
         .mockResolvedValueOnce([expiredBooking])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       mockPrismaService.booking.findUnique.mockResolvedValue(expiredBooking);
-      mockPrismaService.booking.update.mockResolvedValue(expiredBooking);
 
       await service.autoTransitionExpiredBookings();
 
@@ -337,6 +341,36 @@ describe('BookingStateMachineService', () => {
         from: BookingStatus.CANCELLED,
         transition: 'REFUND',
         to: BookingStatus.REFUNDED,
+        role: 'SYSTEM',
+      },
+      {
+        from: BookingStatus.DISPUTED,
+        transition: 'RESOLVE_DISPUTE_OWNER_FAVOR',
+        to: BookingStatus.COMPLETED,
+        role: 'ADMIN',
+      },
+      {
+        from: BookingStatus.DISPUTED,
+        transition: 'RESOLVE_DISPUTE_RENTER_FAVOR',
+        to: BookingStatus.REFUNDED,
+        role: 'ADMIN',
+      },
+      {
+        from: BookingStatus.PAYMENT_FAILED,
+        transition: 'RETRY_PAYMENT',
+        to: BookingStatus.PENDING_PAYMENT,
+        role: 'RENTER',
+      },
+      {
+        from: BookingStatus.PENDING_PAYMENT,
+        transition: 'FAIL_PAYMENT',
+        to: BookingStatus.PAYMENT_FAILED,
+        role: 'SYSTEM',
+      },
+      {
+        from: BookingStatus.PAYMENT_FAILED,
+        transition: 'EXPIRE',
+        to: BookingStatus.CANCELLED,
         role: 'SYSTEM',
       },
     ];

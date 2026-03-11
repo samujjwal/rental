@@ -1,0 +1,55 @@
+# docker-compose.e2e.yml
+#
+# Lightweight infrastructure-only compose for running Playwright E2E tests.
+# Starts only Postgres + Redis — the API and web servers are started by
+# Playwright's webServer config (playwright.config.ts).
+#
+# Usage:
+#   docker-compose -f docker-compose.e2e.yml up -d
+#   # Wait for health checks, then:
+#   cd apps/web && pnpm exec playwright test
+#   # Tear down:
+#   docker-compose -f docker-compose.e2e.yml down
+
+version: "3.8"
+
+services:
+  postgres-e2e:
+    image: pgvector/pgvector:pg15
+    container_name: rental-postgres-e2e
+    environment:
+      POSTGRES_USER: rental_user
+      POSTGRES_PASSWORD: rental_password
+      POSTGRES_DB: rental_portal_e2e
+    ports:
+      - "3433:5432"        # port 3433 to avoid clash with the dev DB on 3432
+    volumes:
+      - postgres_e2e_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rental_user -d rental_portal_e2e"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - e2e-network
+
+  redis-e2e:
+    image: redis:7-alpine
+    container_name: rental-redis-e2e
+    ports:
+      - "3480:6379"        # port 3480 to avoid clash with the dev Redis on 3479
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - e2e-network
+
+volumes:
+  postgres_e2e_data:
+    driver: local
+
+networks:
+  e2e-network:
+    driver: bridge

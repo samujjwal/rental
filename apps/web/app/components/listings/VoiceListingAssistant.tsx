@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Mic, MicOff } from "lucide-react";
+import { APP_LOCALE } from "~/config/locale";
 
 type CategoryOption = { id: string; name: string };
 
@@ -170,7 +171,7 @@ export function VoiceListingAssistant({
     if (!RecognitionCtor) return;
 
     const recognition = new RecognitionCtor();
-    recognition.lang = "en-US";
+    recognition.lang = APP_LOCALE;
     recognition.continuous = false;
     recognition.interimResults = false;
 

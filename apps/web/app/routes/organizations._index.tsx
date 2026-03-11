@@ -6,6 +6,7 @@ import { RouteErrorBoundary } from "~/components/ui/error-state";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { Organization } from "~/lib/api/organizations";
 import { getUser } from "~/utils/auth";
+import { useTranslation } from "react-i18next";
 
 const ORG_CREATE_PATH = "/organizations/create";
 
@@ -36,6 +37,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 
 export default function OrganizationsIndex() {
   const { organizations, error } = useLoaderData<typeof clientLoader>();
+  const { t } = useTranslation();
 
   const getStatusVariant = (status: unknown) => {
     const normalized = String(status || "PENDING").toUpperCase();
@@ -78,14 +80,14 @@ export default function OrganizationsIndex() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-foreground">
-              My Organizations
+              {t("organizations.title")}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Manage your organization accounts and team members
+              {t("organizations.subtitle")}
             </p>
           </div>
           <Link to={ORG_CREATE_PATH}>
-            <UnifiedButton>Create Organization</UnifiedButton>
+            <UnifiedButton>{t("organizations.create")}</UnifiedButton>
           </Link>
         </div>
 
@@ -106,13 +108,13 @@ export default function OrganizationsIndex() {
               />
             </svg>
             <h3 className="mt-4 text-lg font-medium text-foreground">
-              No organizations yet
+              {t("organizations.empty")}
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Create an organization to start managing listings as a team
+              {t("organizations.emptyDesc")}
             </p>
             <Link to={ORG_CREATE_PATH} className="mt-6 inline-block">
-              <UnifiedButton>Create Your First Organization</UnifiedButton>
+              <UnifiedButton>{t("organizations.createFirst")}</UnifiedButton>
             </Link>
           </Card>
         ) : (
@@ -169,29 +171,29 @@ export default function OrganizationsIndex() {
                       <p className="text-2xl font-bold text-foreground">
                         {org._count?.members ?? 0}
                       </p>
-                      <p className="text-xs text-muted-foreground">Members</p>
+                      <p className="text-xs text-muted-foreground">{t("organizations.members")}</p>
                     </div>
                     <div className="text-center p-3 bg-muted rounded">
                       <p className="text-2xl font-bold text-foreground">
                         {org._count?.listings ?? 0}
                       </p>
-                      <p className="text-xs text-muted-foreground">Listings</p>
+                      <p className="text-xs text-muted-foreground">{t("organizations.listings")}</p>
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex space-x-2">
                     <Link to={`/organizations/${org.id}/settings`} className="flex-1">
-                      <UnifiedButton className="w-full">Manage</UnifiedButton>
+                      <UnifiedButton className="w-full">{t("organizations.manage")}</UnifiedButton>
                     </Link>
                     <Link to={`/organizations/${org.id}/members`} className="flex-1">
                       <UnifiedButton variant="outline" className="w-full">
-                        Members
+                        {t("organizations.members")}
                       </UnifiedButton>
                     </Link>
                     <Link to={`/organizations/${org.id}/listings`} className="flex-1">
                       <UnifiedButton variant="outline" className="w-full">
-                        Listings
+                        {t("organizations.listings")}
                       </UnifiedButton>
                     </Link>
                   </div>
@@ -220,13 +222,11 @@ export default function OrganizationsIndex() {
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-foreground">
-                About Organizations
+                {t("organizations.about")}
               </h3>
               <div className="mt-2 text-sm text-muted-foreground">
                 <p>
-                  Organizations allow you to manage listings and collaborate
-                  with team members. Each organization can have multiple members
-                  with different roles and permissions.
+                  {t("organizations.aboutDesc")}
                 </p>
               </div>
             </div>

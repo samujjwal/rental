@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, TextInput, FlatList, Pressable, Text, StyleSheet } from "react-native";
 import { mobileClient, } from "../api/client";
-import type { GeoSuggestion } from "@rental-portal/mobile-sdk";
+import type { GeoSuggestion } from '~/types';
 
 type LocationInputProps = {
   value: string;

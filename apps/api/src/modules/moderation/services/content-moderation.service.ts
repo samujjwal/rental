@@ -48,6 +48,7 @@ export class ContentModerationService {
     description: string;
     photos: string[];
     userId: string;
+    listingId?: string;
   }): Promise<ModerationResult> {
     const flags: ModerationFlag[] = [];
     let totalConfidence = 0;
@@ -99,14 +100,14 @@ export class ContentModerationService {
       if (requiresHumanReview) {
         await this.moderationQueueService.addToQueue({
           entityType: 'LISTING',
-          entityId: listingData.userId,
+          entityId: listingData.listingId || listingData.userId,
           flags,
           priority: hasCriticalFlags ? 'HIGH' : hasHighFlags ? 'MEDIUM' : 'LOW',
         });
       }
 
       // 5. Log moderation result
-      await this.logModerationResult('LISTING', listingData.userId, {
+      await this.logModerationResult('LISTING', listingData.listingId || listingData.userId, {
         status,
         confidence: averageConfidence,
         flags,

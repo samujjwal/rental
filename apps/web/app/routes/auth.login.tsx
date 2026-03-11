@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { authApi } from "~/lib/api/auth";
 import { createUserSession } from "~/utils/auth";
 import { useAuthStore } from "~/lib/store/auth";
@@ -21,14 +22,14 @@ import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Login - Universal Rental Portal" },
+    { title: "Login | GharBatai Rentals" },
     { name: "description", content: "Sign in to your account" },
   ];
 };
 
 function sanitizeRedirectPath(redirectTo?: string | null) {
   if (!redirectTo || redirectTo.length > 512) {
-    return "/dashboard";
+    return "/";
   }
   const normalized = redirectTo.trim();
   if (
@@ -36,10 +37,10 @@ function sanitizeRedirectPath(redirectTo?: string | null) {
     normalized.startsWith("//") ||
     /[\r\n\t]/.test(normalized)
   ) {
-    return "/dashboard";
+    return "/";
   }
   if (normalized.startsWith("/auth/")) {
-    return "/dashboard";
+    return "/";
   }
   return normalized;
 }
@@ -63,6 +64,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     }
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    const mfaCode = String(formData.get("mfaCode") ?? "").trim() || undefined;
     if (email.length > 320 || password.length > 1024) {
       return { error: "Invalid credentials." };
     }
@@ -77,10 +79,11 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       };
     }
 
-    const response = await authApi.login({ email, password });
+    const response = await authApi.login({ email, password, mfaCode });
 
     // Update auth store immediately for better SPA experience
-    useAuthStore.getState().setAuth(response.user, response.accessToken, response.refreshToken);
+    // B-29: refreshToken is now stored in httpOnly cookie by the API, not in localStorage
+    useAuthStore.getState().setAuth(response.user, response.accessToken);
 
     // Store in server session
     const sessionResponse = await createUserSession({
@@ -101,18 +104,31 @@ export async function clientAction({ request }: ActionFunctionArgs) {
           ? error.message
           : "Login failed. Please try again.";
 
-    console.error("Login error:", errorMessage);
+    // If MFA code is required, signal the UI to show MFA input
+    if (errorMessage === "MFA code required") {
+      return { requiresMfa: true };
+    }
+
     return { error: errorMessage || "Login failed. Please try again." };
   }
 }
 
 export default function Login() {
+  const { t } = useTranslation();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const [searchParams] = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
+  const [showMfa, setShowMfa] = useState(false);
   const isSubmitting = navigation.state === "submitting";
   const redirectTo = sanitizeRedirectPath(searchParams.get("redirectTo"));
+
+  // Show MFA input when API signals it's required
+  useEffect(() => {
+    if (actionData && "requiresMfa" in actionData && actionData.requiresMfa) {
+      setShowMfa(true);
+    }
+  }, [actionData]);
 
   const {
     register,
@@ -138,10 +154,10 @@ export default function Login() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-3xl font-bold text-primary">Rental Portal</h1>
+            <h1 className="text-3xl font-bold text-primary">{t('common.appName')}</h1>
           </Link>
           <p className="text-muted-foreground mt-2">
-            Welcome back! Please sign in.
+            {t('auth.login.welcome')}
           </p>
         </div>
 
@@ -163,7 +179,7 @@ export default function Login() {
                 htmlFor="email"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                Email Address
+                {t('auth.login.email')}
               </label>
               <input
                 type="email"
@@ -181,7 +197,7 @@ export default function Login() {
                     ? "border-destructive focus-visible:ring-destructive"
                     : "border-input"
                 )}
-                placeholder="you@example.com"
+                placeholder={t('auth.login.emailPlaceholder')}
                 required
               />
               {errors.email && (
@@ -195,7 +211,7 @@ export default function Login() {
                 htmlFor="password"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                Password
+                {t('auth.login.password')}
               </label>
               <div className="relative">
                 <input
@@ -214,13 +230,14 @@ export default function Login() {
                       ? "border-destructive focus-visible:ring-destructive"
                       : "border-input"
                   )}
-                  placeholder="•••••••••"
+                  placeholder={t('auth.login.passwordPlaceholder')}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -234,6 +251,36 @@ export default function Login() {
               )}
             </div>
 
+            {/* MFA Code Field */}
+            {showMfa && (
+              <div className="space-y-2">
+                <label
+                  htmlFor="mfaCode"
+                  className="text-sm font-medium leading-none"
+                >
+                  Two-Factor Code
+                </label>
+                <input
+                  type="text"
+                  id="mfaCode"
+                  name="mfaCode"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  className={cn(
+                    "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+                    "placeholder:text-muted-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  )}
+                  placeholder={t('auth.login.mfaPlaceholder')}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('auth.login.mfaHelp')}
+                </p>
+              </div>
+            )}
+
             {/* Remember me */}
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -243,7 +290,7 @@ export default function Login() {
                   value="true"
                   className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                 />
-                Remember me
+                {t('auth.login.rememberMe')}
               </label>
             </div>
 
@@ -253,7 +300,7 @@ export default function Login() {
                 to="/auth/forgot-password"
                 className="text-sm text-primary hover:text-primary/90 underline-offset-4 hover:underline"
               >
-                Forgot password?
+                {t('auth.login.forgotPassword')}
               </Link>
             </div>
 
@@ -271,7 +318,7 @@ export default function Login() {
               ) : (
                 <>
                   <LogIn className="w-4 h-4" />
-                  Sign In
+                  {t('auth.login.signIn')}
                 </>
               )}
             </button>
@@ -280,15 +327,22 @@ export default function Login() {
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
+              {t('auth.login.noAccount')}{" "}
               <Link
                 to="/auth/signup"
                 className="text-primary hover:text-primary/90 font-medium underline-offset-4 hover:underline"
               >
-                Sign up
+                {t('auth.login.signUp')}
               </Link>
             </p>
           </div>
+        </div>
+
+        {/* Trust signals */}
+        <div className="mt-6 flex items-center justify-center gap-6 text-xs text-muted-foreground flex-wrap">
+          <span className="flex items-center gap-1">🔒 Secure &amp; encrypted</span>
+          <span className="flex items-center gap-1">⭐ 10,000+ renters</span>
+          <span className="flex items-center gap-1">🛡️ Insured transactions</span>
         </div>
       </div>
     </div>

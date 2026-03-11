@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { DisputeDetail } from "@rental-portal/mobile-sdk";
+import type { DisputeDetail } from '~/types';
+import { formatCurrency } from '../utils/currency';
 
 type Props = NativeStackScreenProps<RootStackParamList, "DisputeDetail">;
 
@@ -39,9 +41,11 @@ export function DisputeDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  useEffect(() => {
-    loadDispute();
-  }, [disputeId]);
+  useFocusEffect(
+    useCallback(() => {
+      loadDispute();
+    }, [disputeId])
+  );
 
   const handleRespond = async () => {
     if (!message.trim()) return;
@@ -112,7 +116,7 @@ export function DisputeDetailScreen({ route, navigation }: Props) {
           <Text style={styles.meta}>Listing: {dispute.booking.listing.title}</Text>
         ) : null}
         {typeof dispute.amount === "number" ? (
-          <Text style={styles.meta}>Amount: ${dispute.amount.toFixed(2)}</Text>
+          <Text style={styles.meta}>Amount: {formatCurrency(dispute.amount)}</Text>
         ) : null}
         <Text style={styles.meta}>Initiator: {dispute.initiator?.email || "Unknown"}</Text>
         <Text style={styles.meta}>Defendant: {dispute.defendant?.email || "Unknown"}</Text>
@@ -124,7 +128,7 @@ export function DisputeDetailScreen({ route, navigation }: Props) {
           dispute.responses.map((response) => (
             <View key={response.id} style={styles.responseItem}>
               <Text style={styles.responseMeta}>
-                {response.user?.email || "System"} • {new Date(response.createdAt).toLocaleString()}
+                {response.user?.email || "System"} • {new Date(response.createdAt).toLocaleString('en')}
               </Text>
               <Text style={styles.body}>{response.content}</Text>
             </View>

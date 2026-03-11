@@ -15,7 +15,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
 import { mobileClient } from '../api/client';
 import { useAuth } from '../api/authContext';
-import type { MessageItem } from '@rental-portal/mobile-sdk';
+import type { MessageItem } from '~/types';
 import {
   connectSocket,
   joinConversation,
@@ -43,7 +43,7 @@ function isImageUrl(url: string): boolean {
 function formatTime(dateStr: string): string {
   try {
     const d = new Date(dateStr);
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
   } catch {
     return dateStr;
   }
@@ -124,6 +124,7 @@ export function MessageThreadScreen({ route }: Props) {
       cleanupNewMessage?.();
       cleanupTyping?.();
       cleanupStatus?.();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, [conversationId, user]);
 

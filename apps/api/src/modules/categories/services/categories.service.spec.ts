@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { CategoriesService, CreateCategoryDto, UpdateCategoryDto } from './categories.service';
+import { CategoriesService } from './categories.service';
+import { CreateCategoryDto, UpdateCategoryDto } from '../dto/category.dto';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { PricingMode } from '@rental-portal/database';

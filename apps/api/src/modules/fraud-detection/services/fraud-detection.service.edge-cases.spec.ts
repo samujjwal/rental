@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FraudDetectionService } from './fraud-detection.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
+import { EventsService } from '../../../common/events/events.service';
 
 const mockPrismaService = {
   user: {
@@ -33,6 +34,7 @@ describe('FraudDetectionService - Edge Cases & Comprehensive Tests', () => {
         FraudDetectionService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: CacheService, useValue: mockCacheService },
+        { provide: EventsService, useValue: { emitBookingCreated: jest.fn(), emitBookingStatusChanged: jest.fn(), emitPaymentProcessed: jest.fn() } },
       ],
     }).compile();
 

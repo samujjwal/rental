@@ -4,9 +4,10 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { Category } from "@rental-portal/mobile-sdk";
+import type { Category } from '~/types';
 import { ImagePicker, SelectedImage } from "../components/ImagePicker";
 import { showSuccess, showError, showApiError } from "../components/Toast";
+import { DEFAULT_CURRENCY } from '../utils/currency';
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateListing">;
 
@@ -18,10 +19,12 @@ export function CreateListingScreen({ navigation }: Props) {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [country, setCountry] = useState("");
+  const [address, setAddress] = useState("");
+  const [zipCode, setZipCode] = useState("");
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
   const [price, setPrice] = useState("");
-  const [bookingMode, setBookingMode] = useState<"REQUEST" | "INSTANT">("REQUEST");
+  const [bookingMode, setBookingMode] = useState<"REQUEST" | "INSTANT_BOOK">("REQUEST");
   const [images, setImages] = useState<SelectedImage[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -50,7 +53,7 @@ export function CreateListingScreen({ navigation }: Props) {
       setError("Sign in to create a listing.");
       return;
     }
-    if (!title.trim() || !description.trim() || !categoryId || !city.trim() || !state.trim() || !country.trim()) {
+    if (!title.trim() || !description.trim() || !categoryId || !city.trim() || !state.trim() || !country.trim() || !address.trim()) {
       setError("Please fill in all required fields.");
       return;
     }
@@ -65,20 +68,39 @@ export function CreateListingScreen({ navigation }: Props) {
     setLoading(true);
     setError("");
     try {
+      // Upload selected images
+      let imageUrls: string[] = [];
+      if (images.length > 0) {
+        try {
+          imageUrls = await mobileClient.uploadImages(images);
+        } catch {
+          setError("Failed to upload images. Please try again.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      const slug = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
       const listing = await mobileClient.createListing({
         categoryId,
         title,
         description,
+        type: "PROPERTY",
+        slug,
+        address: address.trim(),
+        zipCode: zipCode.trim() || undefined,
         city,
         state,
         country,
         latitude: Number(lat),
         longitude: Number(lon),
-        pricingMode: "DAILY",
+        pricingMode: "PER_DAY",
         basePrice: Number(price),
         bookingMode,
         categorySpecificData: {},
-        currency: "USD",
+        currency: DEFAULT_CURRENCY,
+        images: imageUrls,
       });
       setTitle("");
       setDescription("");
@@ -86,6 +108,8 @@ export function CreateListingScreen({ navigation }: Props) {
       setCity("");
       setState("");
       setCountry("");
+      setAddress("");
+      setZipCode("");
       setLat("");
       setLon("");
       setPrice("");
@@ -201,6 +225,18 @@ export function CreateListingScreen({ navigation }: Props) {
         style={styles.input}
       />
       <TextInput
+        value={address}
+        onChangeText={setAddress}
+        placeholder="Street address"
+        style={styles.input}
+      />
+      <TextInput
+        value={zipCode}
+        onChangeText={setZipCode}
+        placeholder="Zip code"
+        style={styles.input}
+      />
+      <TextInput
         value={lat}
         onChangeText={setLat}
         placeholder="Latitude"
@@ -242,14 +278,14 @@ export function CreateListingScreen({ navigation }: Props) {
         <Pressable
           style={[
             styles.toggleButton,
-            bookingMode === "INSTANT" && styles.toggleButtonActive,
+            bookingMode === "INSTANT_BOOK" && styles.toggleButtonActive,
           ]}
-          onPress={() => setBookingMode("INSTANT")}
+          onPress={() => setBookingMode("INSTANT_BOOK")}
         >
           <Text
             style={[
               styles.toggleText,
-              bookingMode === "INSTANT" && styles.toggleTextActive,
+              bookingMode === "INSTANT_BOOK" && styles.toggleTextActive,
             ]}
           >
             Instant
@@ -257,7 +293,7 @@ export function CreateListingScreen({ navigation }: Props) {
         </Pressable>
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.primaryButton} onPress={handleCreate}>
+      <Pressable style={styles.primaryButton} onPress={handleCreate} disabled={loading}>
         <Text style={styles.primaryButtonText}>
           {loading ? "Creating..." : "Create"}
         </Text>

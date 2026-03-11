@@ -80,8 +80,8 @@ export type RootStackParamList = {
   // Detail & modal screens
   Listing: { listingId: string };
   BookingDetail: { bookingId: string };
-  BookingFlow: { listingId?: string };
-  Checkout: { bookingId?: string };
+  BookingFlow: { listingId: string };
+  Checkout: { bookingId: string };
   CreateListing: undefined;
   EditListing: { listingId: string };
   MessageThread: { conversationId: string };
@@ -145,7 +145,7 @@ function RootNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerBackTitleVisible: false }}>
+    <Stack.Navigator screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
       {!user ? (
         // Auth screens — no header, full-screen
         <Stack.Group screenOptions={{ headerShown: false, animation: 'fade' }}>
@@ -169,70 +169,76 @@ function RootNavigator() {
           <Stack.Group screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+          </Stack.Group>
+
+          {/* Auth-required detail screens */}
+          <Stack.Group>
+            <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking' }} />
+            <Stack.Screen name="BookingFlow" component={BookingFlowScreen} options={{ title: 'Book' }} />
+            <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
+            <Stack.Screen name="CreateListing" component={CreateListingScreen} options={{ title: 'Create Listing' }} />
+            <Stack.Screen name="EditListing" component={EditListingScreen} options={{ title: 'Edit Listing' }} />
+            <Stack.Screen name="MessageThread" component={MessageThreadScreen} options={{ title: 'Conversation' }} />
+            <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ title: 'Favorites' }} />
+          </Stack.Group>
+
+          {/* Settings screens */}
+          <Stack.Group>
+            <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+            <Stack.Screen name="SettingsIndex" component={SettingsIndexScreen} options={{ title: 'Settings' }} />
+            <Stack.Screen name="SettingsProfile" component={SettingsProfileScreen} options={{ title: 'Profile Settings' }} />
+            <Stack.Screen name="SettingsNotifications" component={SettingsNotificationsScreen} options={{ title: 'Notifications' }} />
+          </Stack.Group>
+
+          {/* Owner screens */}
+          <Stack.Group>
+            <Stack.Screen name="OwnerDashboard" component={OwnerDashboardScreen} options={{ title: 'Owner Dashboard' }} />
+            <Stack.Screen name="OwnerListings" component={OwnerListingsScreen} options={{ title: 'My Listings' }} />
+            <Stack.Screen name="OwnerCalendar" component={OwnerCalendarScreen} options={{ title: 'Calendar' }} />
+            <Stack.Screen name="OwnerEarnings" component={OwnerEarningsScreen} options={{ title: 'Earnings' }} />
+            <Stack.Screen name="OwnerInsights" component={OwnerInsightsScreen} options={{ title: 'Insights' }} />
+            <Stack.Screen name="OwnerPerformance" component={OwnerPerformanceScreen} options={{ title: 'Performance' }} />
+            <Stack.Screen name="BecomeOwner" component={BecomeOwnerScreen} options={{ title: 'Become an Owner' }} />
+          </Stack.Group>
+
+          {/* Renter & common screens */}
+          <Stack.Group>
+            <Stack.Screen name="RenterDashboard" component={RenterDashboardScreen} options={{ title: 'Dashboard' }} />
+            <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
+            <Stack.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Earnings' }} />
+            <Stack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Payments' }} />
+          </Stack.Group>
+
+          {/* Disputes */}
+          <Stack.Group>
+            <Stack.Screen name="Disputes" component={DisputesScreen} options={{ title: 'Disputes' }} />
+            <Stack.Screen name="DisputeCreate" component={DisputeCreateScreen} options={{ title: 'File a Dispute' }} />
+            <Stack.Screen name="DisputeDetail" component={DisputeDetailScreen} options={{ title: 'Dispute' }} />
+          </Stack.Group>
+
+          {/* Organizations */}
+          <Stack.Group>
+            <Stack.Screen name="Organizations" component={OrganizationsScreen} options={{ title: 'Organizations' }} />
+            <Stack.Screen name="OrganizationCreate" component={OrganizationCreateScreen} options={{ title: 'Create Organization' }} />
+            <Stack.Screen name="OrganizationSettings" component={OrganizationSettingsScreen} options={{ title: 'Organization Settings' }} />
+            <Stack.Screen name="OrganizationMembers" component={OrganizationMembersScreen} options={{ title: 'Team Members' }} />
+          </Stack.Group>
+
+          {/* Insurance */}
+          <Stack.Group>
+            <Stack.Screen name="Insurance" component={InsuranceScreen} options={{ title: 'Insurance' }} />
+            <Stack.Screen name="InsuranceUpload" component={InsuranceUploadScreen} options={{ title: 'Upload Documents' }} />
           </Stack.Group>
         </>
       )}
 
-      {/* Detail screens — always accessible */}
+      {/* Public screens — accessible without auth */}
       <Stack.Group>
         <Stack.Screen name="Listing" component={ListingScreen} options={{ title: 'Listing' }} />
-        <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking' }} />
-        <Stack.Screen name="BookingFlow" component={BookingFlowScreen} options={{ title: 'Book' }} />
-        <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
-        <Stack.Screen name="CreateListing" component={CreateListingScreen} options={{ title: 'Create Listing' }} />
-        <Stack.Screen name="EditListing" component={EditListingScreen} options={{ title: 'Edit Listing' }} />
-        <Stack.Screen name="MessageThread" component={MessageThreadScreen} options={{ title: 'Conversation' }} />
         <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ title: 'Reviews' }} />
         <Stack.Screen name="ProfileView" component={ProfileViewScreen} options={{ title: 'Profile' }} />
-        <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ title: 'Favorites' }} />
-      </Stack.Group>
-
-      {/* Settings screens */}
-      <Stack.Group>
-        <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
-        <Stack.Screen name="SettingsIndex" component={SettingsIndexScreen} options={{ title: 'Settings' }} />
-        <Stack.Screen name="SettingsProfile" component={SettingsProfileScreen} options={{ title: 'Profile Settings' }} />
-        <Stack.Screen name="SettingsNotifications" component={SettingsNotificationsScreen} options={{ title: 'Notifications' }} />
-      </Stack.Group>
-
-      {/* Owner screens */}
-      <Stack.Group>
-        <Stack.Screen name="OwnerDashboard" component={OwnerDashboardScreen} options={{ title: 'Owner Dashboard' }} />
-        <Stack.Screen name="OwnerListings" component={OwnerListingsScreen} options={{ title: 'My Listings' }} />
-        <Stack.Screen name="OwnerCalendar" component={OwnerCalendarScreen} options={{ title: 'Calendar' }} />
-        <Stack.Screen name="OwnerEarnings" component={OwnerEarningsScreen} options={{ title: 'Earnings' }} />
-        <Stack.Screen name="OwnerInsights" component={OwnerInsightsScreen} options={{ title: 'Insights' }} />
-        <Stack.Screen name="OwnerPerformance" component={OwnerPerformanceScreen} options={{ title: 'Performance' }} />
-        <Stack.Screen name="BecomeOwner" component={BecomeOwnerScreen} options={{ title: 'Become an Owner' }} />
-      </Stack.Group>
-
-      {/* Renter & common screens */}
-      <Stack.Group>
-        <Stack.Screen name="RenterDashboard" component={RenterDashboardScreen} options={{ title: 'Dashboard' }} />
-        <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
-        <Stack.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Earnings' }} />
-        <Stack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Payments' }} />
-      </Stack.Group>
-
-      {/* Disputes */}
-      <Stack.Group>
-        <Stack.Screen name="Disputes" component={DisputesScreen} options={{ title: 'Disputes' }} />
-        <Stack.Screen name="DisputeCreate" component={DisputeCreateScreen} options={{ title: 'File a Dispute' }} />
-        <Stack.Screen name="DisputeDetail" component={DisputeDetailScreen} options={{ title: 'Dispute' }} />
-      </Stack.Group>
-
-      {/* Organizations */}
-      <Stack.Group>
-        <Stack.Screen name="Organizations" component={OrganizationsScreen} options={{ title: 'Organizations' }} />
-        <Stack.Screen name="OrganizationCreate" component={OrganizationCreateScreen} options={{ title: 'Create Organization' }} />
-        <Stack.Screen name="OrganizationSettings" component={OrganizationSettingsScreen} options={{ title: 'Organization Settings' }} />
-        <Stack.Screen name="OrganizationMembers" component={OrganizationMembersScreen} options={{ title: 'Team Members' }} />
-      </Stack.Group>
-
-      {/* Insurance */}
-      <Stack.Group>
-        <Stack.Screen name="Insurance" component={InsuranceScreen} options={{ title: 'Insurance' }} />
-        <Stack.Screen name="InsuranceUpload" component={InsuranceUploadScreen} options={{ title: 'Upload Documents' }} />
       </Stack.Group>
 
       {/* Static/info screens */}
@@ -248,8 +254,6 @@ function RootNavigator() {
         <Stack.Screen name="Terms" component={TermsScreen} options={{ title: 'Terms of Service' }} />
         <Stack.Screen name="Privacy" component={PrivacyScreen} options={{ title: 'Privacy Policy' }} />
         <Stack.Screen name="Cookies" component={CookiesScreen} options={{ title: 'Cookie Policy' }} />
-        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot Password' }} />
-        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Reset Password' }} />
       </Stack.Group>
     </Stack.Navigator>
   );

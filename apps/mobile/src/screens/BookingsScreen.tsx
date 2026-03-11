@@ -1,13 +1,34 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, Image } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import { CompositeScreenProps, useFocusEffect } from "@react-navigation/native";
 import type { RootStackParamList } from "../../App";
+import type { TabParamList } from "../navigation/TabNavigator";
 import { useAuth } from "../api/authContext";
 import { mobileClient } from "../api/client";
-import type { BookingSummary } from "@rental-portal/mobile-sdk";
+import type { BookingSummary } from '~/types';
+import { formatCurrency } from '../utils/currency';
+import { formatDate } from '../utils/date';
+
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  PENDING:                    { bg: "#FEF9C3", text: "#854D0E", label: "Pending" },
+  PENDING_OWNER_APPROVAL:     { bg: "#FEF9C3", text: "#854D0E", label: "Awaiting Approval" },
+  PENDING_PAYMENT:            { bg: "#FEF3C7", text: "#92400E", label: "Awaiting Payment" },
+  CONFIRMED:                  { bg: "#DCFCE7", text: "#166534", label: "Confirmed" },
+  IN_PROGRESS:                { bg: "#DBEAFE", text: "#1E40AF", label: "In Progress" },
+  AWAITING_RETURN_INSPECTION: { bg: "#E0E7FF", text: "#3730A3", label: "Return Requested" },
+  COMPLETED:                  { bg: "#F3F4F6", text: "#374151", label: "Completed" },
+  SETTLED:                    { bg: "#F3F4F6", text: "#374151", label: "Settled" },
+  CANCELLED:                  { bg: "#FEE2E2", text: "#991B1B", label: "Cancelled" },
+  DISPUTED:                   { bg: "#FEE2E2", text: "#991B1B", label: "Disputed" },
+};
 
 
-type Props = NativeStackScreenProps<RootStackParamList, "Bookings">;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, 'BookingsTab'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 export function BookingsScreen({ navigation }: Props) {
   const { user } = useAuth();
@@ -21,7 +42,7 @@ export function BookingsScreen({ navigation }: Props) {
       ? [
           { value: "", label: "All" },
           { value: "PENDING", label: "Pending" },
-          { value: "PENDING_OWNER_APPROVAL", label: "Pending" },
+          { value: "PENDING_OWNER_APPROVAL", label: "Pending Approval" },
           { value: "PENDING_PAYMENT", label: "Pending Payment" },
           { value: "CONFIRMED", label: "Confirmed" },
           { value: "IN_PROGRESS", label: "In Progress" },
@@ -42,33 +63,44 @@ export function BookingsScreen({ navigation }: Props) {
           { value: "CANCELLED", label: "Cancelled" },
         ];
 
-  useEffect(() => {
-    const fetchBookings = async () => {
-      if (!user) return;
-      setLoading(true);
-      try {
-        const response =
-          view === "owner"
-            ? await mobileClient.getHostBookings()
-            : await mobileClient.getMyBookings();
-        const normalizeStatus = (status: string) => status.toUpperCase();
-        const filtered =
-          statusFilter
-            ? (response || []).filter((booking) => {
-                const statusValue = normalizeStatus(booking.status || "");
-                return statusValue === statusFilter.toUpperCase();
-              })
-            : response || [];
-        setBookings(filtered);
-      } catch (error) {
-        setBookings([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      const fetchBookings = async () => {
+        if (!user) return;
+        setLoading(true);
+        try {
+          const response =
+            view === "owner"
+              ? await mobileClient.getHostBookings()
+              : await mobileClient.getMyBookings();
+          if (!isMounted) return;
+          const normalizeStatus = (status: string) => status.toUpperCase();
+          const filtered =
+            statusFilter
+              ? (response || []).filter((booking) => {
+                  const statusValue = normalizeStatus(booking.status || "");
+                  return statusValue === statusFilter.toUpperCase();
+                })
+              : response || [];
+          setBookings(filtered);
+        } catch (error) {
+          if (!isMounted) return;
+          setBookings([]);
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
+        }
+      };
 
-    fetchBookings();
-  }, [user, view, statusFilter]);
+      fetchBookings();
+      
+      return () => {
+        isMounted = false;
+      };
+    }, [user, view, statusFilter])
+  );
 
   if (!user) {
     return (
@@ -135,24 +167,67 @@ export function BookingsScreen({ navigation }: Props) {
       <FlatList
         data={bookings}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Pressable
-            style={styles.card}
-            onPress={() => navigation.navigate("BookingDetail", { bookingId: item.id })}
-          >
-            <Text style={styles.title}>{item.listing?.title || "Booking"}</Text>
-            <Text style={styles.subtitle}>Status: {item.status}</Text>
-            <Text style={styles.subtitle}>
-              {item.startDate} → {item.endDate}
-            </Text>
-            {item.totalAmount != null || item.totalPrice != null ? (
-              <Text style={styles.subtitle}>
-                Total: ${item.totalAmount ?? item.totalPrice}
+        renderItem={({ item }) => {
+          const statusKey = (item.status || "").toUpperCase();
+          const statusStyle = STATUS_COLORS[statusKey] ?? { bg: "#F3F4F6", text: "#374151", label: statusKey };
+          const listingImage = (item.listing as any)?.images?.[0] ?? (item.listing as any)?.photos?.[0];
+
+          return (
+            <Pressable
+              style={styles.card}
+              onPress={() => navigation.navigate("BookingDetail", { bookingId: item.id })}
+            >
+              <View style={styles.cardRow}>
+                {listingImage ? (
+                  <Image source={{ uri: listingImage }} style={styles.listingThumb} />
+                ) : (
+                  <View style={[styles.listingThumb, styles.listingThumbPlaceholder]}>
+                    <Text style={styles.thumbPlaceholderText}>📦</Text>
+                  </View>
+                )}
+                <View style={styles.cardContent}>
+                  <Text style={styles.title} numberOfLines={1}>{item.listing?.title || "Booking"}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                    <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                      {statusStyle.label}
+                    </Text>
+                  </View>
+                  <Text style={styles.subtitle}>
+                    {formatDate(item.startDate)} → {formatDate(item.endDate)}
+                  </Text>
+                  {(item.totalAmount != null || item.totalPrice != null) && (
+                    <Text style={styles.amount}>
+                      {formatCurrency(item.totalAmount ?? item.totalPrice)}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </Pressable>
+          );
+        }}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyIcon}>📅</Text>
+              <Text style={styles.emptyTitle}>
+                {view === "owner" ? "No listing bookings yet" : "No bookings yet"}
               </Text>
-            ) : null}
-          </Pressable>
-        )}
-          ListEmptyComponent={<Text style={styles.message}>No bookings yet.</Text>}
+              <Text style={styles.emptyHint}>
+                {view === "owner"
+                  ? "When renters book your listings, they will appear here."
+                  : "Find something to rent and make your first booking."}
+              </Text>
+              {view === "renter" && (
+                <Pressable
+                  style={styles.emptyAction}
+                  onPress={() => navigation.navigate("SearchTab", {})}
+                  accessibilityRole="button"
+                  accessibilityLabel="Browse listings"
+                >
+                  <Text style={styles.emptyActionText}>Browse Listings</Text>
+                </Pressable>
+              )}
+            </View>
+          }
         />
       )}
     </View>
@@ -225,6 +300,40 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 12,
   },
+  emptyBox: {
+    alignItems: "center",
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptyHint: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  emptyAction: {
+    backgroundColor: "#111827",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+  },
+  emptyActionText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 15,
+  },
   card: {
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -233,6 +342,44 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: "#FFFFFF",
   },
+  cardRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  listingThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  listingThumbPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbPlaceholderText: {
+    fontSize: 24,
+  },
+  cardContent: {
+    flex: 1,
+    gap: 4,
+  },
+  statusBadge: {
+    alignSelf: "flex-start",
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  amount: {
+    marginTop: 2,
+    fontWeight: "700",
+    color: "#111827",
+    fontSize: 13,
+  },
   title: {
     fontWeight: "600",
     color: "#111827",
@@ -240,6 +387,7 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: 4,
     color: "#6B7280",
+    fontSize: 12,
   },
   primaryButton: {
     marginTop: 16,

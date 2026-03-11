@@ -7,18 +7,18 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  Req,
-  RawBodyRequest,
   Query,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
-import { Request } from 'express';
 import { StripeService } from '../services/stripe.service';
 import { PayoutsService } from '../services/payouts.service';
 import { LedgerService } from '../services/ledger.service';
+import { PaymentDataService } from '../services/payment-data.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import {
   StartOnboardingDto,
   AttachPaymentMethodDto,
@@ -26,8 +26,8 @@ import {
   RequestRefundDto,
 } from '../dto/payment.dto';
 import { toNumber } from '@rental-portal/database';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@/common/auth';
+import { EmailVerifiedGuard, RequireEmailVerification } from '@/common/guards/email-verified.guard';
 
 type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
 
@@ -38,6 +38,8 @@ export class PaymentsController {
     private readonly stripe: StripeService,
     private readonly ledger: LedgerService,
     private readonly payouts: PayoutsService,
+    private readonly paymentData: PaymentDataService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post('connect/onboard')
@@ -62,26 +64,24 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Get Stripe Connect account status' })
   @ApiResponse({ status: 200, description: 'Account status retrieved' })
   async getAccountStatus(@CurrentUser('id') userId: string) {
-    const user = await this.stripe['prisma'].user.findUnique({
-      where: { id: userId },
-      select: { stripeConnectId: true },
-    });
+    const stripeConnectId = await this.paymentData.getUserStripeConnectId(userId);
 
-    if (!user?.stripeConnectId) {
+    if (!stripeConnectId) {
       return { connected: false };
     }
 
-    const status = await this.stripe.getAccountStatus(user.stripeConnectId);
+    const status = await this.stripe.getAccountStatus(stripeConnectId);
 
     return {
       connected: true,
-      accountId: user.stripeConnectId,
+      accountId: stripeConnectId,
       ...status,
     };
   }
 
   @Post('intents/:bookingId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
+  @RequireEmailVerification()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create payment intent for booking' })
   @ApiResponse({ status: 201, description: 'Payment intent created' })
@@ -89,46 +89,38 @@ export class PaymentsController {
     @Param('bookingId') bookingId: string,
     @CurrentUser('id') userId: string,
   ) {
-    const booking = await this.stripe['prisma'].booking.findUnique({
-      where: { id: bookingId },
-      include: { renter: true },
-    });
-
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
-    }
+    const booking = await this.paymentData.getBookingForPayment(bookingId);
 
     if (booking.renterId !== userId) {
-      throw new ForbiddenException('Not authorized to pay for this booking');
+      throw i18nForbidden('booking.unauthorizedAction');
     }
 
     const normalizedStatus = String(booking.status || '').toUpperCase();
-    if (!['PENDING', 'PENDING_PAYMENT'].includes(normalizedStatus)) {
-      throw new BadRequestException('Booking is not ready for payment');
+    if (!['PENDING_PAYMENT'].includes(normalizedStatus)) {
+      throw i18nBadRequest('booking.notReady');
     }
 
-    const result = await this.stripe.createPaymentIntent(
-      bookingId,
-      toNumber(booking.totalPrice),
-      booking.currency,
-      booking.renter.stripeCustomerId || undefined,
-    );
+    const result = await this.prisma.$transaction(async (tx: any) => {
+      const paymentResult = await this.stripe.createPaymentIntent(
+        bookingId,
+        toNumber(booking.totalPrice),
+        booking.currency,
+        booking.renter.stripeCustomerId || undefined,
+      );
 
-    await this.stripe['prisma'].booking.update({
-      where: { id: bookingId },
-      data: { paymentIntentId: result.paymentIntentId },
-    });
+      await this.paymentData.updateBookingPaymentIntent(bookingId, paymentResult.paymentIntentId, tx);
 
-    await this.stripe['prisma'].payment.create({
-      data: {
+      await this.paymentData.createPaymentRecord({
         bookingId,
         amount: booking.totalPrice,
         currency: booking.currency,
         status: 'PENDING',
-        paymentIntentId: result.paymentIntentId,
-        stripePaymentIntentId: result.paymentIntentId,
-      },
-    });
+        paymentIntentId: paymentResult.paymentIntentId,
+        stripePaymentIntentId: paymentResult.paymentIntentId,
+      }, tx);
+
+      return paymentResult;
+    }) as unknown as { paymentIntentId: string; clientSecret: string };
 
     return result;
   }
@@ -139,16 +131,14 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Hold security deposit' })
   @ApiResponse({ status: 201, description: 'Deposit held' })
   async holdDeposit(@Param('bookingId') bookingId: string, @CurrentUser('id') userId: string) {
-    const booking = await this.stripe['prisma'].booking.findUnique({
-      where: { id: bookingId },
-    });
+    const booking = await this.paymentData.getBookingMinimal(bookingId);
 
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
+    if (booking.renterId !== userId) {
+      throw i18nForbidden('booking.unauthorizedAction');
     }
 
     if (toNumber(booking.securityDeposit) <= 0) {
-      throw new BadRequestException('No deposit required for this booking');
+      throw i18nBadRequest('payment.noDeposit');
     }
 
     const paymentIntentId = await this.stripe.holdDeposit(
@@ -173,20 +163,20 @@ export class PaymentsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Release security deposit' })
   @ApiResponse({ status: 200, description: 'Deposit released' })
-  async releaseDeposit(@Param('depositId') depositId: string) {
-    await this.stripe.releaseDeposit(depositId);
+  async releaseDeposit(
+    @Param('depositId') depositId: string,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
+    const { deposit, booking } = await this.paymentData.getDepositWithBooking(depositId);
 
-    const deposit = await this.stripe['prisma'].depositHold.findUnique({
-      where: { id: depositId },
-    });
-
-    if (!deposit || !deposit.bookingId) {
-      throw new NotFoundException('Deposit or associated booking not found');
+    // Only the booking owner or an admin can release a deposit
+    const isOwner = booking.ownerId === user.id;
+    const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+    if (!isOwner && !isAdmin) {
+      throw i18nForbidden('booking.unauthorizedAction');
     }
 
-    const booking = await this.stripe['prisma'].booking.findUnique({
-      where: { id: deposit.bookingId },
-    });
+    await this.stripe.releaseDeposit(depositId);
 
     await this.ledger.recordDepositRelease(
       deposit.bookingId,
@@ -220,16 +210,13 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Get payment methods' })
   @ApiResponse({ status: 200, description: 'Payment methods retrieved' })
   async getPaymentMethods(@CurrentUser('id') userId: string) {
-    const user = await this.stripe['prisma'].user.findUnique({
-      where: { id: userId },
-      select: { stripeCustomerId: true },
-    });
+    const stripeCustomerId = await this.paymentData.getUserStripeCustomerId(userId);
 
-    if (!user?.stripeCustomerId) {
-      return { data: [] };
+    if (!stripeCustomerId) {
+      return { data: [] as any[] };
     }
 
-    return this.stripe.getPaymentMethods(user.stripeCustomerId);
+    return this.stripe.getPaymentMethods(stripeCustomerId);
   }
 
   @Post('methods/attach')
@@ -242,16 +229,13 @@ export class PaymentsController {
     @CurrentUser('id') userId: string,
     @Body() dto: AttachPaymentMethodDto,
   ) {
-    const user = await this.stripe['prisma'].user.findUnique({
-      where: { id: userId },
-      select: { stripeCustomerId: true },
-    });
+    const stripeCustomerId = await this.paymentData.getUserStripeCustomerId(userId);
 
-    if (!user?.stripeCustomerId) {
-      throw new BadRequestException('No Stripe customer account found. Please create one first.');
+    if (!stripeCustomerId) {
+      throw i18nBadRequest('payment.noCustomerAccount');
     }
 
-    await this.stripe.attachPaymentMethod(user.stripeCustomerId, dto.paymentMethodId);
+    await this.stripe.attachPaymentMethod(stripeCustomerId, dto.paymentMethodId);
 
     return { success: true };
   }
@@ -300,8 +284,20 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Get booking ledger entries' })
   @ApiResponse({ status: 200, description: 'Ledger entries retrieved' })
   async getBookingLedger(
+    @CurrentUser('id') userId: string,
     @Param('bookingId') bookingId: string,
   ): Promise<AsyncMethodResult<LedgerService['getBookingLedger']>> {
+    // Verify the user is a participant in this booking
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { renterId: true, listing: { select: { ownerId: true } } },
+    });
+    if (!booking) {
+      throw i18nNotFound('booking.notFound');
+    }
+    if (booking.renterId !== userId && booking.listing?.ownerId !== userId) {
+      throw i18nForbidden('booking.unauthorizedAction');
+    }
     return this.ledger.getBookingLedger(bookingId);
   }
 
@@ -311,8 +307,14 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Get user balance' })
   @ApiResponse({ status: 200, description: 'Balance retrieved' })
   async getBalance(@CurrentUser('id') userId: string) {
-    const balance = await this.ledger.getUserBalance(userId);
-    return { balance, currency: 'USD' };
+    // Get user's preferred currency from their profile
+    const userPrefs = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: { currency: true },
+    });
+    const currency = userPrefs?.currency || 'USD';
+    const balance = await this.ledger.getUserBalance(userId, currency);
+    return { balance, currency };
   }
 
   @Get('transactions')
@@ -364,38 +366,42 @@ export class PaymentsController {
     @Body() dto: RequestRefundDto,
   ) {
     // Only the renter or admin can request a refund
-    const booking = await this.ledger.getBookingLedger(bookingId);
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
+    const bookingLedger = await this.ledger.getBookingLedger(bookingId);
+    if (!bookingLedger) {
+      throw i18nNotFound('booking.notFound');
     }
 
     // Find the payment for this booking
-    const payment = await this.stripe['prisma'].payment.findFirst({
-      where: { bookingId },
-      orderBy: { createdAt: 'desc' },
-      include: { booking: { select: { renterId: true } } },
-    });
+    const payment = await this.paymentData.getLatestPaymentForBooking(bookingId);
 
     if (!payment?.stripePaymentIntentId) {
-      throw new BadRequestException('No payment found for this booking');
+      throw i18nBadRequest('payment.paymentNotFound');
     }
 
-    const refundAmount = dto.amount ? Math.round(dto.amount * 100) : undefined;
+    // Verify the user is the renter or an admin
+    const isRenter = payment.booking.renterId === user.id;
+    const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+    if (!isRenter && !isAdmin) {
+      throw i18nForbidden('booking.unauthorizedAction');
+    }
+
+    const refundAmount = dto.amount ?? undefined;
     const refundId = await this.stripe.createRefund(
       payment.stripePaymentIntentId,
-      refundAmount,
+      refundAmount ?? toNumber(payment.amount),
+      payment.currency || 'USD',
       dto.reason,
     );
 
     // Record the refund in the ledger
     const refundAmountDecimal = refundAmount
-      ? refundAmount / 100
+      ? refundAmount
       : toNumber(payment.amount);
     await this.ledger.recordRefund(
       bookingId,
       payment.booking.renterId,
       refundAmountDecimal,
-      payment.currency || 'usd',
+      payment.currency,
     );
 
     return { refundId, amount: refundAmountDecimal };

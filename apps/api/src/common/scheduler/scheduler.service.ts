@@ -1,30 +1,57 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression, Interval } from '@nestjs/schedule';
+import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
+import { Cron, CronExpression, Interval, SchedulerRegistry } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { EmbeddingService } from '@/modules/ai/services/embedding.service';
+import { IEmbeddingService, EMBEDDING_SERVICE } from '@/common/interfaces/embedding.interface';
 import { BookingStatus } from '@rental-portal/database';
 import { addHours, addDays, isBefore } from 'date-fns';
+import { DistributedLockService } from '@/common/locking/distributed-lock.service';
+import { withTraceCtx } from '@/common/queue/queue-trace.util';
 
 @Injectable()
-export class SchedulerService {
+export class SchedulerService implements OnModuleDestroy {
   private readonly logger = new Logger(SchedulerService.name);
 
   constructor(
     private prisma: PrismaService,
-    private embeddingService: EmbeddingService,
+    @Inject(EMBEDDING_SERVICE) private embeddingService: IEmbeddingService,
     @InjectQueue('bookings') private bookingsQueue: Queue,
+    @InjectQueue('payments') private paymentsQueue: Queue,
     @InjectQueue('notifications') private notificationsQueue: Queue,
     @InjectQueue('search-indexing') private searchQueue: Queue,
     @InjectQueue('cleanup') private cleanupQueue: Queue,
+    private schedulerRegistry: SchedulerRegistry,
+    private readonly lockService: DistributedLockService,
   ) {}
+
+  onModuleDestroy() {
+    // Clear all intervals and cron jobs to prevent Jest open handles
+    this.schedulerRegistry.getIntervals().forEach((name) => {
+      this.schedulerRegistry.deleteInterval(name);
+    });
+    this.schedulerRegistry.getCronJobs().forEach((_job, name) => {
+      this.schedulerRegistry.deleteCronJob(name);
+    });
+  }
 
   /**
    * Check for expired bookings every 5 minutes
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async checkExpiredBookings() {
+    const result = await this.lockService.withLock(
+      'cron:checkExpiredBookings',
+      async () => {
+        this.logger.log('Checking for expired bookings...');
+        return true;
+      },
+      { ttl: 270, maxRetries: 1 },
+    );
+    if (result === null) {
+      this.logger.debug('checkExpiredBookings: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Checking for expired bookings...');
 
     try {
@@ -64,6 +91,15 @@ export class SchedulerService {
    */
   @Cron(CronExpression.EVERY_HOUR)
   async sendUpcomingBookingReminders() {
+    const result = await this.lockService.withLock(
+      'cron:sendUpcomingBookingReminders',
+      async () => true,
+      { ttl: 3540, maxRetries: 1 },
+    );
+    if (result === null) {
+      this.logger.debug('sendUpcomingBookingReminders: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Checking for upcoming bookings to send reminders...');
 
     try {
@@ -109,6 +145,15 @@ export class SchedulerService {
    */
   @Cron(CronExpression.EVERY_6_HOURS)
   async sendReturnReminders() {
+    const result = await this.lockService.withLock(
+      'cron:sendReturnReminders',
+      async () => true,
+      { ttl: 21540, maxRetries: 1 },
+    );
+    if (result === null) {
+      this.logger.debug('sendReturnReminders: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Checking for bookings needing return reminders...');
 
     try {
@@ -148,6 +193,15 @@ export class SchedulerService {
    */
   @Cron(CronExpression.EVERY_HOUR)
   async autoCompleteBookings() {
+    const result = await this.lockService.withLock(
+      'cron:autoCompleteBookings',
+      async () => true,
+      { ttl: 3540, maxRetries: 1 },
+    );
+    if (result === null) {
+      this.logger.debug('autoCompleteBookings: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Checking for bookings to auto-complete...');
 
     try {
@@ -181,10 +235,126 @@ export class SchedulerService {
   }
 
   /**
+   * Auto-settle completed bookings after 48-hour dispute window
+   * Moves COMPLETED → SETTLED and triggers payout to owner
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async autoSettleBookings() {
+    const result = await this.lockService.withLock(
+      'cron:autoSettleBookings',
+      async () => true,
+      { ttl: 3540, maxRetries: 1 },
+    );
+    if (result === null) {
+      this.logger.debug('autoSettleBookings: skipped — another instance holds the lock');
+      return;
+    }
+    this.logger.log('Checking for bookings to auto-settle...');
+
+    try {
+      const now = new Date();
+
+      // Find COMPLETED bookings where completedAt is older than 48 hours
+      const bookingsToSettle = await this.prisma.booking.findMany({
+        where: {
+          status: BookingStatus.COMPLETED,
+          completedAt: {
+            lt: addHours(now, -48),
+          },
+        },
+        include: {
+          listing: {
+            include: { owner: true },
+          },
+          payments: {
+            where: { status: 'COMPLETED' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      });
+
+      for (const booking of bookingsToSettle) {
+        try {
+          const owner = booking.listing.owner;
+          const payment = booking.payments[0];
+
+          if (!payment) {
+            this.logger.warn(`No completed payment found for booking ${booking.id}, skipping settlement`);
+            continue;
+          }
+
+          // Calculate owner payout (total minus platform fee)
+          const platformFeeRate = 0.10; // 10% platform fee
+          const payoutAmount = Math.round(Number(payment.amount) * (1 - platformFeeRate));
+
+          // Update booking status to SETTLED
+          await this.prisma.$transaction(async (tx: any) => {
+            await tx.booking.update({
+              where: { id: booking.id },
+              data: { status: BookingStatus.SETTLED },
+            });
+
+            await tx.bookingStateHistory.create({
+              data: {
+                bookingId: booking.id,
+                fromStatus: BookingStatus.COMPLETED,
+                toStatus: BookingStatus.SETTLED,
+                changedBy: 'SYSTEM',
+                metadata: JSON.stringify({
+                  source: 'auto_settlement_cron',
+                  payoutAmount,
+                  currency: payment.currency,
+                }),
+              },
+            });
+          });
+
+          // Queue payout to owner via Stripe Connect
+          const cronTraceId = `cron:autoSettle:${booking.id}`;
+          await this.paymentsQueue.add('process-settlement', withTraceCtx({
+            bookingId: booking.id,
+            ownerId: owner.id,
+            ownerStripeConnectId: (owner as any).stripeConnectId || '',
+            amount: payoutAmount,
+            currency: payment.currency,
+            timestamp: new Date().toISOString(),
+          }, cronTraceId));
+
+          // Queue deposit release back to renter
+          await this.paymentsQueue.add('release-deposit', withTraceCtx({
+            bookingId: booking.id,
+            timestamp: new Date().toISOString(),
+          }, cronTraceId));
+
+          this.logger.log(`Settled booking ${booking.id}, payout ${payoutAmount} ${payment.currency} to owner ${owner.id}`);
+        } catch (innerError) {
+          this.logger.error(`Failed to settle booking ${booking.id}: ${innerError.message}`);
+          // Continue with next booking - don't fail the entire batch
+        }
+      }
+
+      if (bookingsToSettle.length > 0) {
+        this.logger.log(`Processed ${bookingsToSettle.length} bookings for auto-settlement`);
+      }
+    } catch (error) {
+      this.logger.error(`Error in auto-settlement cron: ${error.message}`);
+    }
+  }
+
+  /**
    * Process scheduled notifications
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async processScheduledNotifications() {
+    const result = await this.lockService.withLock(
+      'cron:processScheduledNotifications',
+      async () => true,
+      { ttl: 55, maxRetries: 1 },
+    );
+    if (result === null) {
+      return; // Another instance is processing scheduled notifications
+    }
     try {
       const now = new Date();
 
@@ -230,6 +400,15 @@ export class SchedulerService {
    */
   @Cron('0 2 * * *')
   async reindexSearchEngine() {
+    const result = await this.lockService.withLock(
+      'cron:reindexSearchEngine',
+      async () => true,
+      { ttl: 82800, maxRetries: 1 },
+    );
+    if (result === null) {
+      this.logger.debug('reindexSearchEngine: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Starting daily search index rebuild...');
 
     try {
@@ -248,6 +427,15 @@ export class SchedulerService {
    */
   @Cron('0 3 * * 0')
   async cleanupOldData() {
+    const result = await this.lockService.withLock(
+      'cron:cleanupOldData',
+      async () => true,
+      { ttl: 604740, maxRetries: 1 }, // ~7 days TTL
+    );
+    if (result === null) {
+      this.logger.debug('cleanupOldData: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Starting weekly data cleanup...');
 
     try {
@@ -299,13 +487,31 @@ export class SchedulerService {
 
   /**
    * Calculate and update aggregated ratings (every 6 hours)
+   * Uses distributed locking to prevent race conditions
    */
   @Cron(CronExpression.EVERY_6_HOURS)
   async updateAggregatedRatings() {
+    // Method-level lock prevents concurrent runs across instances
+    const methodLock = await this.lockService.withLock(
+      'cron:updateAggregatedRatings',
+      async () => true,
+      { ttl: 21540, maxRetries: 1 },
+    );
+    if (methodLock === null) {
+      this.logger.debug('updateAggregatedRatings: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Updating aggregated ratings...');
 
+    const lockKey = 'rating-update-aggregated';
+    const lockTTL = 300; // 5 minutes
+
     try {
-      // Update user ratings
+      const updated = await this.lockService.withLock(lockKey, async () => {
+      let userUpdates = 0;
+      let listingUpdates = 0;
+
+      // Update user ratings with individual locks
       const users = await this.prisma.user.findMany({
         where: {
           reviewsReceived: {
@@ -318,25 +524,32 @@ export class SchedulerService {
       });
 
       for (const user of users) {
-        const ratings = await this.prisma.review.aggregate({
-          where: {
-            revieweeId: user.id,
-          },
-          _avg: {
-            overallRating: true,
-          },
-          _count: true,
-        });
+        const userLockKey = `rating-update:user-${user.id}`;
+        const userUpdated = await this.lockService.withLock(userLockKey, async () => {
+          const ratings = await this.prisma.review.aggregate({
+            where: {
+              revieweeId: user.id,
+            },
+            _avg: {
+              overallRating: true,
+            },
+            _count: true,
+          });
 
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            averageRating: ratings._avg.overallRating || 0,
-          },
-        });
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: {
+              averageRating: ratings._avg.overallRating || 0,
+            },
+          });
+
+          return true;
+        }, { ttl: 30 });
+
+        if (userUpdated) userUpdates++;
       }
 
-      // Update listing ratings
+      // Update listing ratings with individual locks
       const listings = await this.prisma.listing.findMany({
         where: {
           reviews: {
@@ -349,25 +562,40 @@ export class SchedulerService {
       });
 
       for (const listing of listings) {
-        const ratings = await this.prisma.review.aggregate({
-          where: {
-            listingId: listing.id,
-          },
-          _avg: {
-            overallRating: true,
-          },
-          _count: true,
-        });
+        const listingLockKey = `rating-update:listing-${listing.id}`;
+        const listingUpdated = await this.lockService.withLock(listingLockKey, async () => {
+          const ratings = await this.prisma.review.aggregate({
+            where: {
+              listingId: listing.id,
+            },
+            _avg: {
+              overallRating: true,
+            },
+            _count: true,
+          });
 
-        await this.prisma.listing.update({
-          where: { id: listing.id },
-          data: {
-            averageRating: ratings._avg.overallRating || 0,
-          },
-        });
+          await this.prisma.listing.update({
+            where: { id: listing.id },
+            data: {
+              averageRating: ratings._avg.overallRating || 0,
+            },
+          });
+
+          return true;
+        }, { ttl: 30 });
+
+        if (listingUpdated) listingUpdates++;
       }
 
-      this.logger.log('Aggregated ratings updated successfully');
+      this.logger.log(`Updated ${userUpdates} users and ${listingUpdates} listings ratings`);
+      return { userUpdates, listingUpdates };
+    }, { ttl: lockTTL });
+
+      if (updated) {
+        this.logger.log('Aggregated ratings updated successfully with distributed locking');
+      } else {
+        this.logger.warn('Failed to acquire rating update lock - another instance may be running');
+      }
     } catch (error) {
       this.logger.error(`Error updating aggregated ratings: ${error.message}`);
     }
@@ -379,6 +607,15 @@ export class SchedulerService {
    */
   @Cron('0 4 * * *')
   async retryFailedSettlements() {
+    const result = await this.lockService.withLock(
+      'cron:retryFailedSettlements',
+      async () => true,
+      { ttl: 82800, maxRetries: 1 },
+    );
+    if (result === null) {
+      this.logger.debug('retryFailedSettlements: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Retrying failed settlements...');
 
     try {
@@ -449,6 +686,15 @@ export class SchedulerService {
    */
   @Cron('0 */6 * * *')
   async backfillEmbeddings() {
+    const result = await this.lockService.withLock(
+      'cron:backfillEmbeddings',
+      async () => true,
+      { ttl: 21540, maxRetries: 1 },
+    );
+    if (result === null) {
+      this.logger.debug('backfillEmbeddings: skipped — another instance holds the lock');
+      return;
+    }
     this.logger.log('Starting embedding backfill...');
     try {
       const result = await this.embeddingService.backfillEmbeddings(50);

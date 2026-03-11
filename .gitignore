@@ -54,3 +54,9 @@ prisma/.env
 *.tmp
 *.temp
 .cache/
+
+# Deployment artifacts
+backups/
+nginx/logs/
+nginx/www/
+nginx/mvp.generated.conf

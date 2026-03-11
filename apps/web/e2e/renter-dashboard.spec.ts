@@ -27,18 +27,30 @@ test.describe("Renter Experience", () => {
     });
 
     test("should display renter dashboard sections", async ({ page }) => {
-      await expect(page.locator("h1")).toContainText(/Renter Dashboard/i);
-      await expect(page.getByRole("heading", { name: "My Bookings" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: /Recommended for You/i })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Spending Summary" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "My Favorites" })).toBeVisible();
+      await expect(page.locator("h1")).toContainText(/Renter Portal/i);
+      await expect(
+        page.getByRole("heading", { name: "My Bookings" })
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: /Recommended for You/i })
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Spending Summary" })
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "My Favorites" })
+      ).toBeVisible();
     });
 
     test("should show booking and favorites stats", async ({ page }) => {
-      await expect(page.locator("text=Upcoming Bookings")).toBeVisible();
-      await expect(page.locator("text=Active Rentals")).toBeVisible();
-      await expect(page.locator("text=Completed Bookings")).toBeVisible();
-      await expect(page.locator("text=Total Spent")).toBeVisible();
+      await expect(
+        page.locator("p:text-is('Upcoming Bookings')")
+      ).toBeVisible();
+      await expect(page.locator("p:text-is('Active Bookings')")).toBeVisible();
+      await expect(
+        page.locator("p:text-is('Completed Bookings')")
+      ).toBeVisible();
+      await expect(page.locator("p:text-is('Favorites')")).toBeVisible();
     });
 
     test("should render bookings list or empty state", async ({ page }) => {
@@ -59,7 +71,9 @@ test.describe("Renter Experience", () => {
     });
 
     test("should navigate to search from recommendations", async ({ page }) => {
-      const clicked = await clickFirstVisible(page, ['a:has-text("Explore More")']);
+      const clicked = await clickFirstVisible(page, [
+        'a:has-text("Explore More")',
+      ]);
       if (clicked) {
         await expect(page).toHaveURL(/\/search/);
       } else {
@@ -79,7 +93,9 @@ test.describe("Renter Experience", () => {
       await expect(page).toHaveURL(/\/favorites/);
     });
 
-    test("should expose quick browse action when no bookings", async ({ page }) => {
+    test("should expose quick browse action when no bookings", async ({
+      page,
+    }) => {
       const browseVisible = await page
         .locator('a:has-text("Start Browsing")')
         .first()
@@ -102,18 +118,20 @@ test.describe("Renter Experience", () => {
     });
 
     test("should display favorites page", async ({ page }) => {
-      await expect(page.locator("h1")).toContainText(/My Favorites/i);
+      await expect(page.locator("h1")).toContainText(/Saved Listings/i);
     });
 
     test("should navigate to search from browse more", async ({ page }) => {
-      const clicked = await clickFirstVisible(page, ['a:has-text("Browse More")']);
+      const clicked = await clickFirstVisible(page, [
+        'a:has-text("Browse More")',
+      ]);
       if (!clicked) return;
       await expect(page).toHaveURL(/\/search/);
     });
 
     test("should render favorite listings or empty state", async ({ page }) => {
       await expectAnyVisible(page, [
-        'text=/No favorites yet/i',
+        "text=/No favorites yet/i",
         'a[href^="/listings/"]',
       ]);
     });
@@ -121,11 +139,13 @@ test.describe("Renter Experience", () => {
     test("should show search input when favorites exist", async ({ page }) => {
       await expectAnyVisible(page, [
         'input[placeholder="Search favorites..."]',
-        'text=/No favorites yet/i',
+        "text=/No favorites yet/i",
       ]);
     });
 
-    test("should toggle view controls when favorites exist", async ({ page }) => {
+    test("should toggle view controls when favorites exist", async ({
+      page,
+    }) => {
       const gridVisible = await page
         .locator("button:has(svg.lucide-grid)")
         .first()
@@ -142,14 +162,16 @@ test.describe("Renter Experience", () => {
         await page.click("button:has(svg.lucide-grid)");
         await expect(page.locator("body")).toBeVisible();
       } else {
-        await expectAnyVisible(page, ['text=/No favorites yet/i']);
+        await expectAnyVisible(page, ["text=/No favorites yet/i"]);
       }
     });
 
-    test("should open listing detail from favorites when available", async ({ page }) => {
+    test("should open listing detail from favorites when available", async ({
+      page,
+    }) => {
       const listingLink = page.locator('a[href^="/listings/"]').first();
       if ((await listingLink.count()) === 0) {
-        await expectAnyVisible(page, ['text=/No favorites yet/i']);
+        await expectAnyVisible(page, ["text=/No favorites yet/i"]);
         return;
       }
       await listingLink.click();
@@ -165,52 +187,63 @@ test.describe("Renter Experience", () => {
 
     test("should display messages page", async ({ page }) => {
       await expect(page.locator("h1")).toContainText(/Messages/i);
-      await expect(page.locator('input[placeholder="Search conversations..."]')).toBeVisible();
+      await expect(page.locator('[data-testid="conversation-search"]')).toBeVisible();
     });
 
-    test("should render conversations list or empty state", async ({ page }) => {
+    test("should render conversations list or empty state", async ({
+      page,
+    }) => {
       await expectAnyVisible(page, [
-        "text=No conversations yet",
-        "button:has-text(\"No conversations yet\")",
-        "div.divide-y button",
+        '[data-testid="conversation-empty-state"]',
+        '[data-testid="conversation-item"]',
       ]);
     });
 
     test("should show chat panel prompt or message input", async ({ page }) => {
       await expectAnyVisible(page, [
-        "text=Select a conversation to start messaging",
-        'textarea[placeholder="Type a message..."]',
+        '[data-testid="message-empty-prompt"]',
+        '[data-testid="message-composer"]',
       ]);
     });
 
     test("should open first conversation when available", async ({ page }) => {
-      const conversation = page.locator("div.divide-y button").first();
+      await expectAnyVisible(page, [
+        '[data-testid="conversation-item"]',
+        '[data-testid="conversation-empty-state"]',
+      ]);
+      const conversation = page.locator('[data-testid="conversation-item"]').first();
       if ((await conversation.count()) === 0) {
-        await expect(page.locator("text=No conversations yet")).toBeVisible();
+        await expect(page.locator('[data-testid="conversation-empty-state"]')).toBeVisible();
         return;
       }
 
       await conversation.click();
       await expectAnyVisible(page, [
-        'textarea[placeholder="Type a message..."]',
-        "text=No messages yet. Start the conversation!",
+        '[data-testid="message-composer"]',
+        '[data-testid="message-empty-state"]',
       ]);
     });
 
     test("should filter conversations with search input", async ({ page }) => {
-      const search = page.locator('input[placeholder="Search conversations..."]');
+      const search = page.locator('[data-testid="conversation-search"]');
       await search.fill("owner");
       await expect(search).toHaveValue("owner");
     });
 
-    test("should allow composing text when input is visible", async ({ page }) => {
-      const textarea = page.locator('textarea[placeholder="Type a message..."]');
+    test("should allow composing text when input is visible", async ({
+      page,
+    }) => {
+      await expectAnyVisible(page, [
+        '[data-testid="message-composer"]',
+        '[data-testid="message-empty-prompt"]',
+      ]);
+      const textarea = page.locator('[data-testid="message-composer"]');
       const visible = await textarea.isVisible().catch(() => false);
       if (visible) {
         await textarea.fill("E2E message draft");
         await expect(textarea).toHaveValue("E2E message draft");
       } else {
-        await expect(page.locator("text=Select a conversation to start messaging")).toBeVisible();
+        await expect(page.locator('[data-testid="message-empty-prompt"]')).toBeVisible();
       }
     });
   });
@@ -246,17 +279,25 @@ test.describe("Renter Experience", () => {
       await expect(page.locator('input[name="confirmPassword"]')).toBeVisible();
     });
 
-    test("should keep delete account disabled before confirmation", async ({ page }) => {
+    test("should keep delete account disabled before confirmation", async ({
+      page,
+    }) => {
       const deleteButton = page.locator('button:has-text("Delete Account")');
       await expect(deleteButton).toBeDisabled();
     });
 
-    test("should enable delete account after entering DELETE", async ({ page }) => {
+    test("should enable delete account after entering DELETE", async ({
+      page,
+    }) => {
       await page.fill('input[name="deleteConfirmation"]', "DELETE");
-      await expect(page.locator('button:has-text("Delete Account")')).toBeEnabled();
+      await expect(
+        page.locator('button:has-text("Delete Account")')
+      ).toBeEnabled();
     });
 
-    test("should navigate to notification settings from sidebar", async ({ page }) => {
+    test("should navigate to notification settings from sidebar", async ({
+      page,
+    }) => {
       await page.click('a[href="/settings/notifications"]');
       await expect(page).toHaveURL(/\/settings\/notifications/);
     });
@@ -269,7 +310,9 @@ test.describe("Renter Experience", () => {
     });
 
     test("should display notification preferences page", async ({ page }) => {
-      await expect(page.locator("h1")).toContainText(/Notification Preferences/i);
+      await expect(page.locator("h1")).toContainText(
+        /Notification Preferences/i
+      );
       await expect(page.locator("text=Channels")).toBeVisible();
       await expect(page.locator("text=Activity Types")).toBeVisible();
     });
@@ -290,7 +333,9 @@ test.describe("Renter Experience", () => {
     });
 
     test("should show save preferences action", async ({ page }) => {
-      await expect(page.locator('button:has-text("Save Preferences")')).toBeVisible();
+      await expect(
+        page.locator('button:has-text("Save Preferences")')
+      ).toBeVisible();
     });
 
     test("should submit notification preferences form", async ({ page }) => {
@@ -309,7 +354,9 @@ test.describe("Renter Experience", () => {
       await page.goto("/dashboard/renter");
     });
 
-    test("should redirect non-uuid current user profile path to home", async ({ page }) => {
+    test("should redirect non-uuid current user profile path to home", async ({
+      page,
+    }) => {
       const userId = await getCurrentUserId(page);
       expect(userId).not.toBeNull();
 
@@ -317,19 +364,23 @@ test.describe("Renter Experience", () => {
       await expect(page).toHaveURL(/\/$/);
     });
 
-    test("should redirect unknown uuid profile path to home", async ({ page }) => {
+    test("should redirect unknown uuid profile path to home", async ({
+      page,
+    }) => {
       await page.goto("/profile/00000000-0000-0000-0000-000000000000");
       await expect(page).toHaveURL(/\/$/);
     });
 
-    test("should recover to renter dashboard after profile redirect", async ({ page }) => {
+    test("should recover to renter dashboard after profile redirect", async ({
+      page,
+    }) => {
       const userId = await getCurrentUserId(page);
       if (!userId) return;
 
       await page.goto(`/profile/${userId}`);
       await expect(page).toHaveURL(/\/$/);
       await page.goto("/dashboard/renter");
-      await expect(page.locator("h1")).toContainText(/Renter Dashboard/i);
+      await expect(page.locator("h1")).toContainText(/Renter Portal/i);
     });
   });
 });

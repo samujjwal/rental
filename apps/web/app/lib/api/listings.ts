@@ -1,5 +1,6 @@
 import { api } from "~/lib/api-client";
 import { withRetry, parseApiError, ApiError } from "~/lib/api-error";
+import { APP_CURRENCY } from "~/config/locale";
 import type {
   Listing,
   CreateListingRequest,
@@ -55,7 +56,7 @@ function mapSearchResponse(response: SearchResponse): ListingSearchResponse {
     basePrice: Number(listing.basePrice || 0),
     pricePerWeek: null,
     pricePerMonth: null,
-    currency: listing.currency || "USD",
+    currency: listing.currency || APP_CURRENCY,
     condition: listing.condition || "good",
     location: {
       address: "",
@@ -128,6 +129,15 @@ export const listingsApi = {
         typeof params.lng === "number" &&
         typeof params.radius === "number";
 
+      const sortMap: Record<string, string> = {
+        "price-asc": "price_asc",
+        "price-desc": "price_desc",
+        rating: "rating",
+        newest: "newest",
+        popular: "relevance",
+        distance: "distance",
+      };
+
       if (hasGeoSearch) {
         const queryParams = new URLSearchParams();
 
@@ -160,6 +170,7 @@ export const listingsApi = {
             rating: "rating",
             newest: "newest",
             popular: "relevance",
+            distance: "distance",
           };
           queryParams.append("sort", sortMap[params.sortBy]);
         }
@@ -176,8 +187,14 @@ export const listingsApi = {
           if (params.category) fallbackParams.append("categoryId", String(params.category));
           if (params.minPrice != null) fallbackParams.append("minPrice", String(params.minPrice));
           if (params.maxPrice != null) fallbackParams.append("maxPrice", String(params.maxPrice));
+          if (params.condition) fallbackParams.append("condition", String(params.condition));
+          if (params.instantBooking) fallbackParams.append("bookingMode", "INSTANT_BOOK");
+          if (params.delivery) fallbackParams.append("delivery", "true");
           if (params.page != null) fallbackParams.append("page", String(params.page));
           if (params.limit != null) fallbackParams.append("size", String(params.limit));
+          if (params.sortBy && params.sortBy !== "distance") {
+            fallbackParams.append("sort", sortMap[params.sortBy] || "relevance");
+          }
 
           const fallback = await withRetry(
             () => api.get<SearchResponse>(`/search?${fallbackParams.toString()}`),
@@ -202,14 +219,7 @@ export const listingsApi = {
       if (params.page != null) queryParams.append("page", String(params.page));
       if (params.limit != null) queryParams.append("size", String(params.limit));
       if (params.sortBy) {
-        const sortMap: Record<NonNullable<ListingSearchParams["sortBy"]>, string> = {
-          "price-asc": "price_asc",
-          "price-desc": "price_desc",
-          rating: "rating",
-          newest: "newest",
-          popular: "relevance",
-        };
-        queryParams.append("sort", sortMap[params.sortBy]);
+        queryParams.append("sort", sortMap[params.sortBy] || "relevance");
       }
 
       const response = await withRetry(

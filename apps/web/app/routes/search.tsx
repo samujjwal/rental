@@ -1,12 +1,15 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useSearchParams, Link, Form, useNavigation, useSubmit, useNavigate } from "react-router";
-import { Search, SlidersHorizontal, MapPin, X, Grid3X3, List, Map, Package } from "lucide-react";
+import { useLoaderData, useSearchParams, Form, useNavigation, useSubmit, useNavigate } from "react-router";
+import { Search, SlidersHorizontal, X, Grid3X3, List, Map } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
+import { geoApi } from "~/lib/api/geo";
 import type { ListingSearchParams } from "~/types/listing";
 import type { Listing } from "~/types/listing";
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "~/lib/utils";
-import { useDebounce } from "~/hooks/use-debounce";
+import { APP_CURRENCY } from "~/config/locale";
+import { useDebounce } from "~/hooks/useDebounce";
 import type { LatLngBoundsExpression } from "leaflet";
 import {
   UnifiedButton,
@@ -19,10 +22,16 @@ import {
 import { ListingsMap } from "~/components/map/ListingsMap";
 import type { ListingMarkerData } from "~/components/map/ListingMarker";
 import { LocationAutocomplete } from "~/components/search/LocationAutocomplete";
+import {
+  SearchListingCard,
+  SearchListingListItem,
+  SearchListingCompactCard,
+} from "~/components/search/SearchListingCards";
+import { SearchFiltersSidebar } from "~/components/search/SearchFiltersSidebar";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Search Rentals - Universal Rental Portal" },
+    { title: "Search Rentals | GharBatai Rentals" },
     { name: "description", content: "Find the perfect rental for your needs" },
   ];
 };
@@ -124,7 +133,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 
   const sortByParam = url.searchParams.get("sortBy");
   const sortBy = sortByParam &&
-    ["rating", "price-asc", "price-desc", "newest", "popular"].includes(
+    ["rating", "price-asc", "price-desc", "newest", "popular", "distance"].includes(
       sortByParam
     )
       ? (sortByParam as ListingSearchParams["sortBy"])
@@ -161,7 +170,6 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     ]);
     return { results, categories, searchParams, error: null };
   } catch (error) {
-    console.error("Search error:", error);
     return {
       results: {
         listings: [],
@@ -180,12 +188,24 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 export default function SearchPage() {
   const { results, categories, searchParams, error } =
     useLoaderData<typeof clientLoader>();
+  const { t } = useTranslation();
   const [urlSearchParams, setSearchParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
+
+  // Auto-open filter sidebar on xl+ screens; respect user's toggle on smaller screens
+  useEffect(() => {
+    const update = () => {
+      if (window.innerWidth >= 1280) setShowFilters(true);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   const [mapBounds, setMapBounds] = useState<SearchBounds | null>(null);
   const [highlightedListingId, setHighlightedListingId] = useState<string | undefined>();
   const [mapOnly, setMapOnly] = useState(false);
   const [locationValue, setLocationValue] = useState(searchParams.location || "");
+  const [subbarScrolled, setSubbarScrolled] = useState(false);
   const navigate = useNavigate();
 
   // Initialize view mode from localStorage or default to grid
@@ -205,9 +225,79 @@ export default function SearchPage() {
     }
   }, []);
 
+  // Collapse location input when user has scrolled 60px down
+  useEffect(() => {
+    const handler = () => setSubbarScrolled(window.scrollY > 60);
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
+
   useEffect(() => {
     setLocationValue(searchParams.location || "");
   }, [searchParams.location]);
+
+  // Auto-populate location from last used or current position
+  useEffect(() => {
+    if (searchParams.location) return; // already set from URL
+    const saved = localStorage.getItem("lastSearchLocation");
+    if (saved) {
+      setLocationValue(saved);
+      // Also apply to URL so results are actually filtered by this location
+      const newParams = new URLSearchParams(urlSearchParams);
+      newParams.set("location", saved);
+      // Restore saved coordinates so geo search works on return visits
+      try {
+        const savedCoords = localStorage.getItem("lastSearchCoords");
+        if (savedCoords) {
+          const { lat, lng } = JSON.parse(savedCoords);
+          if (typeof lat === "number" && typeof lng === "number") {
+            newParams.set("lat", lat.toFixed(6));
+            newParams.set("lng", lng.toFixed(6));
+            if (!newParams.get("radius")) newParams.set("radius", "25");
+          }
+        }
+      } catch { /* ignore malformed coords */ }
+      newParams.set("page", "1");
+      setSearchParams(newParams, { replace: true });
+      return;
+    }
+    // Fall back to GPS detection
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { result } = await geoApi.reverse(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            navigator.language || "en"
+          );
+          const label = result?.shortLabel || result?.address?.locality || "";
+          if (label) {
+            setLocationValue(label);
+            localStorage.setItem("lastSearchLocation", label);
+            // Persist coordinates so geo search actually triggers
+            localStorage.setItem(
+              "lastSearchCoords",
+              JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+            );
+            // Apply location + coords to URL so results are proximity-filtered
+            const gpsParams = new URLSearchParams(urlSearchParams);
+            gpsParams.set("location", label);
+            gpsParams.set("lat", pos.coords.latitude.toFixed(6));
+            gpsParams.set("lng", pos.coords.longitude.toFixed(6));
+            if (!gpsParams.get("radius")) gpsParams.set("radius", "25");
+            gpsParams.set("page", "1");
+            setSearchParams(gpsParams, { replace: true });
+          }
+        } catch {
+          // silently ignore
+        }
+      },
+      () => { /* permission denied – ignore */ },
+      { timeout: 5000 }
+    );
+   
+  }, []);
 
   useEffect(() => {
     setQuery(searchParams.query || "");
@@ -227,11 +317,31 @@ export default function SearchPage() {
   const submit = useSubmit();
   const isLoading = navigation.state === "loading";
 
+  // Recent search terms persisted in localStorage
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("recentSearchQueries") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const saveRecentSearch = (q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const updated = [trimmed, ...prev.filter((s) => s !== trimmed)].slice(0, 5);
+      localStorage.setItem("recentSearchQueries", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // Auto-submit search when typing (debounced)
   const [query, setQuery] = useState(searchParams.query || "");
   const debouncedQuery = useDebounce(query, 500);
 
   const handleSearchSubmit = () => {
+    if (query.trim()) saveRecentSearch(query.trim());
     const formData = new FormData();
     if (query) formData.set("query", query);
     Array.from(urlSearchParams.entries()).forEach(([key, value]) => {
@@ -285,6 +395,7 @@ export default function SearchPage() {
     const newParams = new URLSearchParams(urlSearchParams);
     if (normalizedLabel) {
       newParams.set("location", normalizedLabel);
+      localStorage.setItem("lastSearchLocation", normalizedLabel);
     } else {
       newParams.delete("location");
     }
@@ -295,6 +406,8 @@ export default function SearchPage() {
       if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
         newParams.set("lat", lat.toFixed(6));
         newParams.set("lng", lon.toFixed(6));
+        // Persist coordinates for return-visit restoration
+        localStorage.setItem("lastSearchCoords", JSON.stringify({ lat, lng: lon }));
       } else {
         newParams.delete("lat");
         newParams.delete("lng");
@@ -341,7 +454,7 @@ export default function SearchPage() {
         id: listing.id,
         title: listing.title,
         price: listing.basePrice,
-        currency: listing.currency || "USD",
+        currency: listing.currency || APP_CURRENCY,
         imageUrl: listing.photos?.[0],
         category:
           typeof listing.category === "string"
@@ -396,17 +509,13 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link to="/" className="text-xl font-bold text-primary">
-              Rental Portal
-            </Link>
-
+      {/* Search sub-bar — sticky below the main app nav (top-14 = 56px) */}
+      <div className="sticky top-14 z-20 bg-card/95 backdrop-blur border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-wrap items-center gap-3">
             {/* Search Bar */}
             <Form
-              className="order-last w-full sm:order-none sm:flex-1 sm:max-w-2xl"
+              className="flex-1 min-w-[200px]"
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSearchSubmit();
@@ -422,7 +531,8 @@ export default function SearchPage() {
                     setQuery(e.target.value.slice(0, MAX_SEARCH_QUERY_LENGTH))
                   }
                   maxLength={MAX_SEARCH_QUERY_LENGTH}
-                  placeholder="Search for items..."
+                  placeholder={t("search.placeholder", "Search for items...")}
+                  aria-label={t("search.placeholder", "Search for items")}
                   className="w-full pl-10 pr-24 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 />
                 {query && (
@@ -438,21 +548,52 @@ export default function SearchPage() {
                   type="submit"
                   className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-primary-foreground px-4 py-1 rounded-md hover:bg-primary/90 transition-colors"
                 >
-                  Search
+                  {t("common.search", "Search")}
                 </button>
               </div>
             </Form>
 
-            <div className="w-full sm:w-48 md:w-60">
+            {/* Recent search chip suggestions — shown when query is empty */}
+            {!query && recentSearches.length > 0 && (
+              <div className="w-full flex items-center gap-1.5 flex-wrap -mt-1 pb-1">
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {t("search.recent", "Recent:")}
+                </span>
+                {recentSearches.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setQuery(s);
+                      handleSearchSubmit();
+                    }}
+                    className="text-xs px-2.5 py-1 rounded-full border border-border bg-muted hover:bg-muted/70 text-foreground transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecentSearches([]);
+                    localStorage.removeItem("recentSearchQueries");
+                  }}
+                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground ml-1"
+                >
+                  {t("search.clearRecent", "Clear")}
+                </button>
+              </div>
+            )}
+
+            <div
+              className={`transition-all duration-300 overflow-hidden shrink-0 ${
+                subbarScrolled ? "w-0 opacity-0 pointer-events-none" : "w-full sm:w-48 md:w-60 opacity-100"
+              }`}
+            >
               <LocationAutocomplete
                 value={locationValue}
-                onChange={(value) =>
-                  setLocationValue(value.slice(0, MAX_SEARCH_LOCATION_LENGTH))
-                }
+                onChange={setLocationValue}
                 onSelect={(suggestion) => {
-                  setLocationValue(
-                    suggestion.shortLabel.slice(0, MAX_SEARCH_LOCATION_LENGTH)
-                  );
                   applyLocationFilter(suggestion.shortLabel, {
                     lat: suggestion.coordinates.lat,
                     lon: suggestion.coordinates.lon,
@@ -464,18 +605,46 @@ export default function SearchPage() {
                 layer="city"
               />
             </div>
-
-            <Link
-              to="/dashboard"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Dashboard
-            </Link>
           </div>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Category Quick-Filter Row — scrollable pills */}
+        {categories.length > 0 && (
+          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1">
+            <button
+              onClick={() => handleFilterChange("category", "")}
+              className={cn(
+                "flex-shrink-0 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors whitespace-nowrap",
+                !searchParams.category
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground border-input hover:border-foreground hover:text-foreground"
+              )}
+            >
+              {t("search.categoryAll", "All")}
+            </button>
+            {(categories as { id: string; name: string; slug?: string }[]).map((cat) => {
+              const catKey = cat.slug ?? cat.id;
+              const isActive = searchParams.category === catKey;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => handleFilterChange("category", isActive ? "" : catKey)}
+                  className={cn(
+                    "flex-shrink-0 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors whitespace-nowrap",
+                    isActive
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground border-input hover:border-foreground hover:text-foreground"
+                  )}
+                >
+                  {cat.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Filter Bar */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -484,7 +653,7 @@ export default function SearchPage() {
               onClick={() => setShowFilters(!showFilters)}
               leftIcon={<SlidersHorizontal className="w-5 h-5" />}
             >
-              Filters
+              {t("search.filters", "Filters")}
               {activeFiltersCount > 0 && (
                 <Badge variant="default" className="ml-1">
                   {activeFiltersCount}
@@ -498,14 +667,14 @@ export default function SearchPage() {
                 className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
               >
                 <X className="w-4 h-4" />
-                Clear all
+                {t("search.clearFilters", "Clear all")}
               </button>
             )}
           </div>
 
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
-              {results.total} results found
+              {t("search.resultsFound", "{{count}} results found", { count: results.total })}
             </span>
 
             {/* View Mode Toggle */}
@@ -518,7 +687,8 @@ export default function SearchPage() {
                     ? "bg-primary text-primary-foreground"
                     : "bg-background hover:bg-accent"
                 )}
-                title="Grid view"
+                title={t("search.gridView", "Grid view")}
+                aria-label={t("search.gridView", "Grid view")}
               >
                 <Grid3X3 className="w-4 h-4" />
               </button>
@@ -530,7 +700,8 @@ export default function SearchPage() {
                     ? "bg-primary text-primary-foreground"
                     : "bg-background hover:bg-accent"
                 )}
-                title="List view"
+                title={t("search.listView", "List view")}
+                aria-label={t("search.listView", "List view")}
               >
                 <List className="w-4 h-4" />
               </button>
@@ -544,7 +715,8 @@ export default function SearchPage() {
                     ? "bg-primary text-primary-foreground"
                     : "bg-background hover:bg-accent"
                 )}
-                title="Map view"
+                title={t("search.mapView", "Map view")}
+                aria-label={t("search.mapView", "Map view")}
               >
                 <Map className="w-4 h-4" />
               </button>
@@ -554,13 +726,15 @@ export default function SearchPage() {
               value={searchParams.sortBy || ""}
               onChange={(e) => handleFilterChange("sortBy", e.target.value)}
               className="px-3 py-2 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-ring transition-colors"
+              aria-label={t("search.sortBy", "Sort by")}
             >
-              <option value="">Sort by</option>
-              <option value="newest">Newest</option>
-              <option value="popular">Most Popular</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
-              <option value="rating">Highest Rated</option>
+              <option value="">{t("search.sortBy", "Sort by")}</option>
+              <option value="distance">{t("search.nearest", "Nearest")}</option>
+              <option value="newest">{t("search.newest", "Newest")}</option>
+              <option value="popular">{t("search.mostPopular", "Most Popular")}</option>
+              <option value="price-asc">{t("search.priceLow", "Price: Low to High")}</option>
+              <option value="price-desc">{t("search.priceHigh", "Price: High to Low")}</option>
+              <option value="rating">{t("search.topRated", "Highest Rated")}</option>
             </select>
           </div>
         </div>
@@ -568,204 +742,36 @@ export default function SearchPage() {
         <div className={cn("flex gap-6", viewMode === "map" && "flex-1")}>
           {/* Filters Sidebar — overlay on mobile, inline on desktop */}
           {showFilters && (
-            <>
-              {/* Mobile backdrop */}
-              <div
-                className="fixed inset-0 z-40 bg-black/50 md:hidden"
-                onClick={() => setShowFilters(false)}
-                aria-hidden
-              />
-              <aside className="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] overflow-y-auto bg-card shadow-xl md:relative md:inset-auto md:z-auto md:w-64 md:shadow-none md:shrink-0">
-              <div className="bg-card rounded-lg md:shadow-sm md:border p-6 md:sticky md:top-24">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-foreground">Filters</h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowFilters(false)}
-                    className="md:hidden p-1 text-muted-foreground hover:text-foreground"
-                    aria-label="Close filters"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Category Filter */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Category
-                  </label>
-                  <select
-                    value={searchParams.category || ""}
-                    onChange={(e) =>
-                      handleFilterChange("category", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-ring transition-colors"
-                  >
-                    <option value="">All Categories</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Location Filter */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Location
-                  </label>
-                  <LocationAutocomplete
-                    value={locationValue}
-                    onChange={(value) =>
-                      setLocationValue(value.slice(0, MAX_SEARCH_LOCATION_LENGTH))
-                    }
-                    onSelect={(suggestion) => {
-                      setLocationValue(
-                        suggestion.shortLabel.slice(0, MAX_SEARCH_LOCATION_LENGTH)
-                      );
-                      applyLocationFilter(suggestion.shortLabel, {
-                        lat: suggestion.coordinates.lat,
-                        lon: suggestion.coordinates.lon,
-                      });
-                    }}
-                    inputClassName="py-2.5 text-sm pr-4"
-                    biasZoom={8}
-                    biasScale={0.6}
-                    layer="city"
-                  />
-                  <div className="mt-2 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => applyLocationFilter(locationValue)}
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      Apply location
-                    </button>
-                    {(urlSearchParams.get("lat") || urlSearchParams.get("lng")) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newParams = new URLSearchParams(urlSearchParams);
-                          newParams.delete("lat");
-                          newParams.delete("lng");
-                          newParams.delete("radius");
-                          newParams.set("page", "1");
-                          setSearchParams(newParams);
-                        }}
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        Clear pin
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Radius */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Search Radius
-                  </label>
-                  <select
-                    value={urlSearchParams.get("radius") || "25"}
-                    onChange={(e) => handleFilterChange("radius", e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-ring transition-colors"
-                  >
-                    <option value="5">5 km</option>
-                    <option value="10">10 km</option>
-                    <option value="25">25 km</option>
-                    <option value="50">50 km</option>
-                    <option value="100">100 km</option>
-                  </select>
-                </div>
-
-                {/* Price Range */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Price Range (per day)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      placeholder="Min"
-                      value={searchParams.minPrice || ""}
-                      onChange={(e) =>
-                        handleFilterChange("minPrice", e.target.value)
-                      }
-                      className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-ring transition-colors"
-                    />
-                    <span className="text-muted-foreground">-</span>
-                    <input
-                      type="number"
-                      placeholder="Max"
-                      value={searchParams.maxPrice || ""}
-                      onChange={(e) =>
-                        handleFilterChange("maxPrice", e.target.value)
-                      }
-                      className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-ring transition-colors"
-                    />
-                  </div>
-                </div>
-
-                {/* Condition */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Condition
-                  </label>
-                  <select
-                    value={searchParams.condition || ""}
-                    onChange={(e) =>
-                      handleFilterChange("condition", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background capitalize focus:ring-2 focus:ring-ring transition-colors"
-                  >
-                    <option value="">Any Condition</option>
-                    {conditions.map((cond) => (
-                      <option key={cond} value={cond}>
-                        {humanizeCondition(cond)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Quick Filters */}
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={searchParams.instantBooking === true}
-                      onChange={(e) =>
-                        handleFilterChange(
-                          "instantBooking",
-                          e.target.checked ? "true" : ""
-                        )
-                      }
-                      className="w-4 h-4 text-primary rounded border-input focus:ring-ring"
-                    />
-                    <span className="text-sm text-foreground">
-                      Instant Booking
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={searchParams.delivery === true}
-                      onChange={(e) =>
-                        handleFilterChange(
-                          "delivery",
-                          e.target.checked ? "true" : ""
-                        )
-                      }
-                      className="w-4 h-4 text-primary rounded border-input focus:ring-ring"
-                    />
-                    <span className="text-sm text-foreground">
-                      Delivery Available
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </aside>
-            </>
+            <SearchFiltersSidebar
+              categories={categories}
+              searchParams={searchParams}
+              urlSearchParams={urlSearchParams}
+              locationValue={locationValue}
+              conditions={conditions}
+              maxLocationLength={MAX_SEARCH_LOCATION_LENGTH}
+              onLocationChange={(value) => setLocationValue(value)}
+              onLocationSelect={(suggestion) => {
+                setLocationValue(
+                  suggestion.shortLabel.slice(0, MAX_SEARCH_LOCATION_LENGTH)
+                );
+                applyLocationFilter(suggestion.shortLabel, {
+                  lat: suggestion.coordinates.lat,
+                  lon: suggestion.coordinates.lon,
+                });
+              }}
+              onFilterChange={handleFilterChange}
+              onApplyLocation={applyLocationFilter}
+              onClearPin={() => {
+                const newParams = new URLSearchParams(urlSearchParams);
+                newParams.delete("lat");
+                newParams.delete("lng");
+                newParams.delete("radius");
+                newParams.set("page", "1");
+                setSearchParams(newParams);
+              }}
+              onClearAll={clearFilters}
+              onClose={() => setShowFilters(false)}
+            />
           )}
 
           {/* Results Section - Split view with map */}
@@ -774,7 +780,7 @@ export default function SearchPage() {
             {error && (
               <Alert
                 type="error"
-                title="Search Error"
+                title={t("search.error", "Search Error")}
                 message={error}
                 className="mb-6"
               />
@@ -798,6 +804,32 @@ export default function SearchPage() {
                 />
               )}
 
+              {/* Empty search discovery prompt — shown when no active search intent */}
+              {!isLoading && !searchParams.query && !searchParams.location && !searchParams.lat && !searchParams.category && results.listings.length > 0 && (
+                <div className="mb-6 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-6">
+                  <h2 className="text-lg font-semibold text-foreground mb-1">
+                    {t("search.discoverPromptTitle", "What are you looking for?")}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {t("search.discoverPromptDesc", "Search by keyword or location above, or browse popular categories below.")}
+                  </p>
+                  {categories.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {(categories as { id: string; name: string; slug?: string }[]).slice(0, 8).map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => handleFilterChange("category", cat.slug ?? cat.id)}
+                          className="px-3 py-1.5 rounded-full border border-primary/30 bg-background text-sm text-primary font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+                        >
+                          {cat.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Empty State */}
               {!isLoading && results.listings.length === 0 && (
                 <div className="bg-card rounded-lg shadow-sm border p-12">
@@ -811,11 +843,21 @@ export default function SearchPage() {
               {/* Results */}
               {!isLoading && results.listings.length > 0 && (
                 <>
+                  {/* Similar results notice */}
+                  {(results.listings as any[]).some((l) => l.isSimilarMatch) && (
+                    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                      <span className="font-medium">{t("search.noExactMatches", "No exact matches found.")}</span>
+                      <span className="text-amber-700 dark:text-amber-400">
+                        {searchParams.query ? t("search.showingSimilarFor", "Showing similar results for \"{{query}}\".", { query: searchParams.query }) : t("search.showingSimilar", "Showing similar results.")}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Grid View */}
                   {viewMode === "grid" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {results.listings.map((listing) => (
-                        <ListingCard key={listing.id} listing={listing} />
+                        <SearchListingCard key={listing.id} listing={listing} />
                       ))}
                     </div>
                   )}
@@ -824,7 +866,7 @@ export default function SearchPage() {
                   {viewMode === "list" && (
                     <div className="space-y-4">
                       {results.listings.map((listing) => (
-                        <ListingListItem key={listing.id} listing={listing} />
+                        <SearchListingListItem key={listing.id} listing={listing} />
                       ))}
                     </div>
                   )}
@@ -833,7 +875,7 @@ export default function SearchPage() {
                   {viewMode === "map" && !mapOnly && (
                     <div className="space-y-3">
                       {results.listings.map((listing) => (
-                        <ListingCompactCard
+                        <SearchListingCompactCard
                           key={listing.id}
                           listing={listing}
                           onHighlightChange={setHighlightedListingId}
@@ -852,7 +894,7 @@ export default function SearchPage() {
                             handleFilterChange("page", String(results.page - 1))
                           }
                         >
-                          Previous
+                          {t("common.previous", "Previous")}
                         </UnifiedButton>
                       )}
                       {Array.from({ length: results.totalPages }, (_, i) => i + 1)
@@ -888,7 +930,7 @@ export default function SearchPage() {
                             handleFilterChange("page", String(results.page + 1))
                           }
                         >
-                          Next
+                          {t("common.next", "Next")}
                         </UnifiedButton>
                       )}
                     </div>
@@ -902,14 +944,14 @@ export default function SearchPage() {
               <div
                 className={cn(
                   mapOnly ? "w-full" : "w-1/2",
-                  "sticky top-24 h-[calc(100vh-200px)]"
+                  "sticky top-[8.5rem] h-[calc(100vh-9rem)]"
                 )}
               >
                 <div className="bg-card border rounded-lg h-full flex flex-col">
                   {/* Map Header */}
                   <div className="p-3 border-b flex items-center justify-between">
                     <span className="text-sm font-medium text-foreground">
-                      {mapListings.length} items on map
+                      {t("search.itemsOnMap", "{{count}} items on map", { count: mapListings.length })}
                     </span>
                     <div className="flex items-center gap-2">
                       <UnifiedButton
@@ -923,7 +965,7 @@ export default function SearchPage() {
                           });
                         }}
                       >
-                        {mapOnly ? "Show list" : "Map only"}
+                        {mapOnly ? t("search.showList", "Show list") : t("search.mapOnly", "Map only")}
                       </UnifiedButton>
                       <UnifiedButton
                         variant="outline"
@@ -931,7 +973,7 @@ export default function SearchPage() {
                         onClick={handleSearchThisArea}
                         disabled={!mapBounds}
                       >
-                        Search this area
+                        {t("search.searchThisArea", "Search this area")}
                       </UnifiedButton>
                     </div>
                   </div>
@@ -949,10 +991,10 @@ export default function SearchPage() {
                       <div className="absolute inset-0 flex items-center justify-center bg-muted/70 rounded-b-lg">
                         <div className="text-center">
                           <p className="text-sm font-medium text-foreground">
-                            No geocoded listings to show.
+                            {t("search.noGeocodedListings", "No geocoded listings to show.")}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Try adjusting filters or switch to list view.
+                            {t("search.adjustFiltersHint", "Try adjusting filters or switch to list view.")}
                           </p>
                         </div>
                       </div>
@@ -965,201 +1007,6 @@ export default function SearchPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-// Grid Card Component
-function ListingCard({ listing }: { listing: Listing }) {
-  const listingId = safeText(listing.id);
-  const listingTitle = safeText(listing.title, "Listing");
-  const ratingValue = listing.rating ?? listing.averageRating ?? null;
-  const reviewCount = listing.totalReviews ?? listing.reviewCount ?? 0;
-  return (
-    <Link
-      to={listingId ? `/listings/${listingId}` : "/listings"}
-      className="bg-card rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-shadow group"
-    >
-      {/* Image */}
-      <div className="aspect-[4/3] bg-muted relative">
-        {listing.photos?.[0] ? (
-          <img
-            src={listing.photos[0]}
-            alt={listingTitle}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground">
-            <Package className="w-10 h-10" />
-          </div>
-        )}
-        {listing.featured && (
-          <Badge variant="warning" className="absolute top-2 left-2">
-            Featured
-          </Badge>
-        )}
-        {listing.instantBooking && (
-          <Badge variant="success" className="absolute top-2 right-2">
-            Instant
-          </Badge>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-4">
-        <h3 className="font-semibold text-foreground mb-1 line-clamp-2 group-hover:text-primary transition-colors">
-          {listingTitle}
-        </h3>
-        <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-          <MapPin className="w-4 h-4" />
-          {safeText(listing.location?.city, "Location")}
-          {listing.location?.state ? `, ${listing.location.state}` : ""}
-        </p>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-muted-foreground capitalize">
-            {humanizeCondition(listing.condition)}
-          </span>
-        {ratingValue != null && (
-          <span className="text-sm text-muted-foreground">
-            ⭐ {safeNumber(ratingValue).toFixed(1)} ({reviewCount})
-          </span>
-        )}
-        </div>
-        <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-bold text-foreground">
-            ${listing.basePrice}
-          </span>
-          <span className="text-sm text-muted-foreground">/day</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// List View Component
-function ListingListItem({ listing }: { listing: Listing }) {
-  const listingId = safeText(listing.id);
-  const listingTitle = safeText(listing.title, "Listing");
-  const ratingValue = listing.rating ?? listing.averageRating ?? null;
-  const reviewCount = listing.totalReviews ?? listing.reviewCount ?? 0;
-  return (
-    <Link
-      to={listingId ? `/listings/${listingId}` : "/listings"}
-      className="bg-card rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition-shadow flex group"
-    >
-      {/* Image */}
-      <div className="w-48 h-36 bg-muted relative shrink-0">
-        {listing.photos?.[0] ? (
-          <img
-            src={listing.photos[0]}
-            alt={listingTitle}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground">
-            <Package className="w-8 h-8" />
-          </div>
-        )}
-        {listing.instantBooking && (
-          <Badge variant="success" className="absolute top-2 left-2">
-            Instant
-          </Badge>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-4 flex-1 flex flex-col justify-between">
-        <div>
-          <div className="flex items-start justify-between mb-2">
-            <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-              {listingTitle}
-            </h3>
-            {listing.featured && <Badge variant="warning">Featured</Badge>}
-          </div>
-          <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-            <MapPin className="w-4 h-4" />
-            {safeText(listing.location?.city, "Location")}
-            {listing.location?.state ? `, ${listing.location.state}` : ""}
-          </p>
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {listing.description}
-          </p>
-        </div>
-        <div className="flex items-center justify-between mt-3">
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground capitalize">
-              {humanizeCondition(listing.condition)}
-            </span>
-            {ratingValue != null && (
-              <span className="text-sm text-muted-foreground">
-                ⭐ {safeNumber(ratingValue).toFixed(1)} ({reviewCount})
-              </span>
-            )}
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-xl font-bold text-foreground">
-              ${listing.basePrice}
-            </span>
-            <span className="text-sm text-muted-foreground">/day</span>
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// Compact Card for Map View
-function ListingCompactCard({
-  listing,
-  onHighlightChange,
-}: {
-  listing: Listing;
-  onHighlightChange: (listingId: string | undefined) => void;
-}) {
-  const listingId = safeText(listing.id);
-  const listingTitle = safeText(listing.title, "Listing");
-  const ratingValue = listing.rating ?? listing.averageRating ?? null;
-  const reviewCount = listing.totalReviews ?? listing.reviewCount ?? 0;
-  return (
-    <Link
-      to={listingId ? `/listings/${listingId}` : "/listings"}
-      onMouseEnter={() => onHighlightChange(listingId || undefined)}
-      onMouseLeave={() => onHighlightChange(undefined)}
-      className="bg-card rounded-lg border p-3 hover:shadow-md transition-shadow flex gap-3 group"
-    >
-      {/* Thumbnail */}
-      <div className="w-20 h-20 bg-muted rounded-lg shrink-0 overflow-hidden">
-        {listing.photos?.[0] ? (
-          <img
-            src={listing.photos[0]}
-            alt={listingTitle}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground">
-            <Package className="w-5 h-5" />
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-foreground text-sm line-clamp-1 group-hover:text-primary transition-colors">
-          {listingTitle}
-        </h3>
-        <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-          <MapPin className="w-3 h-3" />
-          {listing.location?.city}
-        </p>
-        {ratingValue != null && (
-          <p className="text-xs text-muted-foreground mb-1">
-            ⭐ {safeNumber(ratingValue).toFixed(1)} ({reviewCount})
-          </p>
-        )}
-        <p className="text-sm font-bold text-foreground">
-          ${listing.basePrice}/day
-        </p>
-      </div>
-    </Link>
   );
 }
 

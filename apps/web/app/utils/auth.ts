@@ -1,25 +1,33 @@
 import { createCookieSessionStorage, redirect } from "react-router";
 import { api } from "~/lib/api-client";
+import { useAuthStore } from "~/lib/store/auth";
 import type { User } from "~/types/user";
 
 // Safe access for browser environments where process might not exist
 const isServer = typeof process !== "undefined" && process.env && process.env.NODE_ENV;
-const sessionSecret = (isServer ? process.env.SESSION_SECRET : "browser-safe-secret") || "default-secret";
 
-// Only enforce secret on server
-if (isServer && !sessionSecret && process.env.NODE_ENV === "production") {
-  throw new Error("SESSION_SECRET must be set");
+// Enforce SESSION_SECRET on server — throw in production, warn + use random in dev
+if (isServer && !process.env.SESSION_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET environment variable must be set in production");
+  } else {
+    const randomSecret = Math.random().toString(36) + Math.random().toString(36);
+    process.env.SESSION_SECRET = randomSecret;
+    console.warn("[Web] WARNING: SESSION_SECRET not set — using a random secret for this session. Sessions will be invalidated on restart.");
+  }
 }
+
+const sessionSecret = isServer ? process.env.SESSION_SECRET! : "browser-safe-secret";
 
 export const sessionStorage = createCookieSessionStorage({
   cookie: {
     name: "__session",
-    httpOnly: false,
+    httpOnly: true,
     maxAge: 60 * 60 * 24 * 7, // 7 days
     path: "/",
     sameSite: "lax",
     secrets: [sessionSecret],
-    secure: false,
+    secure: isServer ? process.env.NODE_ENV === "production" : false,
   },
 });
 
@@ -43,16 +51,12 @@ export async function getUserToken(
 export async function getUser(request: Request): Promise<User | null> {
   const session = await getSession(request);
   let token: string | null = session.get("accessToken") ?? null;
-  let refreshToken: string | null = session.get("refreshToken") ?? null;
 
-  // Fall back to localStorage for client-side navigation
+  // Fall back to Zustand store for client-side navigation
   // Session cookie is primary source of truth
   if (typeof window !== "undefined" && !token) {
-    const storedAccessToken = localStorage.getItem("accessToken");
-    const storedRefreshToken = localStorage.getItem("refreshToken");
-    
-    token = storedAccessToken;
-    refreshToken = storedRefreshToken;
+    const storeState = useAuthStore.getState();
+    token = storeState.accessToken;
   }
 
   if (!token) return null;
@@ -77,17 +81,15 @@ export async function getUser(request: Request): Promise<User | null> {
       (error as { response?: { status?: number } }).response?.status;
 
     // 401 is expected for anonymous users or expired sessions.
-    // Normalize to "no user" and clear stale client tokens.
+    // Clear the Zustand auth store to stay in sync.
     if (status === 401) {
       if (typeof window !== "undefined") {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("user");
+        useAuthStore.getState().clearAuth();
       }
       return null;
     }
 
-    console.error("Auth error:", error);
+    // Non-401 errors: return null silently to avoid leaking details
     return null;
   }
 }
@@ -140,34 +142,20 @@ export async function createUserSession({
   remember: boolean;
   redirectTo: string;
 }) {
-  console.log("=== CREATE USER SESSION START ===");
-  console.log("createUserSession: creating session for userId:", userId);
-  console.log("createUserSession: redirectTo:", redirectTo);
-  console.log("createUserSession: remember:", remember);
+  const session = await sessionStorage.getSession();
+  session.set("userId", userId);
+  session.set("accessToken", accessToken);
+  session.set("refreshToken", refreshToken);
 
-  try {
-    const session = await sessionStorage.getSession();
-    session.set("userId", userId);
-    session.set("accessToken", accessToken);
-    session.set("refreshToken", refreshToken);
+  const response = redirect(redirectTo, {
+    headers: {
+      "Set-Cookie": await sessionStorage.commitSession(session, {
+        maxAge: remember ? 60 * 60 * 24 * 30 : undefined, // 30 days
+      }),
+    },
+  });
 
-    console.log("createUserSession: session data set, creating redirect");
-    const response = redirect(redirectTo, {
-      headers: {
-        "Set-Cookie": await sessionStorage.commitSession(session, {
-          maxAge: remember ? 60 * 60 * 24 * 30 : undefined, // 30 days
-        }),
-      },
-    });
-
-    console.log("createUserSession: redirect created successfully");
-    console.log("=== CREATE USER SESSION END ===");
-    return response;
-  } catch (error) {
-    console.error("createUserSession: ERROR:", error);
-    console.log("=== CREATE USER SESSION END WITH ERROR ===");
-    throw error;
-  }
+  return response;
 }
 
 export async function logout(request: Request) {

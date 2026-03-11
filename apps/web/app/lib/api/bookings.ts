@@ -65,17 +65,24 @@ export const bookingsApi = {
     return api.post<Booking>(`/bookings/${id}/approve-return`);
   },
 
+  async rejectReturn(id: string, reason: string): Promise<Booking> {
+    return api.post<Booking>(`/bookings/${id}/reject-return`, { reason });
+  },
+
   async calculatePrice(
     listingId: string,
     startDate: string,
     endDate: string,
-    deliveryMethod: "pickup" | "delivery" | "shipping"
+    deliveryMethod: "pickup" | "delivery" | "shipping",
+    options?: { guestCount?: number; promoCode?: string }
   ): Promise<BookingCalculation> {
     return api.post<BookingCalculation>("/bookings/calculate-price", {
       listingId,
       startDate,
       endDate,
       deliveryMethod,
+      ...(options?.guestCount != null && { guestCount: options.guestCount }),
+      ...(options?.promoCode && { promoCode: options.promoCode }),
     });
   },
 

@@ -1,0 +1,108 @@
+# Nepal Country Policy Pack
+# ISO 3166-1 Alpha-2: NP
+# Primary specialization boundary — NOT a regional grouping
+
+general:
+  country_code: "NP"
+  country_name: "Nepal"
+  currency:
+    code: "NPR"
+    name: "Nepalese Rupee"
+    precision: 2
+    symbol: "रू"
+    allow_fractional: true
+  locale: "ne-NP"
+  fallback_locale: "en-US"
+  timezone: "Asia/Kathmandu"
+  utc_offset: "+05:45"
+  languages:
+    - "ne"
+    - "en"
+  date_format: "YYYY-MM-DD"
+  phone_prefix: "+977"
+  address_format:
+    structure: "Province/District/Municipality/Ward"
+    requires_zip: false
+    requires_state: false
+    fields:
+      - { name: "province", required: true, label_ne: "प्रदेश", label_en: "Province" }
+      - { name: "district", required: true, label_ne: "जिल्ला", label_en: "District" }
+      - { name: "municipality", required: true, label_ne: "नगरपालिका", label_en: "Municipality" }
+      - { name: "ward", required: false, label_ne: "वडा", label_en: "Ward" }
+      - { name: "street", required: false, label_ne: "टोल", label_en: "Street/Tole" }
+
+identity:
+  host_verification:
+    required_documents:
+      - type: "CITIZENSHIP_CARD"
+        label: "Nepali Citizenship Card (नागरिकता)"
+        mandatory: true
+      - type: "NATIONAL_ID"
+        label: "National ID Card"
+        mandatory: false
+    minimum_age: 18
+    allow_foreign_hosts: true
+    foreign_host_documents:
+      - "PASSPORT"
+      - "VISA_DOCUMENT"
+  renter_verification:
+    require_phone_verification: true
+    require_email_verification: true
+    require_document_for_high_value: true
+    high_value_threshold: 50000  # NPR
+  kyc_provider: "manual"  # No integrated 3rd-party KYC in NP yet
+  aml_screening: false
+
+tax:
+  platform_level:
+    - type: "VAT"
+      name: "Value Added Tax"
+      rate: 0.13
+      applied_to: ["BASE_PRICE", "SERVICE_FEE"]
+      remitted_by: "PLATFORM"
+      effective_from: "2024-01-01"
+  host_level: []
+  tourism_levy:
+    enabled: false
+  withholding_tax:
+    enabled: true
+    rate: 0.015  # 1.5% TDS on rental income
+    threshold: 0  # Applied from first rupee
+    remitted_by: "PLATFORM"
+
+payments:
+  supported_methods:
+    - "ESEWA"
+    - "KHALTI"
+    - "CONNECT_IPS"
+    - "BANK_TRANSFER"
+    - "CASH_ON_ARRIVAL"
+  default_method: "ESEWA"
+  payout_methods:
+    - "BANK_TRANSFER"
+    - "ESEWA"
+  payout_frequency: "WEEKLY"
+  payout_minimum: 1000  # NPR
+  escrow_hold_days: 1  # Release 24h after check-in
+  max_foreign_currency_withdrawal: null
+
+booking:
+  min_duration_hours: 2
+  max_duration_days: 365
+  advance_booking_max_days: 180
+  cancellation_minimum_hours: 24
+  instant_book_enabled: true
+  allow_hourly: true
+  require_guest_count: true
+  max_guests_default: 20
+
+compliance:
+  short_term_rental_cap:
+    enabled: false
+  business_registration_required: false
+  safety_requirements:
+    fire_extinguisher: false
+    smoke_detector: false
+    first_aid_kit: false
+  insurance_required: false
+  data_retention_days: 2555  # ~7 years per Nepal tax law

@@ -107,4 +107,8 @@ export const disputesApi = {
   closeDispute: async (disputeId: string, reason: string): Promise<DisputeDetail> => {
     return api.post<DisputeDetail>(`/disputes/${disputeId}/close`, { reason });
   },
+
+  escalateDispute: async (disputeId: string, reason: string): Promise<DisputeDetail> => {
+    return api.post<DisputeDetail>(`/disputes/${disputeId}/escalate`, { reason });
+  },
 };

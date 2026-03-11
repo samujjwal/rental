@@ -1,4 +1,5 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceVerificationService } from './insurance-verification.service';
 import { InsurancePolicyService } from './insurance-policy.service';
@@ -48,7 +49,7 @@ export class InsuranceService {
     });
 
     if (!listing) {
-      throw new BadRequestException('Listing not found');
+      throw i18nNotFound('listing.notFound');
     }
 
     // Determine insurance requirements based on category and value
@@ -89,20 +90,32 @@ export class InsuranceService {
     expirationDate: Date;
     documentUrl: string;
   }): Promise<InsurancePolicy> {
+    // Verify the user owns the listing
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: data.listingId },
+      select: { ownerId: true },
+    });
+    if (!listing) {
+      throw i18nNotFound('listing.notFound');
+    }
+    if (listing.ownerId !== data.userId) {
+      throw i18nForbidden('insurance.ownListingsOnly');
+    }
+
     // Validate policy dates
     if (new Date(data.expirationDate) <= new Date()) {
-      throw new BadRequestException('Insurance policy is already expired');
+      throw i18nBadRequest('insurance.expired');
     }
 
     if (new Date(data.effectiveDate) > new Date(data.expirationDate)) {
-      throw new BadRequestException('Effective date must be before expiration date');
+      throw i18nBadRequest('insurance.invalidDates');
     }
 
     // Check if policy meets requirements
     const requirement = await this.checkInsuranceRequirement(data.listingId);
     if (requirement.required && data.coverageAmount < requirement.minimumCoverage) {
       throw new BadRequestException(
-        `Coverage amount must be at least $${requirement.minimumCoverage}`,
+        `Coverage amount must be at least ${requirement.minimumCoverage} in the listing's currency`,
       );
     }
 
@@ -132,7 +145,7 @@ export class InsuranceService {
     const policy = await this.policyService.getPolicy(policyId);
 
     if (!policy) {
-      throw new BadRequestException('Insurance policy not found');
+      throw i18nNotFound('insurance.notFound');
     }
 
     const newStatus = approved ? InsuranceStatus.ACTIVE : InsuranceStatus.CANCELLED;
@@ -188,7 +201,7 @@ export class InsuranceService {
     const policy = await this.policyService.getPolicy(policyId);
 
     if (!policy || policy.status !== InsuranceStatus.ACTIVE) {
-      throw new BadRequestException('Valid insurance policy not found');
+      throw i18nNotFound('insurance.notFound');
     }
 
     // In production: Generate PDF certificate

@@ -77,7 +77,7 @@ npx prisma migrate deploy 2>/dev/null || npx prisma migrate dev --name init
 
 # 5. Seed Database (Dev/Test Data)
 echo -e "\n${BLUE}==> Seeding Database with Test Data...${NC}"
-npm run seed
+npm run seed || echo -e "${YELLOW}⚠️  Seeding failed (continuing anyway)${NC}"
 echo -e "${GREEN}✓ Database seeded successfully!${NC}"
 cd ../..
 

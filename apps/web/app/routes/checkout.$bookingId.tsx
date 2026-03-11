@@ -34,6 +34,8 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { getUser } from "~/utils/auth";
+import { formatCurrency } from "~/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Checkout | GharBatai Rentals" }];
@@ -48,7 +50,7 @@ const safeNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 const safeDateLabel = (value: unknown, pattern: string): string => {
-  const date = new Date(String(value || ""));
+  const date = typeof value === "number" ? new Date(value) : new Date(String(value || ""));
   return Number.isNaN(date.getTime()) ? "Date unavailable" : format(date, pattern);
 };
 const safeStatus = (value: unknown): string =>
@@ -56,7 +58,7 @@ const safeStatus = (value: unknown): string =>
 const safeText = (value: unknown): string =>
   typeof value === "string" ? value : "";
 const safeTime = (value: unknown): number => {
-  const date = new Date(String(value || ""));
+  const date = typeof value === "number" ? new Date(value) : new Date(String(value || ""));
   return Number.isNaN(date.getTime()) ? Number.NaN : date.getTime();
 };
 
@@ -89,7 +91,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     const normalizedStatus = safeStatus(booking.status);
 
     // Check if booking is in correct status for payment
-    if (!["PENDING_PAYMENT", "PENDING", "PAYMENT_FAILED"].includes(normalizedStatus)) {
+    if (!["PENDING_PAYMENT", "PAYMENT_FAILED"].includes(normalizedStatus)) {
       throw redirect(`/bookings/${bookingId}`);
     }
 
@@ -108,7 +110,8 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
       stripePublishableKey,
     };
   } catch (error) {
-    console.error("Failed to load checkout:", error);
+    // Re-throw Response objects (redirects) so React Router can handle them
+    if (error instanceof Response) throw error;
     throw redirect("/bookings");
   }
 }
@@ -141,7 +144,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     const normalizedStatus = safeStatus(booking.status);
     if (
       intent === "confirm-payment" &&
-      !["PENDING_PAYMENT", "PENDING"].includes(normalizedStatus)
+      !["PENDING_PAYMENT"].includes(normalizedStatus)
     ) {
       return { error: "This booking is no longer awaiting payment." };
     }
@@ -153,17 +156,23 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     }
 
     if (intent === "cancel") {
+      // Actually cancel the booking so it doesn't remain in PENDING_PAYMENT state
+      try {
+        await bookingsApi.cancelBooking(bookingId, "Cancelled during checkout");
+      } catch {
+        // If cancel fails (e.g., booking already cancelled), still redirect
+      }
       return redirect(`/bookings/${bookingId}`);
     }
 
     return { error: "Invalid action" };
   } catch (error) {
-    console.error("Checkout action error:", error);
     return { error: error instanceof Error ? error.message : "Payment failed" };
   }
 }
 
 function CheckoutForm({ booking }: { booking: Booking }) {
+  const { t } = useTranslation();
   const stripe = useStripe();
   const elements = useElements();
   const navigate = useNavigate();
@@ -207,7 +216,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
       <div className="bg-card rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold mb-4 flex items-center text-foreground">
           <CreditCard className="w-5 h-5 mr-2" />
-          Payment Information
+          {t("checkout.paymentInformation")}
         </h2>
 
         <PaymentElement />
@@ -228,7 +237,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
 
         <div className="mt-6 flex items-center text-sm text-muted-foreground">
           <Lock className="w-4 h-4 mr-2" />
-          <span>Payments are secure and encrypted</span>
+          <span>{t("checkout.paymentsSecure")}</span>
         </div>
       </div>
 
@@ -239,7 +248,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
           className="flex-1 px-6 py-3 border border-input rounded-md text-foreground hover:bg-muted transition-colors"
           disabled={isProcessing}
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="submit"
@@ -249,12 +258,12 @@ function CheckoutForm({ booking }: { booking: Booking }) {
           {isProcessing ? (
             <>
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Processing...
+              {t("checkout.processing")}
             </>
           ) : (
             <>
               <CreditCard className="w-5 h-5 mr-2" />
-              Pay ${safeNumber(booking.totalAmount).toFixed(2)}
+              {t("checkout.payAmount", { amount: formatCurrency(safeNumber(booking.totalAmount)) })}
             </>
           )}
         </button>
@@ -264,6 +273,7 @@ function CheckoutForm({ booking }: { booking: Booking }) {
 }
 
 export default function CheckoutRoute() {
+  const { t } = useTranslation();
   const { booking, clientSecret } = useLoaderData<typeof clientLoader>();
   const navigate = useNavigate();
   const bookingId = safeText(booking.id);
@@ -292,12 +302,36 @@ export default function CheckoutRoute() {
             className="flex items-center text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
-            Back to Booking
+            {t("checkout.backToBooking")}
           </button>
-          <h1 className="text-3xl font-bold text-foreground">Checkout</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t("checkout.title")}</h1>
           <p className="mt-2 text-muted-foreground">
-            Complete your booking payment
+            {t("checkout.subtitle")}
           </p>
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mt-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-success flex items-center justify-center">
+                <CheckCircle className="w-3.5 h-3.5 text-white" />
+              </div>
+              <span className="text-sm font-medium text-success">{t("checkout.step1", "Request")}</span>
+            </div>
+            <div className="flex-1 h-px bg-success/40" />
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                <span className="text-xs font-bold text-primary-foreground">2</span>
+              </div>
+              <span className="text-sm font-medium text-primary">{t("checkout.step2", "Payment")}</span>
+            </div>
+            <div className="flex-1 h-px bg-muted" />
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                <span className="text-xs font-medium text-muted-foreground">3</span>
+              </div>
+              <span className="text-sm text-muted-foreground">{t("checkout.step3", "Confirmed")}</span>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -305,7 +339,7 @@ export default function CheckoutRoute() {
           <div className="lg:col-span-1">
             <div className="bg-card rounded-lg shadow-md p-6 sticky top-6">
               <h2 className="text-lg font-semibold mb-4 text-foreground">
-                Order Summary
+                {t("checkout.orderSummary")}
               </h2>
 
               <div className="space-y-4">
@@ -314,10 +348,10 @@ export default function CheckoutRoute() {
                   <Package className="w-5 h-5 text-muted-foreground mr-3 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="font-medium text-foreground">
-                      {booking.listing?.title || "Item"}
+                      {booking.listing?.title || t("checkout.item")}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {booking.listing?.location?.city || "Category"}
+                      {booking.listing?.location?.city || t("listings.filters.category")}
                     </p>
                   </div>
                 </div>
@@ -326,7 +360,7 @@ export default function CheckoutRoute() {
                 <div className="flex items-start">
                   <User className="w-5 h-5 text-muted-foreground mr-3 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm text-muted-foreground">Owner</p>
+                    <p className="text-sm text-muted-foreground">{t("checkout.owner")}</p>
                     <p className="font-medium text-foreground">
                       {booking.owner
                         ? `${booking.owner.firstName}${
@@ -334,7 +368,7 @@ export default function CheckoutRoute() {
                               ? ` ${booking.owner.lastName}`
                               : ""
                           }`
-                        : "Owner"}
+                        : t("checkout.owner")}
                     </p>
                   </div>
                 </div>
@@ -344,14 +378,14 @@ export default function CheckoutRoute() {
                   <Calendar className="w-5 h-5 text-muted-foreground mr-3 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground">
-                      Rental Period
+                      {t("checkout.rentalPeriod")}
                     </p>
                     <p className="font-medium text-foreground">
                       {safeDateLabel(startAt, "MMM d, yyyy")} -{" "}
                       {safeDateLabel(endAt, "MMM d, yyyy")}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {bookingDays} days
+                      {t("checkout.daysCount", { count: bookingDays })}
                     </p>
                   </div>
                 </div>
@@ -359,41 +393,41 @@ export default function CheckoutRoute() {
                 {/* Pricing Breakdown */}
                 <div className="border-t border-border pt-4">
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">{t("checkout.subtotal")}</span>
                     <span className="text-foreground">
-                      ${safeNumber(pricing.subtotal).toFixed(2)}
+                      {formatCurrency(safeNumber(pricing.subtotal))}
                     </span>
                   </div>
                   {safeNumber(pricing.serviceFee) > 0 && (
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Service Fee</span>
+                      <span className="text-muted-foreground">{t("checkout.serviceFee")}</span>
                       <span className="text-foreground">
-                        ${safeNumber(pricing.serviceFee).toFixed(2)}
+                        {formatCurrency(safeNumber(pricing.serviceFee))}
                       </span>
                     </div>
                   )}
                   {safeNumber(pricing.deliveryFee) > 0 && (
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Delivery Fee</span>
+                      <span className="text-muted-foreground">{t("checkout.deliveryFee")}</span>
                       <span className="text-foreground">
-                        ${safeNumber(pricing.deliveryFee).toFixed(2)}
+                        {formatCurrency(safeNumber(pricing.deliveryFee))}
                       </span>
                     </div>
                   )}
                   {safeNumber(pricing.securityDeposit) > 0 && (
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-muted-foreground">
-                        Security Deposit
+                        {t("checkout.securityDeposit")}
                       </span>
                       <span className="text-foreground">
-                        ${safeNumber(pricing.securityDeposit).toFixed(2)}
+                        {formatCurrency(safeNumber(pricing.securityDeposit))}
                       </span>
                     </div>
                   )}
                   <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
-                    <span className="text-foreground">Total</span>
+                    <span className="text-foreground">{t("checkout.total")}</span>
                     <span className="text-primary">
-                      ${safeNumber(pricing.totalAmount).toFixed(2)}
+                      {formatCurrency(safeNumber(pricing.totalAmount))}
                     </span>
                   </div>
                 </div>
@@ -404,11 +438,10 @@ export default function CheckoutRoute() {
                     <CheckCircle className="w-5 h-5 text-success mr-2 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-medium text-success">
-                        Protected Payment
+                        {t("checkout.protectedPayment")}
                       </p>
                       <p className="text-xs text-success/80 mt-1">
-                        Your payment is secured by Stripe and protected by our
-                        platform guarantee.
+                        {t("checkout.protectedPaymentDesc")}
                       </p>
                     </div>
                   </div>
@@ -428,7 +461,7 @@ export default function CheckoutRoute() {
                 <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-start">
                   <AlertCircle className="w-5 h-5 text-destructive mr-2 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-destructive">
-                    Payment setup failed. Please return to bookings and try again.
+                    {t("checkout.paymentSetupFailed")}
                   </p>
                 </div>
               </div>

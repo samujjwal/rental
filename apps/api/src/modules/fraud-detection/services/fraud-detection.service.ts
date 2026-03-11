@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { EventsService } from '@/common/events/events.service';
 import { PropertyStatus, toNumber } from '@rental-portal/database';
 
 export enum RiskLevel {
@@ -32,6 +33,7 @@ export class FraudDetectionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
+    private readonly events: EventsService,
   ) {}
 
   async getHighRiskUsers(limit = 20): Promise<any[]> {
@@ -137,7 +139,7 @@ export class FraudDetectionService {
     }
 
     // Check recent cancellations
-    const recentCancellations = user.bookings.filter((b) => b.status === 'CANCELLED').length;
+    const recentCancellations = user.bookings.filter((b: any) => b.status === 'CANCELLED').length;
     if (recentCancellations > 2) {
       riskScore += 15;
       flags.push({
@@ -459,15 +461,85 @@ export class FraudDetectionService {
    */
   private async getRecentPaymentMethodCount(userId: string): Promise<number> {
     const cacheKey = `user:${userId}:payment:methods`;
-    const methods = await this.cache.get<Set<string>>(cacheKey);
-    return methods ? methods.size : 0;
+    const methods = await this.cache.get<string[]>(cacheKey);
+    if (!methods) return 0;
+    // Cache stores arrays (JSON-serialized), not Sets
+    return Array.isArray(methods) ? methods.length : 0;
+  }
+
+  /**
+   * Perform a comprehensive booking fraud check and emit events.
+   * Call this from the booking creation flow for automatic protection.
+   */
+  async performBookingFraudCheck(bookingData: {
+    userId: string;
+    listingId: string;
+    totalPrice: number;
+    startDate: Date;
+    endDate: Date;
+  }): Promise<FraudCheckResult> {
+    const result = await this.checkBookingRisk(bookingData);
+
+    // Audit all non-LOW checks
+    if (result.riskScore > 0) {
+      await this.logFraudCheck('BOOKING', bookingData.listingId, result);
+    }
+
+    // Emit fraud alert event for HIGH/CRITICAL
+    if (result.riskLevel === RiskLevel.HIGH || result.riskLevel === RiskLevel.CRITICAL) {
+      this.events.emitFraudAlert({
+        entityType: 'BOOKING',
+        entityId: bookingData.listingId,
+        riskLevel: result.riskLevel,
+        riskScore: result.riskScore,
+        flags: result.flags.map((f) => ({ type: f.type, severity: f.severity, description: f.description })),
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Perform a listing fraud check (called on listing creation/update).
+   */
+  async performListingFraudCheck(listingData: {
+    userId: string;
+    title: string;
+    description: string;
+    basePrice: number;
+    photos: string[];
+  }): Promise<FraudCheckResult> {
+    const result = await this.checkListingRisk(listingData);
+
+    if (result.riskScore > 0) {
+      await this.logFraudCheck('LISTING', listingData.userId, result);
+    }
+
+    if (result.riskLevel === RiskLevel.HIGH || result.riskLevel === RiskLevel.CRITICAL) {
+      this.events.emitFraudAlert({
+        entityType: 'LISTING',
+        entityId: listingData.userId,
+        riskLevel: result.riskLevel,
+        riskScore: result.riskScore,
+        flags: result.flags.map((f) => ({ type: f.type, severity: f.severity, description: f.description })),
+      });
+    }
+
+    return result;
   }
 
   /**
    * Helper: Get listing category
    */
   private async getListingCategory(listingData: any): Promise<string | null> {
-    // Simplified - in real implementation, determine from listingData
+    if (listingData.categoryId) {
+      const category = await this.prisma.category.findUnique({
+        where: { id: listingData.categoryId },
+        select: { slug: true },
+      });
+      return category?.slug || null;
+    }
+    // Try to find from listing title/description heuristics
     return null;
   }
 

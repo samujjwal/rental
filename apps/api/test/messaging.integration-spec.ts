@@ -8,7 +8,7 @@ import { buildTestEmail, cleanupCoreRelationalData, createUserWithRole, uniqueSu
 
 type Socket = any;
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+ 
 const io = require('socket.io-client').io;
 
 describe('Messaging (integration)', () => {

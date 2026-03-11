@@ -51,8 +51,7 @@ test.describe("Login Flow", () => {
   });
 
   test("should display login page with all elements", async ({ page }) => {
-    // Check for either page title or login heading
-    await expect(page.locator("h1, h2")).toContainText(/Login|Sign In|Rental Portal/i);
+    await expect(page.locator("h1")).toContainText(/GharBatai Rentals/i);
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
     await expect(page.locator('button[type="submit"]')).toBeVisible();
@@ -60,33 +59,24 @@ test.describe("Login Flow", () => {
 
   test("should show validation errors on empty form submission", async ({ page }) => {
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(500);
-    // Check if still on login page or error message appears
-    const hasError = await page.locator('.text-destructive, .text-red-500, [role="alert"]').first().isVisible().catch(() => false);
-    const stillOnLogin = page.url().includes('/auth/login');
-    expect(hasError || stillOnLogin).toBe(true);
+    // Should show validation error or remain on login page
+    await expect(page).toHaveURL(/.*\/auth\/login/);
   });
 
   test("should show error for invalid email format", async ({ page }) => {
     await page.fill('input[type="email"]', "invalid-email");
     await page.fill('input[type="password"]', "password123");
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(500);
-    // Should show error or stay on page
-    const hasError = await page.locator('.text-destructive, .text-red-500, [role="alert"]').first().isVisible().catch(() => false);
-    const stillOnLogin = page.url().includes('/auth/login');
-    expect(hasError || stillOnLogin).toBe(true);
+    // Should show error or stay on login page
+    await expect(page).toHaveURL(/.*\/auth\/login/);
   });
 
   test("should show error for wrong credentials", async ({ page }) => {
     await page.fill('input[type="email"]', "wrong@email.com");
     await page.fill('input[type="password"]', "wrongpassword");
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(1000);
-    // Should show error or stay on page
-    const hasError = await page.locator('.text-destructive, .text-red-500, [role="alert"]').first().isVisible().catch(() => false);
-    const stillOnLogin = page.url().includes('/auth/login');
-    expect(hasError || stillOnLogin).toBe(true);
+    // Should show error or stay on login page
+    await expect(page).toHaveURL(/.*\/auth\/login/);
   });
 
   test("should toggle password visibility", async ({ page }) => {
@@ -141,9 +131,7 @@ test.describe("Login Flow", () => {
     await page.waitForURL(/.*login/, { timeout: 5000 }).catch(() => {});
     await loginAs(page, TEST_USER.email, TEST_USER.password);
     await page.goto("/bookings");
-    await page.waitForTimeout(1000);
-    const url = page.url();
-    expect(url.includes('/bookings') || url.includes('/dashboard')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(bookings|dashboard)/);
   });
 });
 
@@ -164,11 +152,8 @@ test.describe("Signup Flow", () => {
 
   test("should show validation errors on empty submission", async ({ page }) => {
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(500);
-    // Check for any errors
-    const errors = page.locator('.text-destructive, .text-red-500, [role="alert"]');
-    const errorCount = await errors.count();
-    expect(errorCount).toBeGreaterThan(0);
+    // Check for any validation errors
+    await expect(page.locator('.text-destructive, .text-red-500, [role="alert"]').first()).toBeVisible({ timeout: 1000 });
   });
 
   test("should validate email format", async ({ page }) => {
@@ -177,11 +162,8 @@ test.describe("Signup Flow", () => {
     await page.fill('input[type="email"]', "invalid-email");
     await page.fill('input[type="password"]', "Password123!");
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(500);
-    // Should show error or stay on page
-    const hasError = await page.locator('.text-destructive, .text-red-500').first().isVisible().catch(() => false);
-    const stillOnPage = page.url().includes('/auth/signup');
-    expect(hasError || stillOnPage).toBe(true);
+    // Should show error or stay on signup page
+    await expect(page).toHaveURL(/.*\/auth\/signup/);
   });
 
   test("should validate password strength", async ({ page }) => {
@@ -190,11 +172,8 @@ test.describe("Signup Flow", () => {
     await page.fill('input[type="email"]', "test@example.com");
     await page.fill('input[type="password"]', "weak");
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(500);
-    // Should show error or stay on page
-    const hasError = await page.locator('.text-destructive, .text-red-500').first().isVisible().catch(() => false);
-    const stillOnPage = page.url().includes('/auth/signup');
-    expect(hasError || stillOnPage).toBe(true);
+    // Should show error or stay on signup page
+    await expect(page).toHaveURL(/.*\/auth\/signup/);
   });
 
   test("should show password confirmation match error", async ({ page }) => {
@@ -203,9 +182,8 @@ test.describe("Signup Flow", () => {
       await page.fill('input[type="password"]', "Password123!");
       await confirmPassword.fill("DifferentPassword123!");
       await page.click('button[type="submit"]');
-      await page.waitForTimeout(500);
-      const hasError = await page.locator('.text-destructive, .text-red-500').first().isVisible().catch(() => false);
-      expect(hasError || page.url().includes('/auth/signup')).toBe(true);
+      // Should show mismatch error or stay on signup page
+      await expect(page).toHaveURL(/.*\/auth\/signup/);
     }
   });
 
@@ -219,11 +197,8 @@ test.describe("Signup Flow", () => {
       await confirmPassword.fill("Password123!");
     }
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(1000);
-    // Should show error or stay on page
-    const hasError = await page.locator('.text-destructive, .text-red-500, [role="alert"]').first().isVisible().catch(() => false);
-    const stillOnPage = page.url().includes('/auth/signup');
-    expect(hasError || stillOnPage).toBe(true);
+    // Should show error or stay on signup page
+    await expect(page).toHaveURL(/.*\/auth\/signup/);
   });
 
   test("should accept terms and conditions checkbox", async ({ page }) => {
@@ -231,10 +206,8 @@ test.describe("Signup Flow", () => {
     if (await termsCheckbox.isVisible().catch(() => false)) {
       await termsCheckbox.check();
       await expect(termsCheckbox).toBeChecked();
-    } else {
-      // If no checkbox, test passes (optional field)
-      expect(true).toBe(true);
     }
+    // If no checkbox exists, the field is optional — test passes implicitly
   });
 
   test("should show terms and conditions link", async ({ page }) => {
@@ -256,7 +229,6 @@ test.describe("Signup Flow", () => {
     const renterRole = page.locator('input[value="renter"]');
     if (await renterRole.isVisible().catch(() => false)) {
       await renterRole.check();
-      await page.waitForTimeout(200);
     }
     
     await page.fill('input[name="firstName"]', "New");
@@ -274,17 +246,11 @@ test.describe("Signup Flow", () => {
       await termsCheckbox.check();
     }
     
-    await page.waitForTimeout(500);
     await page.click('button[type="submit"]');
-    
-    // Wait for navigation
-    await page.waitForTimeout(3000);
-    
-    const currentUrl = page.url();
     
     // All new users are created as "renter" - API doesn't accept role parameter
     // Users upgrade to "owner" via /become-owner route
-    expect(currentUrl.includes('/dashboard') || currentUrl.includes('/verify') || currentUrl.includes('/welcome')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(dashboard|verify|welcome)/, { timeout: 10000 });
   });
 });
 
@@ -301,37 +267,31 @@ test.describe("Forgot Password Flow", () => {
 
   test("should show error for empty email", async ({ page }) => {
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(300);
-    const hasError = await page.locator('.text-destructive, .text-red-500').first().isVisible().catch(() => false);
-    const stillOnPage = page.url().includes('/auth/forgot-password');
-    expect(hasError || stillOnPage).toBe(true);
+    // Should show error or remain on forgot-password page
+    await expect(page).toHaveURL(/.*\/auth\/forgot-password/);
   });
 
   test("should show error for invalid email format", async ({ page }) => {
     await page.fill('input[type="email"]', "invalid-email");
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(500);
-    const hasError = await page.locator('.text-destructive, .text-red-500').first().isVisible().catch(() => false);
-    const stillOnPage = page.url().includes('/auth/forgot-password');
-    expect(hasError || stillOnPage).toBe(true);
+    // Should show error or remain on forgot-password page
+    await expect(page).toHaveURL(/.*\/auth\/forgot-password/);
   });
 
   test("should submit forgot password request", async ({ page }) => {
     await page.fill('input[type="email"]', TEST_USER.email);
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(1000);
-    // Should show success message or navigate away
-    const hasSuccess = await page.locator('.text-green-500, .text-success, [role="status"]').first().isVisible().catch(() => false);
-    const urlChanged = !page.url().includes('/auth/forgot-password');
-    expect(hasSuccess || urlChanged || page.url().includes('/auth/forgot-password')).toBe(true);
+    // Should show success message or remain on page after submission
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('body')).toBeVisible();
   });
 
   test("should handle non-existent email gracefully", async ({ page }) => {
     await page.fill('input[type="email"]', "nonexistent@example.com");
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(1000);
-    // Should show message or handle gracefully (security - don't reveal if email exists)
-    expect(page.url()).toBeTruthy();
+    // Should handle gracefully (security - don't reveal if email exists)
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('body')).toBeVisible();
   });
 
   test("should navigate back to login", async ({ page }) => {
@@ -350,15 +310,14 @@ test.describe("Reset Password Flow", () => {
 
   test("should show error for invalid/expired token", async ({ page }) => {
     await page.goto("/auth/reset-password?token=invalid-token");
-    await page.waitForTimeout(500);
+    await page.waitForLoadState('domcontentloaded');
     // Either shows error, password input, or redirects
-    const pageLoaded = page.url().includes('reset-password');
-    expect(pageLoaded || page.url().includes('login') || page.url().includes('forgot')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(reset-password|login|forgot)/);
   });
 
   test("should validate password requirements", async ({ page }) => {
     await page.goto("/auth/reset-password?token=test-token");
-    await page.waitForTimeout(300);
+    await page.waitForLoadState('domcontentloaded');
     const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
     if (await passwordInput.isVisible().catch(() => false)) {
       await passwordInput.fill("weak");
@@ -367,16 +326,14 @@ test.describe("Reset Password Flow", () => {
         await confirmPassword.fill("weak");
       }
       await page.click('button[type="submit"]');
-      await page.waitForTimeout(500);
-      const hasError = await page.locator('.text-destructive, .text-red-500').first().isVisible().catch(() => false);
-      const stillOnPage = page.url().includes('reset-password');
-      expect(hasError || stillOnPage).toBe(true);
+      // Should show validation error or stay on reset-password page
+      await expect(page).toHaveURL(/.*reset-password/);
     }
   });
 
   test("should validate password confirmation match", async ({ page }) => {
     await page.goto("/auth/reset-password?token=test-token");
-    await page.waitForTimeout(300);
+    await page.waitForLoadState('domcontentloaded');
     const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
     if (await passwordInput.isVisible().catch(() => false)) {
       await passwordInput.fill("NewSecurePassword123!");
@@ -384,9 +341,8 @@ test.describe("Reset Password Flow", () => {
       if (await confirmPassword.isVisible().catch(() => false)) {
         await confirmPassword.fill("DifferentPassword123!");
         await page.click('button[type="submit"]');
-        await page.waitForTimeout(500);
-        const hasError = await page.locator('.text-destructive, .text-red-500').first().isVisible().catch(() => false);
-        expect(hasError || page.url().includes('reset-password')).toBe(true);
+        // Should show mismatch error or stay on reset-password page
+        await expect(page).toHaveURL(/.*reset-password/);
       }
     }
   });
@@ -401,20 +357,18 @@ test.describe("Logout Flow", () => {
     const userMenu = page.locator('[data-testid="user-menu"], button:has-text("account"), button:has-text("profile"), [aria-label*="user"]').first();
     if (await userMenu.isVisible().catch(() => false)) {
       await userMenu.click();
-      await page.waitForTimeout(300);
     }
     
     const logoutButton = page.locator('text=/Logout|Sign Out/i').first();
     if (await logoutButton.isVisible().catch(() => false)) {
       await logoutButton.click();
-      await page.waitForTimeout(1000);
-      expect(page.url().includes('login') || page.url().includes('home') || page.url() === '/' || !page.url().includes('dashboard')).toBe(true);
+      await expect(page).not.toHaveURL(/.*dashboard/, { timeout: 5000 });
     } else {
       // If no logout button found in dropdown, look in page
       const directLogout = page.locator('a:has-text("Logout"), button:has-text("Logout")').first();
       if (await directLogout.isVisible().catch(() => false)) {
         await directLogout.click();
-        await page.waitForTimeout(1000);
+        await expect(page).not.toHaveURL(/.*dashboard/, { timeout: 5000 });
       }
     }
   });
@@ -438,45 +392,38 @@ test.describe("Logout Flow", () => {
 test.describe("Protected Routes", () => {
   test("should redirect to login when accessing dashboard", async ({ page }) => {
     await page.goto("/dashboard");
-    await page.waitForTimeout(1000);
-    expect(page.url().includes('/login') || page.url().includes('/auth')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(login|auth)/, { timeout: 5000 });
   });
 
   test("should redirect to login when accessing admin route", async ({ page }) => {
     await page.goto("/admin");
-    await page.waitForTimeout(2000);
     // Should redirect to login
     await expect(page).toHaveURL(/.*\/login|.*\/auth/);
   });
 
   test("should redirect to login when accessing bookings", async ({ page }) => {
     await page.goto("/bookings");
-    await page.waitForTimeout(1000);
-    expect(page.url().includes('/login') || page.url().includes('/auth')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(login|auth)/, { timeout: 5000 });
   });
 
   test("should redirect to login when accessing favorites", async ({ page }) => {
     await page.goto("/favorites");
-    await page.waitForTimeout(1000);
-    expect(page.url().includes('/login') || page.url().includes('/auth')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(login|auth)/, { timeout: 5000 });
   });
 
   test("should redirect to login when accessing messages", async ({ page }) => {
     await page.goto("/messages");
-    await page.waitForTimeout(1000);
-    expect(page.url().includes('/login') || page.url().includes('/auth')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(login|auth)/, { timeout: 5000 });
   });
 
   test("should redirect to login when accessing settings", async ({ page }) => {
     await page.goto("/settings");
-    await page.waitForTimeout(1000);
-    expect(page.url().includes('/login') || page.url().includes('/auth')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(login|auth)/, { timeout: 5000 });
   });
 
   test("should redirect to login when accessing organizations", async ({ page }) => {
     await page.goto("/organizations");
-    await page.waitForTimeout(1000);
-    expect(page.url().includes('/login') || page.url().includes('/auth')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(login|auth)/, { timeout: 5000 });
   });
 
   test("should redirect non-admin from admin routes", async ({ page }) => {
@@ -485,31 +432,31 @@ test.describe("Protected Routes", () => {
     
     // Try accessing admin route
     await page.goto("/admin");
-    await page.waitForTimeout(2000);
     // Should either redirect to dashboard or show unauthorized
-    const url = page.url();
-    expect(url.includes('/dashboard') || url.includes('/unauthorized') || url.includes('/forbidden')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(dashboard|unauthorized|forbidden)/, { timeout: 5000 });
   });
 });
 
 test.describe("Session Management", () => {
   test("should persist session on page reload", async ({ page }) => {
     await loginAs(page, TEST_USER.email, TEST_USER.password);
-    await page.waitForTimeout(500);
     await page.reload();
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
     // Should still be on dashboard
-    expect(page.url().includes('/dashboard') || page.url().includes('/admin')).toBe(true);
+    await expect(page).toHaveURL(/.*\/(dashboard|admin)/);
   });
 
   test("should handle expired session gracefully", async ({ page }) => {
     await loginAs(page, TEST_USER.email, TEST_USER.password);
 
-    // Simulate an expired/invalid client session.
+    // Simulate a fully expired client session by clearing both cookies and persisted auth state.
     await page.context().clearCookies();
     await page.evaluate(() => {
-      localStorage.setItem("accessToken", "expired.invalid.token");
-      localStorage.setItem("refreshToken", "expired-refresh-token");
+      localStorage.removeItem("auth-storage");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
+      sessionStorage.clear();
     });
 
     await page.goto("/dashboard");

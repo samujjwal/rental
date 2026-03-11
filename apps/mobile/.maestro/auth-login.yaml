@@ -1,0 +1,33 @@
+# ============================================================================
+# Auth Login Flow — E2E Maestro Test
+# Validates the sign-in flow from the login screen through to the home tab.
+# ============================================================================
+appId: com.gharbatai.rental
+
+---
+
+# 1. App starts on login screen (unauthenticated)
+- assertVisible: "Sign In"
+
+# 2. Tap email field and enter credentials
+- tapOn:
+    id: "email-input"
+- inputText: ${TEST_EMAIL:-renter@test.com}
+
+- tapOn:
+    id: "password-input"
+- inputText: ${TEST_PASSWORD:-Test123!@#}
+
+# 3. Tap Sign In button
+- tapOn:
+    text: "Sign In"
+
+# 4. Wait for navigation to home/main screen
+- assertVisible:
+    text: "Home"
+    timeout: 10000
+
+# 5. Verify bottom tabs are visible (authenticated state)
+- assertVisible: "Search"
+- assertVisible: "Bookings"
+- assertVisible: "Profile"

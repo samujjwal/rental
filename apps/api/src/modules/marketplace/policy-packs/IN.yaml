@@ -1,0 +1,146 @@
+# India Country Policy Pack
+# ISO 3166-1 Alpha-2: IN
+
+general:
+  country_code: "IN"
+  country_name: "India"
+  currency:
+    code: "INR"
+    name: "Indian Rupee"
+    precision: 2
+    symbol: "₹"
+    allow_fractional: true
+  locale: "hi-IN"
+  fallback_locale: "en-IN"
+  timezone: "Asia/Kolkata"
+  utc_offset: "+05:30"
+  languages:
+    - "hi"
+    - "en"
+    - "bn"
+    - "te"
+    - "ta"
+    - "mr"
+    - "kn"
+  date_format: "DD-MM-YYYY"
+  phone_prefix: "+91"
+  address_format:
+    structure: "State/District/City/Pincode"
+    requires_zip: true
+    requires_state: true
+    zip_regex: "^[1-9][0-9]{5}$"
+    fields:
+      - { name: "state", required: true }
+      - { name: "district", required: false }
+      - { name: "city", required: true }
+      - { name: "pincode", required: true }
+      - { name: "address_line_1", required: true }
+      - { name: "address_line_2", required: false }
+
+identity:
+  host_verification:
+    required_documents:
+      - type: "AADHAAR"
+        label: "Aadhaar Card"
+        mandatory: true
+        api_integration: "UIDAI_VERIFICATION"
+      - type: "PAN_CARD"
+        label: "PAN Card"
+        mandatory: true
+        required_for: "TAX_COMPLIANCE"
+    minimum_age: 18
+    allow_foreign_hosts: true
+    foreign_host_documents:
+      - "PASSPORT"
+      - "OCI_CARD"
+  renter_verification:
+    require_phone_verification: true
+    require_email_verification: true
+    require_document_for_high_value: true
+    high_value_threshold: 100000  # INR
+  kyc_provider: "DIGILOCKER"
+  aadhaar_integration_enabled: true
+  aml_screening: true
+
+tax:
+  platform_level:
+    - type: "GST"
+      name: "Goods and Services Tax"
+      rate: 0.18
+      applied_to: ["SERVICE_FEE"]
+      remitted_by: "PLATFORM"
+      effective_from: "2017-07-01"
+    - type: "GST_SHORT_STAY"
+      name: "GST on Short-Stay Accommodation"
+      rate: 0.12
+      applied_to: ["BASE_PRICE"]
+      remitted_by: "PLATFORM"
+      condition: "base_price_per_night <= 7500"
+      effective_from: "2023-01-01"
+    - type: "GST_PREMIUM_STAY"
+      name: "GST on Premium Accommodation"
+      rate: 0.18
+      applied_to: ["BASE_PRICE"]
+      remitted_by: "PLATFORM"
+      condition: "base_price_per_night > 7500"
+      effective_from: "2023-01-01"
+  host_level: []
+  withholding_tax:
+    enabled: true
+    rate: 0.01  # 1% TDS on rental exceeding threshold
+    threshold: 50000  # INR per month
+    remitted_by: "PLATFORM"
+
+  # Subnational overrides
+  subnational:
+    MH:  # Maharashtra
+      municipal_tax:
+        rate: 0.0
+        name: "Municipal Tax" 
+    GJ:  # Gujarat
+      tourism_levy:
+        rate: 0.0
+        name: "Gujarat Tourism Levy"
+
+payments:
+  supported_methods:
+    - "UPI"
+    - "RAZORPAY"
+    - "STRIPE"
+    - "BANK_TRANSFER"
+    - "DEBIT_CARD"
+    - "CREDIT_CARD"
+    - "NET_BANKING"
+  default_method: "UPI"
+  payout_methods:
+    - "BANK_TRANSFER"
+    - "UPI"
+  payout_frequency: "WEEKLY"
+  payout_minimum: 500  # INR
+  escrow_hold_days: 1
+  max_foreign_currency_withdrawal: null
+
+booking:
+  min_duration_hours: 1
+  max_duration_days: 365
+  advance_booking_max_days: 365
+  cancellation_minimum_hours: 48
+  instant_book_enabled: true
+  allow_hourly: true
+  require_guest_count: true
+  max_guests_default: 30
+
+compliance:
+  short_term_rental_cap:
+    enabled: false
+  business_registration_required: false
+  safety_requirements:
+    fire_extinguisher: true
+    smoke_detector: false
+    first_aid_kit: false
+  insurance_required: false
+  data_retention_days: 2555  # ~7 years per IT Act
+  w9_equivalent:
+    required: true
+    form: "FORM_26AS"
+    threshold: 0  # All hosts must provide PAN

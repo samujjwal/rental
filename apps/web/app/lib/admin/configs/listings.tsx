@@ -1,6 +1,7 @@
 import type { EntityConfig } from "../entity-framework";
 import type { AdminListing } from "~/lib/api/admin";
 import { StatusBadge } from "~/components/ui/StatusBadge";
+import { formatCurrency, formatDate } from "~/lib/utils";
 
 export const listingsConfig: EntityConfig<AdminListing> = {
   name: "Listing",
@@ -41,12 +42,12 @@ export const listingsConfig: EntityConfig<AdminListing> = {
     {
       accessorKey: "basePrice",
       header: "Price",
-      Cell: ({ cell }) => `$${cell.getValue<number>()}`,
+      Cell: ({ cell }) => formatCurrency(cell.getValue<number>()),
     },
     {
       accessorKey: "createdAt",
       header: "Created",
-      Cell: ({ cell }) => new Date(cell.getValue<string>()).toLocaleDateString(),
+      Cell: ({ cell }) => formatDate(cell.getValue<string>()),
     },
   ],
 

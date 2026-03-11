@@ -5,6 +5,8 @@ import { CacheService } from '../../../common/cache/cache.service';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
 import { ListingValidationService } from './listing-validation.service';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
+import { EmbeddingService } from '../../ai/services/embedding.service';
+import { ListingVersionService } from './listing-version.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('ListingsService', () => {
@@ -59,6 +61,19 @@ describe('ListingsService', () => {
           useValue: {
             moderateText: jest.fn().mockResolvedValue({ isApproved: true, flags: [] }),
             moderateImage: jest.fn().mockResolvedValue({ isApproved: true, flags: [] }),
+            moderateListing: jest.fn().mockResolvedValue({ status: 'APPROVED', flags: [], confidence: 1 }),
+          },
+        },
+        {
+          provide: EmbeddingService,
+          useValue: {
+            updateListingEmbedding: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: ListingVersionService,
+          useValue: {
+            createSnapshot: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -103,6 +118,79 @@ describe('ListingsService', () => {
       prismaService.category.findFirst.mockResolvedValue(null);
 
       await expect(service.create(mockOwnerId, mockDto)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('create — moderation fail-closed behavior', () => {
+    const mockOwnerId = 'owner-123';
+    const mockDto: any = {
+      categoryId: 'cat-123',
+      title: 'Test Listing',
+      description: 'Test Description',
+      pricingMode: 'PER_DAY',
+      basePrice: 100,
+      bookingMode: 'INSTANT_BOOKING',
+      categorySpecificData: {},
+    };
+
+    beforeEach(() => {
+      prismaService.category.findFirst.mockResolvedValue({ id: 'cat-123', name: 'Test' });
+      validationService.validateCategoryData.mockResolvedValue({ isValid: true });
+    });
+
+    it('should block listing creation when moderation service is unavailable (fail-closed)', async () => {
+      const moderationService = service['moderationService'] as any;
+      moderationService.moderateListing.mockRejectedValueOnce(
+        new Error('Moderation service unavailable'),
+      );
+
+      try {
+        await service.create(mockOwnerId, mockDto);
+        fail('Expected BadRequestException');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        const response = error.getResponse();
+        expect(response.code).toBe('MODERATION_SERVICE_UNAVAILABLE');
+      }
+
+      expect(prismaService.listing.create).not.toHaveBeenCalled();
+    });
+
+    it('should block listing when moderation explicitly rejects content', async () => {
+      const moderationService = service['moderationService'] as any;
+      moderationService.moderateListing.mockResolvedValueOnce({
+        status: 'REJECTED',
+        flags: [{ type: 'spam', description: 'Content is spam' }],
+        confidence: 0.95,
+      });
+
+      await expect(service.create(mockOwnerId, mockDto)).rejects.toThrow(BadRequestException);
+      expect(prismaService.listing.create).not.toHaveBeenCalled();
+    });
+
+    it('should block listing when moderation flags content', async () => {
+      const moderationService = service['moderationService'] as any;
+      moderationService.moderateListing.mockResolvedValueOnce({
+        status: 'FLAGGED',
+        flags: [{ type: 'inappropriate', description: 'Inappropriate language' }],
+        confidence: 0.8,
+      });
+
+      await expect(service.create(mockOwnerId, mockDto)).rejects.toThrow(BadRequestException);
+      expect(prismaService.listing.create).not.toHaveBeenCalled();
+    });
+
+    it('should allow listing when moderation approves', async () => {
+      const moderationService = service['moderationService'] as any;
+      moderationService.moderateListing.mockResolvedValueOnce({
+        status: 'APPROVED',
+        flags: [],
+        confidence: 1,
+      });
+      prismaService.listing.create.mockResolvedValue({ id: 'listing-123', ...mockDto });
+
+      const result = await service.create(mockOwnerId, mockDto);
+      expect(result).toBeDefined();
     });
   });
 });

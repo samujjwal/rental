@@ -13,8 +13,9 @@ import {
 } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, Info } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { authApi } from "~/lib/api/auth";
 import {
   resetPasswordSchema,
@@ -27,7 +28,7 @@ import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Reset Password - Universal Rental Portal" },
+    { title: "Reset Password | GharBatai Rentals" },
     { name: "description", content: "Set a new password for your account" },
   ];
 };
@@ -96,6 +97,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 }
 
 export default function ResetPassword() {
+  const { t } = useTranslation();
   const { token } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -148,9 +150,9 @@ export default function ResetPassword() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-3xl font-bold text-primary">Reset Password</h1>
+            <h1 className="text-3xl font-bold text-primary">{t('auth.resetPassword.title', 'Reset Password')}</h1>
           </Link>
-          <p className="text-muted-foreground mt-2">Enter your new password</p>
+          <p className="text-muted-foreground mt-2">{t('auth.resetPassword.description', 'Enter your new password below.')}</p>
         </div>
 
         {/* Reset Password Form */}
@@ -161,17 +163,16 @@ export default function ResetPassword() {
                 <CheckCircle className="w-8 h-8 text-success" />
               </div>
               <h2 className="text-xl font-semibold text-foreground mb-2">
-                Password reset successful
+                {t('auth.resetPassword.success', 'Password has been reset successfully!')}
               </h2>
               <p className="text-muted-foreground mb-6">
-                Your password has been reset successfully. You can now sign in
-                with your new password.
+                {t('auth.resetPassword.successMessage', 'You can now sign in with your new password.')}
               </p>
               <Link
                 to="/auth/login"
                 className="inline-flex items-center justify-center w-full h-10 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
               >
-                Go to Login
+                {t('nav.login')}
               </Link>
             </div>
           ) : (
@@ -186,6 +187,14 @@ export default function ResetPassword() {
               <input type="hidden" name="intent" value="reset-password" />
               <input type="hidden" name="token" value={token || ""} />
 
+              {/* Token expiry notice */}
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+                <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-blue-700">
+                  {t('auth.resetPassword.linkExpiry', 'This reset link expires in 24 hours. If it has already expired, request a new one.')}
+                </p>
+              </div>
+
               {/* Error Message */}
               {actionData?.error && (
                 <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -199,7 +208,7 @@ export default function ResetPassword() {
                   htmlFor="password"
                   className="text-sm font-medium leading-none"
                 >
-                  New Password
+                  {t('auth.resetPassword.newPassword', 'New Password')}
                 </label>
                 <div className="relative">
                   <input
@@ -215,6 +224,7 @@ export default function ResetPassword() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -229,7 +239,7 @@ export default function ResetPassword() {
                   <div className="mt-2">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-muted-foreground">
-                        Password strength:
+                        {t('auth.signup.passwordStrength', 'Password strength:')}
                       </span>
                       <span
                         className={cn(
@@ -274,7 +284,7 @@ export default function ResetPassword() {
                   htmlFor="confirmPassword"
                   className="text-sm font-medium leading-none"
                 >
-                  Confirm New Password
+                  {t('auth.resetPassword.confirmPassword', 'Confirm New Password')}
                 </label>
                 <div className="relative">
                   <input
@@ -290,6 +300,7 @@ export default function ResetPassword() {
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -310,10 +321,10 @@ export default function ResetPassword() {
                 {isSubmitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                    Resetting password...
+                    {t('auth.resetPassword.resetting', 'Resetting...')}
                   </>
                 ) : (
-                  "Reset Password"
+                  t('auth.resetPassword.resetButton', 'Reset Password')
                 )}
               </UnifiedButton>
             </Form>

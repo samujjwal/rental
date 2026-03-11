@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
+import { FieldEncryptionService } from '../../../common/encryption/field-encryption.service';
+import { ConfigCascadeService } from '../../../common/config/config-cascade.service';
 import { User, UserStatus, VerificationStatus } from '@rental-portal/database';
 import { NotFoundException } from '@nestjs/common';
 
@@ -42,6 +44,20 @@ describe('UsersService', () => {
             get: jest.fn(),
             set: jest.fn(),
             del: jest.fn(),
+          },
+        },
+        {
+          provide: FieldEncryptionService,
+          useValue: {
+            encrypt: jest.fn((v: string) => (v ? `enc:${v}` : null)),
+            decrypt: jest.fn((v: string) => (v ? v.replace(/^enc:/, '') : null)),
+            isEncrypted: jest.fn((v: string) => typeof v === 'string' && v.startsWith('enc:')),
+          },
+        },
+        {
+          provide: ConfigCascadeService,
+          useValue: {
+            resolve: jest.fn().mockResolvedValue({ locale: 'en', currency: 'USD', timezone: 'UTC' }),
           },
         },
       ],

@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import {
   Key,
@@ -220,6 +221,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 }
 
 export default function SecuritySettingsPage() {
+  const { t } = useTranslation();
   const { settings, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -268,11 +270,11 @@ export default function SecuritySettingsPage() {
           to="/admin/system"
           className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
         >
-          ← Back to System Settings
+          {t("admin.backToSystemSettings")}
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900">Security Settings</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("admin.securitySettings")}</h1>
         <p className="text-gray-600 mt-1">
-          Configure platform security policies and access controls
+          {t("admin.securitySettingsSubtitle")}
         </p>
       </div>
 
@@ -292,7 +294,7 @@ export default function SecuritySettingsPage() {
       {error && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700">
           <AlertTriangle className="w-5 h-5 inline-block mr-2" />
-          Using default settings: {error}
+          {t("admin.usingDefaultSettings")}: {error}
         </div>
       )}
 
@@ -302,13 +304,13 @@ export default function SecuritySettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Key className="w-5 h-5 text-blue-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Password Policy</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.passwordPolicy")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
             <div>
               <label htmlFor="minPasswordLength" className="block text-sm font-medium text-gray-700 mb-1">
-                Minimum Password Length
+                {t("admin.minPasswordLength")}
               </label>
               <input
                 type="number"
@@ -324,7 +326,7 @@ export default function SecuritySettingsPage() {
 
             <div>
               <label htmlFor="passwordExpiryDays" className="block text-sm font-medium text-gray-700 mb-1">
-                Password Expiry (days, 0 = never)
+                {t("admin.passwordExpiry")}
               </label>
               <input
                 type="number"
@@ -342,8 +344,8 @@ export default function SecuritySettingsPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Require Uppercase Letters</p>
-                <p className="text-sm text-gray-500">Password must contain A-Z</p>
+                <p className="font-medium text-gray-900">{t("admin.requireUppercase")}</p>
+                <p className="text-sm text-gray-500">{t("admin.requireUppercaseDesc")}</p>
               </div>
               <ToggleSwitch
                 name="requireUppercase"
@@ -354,8 +356,8 @@ export default function SecuritySettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Require Lowercase Letters</p>
-                <p className="text-sm text-gray-500">Password must contain a-z</p>
+                <p className="font-medium text-gray-900">{t("admin.requireLowercase")}</p>
+                <p className="text-sm text-gray-500">{t("admin.requireLowercaseDesc")}</p>
               </div>
               <ToggleSwitch
                 name="requireLowercase"
@@ -366,8 +368,8 @@ export default function SecuritySettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Require Numbers</p>
-                <p className="text-sm text-gray-500">Password must contain 0-9</p>
+                <p className="font-medium text-gray-900">{t("admin.requireNumbers")}</p>
+                <p className="text-sm text-gray-500">{t("admin.requireNumbersDesc")}</p>
               </div>
               <ToggleSwitch
                 name="requireNumbers"
@@ -378,8 +380,8 @@ export default function SecuritySettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Require Special Characters</p>
-                <p className="text-sm text-gray-500">Password must contain !@#$%^&* etc.</p>
+                <p className="font-medium text-gray-900">{t("admin.requireSpecialChars")}</p>
+                <p className="text-sm text-gray-500">{t("admin.requireSpecialCharsDesc")}</p>
               </div>
               <ToggleSwitch
                 name="requireSpecialChars"
@@ -394,13 +396,13 @@ export default function SecuritySettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Clock className="w-5 h-5 text-green-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Session Settings</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.sessionSettings")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label htmlFor="sessionTimeoutMinutes" className="block text-sm font-medium text-gray-700 mb-1">
-                Session Timeout (minutes)
+                {t("admin.sessionTimeout")}
               </label>
               <input
                 type="number"
@@ -416,7 +418,7 @@ export default function SecuritySettingsPage() {
 
             <div>
               <label htmlFor="maxConcurrentSessions" className="block text-sm font-medium text-gray-700 mb-1">
-                Max Concurrent Sessions
+                {t("admin.maxConcurrentSessions")}
               </label>
               <input
                 type="number"
@@ -432,7 +434,7 @@ export default function SecuritySettingsPage() {
 
             <div>
               <label htmlFor="rememberMeDays" className="block text-sm font-medium text-gray-700 mb-1">
-                Remember Me Duration (days)
+                {t("admin.rememberMeDuration")}
               </label>
               <input
                 type="number"
@@ -452,13 +454,13 @@ export default function SecuritySettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <UserX className="w-5 h-5 text-red-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Login Security</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.loginSecurity")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
             <div>
               <label htmlFor="maxLoginAttempts" className="block text-sm font-medium text-gray-700 mb-1">
-                Max Login Attempts
+                {t("admin.maxLoginAttempts")}
               </label>
               <input
                 type="number"
@@ -474,7 +476,7 @@ export default function SecuritySettingsPage() {
 
             <div>
               <label htmlFor="lockoutDurationMinutes" className="block text-sm font-medium text-gray-700 mb-1">
-                Lockout Duration (minutes)
+                {t("admin.lockoutDuration")}
               </label>
               <input
                 type="number"
@@ -492,8 +494,8 @@ export default function SecuritySettingsPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Enable CAPTCHA</p>
-                <p className="text-sm text-gray-500">Show CAPTCHA after failed login attempts</p>
+                <p className="font-medium text-gray-900">{t("admin.enableCaptcha")}</p>
+                <p className="text-sm text-gray-500">{t("admin.enableCaptchaDesc")}</p>
               </div>
               <ToggleSwitch
                 name="enableCaptcha"
@@ -504,8 +506,8 @@ export default function SecuritySettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Enable Two-Factor Authentication</p>
-                <p className="text-sm text-gray-500">Allow users to enable 2FA for their accounts</p>
+                <p className="font-medium text-gray-900">{t("admin.enableTwoFactor")}</p>
+                <p className="text-sm text-gray-500">{t("admin.enableTwoFactorDesc")}</p>
               </div>
               <ToggleSwitch
                 name="enableTwoFactor"
@@ -520,14 +522,14 @@ export default function SecuritySettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Globe className="w-5 h-5 text-purple-500" />
-            <h2 className="text-xl font-semibold text-gray-900">IP & Rate Limiting</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.ipRateLimiting")}</h2>
           </div>
 
           <div className="space-y-4 mb-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Enable Rate Limiting</p>
-                <p className="text-sm text-gray-500">Limit API requests per IP address</p>
+                <p className="font-medium text-gray-900">{t("admin.enableRateLimiting")}</p>
+                <p className="text-sm text-gray-500">{t("admin.enableRateLimitingDesc")}</p>
               </div>
               <ToggleSwitch
                 name="enableRateLimiting"
@@ -539,7 +541,7 @@ export default function SecuritySettingsPage() {
             {formValues.enableRateLimiting && (
               <div className="p-4 bg-gray-50 rounded-lg">
                 <label htmlFor="rateLimitRequestsPerMinute" className="block text-sm font-medium text-gray-700 mb-1">
-                  Max Requests Per Minute
+                  {t("admin.maxRequestsPerMinute")}
                 </label>
                 <input
                   type="number"
@@ -556,8 +558,8 @@ export default function SecuritySettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Enable IP Whitelist</p>
-                <p className="text-sm text-gray-500">Only allow access from specific IP addresses</p>
+                <p className="font-medium text-gray-900">{t("admin.enableIpWhitelist")}</p>
+                <p className="text-sm text-gray-500">{t("admin.enableIpWhitelistDesc")}</p>
               </div>
               <ToggleSwitch
                 name="enableIpWhitelist"
@@ -569,7 +571,7 @@ export default function SecuritySettingsPage() {
             {formValues.enableIpWhitelist && (
               <div className="p-4 bg-gray-50 rounded-lg">
                 <label htmlFor="ipWhitelist" className="block text-sm font-medium text-gray-700 mb-1">
-                  Whitelisted IPs (one per line)
+                  {t("admin.whitelistedIps")}
                 </label>
                 <textarea
                   id="ipWhitelist"
@@ -589,14 +591,14 @@ export default function SecuritySettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Eye className="w-5 h-5 text-yellow-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Audit & Logging</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.auditLogging")}</h2>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Enable Audit Log</p>
-                <p className="text-sm text-gray-500">Track all admin and security-related actions</p>
+                <p className="font-medium text-gray-900">{t("admin.enableAuditLog")}</p>
+                <p className="text-sm text-gray-500">{t("admin.enableAuditLogDesc")}</p>
               </div>
               <ToggleSwitch
                 name="enableAuditLog"
@@ -608,7 +610,7 @@ export default function SecuritySettingsPage() {
             {formValues.enableAuditLog && (
               <div className="p-4 bg-gray-50 rounded-lg">
                 <label htmlFor="auditLogRetentionDays" className="block text-sm font-medium text-gray-700 mb-1">
-                  Audit Log Retention (days)
+                  {t("admin.auditLogRetention")}
                 </label>
                 <input
                   type="number"
@@ -631,12 +633,12 @@ export default function SecuritySettingsPage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
+                {t("admin.saving")}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Save Security Settings
+                {t("admin.saveSecuritySettings")}
               </>
             )}
           </UnifiedButton>

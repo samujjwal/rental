@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
+import { toMinorUnits, fromMinorUnits } from '@rental-portal/shared-types';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { toNumber } from '@rental-portal/database';
 
@@ -65,7 +67,7 @@ export class StripeTaxService {
   ) {
     const stripeSecretKey = this.config.get<string>('STRIPE_SECRET_KEY');
     if (!stripeSecretKey) {
-      this.logger.warn('Stripe secret key not configured');
+      this.logger.warn('Stripe secret key not configured — tax calculations will return 0 tax until STRIPE_SECRET_KEY is set');
       return;
     }
 
@@ -78,44 +80,77 @@ export class StripeTaxService {
    * Calculate tax for a transaction
    */
   async calculateTax(request: TaxCalculationRequest): Promise<TaxCalculationResult> {
-    try {
-      // For now, return a simple tax calculation
-      // In production, this would use Stripe Tax API
-      const taxRate = 0.08; // 8% default tax rate
-      const taxAmount = request.amount * taxRate;
-
-      const result: TaxCalculationResult = {
-        amount: request.amount,
-        tax: taxAmount,
-        total: request.amount + taxAmount,
-        taxBreakdown: [
-          {
-            name: 'Sales Tax',
-            amount: taxAmount,
-            rate: taxRate * 100,
-            type: 'state',
-          },
-        ],
-        taxRate,
-        jurisdiction: 'US',
-        taxable: true,
-      };
-
-      // Save tax calculation to database (simplified)
-      // await this.saveTaxCalculation(request, result);
-
-      return result;
-    } catch (error) {
-      this.logger.error('Tax calculation failed', error);
-
-      // Return default tax calculation (no tax)
+    if (!this.stripe) {
+      this.logger.warn('calculateTax called but Stripe is not configured — returning 0 tax');
       return {
         amount: request.amount,
         tax: 0,
         total: request.amount,
         taxBreakdown: [],
         taxRate: 0,
-        jurisdiction: 'Unknown',
+        jurisdiction: this.config.get<string>('platform.country', ''),
+        taxable: false,
+      };
+    }
+
+    try {
+      const calculation = await this.stripe.tax.calculations.create({
+        currency: request.currency,
+        line_items: [
+          {
+            amount: toMinorUnits(request.amount, request.currency), // Use currency-aware conversion
+            reference: 'rental',
+          },
+        ],
+        customer_details: {
+          address: {
+            country: request.customerAddress?.country || this.config.get<string>('platform.country', ''),
+
+            postal_code: request.customerAddress?.postalCode,
+            state: request.customerAddress?.state,
+            city: request.customerAddress?.city,
+            line1: request.customerAddress?.line1,
+            line2: request.customerAddress?.line2,
+          }
+        },
+      });
+
+      const taxAmount = fromMinorUnits(calculation.tax_amount_exclusive + calculation.tax_amount_inclusive, request.currency);
+      
+      const taxBreakdown = calculation.tax_breakdown.map(breakdown => ({
+        name: breakdown.taxability_reason || 'Tax',
+        amount: fromMinorUnits(breakdown.amount, request.currency),
+        rate: Number(breakdown.tax_rate_details?.percentage_decimal || 0),
+        type: 'state' as const, // Simplified mapping
+      }));
+
+      const result: TaxCalculationResult = {
+        amount: request.amount,
+        tax: taxAmount,
+        total: request.amount + taxAmount,
+        taxBreakdown,
+        taxRate: calculation.tax_breakdown.length > 0 ? Number(calculation.tax_breakdown[0].tax_rate_details?.percentage_decimal || 0) : 0,
+        jurisdiction: request.customerAddress?.country || this.config.get<string>('platform.country', ''),
+        taxable: calculation.tax_amount_exclusive > 0 || calculation.tax_amount_inclusive > 0,
+      };
+
+      return result;
+    } catch (error) {
+      // CRITICAL: Stripe Tax API call failed — do NOT silently apply a hardcoded rate.
+      // Return 0 tax so the booking can proceed without overcharging the user.
+      // Operators should configure Stripe Tax and ensure the API key is valid.
+      this.logger.error(
+        'CRITICAL: Tax calculation via Stripe failed. Returning 0 tax to avoid incorrect charges. ' +
+        'Verify STRIPE_SECRET_KEY and Stripe Tax configuration.',
+        error,
+      );
+      return {
+        amount: request.amount,
+        tax: 0,
+        total: request.amount,
+        taxBreakdown: [],
+        taxRate: 0,
+        jurisdiction: this.config.get<string>('platform.country', ''),
         taxable: false,
       };
     }
@@ -141,40 +176,96 @@ export class StripeTaxService {
   }
 
   /**
-   * Get tax registrations for the business
+   * Get tax registrations for the business from Stripe
    */
   async getTaxRegistrations(): Promise<TaxRegistration[]> {
-    try {
-      // Return empty array for now - would integrate with Stripe Tax API in production
+    if (!this.stripe) {
+      this.logger.warn('getTaxRegistrations called but Stripe is not configured');
       return [];
+    }
+
+    try {
+      const registrations = await this.stripe.tax.registrations.list({ status: 'active', limit: 100 });
+      return registrations.data.map((reg) => ({
+        id: reg.id,
+        country: reg.country,
+        state: (reg.country_options as any)?.[reg.country.toLowerCase()]?.state ?? undefined,
+        taxId: undefined as any,
+        registrationStatus: reg.status === 'active' ? 'registered' : reg.status === 'scheduled' ? 'pending' : 'not_registered',
+        effectiveDate: new Date(reg.active_from * 1000),
+      }));
     } catch (error) {
-      this.logger.error('Failed to get tax registrations', error);
+      this.logger.error('Failed to get tax registrations from Stripe', error);
       return [];
     }
   }
 
   /**
-   * Register for tax in a new jurisdiction
+   * Register for tax in a new jurisdiction via Stripe Tax Registrations API.
+   * See https://stripe.com/docs/api/tax/registrations/create
    */
   async registerForTax(country: string, state?: string, taxId?: string): Promise<TaxRegistration> {
+    if (!this.stripe) {
+      throw new BadRequestException(
+        'Stripe is not configured. Set STRIPE_SECRET_KEY to enable tax registration.',
+      );
+    }
+
     try {
-      // Return mock registration for now
-      const result: TaxRegistration = {
-        id: 'mock_registration',
-        country,
-        state,
-        taxId,
-        registrationStatus: 'pending',
-        effectiveDate: new Date(),
+      // Build country-specific options required by Stripe Tax Registrations
+      const countryKey = country.toLowerCase();
+      const countryOptions: Record<string, any> = {
+        [countryKey]: this.buildCountryOptions(country, state),
       };
 
-      this.logger.log(`Tax registration created: ${result.id}`);
+      const registration = await this.stripe.tax.registrations.create({
+        country: country.toUpperCase(),
+        active_from: 'now',
+        country_options: countryOptions as any,
+      });
 
-      return result;
+      this.logger.log(
+        `Stripe Tax Registration created: ${registration.id} for ${country}${state ? `/${state}` : ''}`,
+      );
+
+      return {
+        id: registration.id,
+        country: registration.country,
+        state,
+        taxId,
+        registrationStatus: registration.status === 'active' ? 'registered' : 'pending',
+        effectiveDate: new Date(registration.active_from * 1000),
+      };
     } catch (error) {
-      this.logger.error('Failed to register for tax', error);
+      this.logger.error(`Failed to register for tax in ${country}`, error);
       throw error;
     }
+  }
+
+  /**
+   * Build country-specific tax options for the Stripe Tax Registrations API.
+   * Stripe requires different option shapes per country/registration type.
+   */
+  private buildCountryOptions(country: string, state?: string): Record<string, any> {
+    const upper = country.toUpperCase();
+
+    // US: state-level sales tax registration
+    if (upper === 'US' && state) {
+      return { type: 'state_sales_tax', state };
+    }
+
+    // EU countries: standard VAT
+    const euCountries = new Set([
+      'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI',
+      'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT',
+      'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+    ]);
+    if (euCountries.has(upper)) {
+      return { type: 'standard' };
+    }
+
+    // NP (Nepal), IN, AU, GB and other countries: standard / simplified
+    return { type: 'simplified' };
   }
 
   /**
@@ -202,7 +293,7 @@ export class StripeTaxService {
 
       // Calculate totals
       let totalIncome = 0;
-      let totalTax = 0;
+      const totalTax = 0;
       let totalExpenses = 0;
 
       for (const booking of bookings) {
@@ -254,11 +345,11 @@ export class StripeTaxService {
       });
 
       if (!user || user.country !== 'US') {
-        throw new Error('User is not eligible for 1099 form');
+        throw i18nBadRequest('payment.notEligibleFor1099');
       }
 
       if (taxSummary.totalIncome < 600) {
-        throw new Error('Income is below 1099 threshold');
+        throw i18nBadRequest('payment.belowThreshold');
       }
 
       // Generate 1099 data
@@ -276,7 +367,7 @@ export class StripeTaxService {
           },
         },
         payer: {
-          name: 'Rental Portal Inc.',
+          name: 'GharBatai Rentals Pvt. Ltd.',
           taxId: this.config.get('BUSINESS_TAX_ID'),
           address: this.config.get('BUSINESS_ADDRESS'),
         },
@@ -309,6 +400,7 @@ export class StripeTaxService {
     try {
       // Return mock jurisdictions for now
       return [
+        { country: this.config.get<string>('platform.country', ''), supported: true, taxRates: [] },
         { country: 'US', state: 'CA', supported: true, taxRates: [] },
         { country: 'US', state: 'NY', supported: true, taxRates: [] },
         { country: 'US', state: 'TX', supported: true, taxRates: [] },
@@ -330,20 +422,20 @@ export class StripeTaxService {
     try {
       const testRequest: TaxCalculationRequest = {
         amount: 100,
-        currency: 'USD',
+        currency: this.config.get<string>('platform.defaultCurrency', 'USD'),
         customerAddress: {
           line1: '123 Main St',
-          city: 'San Francisco',
-          state: 'CA',
-          postalCode: '94105',
-          country: 'US',
+          city: 'Test City',
+          state: 'Test State',
+          postalCode: '10001',
+          country: this.config.get<string>('platform.country', 'US'),
         },
         businessAddress: {
-          line1: '456 Market St',
-          city: 'San Francisco',
-          state: 'CA',
-          postalCode: '94105',
-          country: 'US',
+          line1: '456 Business Ave',
+          city: 'Test City',
+          state: 'Test State',
+          postalCode: '10001',
+          country: this.config.get<string>('platform.country', 'US'),
         },
       };
 

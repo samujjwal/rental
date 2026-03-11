@@ -9,72 +9,84 @@ test.describe("Messaging", () => {
 
   test("should display messages page and search", async ({ page }) => {
     await expect(page.locator("h1")).toContainText(/Messages/i);
-    await expect(page.locator('input[placeholder="Search conversations..."]')).toBeVisible();
+    await expect(page.locator('[data-testid="conversation-search"]')).toBeVisible();
   });
 
   test("should show conversations list or empty state", async ({ page }) => {
     await expectAnyVisible(page, [
-      "div.divide-y button",
-      "text=No conversations yet",
+      '[data-testid="conversation-item"]',
+      '[data-testid="conversation-empty-state"]',
     ]);
   });
 
   test("should filter conversations by search", async ({ page }) => {
-    const search = page.locator('input[placeholder="Search conversations..."]');
+    const search = page.locator('[data-testid="conversation-search"]');
     await search.fill("camera");
     await expect(search).toHaveValue("camera");
   });
 
   test("should show chat prompt or active composer", async ({ page }) => {
     await expectAnyVisible(page, [
-      "text=Select a conversation to start messaging",
-      'textarea[placeholder="Type a message..."]',
+      '[data-testid="message-empty-prompt"]',
+      '[data-testid="message-composer"]',
     ]);
   });
 
   test("should open first conversation when available", async ({ page }) => {
-    const conversation = page.locator("div.divide-y button").first();
+    await expectAnyVisible(page, [
+      '[data-testid="conversation-item"]',
+      '[data-testid="conversation-empty-state"]',
+    ]);
+    const conversation = page.locator('[data-testid="conversation-item"]').first();
     if ((await conversation.count()) === 0) {
-      await expect(page.locator("text=No conversations yet")).toBeVisible();
+      await expect(page.locator('[data-testid="conversation-empty-state"]')).toBeVisible();
       return;
     }
 
     await conversation.click();
     await expect(page).toHaveURL(/conversation=/);
     await expectAnyVisible(page, [
-      'textarea[placeholder="Type a message..."]',
-      "text=No messages yet. Start the conversation!",
+      '[data-testid="message-composer"]',
+      '[data-testid="message-empty-state"]',
     ]);
   });
 
   test("should display attachment control for active conversation", async ({ page }) => {
-    const conversation = page.locator("div.divide-y button").first();
+    await expectAnyVisible(page, [
+      '[data-testid="conversation-item"]',
+      '[data-testid="conversation-empty-state"]',
+    ]);
+    const conversation = page.locator('[data-testid="conversation-item"]').first();
     if ((await conversation.count()) === 0) {
-      await expect(page.locator("text=No conversations yet")).toBeVisible();
+      await expect(page.locator('[data-testid="conversation-empty-state"]')).toBeVisible();
       return;
     }
 
     await conversation.click();
-    await expect(page.locator('label:has(svg.lucide-image)')).toBeVisible();
+    await expect(page.locator('[data-testid="message-attachment-button"]')).toBeVisible();
   });
 
   test("should allow drafting a message when composer is visible", async ({ page }) => {
-    const conversation = page.locator("div.divide-y button").first();
+    await expectAnyVisible(page, [
+      '[data-testid="conversation-item"]',
+      '[data-testid="conversation-empty-state"]',
+    ]);
+    const conversation = page.locator('[data-testid="conversation-item"]').first();
     if ((await conversation.count()) === 0) {
-      await expect(page.locator("text=No conversations yet")).toBeVisible();
+      await expect(page.locator('[data-testid="conversation-empty-state"]')).toBeVisible();
       return;
     }
 
     await conversation.click();
-    const composer = page.locator('textarea[placeholder="Type a message..."]');
+    const composer = page.locator('[data-testid="message-composer"]');
     await composer.fill("Test draft message");
     await expect(composer).toHaveValue("Test draft message");
   });
 
   test("should show filtered empty state for unmatched query", async ({ page }) => {
-    const search = page.locator('input[placeholder="Search conversations..."]');
+    const search = page.locator('[data-testid="conversation-search"]');
     await search.fill("zzzz-non-existent-conversation");
-    await expect(page.locator("text=No conversations yet")).toBeVisible();
+    await expect(page.locator('[data-testid="conversation-empty-state"]')).toBeVisible();
   });
 
   test("should load booking-context message entry route", async ({ page }) => {
@@ -96,8 +108,8 @@ test.describe("Messaging", () => {
     await page.goto("/messages");
     await expect(page.locator("h1")).toContainText(/Messages/i);
     await expectAnyVisible(page, [
-      "div.divide-y button",
-      "text=No conversations yet",
+      '[data-testid="conversation-item"]',
+      '[data-testid="conversation-empty-state"]',
     ]);
   });
 });

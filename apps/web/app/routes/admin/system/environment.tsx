@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link, useRevalidator } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import {
   Terminal,
@@ -82,6 +83,7 @@ const safeLower = (value: unknown): string =>
   (typeof value === "string" ? value : "").toLowerCase();
 
 export default function EnvironmentPage() {
+  const { t } = useTranslation();
   const { variables, environment, error } = useLoaderData<typeof clientLoader>();
   const revalidator = useRevalidator();
 
@@ -162,7 +164,7 @@ export default function EnvironmentPage() {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold mb-2">Error Loading Environment Variables</h3>
+          <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingEnv")}</h3>
           <p className="text-red-600">{error}</p>
         </div>
       </div>
@@ -178,14 +180,14 @@ export default function EnvironmentPage() {
             to="/admin/system"
             className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
           >
-            ← Back to System Settings
+            {t("admin.backToSystemSettings")}
           </Link>
           <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold text-gray-900">Environment Variables</h1>
+            <h1 className="text-3xl font-bold text-gray-900">{t("admin.environmentVariables")}</h1>
             {getEnvironmentBadge(environment)}
           </div>
           <p className="text-gray-600 mt-1">
-            View current environment configuration (read-only)
+            {t("admin.envReadOnlyDesc")}
           </p>
         </div>
         <UnifiedButton
@@ -194,7 +196,7 @@ export default function EnvironmentPage() {
           disabled={revalidator.state === "loading"}
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${revalidator.state === "loading" ? "animate-spin" : ""}`} />
-          Refresh
+          {t("admin.refresh")}
         </UnifiedButton>
       </div>
 
@@ -203,11 +205,9 @@ export default function EnvironmentPage() {
         <div className="flex items-start">
           <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" />
           <div>
-            <h3 className="text-sm font-medium text-yellow-800">Read-Only View</h3>
+            <h3 className="text-sm font-medium text-yellow-800">{t("admin.readOnlyView")}</h3>
             <p className="text-sm text-yellow-700 mt-1">
-              Environment variables cannot be modified through this interface for security reasons.
-              To update environment variables, modify your <code className="bg-yellow-100 px-1 rounded">.env</code> file
-              or your deployment configuration and restart the application.
+              {t("admin.envReadOnlyWarning")}
             </p>
           </div>
         </div>
@@ -219,9 +219,10 @@ export default function EnvironmentPage() {
           <div className="flex-1">
             <input
               type="text"
-              placeholder="Search variables..."
+              placeholder={t("admin.searchVariables")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label={t("admin.searchVariables")}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -258,9 +259,9 @@ export default function EnvironmentPage() {
       {Object.keys(groupedVariables).length === 0 ? (
         <div className="bg-white rounded-lg shadow border border-gray-200 p-8 text-center text-gray-500">
           <Terminal className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-          <p>No environment variables found</p>
+          <p>{t("admin.noEnvVarsFound")}</p>
           {searchQuery && (
-            <p className="text-sm mt-1">Try adjusting your search query</p>
+            <p className="text-sm mt-1">{t("admin.adjustSearch")}</p>
           )}
         </div>
       ) : (
@@ -275,10 +276,10 @@ export default function EnvironmentPage() {
                   {categoryIcons[category]}
                 </span>
                 <h2 className="text-lg font-semibold text-gray-900 capitalize">
-                  {category} Configuration
+                  {t("admin.configLabel", { category })}
                 </h2>
                 <span className="text-sm text-gray-500">
-                  ({(vars as EnvVariable[]).length} variables)
+                  ({(vars as EnvVariable[]).length} {t("admin.variables")})
                 </span>
               </div>
             </div>
@@ -296,7 +297,7 @@ export default function EnvironmentPage() {
                         </code>
                         {variable.sensitive && (
                           <span className="px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">
-                            Sensitive
+                            {t("admin.sensitive")}
                           </span>
                         )}
                       </div>
@@ -348,23 +349,23 @@ export default function EnvironmentPage() {
       {/* Statistics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
         <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">Total Variables</p>
+          <p className="text-sm text-gray-500">{t("admin.totalVariables")}</p>
           <p className="text-2xl font-semibold text-gray-900">{variables.length}</p>
         </div>
         <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">Sensitive</p>
+          <p className="text-sm text-gray-500">{t("admin.sensitive")}</p>
           <p className="text-2xl font-semibold text-red-600">
             {variables.filter((v: EnvVariable) => v.sensitive).length}
           </p>
         </div>
         <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">Categories</p>
+          <p className="text-sm text-gray-500">{t("admin.categories")}</p>
           <p className="text-2xl font-semibold text-blue-600">
             {new Set(variables.map((v: EnvVariable) => v.category)).size}
           </p>
         </div>
         <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">Environment</p>
+          <p className="text-sm text-gray-500">{t("admin.environment")}</p>
           <p className="text-2xl font-semibold text-gray-900 capitalize">{environment}</p>
         </div>
       </div>

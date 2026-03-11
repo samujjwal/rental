@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AvailabilityService } from './availability.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CacheService } from '../../../common/cache/cache.service';
 import { BadRequestException } from '@nestjs/common';
 
 describe('AvailabilityService', () => {
@@ -22,6 +23,15 @@ describe('AvailabilityService', () => {
             booking: {
               findMany: jest.fn(),
             },
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+            publish: jest.fn(),
           },
         },
       ],

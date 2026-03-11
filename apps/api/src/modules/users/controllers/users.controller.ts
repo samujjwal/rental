@@ -1,10 +1,10 @@
 import { Controller, Get, Patch, Post, Body, Param, UseGuards, NotFoundException, Delete } from '@nestjs/common';
+import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { UsersService } from '../services/users.service';
 import { DataExportService } from '../services/data-export.service';
 import { UpdateProfileDto } from '../dto/update-profile.dto';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@/common/auth';
 
 @ApiTags('users')
 @Controller('users')
@@ -22,7 +22,7 @@ export class UsersController {
   async getCurrentProfile(@CurrentUser('id') userId: string) {
     const user = await this.usersService.findById(userId);
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw i18nNotFound('auth.userNotFound');
     }
 
     const { passwordHash, mfaSecret, ...profile } = user;
@@ -69,7 +69,7 @@ export class UsersController {
   async getUserProfile(@Param('id') userId: string) {
     const user = await this.usersService.findById(userId);
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw i18nNotFound('auth.userNotFound');
     }
 
     // Return public profile only

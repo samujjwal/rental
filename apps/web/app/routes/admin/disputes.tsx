@@ -1,13 +1,14 @@
 
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import {
   AlertTriangle,
   XCircle,
   User,
   Calendar,
-  DollarSign,
+  Banknote,
   ChevronRight,
   Search,
   Loader2,
@@ -16,6 +17,7 @@ import { adminApi, type AdminDispute } from "~/lib/api/admin";
 import { disputesApi, type DisputeDetail } from "~/lib/api/disputes";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { formatCurrency, formatDate } from "~/lib/utils";
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && typeof error.message === "string") {
@@ -48,7 +50,7 @@ const safeNumber = (value: unknown): number => {
 };
 const safeDateLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
-  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "Unknown date" : formatDate(date);
 };
 const safeLower = (value: unknown): string =>
   (typeof value === "string" ? value : "").toLowerCase();
@@ -89,8 +91,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "");
   const disputeId = String(formData.get("disputeId") ?? "").trim();
-  const UUID_PATTERN =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const hasDisputeId = disputeId.length > 0 && disputeId.length <= 128;
 
   if (intent === "set-status") {
     const status = String(formData.get("status") ?? "").trim().toUpperCase();
@@ -102,7 +103,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       "CLOSED",
       "DISMISSED",
     ]);
-    if (!UUID_PATTERN.test(disputeId)) {
+    if (!hasDisputeId) {
       return { success: false, error: "Dispute ID is required" };
     }
     if (!allowedStatuses.has(status)) {
@@ -117,7 +118,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   }
 
   if (intent === "assign-to-me") {
-    if (!UUID_PATTERN.test(disputeId)) {
+    if (!hasDisputeId) {
       return { success: false, error: "Dispute ID is required" };
     }
     try {
@@ -130,7 +131,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 
   if (intent === "add-note") {
     const adminNote = String(formData.get("adminNote") ?? "").trim();
-    if (!UUID_PATTERN.test(disputeId)) {
+    if (!hasDisputeId) {
       return { success: false, error: "Dispute ID is required" };
     }
     if (adminNote.length < 3) {
@@ -146,7 +147,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 
   if (intent === "send-message") {
     const message = String(formData.get("message") ?? "").trim();
-    if (!UUID_PATTERN.test(disputeId)) {
+    if (!hasDisputeId) {
       return { success: false, error: "Dispute ID is required" };
     }
     if (message.length < 3) {
@@ -167,7 +168,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       resolvedAmountRaw.length > 0 && !Number.isNaN(Number(resolvedAmountRaw))
         ? Number(resolvedAmountRaw)
         : undefined;
-    if (!UUID_PATTERN.test(disputeId)) {
+    if (!hasDisputeId) {
       return { success: false, error: "Dispute ID is required" };
     }
     if (resolution.length < 3) {
@@ -201,6 +202,7 @@ type DisputeStatus =
 type DisputePriority = "URGENT" | "HIGH" | "MEDIUM" | "LOW";
 
 export default function AdminDisputesPage() {
+  const { t } = useTranslation();
   const { disputes, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -313,9 +315,9 @@ export default function AdminDisputesPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link to="/admin" className="text-muted-foreground hover:text-foreground">
-                ← Admin Dashboard
+                {t("admin.adminDashboard")}
               </Link>
-              <h1 className="text-2xl font-bold text-foreground">Dispute Management</h1>
+              <h1 className="text-2xl font-bold text-foreground">{t("admin.disputeManagement")}</h1>
             </div>
           </div>
         </div>
@@ -343,11 +345,11 @@ export default function AdminDisputesPage() {
         {/* Status Tabs */}
         <div className="flex flex-wrap gap-2 mb-6">
           {[
-            { key: "all", label: "All" },
-            { key: "OPEN", label: "Open" },
-            { key: "UNDER_REVIEW", label: "Under Review" },
-            { key: "INVESTIGATING", label: "Investigating" },
-            { key: "RESOLVED", label: "Resolved" },
+            { key: "all", label: t("admin.all") },
+            { key: "OPEN", label: t("admin.open") },
+            { key: "UNDER_REVIEW", label: t("admin.underReview") },
+            { key: "INVESTIGATING", label: t("admin.investigating") },
+            { key: "RESOLVED", label: t("admin.resolved") },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -376,7 +378,7 @@ export default function AdminDisputesPage() {
         <div className="mb-6">
           <div className="max-w-md">
             <label htmlFor="dispute-type-filter" className="block text-sm font-medium mb-2">
-              Filter by type
+              {t("admin.filterByType")}
             </label>
             <select
               id="dispute-type-filter"
@@ -385,7 +387,7 @@ export default function AdminDisputesPage() {
               onChange={(e) => setSelectedType(e.target.value)}
               className="w-full px-3 py-2 border border-input rounded-lg bg-background"
             >
-              <option value="all">All types</option>
+              <option value="all">{t("admin.allTypes")}</option>
               {availableTypes.map((type) => (
                 <option key={type} value={type}>
                   {humanize(type)}
@@ -401,9 +403,10 @@ export default function AdminDisputesPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search by dispute ID or email..."
+              placeholder={t("admin.searchDisputesPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search disputes"
               className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background"
             />
           </div>
@@ -455,9 +458,9 @@ export default function AdminDisputesPage() {
                       {safeDateLabel(dispute.createdAt)}
                     </span>
                     <span className="flex items-center gap-1">
-                      <DollarSign className="w-4 h-4" />
+                      <Banknote className="w-4 h-4" />
                       {safeNumber(dispute.amount) > 0
-                        ? `$${safeNumber(dispute.amount).toFixed(2)}`
+                        ? formatCurrency(safeNumber(dispute.amount))
                         : "—"}
                     </span>
                   </div>
@@ -484,7 +487,7 @@ export default function AdminDisputesPage() {
           {filteredDisputes.length === 0 && (
             <div className="text-center py-12 bg-card border rounded-xl">
               <AlertTriangle className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">No disputes found</p>
+              <p className="text-muted-foreground">{t("admin.noDisputesFound")}</p>
             </div>
           )}
         </div>
@@ -539,7 +542,7 @@ export default function AdminDisputesPage() {
               {detailLoading && (
                 <div className="p-3 bg-muted/40 rounded-lg text-sm text-muted-foreground flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading dispute details...
+                  {t("admin.loadingDisputeDetails")}
                 </div>
               )}
               {detailError && (
@@ -551,14 +554,14 @@ export default function AdminDisputesPage() {
               {/* Participants */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-muted/50 rounded-lg">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Initiator</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">{t("admin.initiator")}</h4>
                   <p className="font-medium text-foreground">
                     {safeText(selectedDispute.initiator?.firstName, "User")}
                   </p>
                   <p className="text-sm text-muted-foreground">{safeText(selectedDispute.initiator?.email, "Unknown")}</p>
                 </div>
                 <div className="p-4 bg-muted/50 rounded-lg">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Defendant</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">{t("admin.defendant")}</h4>
                   <p className="font-medium text-foreground">
                     {safeText(selectedDispute.defendant?.firstName, "User")}
                   </p>
@@ -568,7 +571,7 @@ export default function AdminDisputesPage() {
 
               {/* Details */}
               <div data-testid="dispute-details-section">
-                <h4 className="text-sm font-medium text-foreground mb-2">Issue Details</h4>
+                <h4 className="text-sm font-medium text-foreground mb-2">{t("admin.issueDetails")}</h4>
                 <div className="p-4 bg-muted/50 rounded-lg space-y-2">
                   <p className="font-medium text-foreground">
                     {getTypeIcon(selectedDispute.type)} {humanize(selectedDispute.type)}
@@ -581,10 +584,10 @@ export default function AdminDisputesPage() {
                     Booking: {safeText(selectedDispute.booking?.listing?.title, "Listing")}
                   </p>
                   <p className="text-sm">
-                    <span className="text-muted-foreground">Amount Disputed:</span>{" "}
+                    <span className="text-muted-foreground">{t("admin.amountDisputed")}:</span>{" "}
                     <span className="font-semibold text-foreground">
                       {safeNumber(selectedDispute.amount) > 0
-                        ? `$${safeNumber(selectedDispute.amount).toFixed(2)}`
+                        ? formatCurrency(safeNumber(selectedDispute.amount))
                         : "—"}
                     </span>
                   </p>
@@ -593,7 +596,7 @@ export default function AdminDisputesPage() {
 
               {/* Evidence */}
               <div data-testid="evidence-section">
-                <h4 className="text-sm font-medium text-foreground mb-2">Evidence</h4>
+                <h4 className="text-sm font-medium text-foreground mb-2">{t("admin.evidence")}</h4>
                 <div className="p-4 bg-muted/50 rounded-lg">
                   {Array.isArray(selectedDisputeDetail?.evidence) &&
                   selectedDisputeDetail.evidence.length > 0 ? (
@@ -605,14 +608,14 @@ export default function AdminDisputesPage() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No evidence attached for this dispute.</p>
+                    <p className="text-sm text-muted-foreground">{t("admin.noEvidence")}</p>
                   )}
                 </div>
               </div>
 
               {/* Messages */}
               <div data-testid="dispute-messages">
-                <h4 className="text-sm font-medium text-foreground mb-2">Discussion</h4>
+                <h4 className="text-sm font-medium text-foreground mb-2">{t("admin.discussion")}</h4>
                 <div className="p-4 bg-muted/50 rounded-lg space-y-2">
                   {Array.isArray(selectedDisputeDetail?.responses) &&
                   selectedDisputeDetail.responses.length > 0 ? (
@@ -625,7 +628,7 @@ export default function AdminDisputesPage() {
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">No responses yet.</p>
+                    <p className="text-sm text-muted-foreground">{t("admin.noResponses")}</p>
                   )}
                 </div>
               </div>
@@ -642,7 +645,7 @@ export default function AdminDisputesPage() {
                       disabled={isSubmitting}
                       data-testid="assign-dispute-button"
                     >
-                      Assign to Me
+                      {t("admin.assignToMe")}
                     </UnifiedButton>
                   </Form>
                   <Form method="post">
@@ -650,7 +653,7 @@ export default function AdminDisputesPage() {
                     <input type="hidden" name="intent" value="set-status" />
                     <input type="hidden" name="status" value="UNDER_REVIEW" />
                     <UnifiedButton type="submit" variant="outline" disabled={isSubmitting}>
-                      Move to Review
+                      {t("admin.moveToReview")}
                     </UnifiedButton>
                   </Form>
                 </div>
@@ -659,11 +662,11 @@ export default function AdminDisputesPage() {
                   <input type="hidden" name="disputeId" value={selectedDispute.id} />
                   <input type="hidden" name="intent" value="add-note" />
                   <label className="block text-sm font-medium text-foreground">
-                    Admin note
+                    {t("admin.adminNote")}
                     <textarea
                       name="adminNote"
                       className="mt-2 w-full min-h-24 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Add internal handling notes for this dispute..."
+                      placeholder={t("admin.adminNotePlaceholder")}
                       data-testid="admin-note-input"
                     />
                   </label>
@@ -673,7 +676,7 @@ export default function AdminDisputesPage() {
                     disabled={isSubmitting}
                     data-testid="add-note-button"
                   >
-                    Add Note
+                    {t("admin.addNote")}
                   </UnifiedButton>
                 </Form>
 
@@ -681,11 +684,11 @@ export default function AdminDisputesPage() {
                   <input type="hidden" name="disputeId" value={selectedDispute.id} />
                   <input type="hidden" name="intent" value="send-message" />
                   <label className="block text-sm font-medium text-foreground">
-                    Send message
+                    {t("admin.sendMessage")}
                     <textarea
                       name="message"
                       className="mt-2 w-full min-h-24 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Send a message to the dispute thread..."
+                      placeholder={t("admin.sendMessagePlaceholder")}
                       data-testid="dispute-message-input"
                     />
                   </label>
@@ -695,7 +698,7 @@ export default function AdminDisputesPage() {
                     disabled={isSubmitting}
                     data-testid="send-dispute-message-button"
                   >
-                    Send Message
+                    {t("admin.sendMessage")}
                   </UnifiedButton>
                 </Form>
 
@@ -703,16 +706,16 @@ export default function AdminDisputesPage() {
                   <input type="hidden" name="disputeId" value={selectedDispute.id} />
                   <input type="hidden" name="intent" value="resolve-dispute" />
                   <label className="block text-sm font-medium text-foreground">
-                    Resolution notes
+                    {t("admin.resolutionNotes")}
                     <textarea
                       name="resolution"
                       className="mt-2 w-full min-h-24 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Summarize the dispute resolution decision..."
+                      placeholder={t("admin.resolutionNotesPlaceholder")}
                       data-testid="resolution-note-input"
                     />
                   </label>
                   <label className="block text-sm font-medium text-foreground">
-                    Resolved amount (optional)
+                    {t("admin.resolvedAmountLabel")}
                     <input
                       name="resolvedAmount"
                       type="number"
@@ -732,12 +735,12 @@ export default function AdminDisputesPage() {
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Updating...
+                        {t("admin.updating")}
                       </>
                     ) : (
                       <>
                         <AlertTriangle className="w-4 h-4 mr-2" />
-                        Resolve Dispute
+                        {t("admin.resolveDispute")}
                       </>
                     )}
                   </UnifiedButton>
@@ -752,4 +755,3 @@ export default function AdminDisputesPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

@@ -3,22 +3,25 @@ import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
-import type { DisputeType } from "@rental-portal/mobile-sdk";
+import { DisputeType } from '~/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, "DisputeCreate">;
 
 const DISPUTE_TYPES: { value: DisputeType; label: string }[] = [
-  { value: "PROPERTY_DAMAGE", label: "Property Damage" },
-  { value: "MISSING_ITEMS", label: "Missing Items" },
-  { value: "CONDITION_MISMATCH", label: "Condition Mismatch" },
-  { value: "REFUND_REQUEST", label: "Refund Request" },
-  { value: "PAYMENT_ISSUE", label: "Payment Issue" },
-  { value: "OTHER", label: "Other" },
+  { value: DisputeType.PROPERTY_DAMAGE, label: "Property Damage" },
+  { value: DisputeType.MISSING_ITEMS, label: "Missing Items" },
+  { value: DisputeType.CONDITION_MISMATCH, label: "Condition Mismatch" },
+  { value: DisputeType.REFUND_REQUEST, label: "Refund Request" },
+  { value: DisputeType.PAYMENT_ISSUE, label: "Payment Issue" },
+  { value: DisputeType.CANCELLATION, label: "Cancellation" },
+  { value: DisputeType.CLEANING_FEE, label: "Cleaning Fee" },
+  { value: DisputeType.RULES_VIOLATION, label: "Rules Violation" },
+  { value: DisputeType.OTHER, label: "Other" },
 ];
 
 export function DisputeCreateScreen({ route, navigation }: Props) {
   const { bookingId } = route.params;
-  const [selectedType, setSelectedType] = useState<DisputeType>("PROPERTY_DAMAGE");
+  const [selectedType, setSelectedType] = useState<DisputeType>(DisputeType.PROPERTY_DAMAGE);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [requestedAmount, setRequestedAmount] = useState("");
@@ -50,7 +53,7 @@ export function DisputeCreateScreen({ route, navigation }: Props) {
     setLoading(true);
     setStatus("");
     try {
-      await mobileClient.createDispute({
+      const dispute = await mobileClient.createDispute({
         bookingId,
         type: selectedType,
         title: title.trim(),
@@ -58,7 +61,7 @@ export function DisputeCreateScreen({ route, navigation }: Props) {
         amount: requestedAmount ? Number(requestedAmount) : undefined,
       });
       setStatus("Dispute submitted.");
-      navigation.navigate("BookingDetail", { bookingId });
+      navigation.navigate("DisputeDetail", { disputeId: dispute.id });
     } catch (err) {
       setStatus("Unable to submit dispute.");
     } finally {

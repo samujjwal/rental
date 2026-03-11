@@ -21,7 +21,9 @@ import {
 } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
 import { UnifiedButton, Badge, RouteErrorBoundary } from "~/components/ui";
+import { formatCurrency } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
+import { useTranslation } from "react-i18next";
 
 export const meta: MetaFunction = () => {
   return [
@@ -77,7 +79,8 @@ interface OwnerListing {
   id: string;
   title: string;
   description: string;
-  images: string[];
+  photos: string[];
+  images?: string[];
   status:
     | "AVAILABLE"
     | "RENTED"
@@ -129,7 +132,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   const search = url.searchParams.get("search")?.trim().slice(0, 100) || undefined;
 
   try {
-    const listings = (await listingsApi.getMyListings()) as OwnerListing[];
+    const listings = (await listingsApi.getMyListings()) as unknown as OwnerListing[];
     
     // Filter listings based on params
     let filteredListings: OwnerListing[] = listings;
@@ -162,7 +165,6 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       error: null,
     };
   } catch (error) {
-    console.error("Failed to load listings:", error);
     return {
       listings: [],
       total: 0,
@@ -248,6 +250,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
 };
 
 export default function OwnerListingsPage() {
+  const { t } = useTranslation();
   const { listings, stats, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const revalidator = useRevalidator();
@@ -300,9 +303,9 @@ export default function OwnerListingsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center">
             <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
-            <h1 className="text-2xl font-bold text-foreground mb-2">Unable to load listings</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-2">{t('listings.owner.errorTitle', 'Unable to load listings')}</h1>
             <p className="text-muted-foreground mb-6">{error}</p>
-            <UnifiedButton onClick={() => revalidator.revalidate()}>Try Again</UnifiedButton>
+            <UnifiedButton onClick={() => revalidator.revalidate()}>{t('common.retry')}</UnifiedButton>
           </div>
         </div>
       </div>
@@ -311,27 +314,22 @@ export default function OwnerListingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">My Listings</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage and track all your rental items
-              </p>
-            </div>
-            <Link to="/listings/new">
-              <UnifiedButton>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Listing
-              </UnifiedButton>
-            </Link>
-          </div>
-        </div>
-      </header>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t('listings.owner.title', 'My Listings')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('listings.owner.subtitle', 'Manage and track all your rental items')}
+            </p>
+          </div>
+          <Link to="/listings/new">
+            <UnifiedButton>
+              <Plus className="w-4 h-4 mr-2" />
+              {t('listings.owner.addListing', 'Add Listing')}
+            </UnifiedButton>
+          </Link>
+        </div>
         {actionData?.message && (
           <div
             className={`mb-6 rounded-lg px-4 py-3 text-sm ${
@@ -346,33 +344,33 @@ export default function OwnerListingsPage() {
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
           <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Total Listings</p>
+            <p className="text-sm text-muted-foreground">{t('dashboard.stats.totalListings')}</p>
             <p className="text-2xl font-bold text-foreground">{stats.total}</p>
           </div>
           <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Active</p>
+            <p className="text-sm text-muted-foreground">{t('listings.owner.stats.active', 'Active')}</p>
             <p className="text-2xl font-bold text-green-600">{stats.active}</p>
           </div>
           <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Currently Rented</p>
+            <p className="text-sm text-muted-foreground">{t('listings.owner.stats.currentlyRented', 'Currently Rented')}</p>
             <p className="text-2xl font-bold text-blue-600">{stats.rented}</p>
           </div>
           <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Drafts</p>
+            <p className="text-sm text-muted-foreground">{t('listings.owner.stats.drafts', 'Drafts')}</p>
             <p className="text-2xl font-bold text-gray-600">{stats.draft}</p>
           </div>
           <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Unavailable</p>
+            <p className="text-sm text-muted-foreground">{t('listings.owner.stats.unavailable', 'Unavailable')}</p>
             <p className="text-2xl font-bold text-orange-600">{stats.unavailable}</p>
           </div>
           <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Total Bookings</p>
+            <p className="text-sm text-muted-foreground">{t('listings.owner.stats.totalBookings', 'Total Bookings')}</p>
             <p className="text-2xl font-bold text-foreground">{stats.totalBookings}</p>
           </div>
           <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Total Earnings</p>
+            <p className="text-sm text-muted-foreground">{t('dashboard.stats.totalEarnings')}</p>
             <p className="text-2xl font-bold text-foreground">
-              ${safeNumber(stats.totalEarnings).toLocaleString()}
+              {formatCurrency(safeNumber(stats.totalEarnings))}
             </p>
           </div>
         </div>
@@ -385,35 +383,35 @@ export default function OwnerListingsPage() {
               size="sm"
               onClick={() => handleStatusFilter(null)}
             >
-              All ({stats.total})
+              {t('listings.owner.filterAll', 'All')} ({stats.total})
             </UnifiedButton>
             <UnifiedButton
               variant={currentStatus === "AVAILABLE" ? "primary" : "outline"}
               size="sm"
               onClick={() => handleStatusFilter("AVAILABLE")}
             >
-              Available ({stats.active})
+              {t('listings.owner.filterAvailable', 'Available')} ({stats.active})
             </UnifiedButton>
             <UnifiedButton
               variant={currentStatus === "RENTED" ? "primary" : "outline"}
               size="sm"
               onClick={() => handleStatusFilter("RENTED")}
             >
-              Rented ({stats.rented})
+              {t('listings.owner.filterRented', 'Rented')} ({stats.rented})
             </UnifiedButton>
             <UnifiedButton
               variant={currentStatus === "DRAFT" ? "primary" : "outline"}
               size="sm"
               onClick={() => handleStatusFilter("DRAFT")}
             >
-              Drafts ({stats.draft})
+              {t('listings.owner.filterDrafts', 'Drafts')} ({stats.draft})
             </UnifiedButton>
             <UnifiedButton
               variant={currentStatus === "UNAVAILABLE" ? "primary" : "outline"}
               size="sm"
               onClick={() => handleStatusFilter("UNAVAILABLE")}
             >
-              Unavailable ({stats.unavailable})
+              {t('listings.owner.filterUnavailable', 'Unavailable')} ({stats.unavailable})
             </UnifiedButton>
           </div>
           
@@ -425,7 +423,8 @@ export default function OwnerListingsPage() {
                 name="search"
                 defaultValue={currentSearch}
                 maxLength={MAX_SEARCH_LENGTH}
-                placeholder="Search listings..."
+                placeholder={t('listings.search')}
+                aria-label={t('listings.search')}
                 className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-sm"
               />
             </form>
@@ -453,18 +452,18 @@ export default function OwnerListingsPage() {
           <div className="text-center py-16 bg-card border rounded-lg">
             <TrendingUp className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-semibold text-foreground mb-2">
-              {currentStatus || currentSearch ? "No listings match your filters" : "No listings yet"}
+              {currentStatus || currentSearch ? t('listings.owner.noMatchFilters', 'No listings match your filters') : t('listings.owner.noListings', 'No listings yet')}
             </h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               {currentStatus || currentSearch
-                ? "Try adjusting your filters or search terms"
-                : "Start earning by listing your first item for rent"}
+                ? t('listings.owner.adjustFilters', 'Try adjusting your filters or search terms')
+                : t('listings.owner.startEarning', 'Start earning by listing your first item for rent')}
             </p>
             {!currentStatus && !currentSearch && (
               <Link to="/listings/new">
                 <UnifiedButton>
                   <Plus className="w-4 h-4 mr-2" />
-                  Create Your First Listing
+                  {t('listings.owner.createFirst', 'Create Your First Listing')}
                 </UnifiedButton>
               </Link>
             )}
@@ -507,14 +506,14 @@ export default function OwnerListingsPage() {
                               className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100"
                             >
                               <Eye className="w-4 h-4" />
-                              View
+                              {t('listings.owner.view', 'View')}
                             </Link>
                             <Link
                               to={listingId ? `/listings/${listingId}/edit` : "/listings"}
                               className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100"
                             >
                               <Edit className="w-4 h-4" />
-                              Edit
+                              {t('common.edit')}
                             </Link>
                             <Form method="post" className="w-full">
                               <input type="hidden" name="listingId" value={listing.id} />
@@ -536,7 +535,7 @@ export default function OwnerListingsPage() {
                                 }}
                               >
                                 <Trash2 className="w-4 h-4" />
-                                {confirmingId === listing.id ? "Confirm delete" : "Delete"}
+                                {confirmingId === listing.id ? t('listings.owner.confirmDelete', 'Confirm delete') : t('common.delete')}
                               </button>
                             </Form>
                             {listing.status === "AVAILABLE" && (
@@ -549,7 +548,7 @@ export default function OwnerListingsPage() {
                                   className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 w-full"
                                 >
                                   <Pause className="w-4 h-4" />
-                                  Pause
+                                  {t('listings.owner.pause', 'Pause')}
                                 </button>
                               </Form>
                             )}
@@ -563,7 +562,7 @@ export default function OwnerListingsPage() {
                                   className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 w-full"
                                 >
                                   <CheckCircle className="w-4 h-4" />
-                                  Activate
+                                  {t('listings.owner.activate', 'Activate')}
                                 </button>
                               </Form>
                             )}
@@ -577,7 +576,7 @@ export default function OwnerListingsPage() {
                                   className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 w-full"
                                 >
                                   <CheckCircle className="w-4 h-4" />
-                                  Publish
+                                  {t('listings.owner.publish', 'Publish')}
                                 </button>
                               </Form>
                             )}
@@ -594,7 +593,7 @@ export default function OwnerListingsPage() {
                     </Link>
                     <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                       <MapPin className="w-4 h-4" />
-                      <span>{listing.location?.city || "Location not set"}</span>
+                      <span>{listing.location?.city || t('listings.owner.locationNotSet', 'Location not set')}</span>
                     </div>
                     <div className="flex items-center justify-between mt-3">
                       <div className="flex items-center gap-1">
@@ -602,23 +601,23 @@ export default function OwnerListingsPage() {
                         <span className="font-medium">
                           {safeNumber(listing.averageRating) > 0
                             ? safeNumber(listing.averageRating).toFixed(1)
-                            : "New"}
+                            : t('listings.owner.new', 'New')}
                         </span>
                         <span className="text-muted-foreground text-sm">
                           ({listing.reviewCount || 0})
                         </span>
                       </div>
                       <div className="font-semibold text-foreground">
-                        ${listing.basePrice}
-                        <span className="text-sm text-muted-foreground font-normal">/day</span>
+                        {formatCurrency(listing.basePrice)}
+                        <span className="text-sm text-muted-foreground font-normal">{t('common.perDay')}</span>
                       </div>
                     </div>
                     <div className="mt-3 pt-3 border-t flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
-                        {listing.bookingsCount || 0} bookings
+                        {listing.bookingsCount || 0} {t('listings.owner.bookingsLabel', 'bookings')}
                       </span>
                       <span className="font-medium text-green-600">
-                        ${safeNumber(listing.totalEarnings).toLocaleString()} earned
+                        {formatCurrency(safeNumber(listing.totalEarnings))} {t('listings.owner.earned', 'earned')}
                       </span>
                     </div>
                   </div>
@@ -631,13 +630,13 @@ export default function OwnerListingsPage() {
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Listing</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Price</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Rating</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Bookings</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Earnings</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Actions</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('listings.owner.tableHeaders.listing', 'Listing')}</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('listings.owner.tableHeaders.status', 'Status')}</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('listings.owner.tableHeaders.price', 'Price')}</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('listings.owner.tableHeaders.rating', 'Rating')}</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('listings.owner.tableHeaders.bookings', 'Bookings')}</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('listings.owner.tableHeaders.earnings', 'Earnings')}</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">{t('listings.owner.tableHeaders.actions', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -667,7 +666,7 @@ export default function OwnerListingsPage() {
                       <td className="px-4 py-3">
                         <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
                       </td>
-                      <td className="px-4 py-3 font-medium">${listing.basePrice}/day</td>
+                      <td className="px-4 py-3 font-medium">{formatCurrency(listing.basePrice)}{t('common.perDay')}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
                           <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
@@ -680,7 +679,7 @@ export default function OwnerListingsPage() {
                       </td>
                       <td className="px-4 py-3">{listing.bookingsCount || 0}</td>
                       <td className="px-4 py-3 font-medium text-green-600">
-                        ${safeNumber(listing.totalEarnings).toLocaleString()}
+                        {formatCurrency(safeNumber(listing.totalEarnings))}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -712,7 +711,7 @@ export default function OwnerListingsPage() {
                                 }
                               }}
                               className="text-red-600 hover:text-red-700"
-                              aria-label={confirmingId === listing.id ? "Confirm delete" : "Delete listing"}
+                              aria-label={confirmingId === listing.id ? t('listings.owner.confirmDelete', 'Confirm delete') : t('listings.owner.deleteListing', 'Delete listing')}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -725,7 +724,7 @@ export default function OwnerListingsPage() {
                                 type="submit"
                                 disabled={isSubmitting}
                                 className="text-muted-foreground hover:text-foreground"
-                                aria-label="Pause listing"
+                                aria-label={t('listings.owner.pauseListing', 'Pause listing')}
                               >
                                 <Pause className="w-4 h-4" />
                               </button>
@@ -739,7 +738,7 @@ export default function OwnerListingsPage() {
                                 type="submit"
                                 disabled={isSubmitting}
                                 className="text-muted-foreground hover:text-foreground"
-                                aria-label="Activate listing"
+                                aria-label={t('listings.owner.activateListing', 'Activate listing')}
                               >
                                 <CheckCircle className="w-4 h-4" />
                               </button>
@@ -753,7 +752,7 @@ export default function OwnerListingsPage() {
                                 type="submit"
                                 disabled={isSubmitting}
                                 className="text-muted-foreground hover:text-foreground"
-                                aria-label="Publish listing"
+                                aria-label={t('listings.owner.publishListing', 'Publish listing')}
                               >
                                 <CheckCircle className="w-4 h-4" />
                               </button>

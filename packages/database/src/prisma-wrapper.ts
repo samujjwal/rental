@@ -1,10 +1,26 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 export class PrismaWrapper {
   private prisma: PrismaClient;
 
   constructor() {
-    this.prisma = new PrismaClient();
+    const connectionString = process.env.DATABASE_URL;
+    if (connectionString) {
+      const adapter = new PrismaPg({ connectionString });
+      this.prisma = new PrismaClient({ adapter });
+    } else {
+      // In test environments PrismaService is typically mocked.
+      // Accessing any model delegate before providing a real URL will throw.
+      this.prisma = new Proxy({} as PrismaClient, {
+        get(_target, prop) {
+          throw new Error(
+            `DATABASE_URL is not set. Cannot access PrismaClient.${String(prop)}. ` +
+            'Provide a valid DATABASE_URL or mock PrismaService in tests.',
+          );
+        },
+      });
+    }
   }
 
   // Provide listing alias for property
@@ -152,6 +168,183 @@ export class PrismaWrapper {
 
   get identityDocument() {
     return this.prisma.identityDocument;
+  }
+
+  // Phase 2: New model accessors
+  get listingContent() {
+    return this.prisma.listingContent;
+  }
+
+  get listingVersion() {
+    return this.prisma.listingVersion;
+  }
+
+  get categoryAttributeDefinition() {
+    return this.prisma.categoryAttributeDefinition;
+  }
+
+  get listingAttributeValue() {
+    return this.prisma.listingAttributeValue;
+  }
+
+  get inventoryUnit() {
+    return this.prisma.inventoryUnit;
+  }
+
+  get availabilitySlot() {
+    return this.prisma.availabilitySlot;
+  }
+
+  get fxRateSnapshot() {
+    return this.prisma.fxRateSnapshot;
+  }
+
+  get bookingPriceBreakdown() {
+    return this.prisma.bookingPriceBreakdown;
+  }
+
+  get taxRule() {
+    return this.prisma.taxRule;
+  }
+
+  // Phase 3: Policy engine model accessors
+  get policyRule() {
+    return this.prisma.policyRule;
+  }
+
+  get policyAuditLog() {
+    return this.prisma.policyAuditLog;
+  }
+
+  get currencyConfig() {
+    return this.prisma.currencyConfig;
+  }
+
+  get localeConfig() {
+    return this.prisma.localeConfig;
+  }
+
+  get countryConfig() {
+    return this.prisma.countryConfig;
+  }
+
+  // Phase 4: V4 Advanced model accessors
+  get pricingRule() {
+    return this.prisma.pricingRule;
+  }
+
+  get trustScore() {
+    return this.prisma.trustScore;
+  }
+
+  get complianceRecord() {
+    return this.prisma.complianceRecord;
+  }
+
+  get platformMetric() {
+    return this.prisma.platformMetric;
+  }
+
+  get escrowTransaction() {
+    return this.prisma.escrowTransaction;
+  }
+
+  get disputeEscalation() {
+    return this.prisma.disputeEscalation;
+  }
+
+  // ── Phase 5 — V5 Enterprise Models ──────────────────────
+
+  get marketplaceHealthMetric() {
+    return this.prisma.marketplaceHealthMetric;
+  }
+
+  get hostActivationCampaign() {
+    return this.prisma.hostActivationCampaign;
+  }
+
+  get aiConversation() {
+    return this.prisma.aiConversation;
+  }
+
+  get aiConversationTurn() {
+    return this.prisma.aiConversationTurn;
+  }
+
+  get demandForecast() {
+    return this.prisma.demandForecast;
+  }
+
+  get demandSignal() {
+    return this.prisma.demandSignal;
+  }
+
+  get marketOpportunity() {
+    return this.prisma.marketOpportunity;
+  }
+
+  get searchEvent() {
+    return this.prisma.searchEvent;
+  }
+
+  get userSearchProfile() {
+    return this.prisma.userSearchProfile;
+  }
+
+  get pricingRecommendation() {
+    return this.prisma.pricingRecommendation;
+  }
+
+  get fraudSignal() {
+    return this.prisma.fraudSignal;
+  }
+
+  get deviceFingerprint() {
+    return this.prisma.deviceFingerprint;
+  }
+
+  get inventoryGraphNode() {
+    return this.prisma.inventoryGraphNode;
+  }
+
+  get inventoryGraphEdge() {
+    return this.prisma.inventoryGraphEdge;
+  }
+
+  get paymentProvider() {
+    return this.prisma.paymentProvider;
+  }
+
+  get taxPolicy() {
+    return this.prisma.taxPolicy;
+  }
+
+  get countryPolicyPack() {
+    return this.prisma.countryPolicyPack;
+  }
+
+  get reputationScore() {
+    return this.prisma.reputationScore;
+  }
+
+  get moderationAction() {
+    return this.prisma.moderationAction;
+  }
+
+  get serviceHealthCheck() {
+    return this.prisma.serviceHealthCheck;
+  }
+
+  get anomalyDetection() {
+    return this.prisma.anomalyDetection;
+  }
+
+  get regionConfig() {
+    return this.prisma.regionConfig;
+  }
+
+  get expansionSimulation() {
+    return this.prisma.expansionSimulation;
   }
 
   // Provide direct access to underlying client for advanced usage

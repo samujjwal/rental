@@ -3,16 +3,20 @@ import {
   Post,
   Body,
   UseGuards,
+  UseInterceptors,
   Get,
   Req,
+  Res,
   HttpCode,
   HttpStatus,
   Ip,
   Param,
   Query,
+  NotFoundException,
 } from '@nestjs/common';
+import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from '../services/auth.service';
@@ -20,6 +24,7 @@ import { OAuthService } from '../services/oauth.service';
 import { OtpService } from '../services/otp.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
+import { RefreshTokenCookieInterceptor } from '../interceptors/refresh-token-cookie.interceptor';
 import { User, UserRole } from '@rental-portal/database';
 
 import {
@@ -36,10 +41,12 @@ import {
   OtpRequestDto,
   OtpVerifyDto,
   PhoneVerifyDto,
+  DevLoginDto,
 } from '../dto/auth.dto';
 
 @ApiTags('auth')
 @Controller('auth')
+@UseInterceptors(RefreshTokenCookieInterceptor)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -69,18 +76,45 @@ export class AuthController {
 
   @Post('dev-login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Development-only login without password' })
+  @ApiOperation({ summary: 'Development-only login without password (dev only)' })
   @ApiResponse({ status: 200, description: 'Successfully logged in for development' })
+  @ApiResponse({ status: 401, description: 'Not available outside development' })
+  @ApiResponse({ status: 404, description: 'Endpoint disabled' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async devLogin(
-    @Body() body: { email?: string; role?: UserRole },
+    @Body() body: DevLoginDto,
     @Ip() ipAddress: string,
     @Req() req: Request,
   ) {
+    // SECURITY: Multi-layer protection for dev-login
+    // 1. Environment check
+    if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
+      throw new NotFoundException('Development login not available');
+    }
+    
+    // 2. Feature flag check
+    if (process.env.DEV_LOGIN_ENABLED !== 'true') {
+      throw new NotFoundException('Development login not enabled');
+    }
+    
+    // 3. IP whitelist check (optional additional security)
+    const allowedIps = process.env.DEV_LOGIN_ALLOWED_IPS?.split(',') || [];
+    if (allowedIps.length > 0 && !allowedIps.includes(ipAddress)) {
+      throw new NotFoundException('Development login not allowed from this IP');
+    }
+    
+    // 4. Secret key verification
+    const devSecret = process.env.DEV_LOGIN_SECRET;
+    if (!devSecret || body?.secret !== devSecret) {
+      throw new NotFoundException('Invalid development login secret');
+    }
+    
     const userAgent = req.headers['user-agent'];
     return this.authService.devLogin(
       {
         email: body?.email,
         role: body?.role,
+        secret: body?.secret,
       },
       ipAddress,
       userAgent,
@@ -92,8 +126,12 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
-  async refreshToken(@Body() dto: RefreshTokenDto) {
-    return this.authService.refreshTokens(dto.refreshToken);
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  async refreshToken(@Body() dto: RefreshTokenDto, @Req() req: Request) {
+    // Prefer httpOnly cookie over body (web uses cookie, mobile sends body)
+    const token =
+      req.cookies?.[RefreshTokenCookieInterceptor.COOKIE_NAME] || dto.refreshToken;
+    return this.authService.refreshTokens(token);
   }
 
   @Post('logout')
@@ -101,8 +139,17 @@ export class AuthController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Logout current session' })
-  async logout(@CurrentUser('id') userId: string, @Body() dto: RefreshTokenDto) {
-    await this.authService.logout(userId, dto.refreshToken);
+  async logout(
+    @CurrentUser('id') userId: string,
+    @Body() dto: RefreshTokenDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token =
+      req.cookies?.[RefreshTokenCookieInterceptor.COOKIE_NAME] || dto.refreshToken;
+    await this.authService.logout(userId, token);
+    // Clear the refresh token cookie
+    res.clearCookie(RefreshTokenCookieInterceptor.COOKIE_NAME, { path: '/api/auth' });
   }
 
   @Post('logout-all')
@@ -120,8 +167,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, description: 'User profile retrieved' })
   async getCurrentUser(@CurrentUser() user: User) {
-    const { passwordHash, mfaSecret, ...sanitized } = user;
-    return sanitized;
+    return this.authService.sanitizeUser(user);
   }
 
   @Post('password/reset-request')
@@ -137,6 +183,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Reset password with token' })
   @ApiResponse({ status: 204, description: 'Password reset successful' })
   @ApiResponse({ status: 400, description: 'Invalid or expired token' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async resetPassword(@Body() dto: PasswordResetDto) {
     await this.authService.resetPassword(dto.token, dto.newPassword);
   }
@@ -145,6 +192,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Change password' })
   @ApiResponse({ status: 204, description: 'Password changed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid current password' })
@@ -155,6 +203,7 @@ export class AuthController {
   @Post('mfa/enable')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Enable MFA for account' })
   @ApiResponse({ status: 200, description: 'MFA setup initiated' })
   async enableMfa(@CurrentUser('id') userId: string) {
@@ -165,6 +214,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Verify and activate MFA' })
   @ApiResponse({ status: 204, description: 'MFA activated successfully' })
   @ApiResponse({ status: 400, description: 'Invalid verification code' })
@@ -176,6 +226,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Disable MFA' })
   @ApiResponse({ status: 204, description: 'MFA disabled successfully' })
   @ApiResponse({ status: 401, description: 'Invalid password' })
@@ -224,7 +275,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify OTP and login' })
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async verifyOtp(@Body() dto: OtpVerifyDto, @Ip() ipAddress: string, @Req() req: Request) {
-    return this.otpService.verifyOtp(dto.email, dto.code, ipAddress, req.headers['user-agent']);
+    return this.otpService.verifyOtp(dto.email, dto.code, ipAddress, req.headers['user-agent'], dto.mfaCode);
   }
 
   // === Verification Endpoints (6.3) ===

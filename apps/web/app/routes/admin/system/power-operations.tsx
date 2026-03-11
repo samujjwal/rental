@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import {
   Database,
@@ -52,6 +53,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 export default function PowerOperationsPage() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [activeOperation, setActiveOperation] = useState<string | null>(null);
   const [operationProgress, setOperationProgress] = useState(0);
@@ -96,20 +98,20 @@ export default function PowerOperationsPage() {
 
   const operations: Operation[] = [
     {
-      id: "backup-database", name: "Backup Database",
-      description: "Create a complete backup of the database including all tables and data",
+      id: "backup-database", name: t("admin.backupDatabase"),
+      description: t("admin.backupDatabaseDesc"),
       icon: <HardDrive className="h-4 w-4" />,
       action: async () => { const b = await adminApi.createBackup("full"); if (b?.downloadUrl) window.open(b.downloadUrl, "_blank", "noopener,noreferrer"); },
     },
     {
-      id: "optimize-database", name: "Optimize Database",
-      description: "Optimize database performance and clean up unused data",
+      id: "optimize-database", name: t("admin.optimizeDatabase"),
+      description: t("admin.optimizeDatabaseDesc"),
       icon: <Database className="h-4 w-4" />,
       action: async () => { await adminApi.runDatabaseVacuum(); await adminApi.runDatabaseAnalyze(); },
     },
     {
-      id: "clear-cache", name: "Clear Cache",
-      description: "Clear all application caches and temporary data",
+      id: "clear-cache", name: t("admin.clearAllCache"),
+      description: t("admin.clearAllCacheDesc"),
       icon: <Database className="h-4 w-4" />,
       action: async () => { await adminApi.clearCache("all"); },
     },
@@ -139,15 +141,15 @@ export default function PowerOperationsPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Power Operations</h1>
-        <p className="text-muted-foreground mt-1">Advanced administrative operations for system maintenance and management</p>
+        <h1 className="text-2xl font-bold">{t("admin.powerOperations")}</h1>
+        <p className="text-muted-foreground mt-1">{t("admin.powerOperationsSubtitle")}</p>
       </div>
 
       {/* Progress Bar */}
       {loading && (
         <div>
           <p className="text-sm mb-1">
-            {activeOperation === "execute-query" ? "Executing Query..." : operations.find((op) => op.id === activeOperation)?.name || "Processing..."}
+            {activeOperation === "execute-query" ? t("admin.executingQuery") : operations.find((op) => op.id === activeOperation)?.name || t("admin.processing")}
           </p>
           <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-primary rounded-full transition-all duration-200" style={{ width: `${operationProgress}%` }} />
@@ -158,7 +160,7 @@ export default function PowerOperationsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Database Operations */}
         <div className="rounded-lg border bg-card p-4 shadow-sm">
-          <h2 className="text-lg font-semibold mb-3">Database Operations</h2>
+          <h2 className="text-lg font-semibold mb-3">{t("admin.databaseOperations")}</h2>
           <div className="space-y-3">
             {operations.slice(0, 2).map((op) => (
               <div key={op.id}>
@@ -173,7 +175,7 @@ export default function PowerOperationsPage() {
 
         {/* System Operations */}
         <div className="rounded-lg border bg-card p-4 shadow-sm">
-          <h2 className="text-lg font-semibold mb-3">System Operations</h2>
+          <h2 className="text-lg font-semibold mb-3">{t("admin.systemOperationsSection")}</h2>
           <div className="space-y-3">
             {operations.slice(2).map((op) => (
               <div key={op.id}>
@@ -196,16 +198,16 @@ export default function PowerOperationsPage() {
           <textarea
             rows={4}
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-            placeholder="Search logs (message contains)..."
+            placeholder={t("admin.searchLogsPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             disabled={loading}
           />
           <div className="flex flex-wrap items-center gap-2">
             <UnifiedButton variant="primary" leftIcon={<Database className="h-4 w-4" />} onClick={executeQuery} disabled={loading || !query.trim()}>
-              Fetch Logs
+              {t("admin.fetchLogs")}
             </UnifiedButton>
-            <UnifiedButton variant="outline" onClick={() => { setQuery(""); setQueryResult(null); }} disabled={loading}>Clear</UnifiedButton>
+            <UnifiedButton variant="outline" onClick={() => { setQuery(""); setQueryResult(null); }} disabled={loading}>{t("admin.clear")}</UnifiedButton>
             {queryResult && (
               <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2.5 py-0.5 text-xs font-medium">
                 {queryResult.rowCount} rows ({queryResult.executionTime}ms)
@@ -248,12 +250,12 @@ export default function PowerOperationsPage() {
 
       {/* Backup & Restore */}
       <div className="rounded-lg border bg-card p-4 shadow-sm">
-        <h2 className="text-lg font-semibold mb-3">Backup & Restore</h2>
+        <h2 className="text-lg font-semibold mb-3">{t("admin.backupRestore")}</h2>
         <div>
-          <p className="text-sm font-medium">Manage Backups</p>
-          <p className="text-sm text-muted-foreground mt-1 mb-3">Create, download, and restore backups from the dedicated backups console.</p>
+          <p className="text-sm font-medium">{t("admin.manageBackupsLabel")}</p>
+          <p className="text-sm text-muted-foreground mt-1 mb-3">{t("admin.manageBackupsDesc")}</p>
           <UnifiedButton asChild variant="primary" disabled={loading}>
-            <Link to="/admin/system/backups">Open Backup Management</Link>
+            <Link to="/admin/system/backups">{t("admin.openBackupManagement")}</Link>
           </UnifiedButton>
         </div>
       </div>
@@ -264,19 +266,19 @@ export default function PowerOperationsPage() {
           <div className="bg-background rounded-lg shadow-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2 px-6 py-4 border-b">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              <h3 className="text-lg font-semibold">Confirm Dangerous Operation</h3>
+              <h3 className="text-lg font-semibold">{t("admin.confirmDangerousOp")}</h3>
             </div>
             <div className="px-6 py-4 space-y-3">
-              <p className="text-sm">You are about to perform a potentially dangerous operation:</p>
+              <p className="text-sm">{t("admin.aboutToPerformDangerous")}</p>
               <p className="font-semibold">{confirmDialog.operation?.name}</p>
               <p className="text-sm text-muted-foreground">{confirmDialog.operation?.description}</p>
               <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-                This action cannot be undone. Please confirm you want to proceed.
+                {t("admin.cannotBeUndone")}
               </div>
             </div>
             <div className="flex justify-end gap-2 px-6 py-4 border-t">
-              <UnifiedButton onClick={() => setConfirmDialog({ open: false, operation: null })} variant="outline">Cancel</UnifiedButton>
-              <UnifiedButton variant="destructive" onClick={() => confirmDialog.operation && performOperation(confirmDialog.operation)} disabled={loading}>Proceed</UnifiedButton>
+              <UnifiedButton onClick={() => setConfirmDialog({ open: false, operation: null })} variant="outline">{t("admin.cancel")}</UnifiedButton>
+              <UnifiedButton variant="destructive" onClick={() => confirmDialog.operation && performOperation(confirmDialog.operation)} disabled={loading}>{t("admin.proceed")}</UnifiedButton>
             </div>
           </div>
         </div>

@@ -1,21 +1,15 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { authStore } from './authStore';
 import { mobileClient, initializeAuth, setCachedToken, setOnForceLogout } from './client';
-import type { AuthResponse, AuthUser, LoginPayload, RegisterPayload } from '@rental-portal/mobile-sdk';
-
-const normalizeRole = (role?: string | null): string => {
-  const normalized = String(role || '').toUpperCase();
-  if (normalized === 'HOST') return 'owner';
-  if (normalized === 'ADMIN' || normalized === 'SUPER_ADMIN') return 'admin';
-  return 'renter';
-};
+import type { AuthUser, LoginPayload, RegisterPayload } from '~/types';
+import { normalizeRole } from '@rental-portal/shared-types';
 
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
-  signIn: (payload: LoginPayload) => Promise<AuthResponse>;
-  signUp: (payload: RegisterPayload) => Promise<AuthResponse>;
-  signOut: () => void;
+  signIn: (payload: LoginPayload) => Promise<{ accessToken: string; refreshToken: string; user: AuthUser }>;
+  signUp: (payload: RegisterPayload) => Promise<{ accessToken: string; refreshToken: string; user: AuthUser }>;
+  signOut: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
 }
 
@@ -28,7 +22,7 @@ const AuthContext = createContext<AuthContextValue>({
   signUp: async () => {
     throw new Error('Auth provider not initialized');
   },
-  signOut: () => {},
+  signOut: async () => {},
   setUser: () => {},
 });
 
@@ -48,13 +42,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Validate stored token by fetching current user
-        const storedUser = await authStore.getUser<AuthUser>();
-        if (storedUser && !cancelled) {
-          setUserState({ ...storedUser, role: normalizeRole(storedUser.role) });
+        // Validate the stored token against the server; fall back to stored user
+        // on network failure so offline app launches still work.
+        let freshUser: AuthUser | null = null;
+        try {
+          const profile = await mobileClient.getProfile();
+          freshUser = { ...profile, role: normalizeRole(profile.role) } as AuthUser;
+        } catch {
+          // Server unreachable or token revoked — use stored user for offline UX
+          const storedUser = await authStore.getUser<AuthUser>();
+          if (storedUser) {
+            freshUser = { ...storedUser, role: normalizeRole(storedUser.role) };
+          }
+        }
+
+        if (freshUser && !cancelled) {
+          await authStore.setUser(freshUser);
+          setUserState(freshUser);
         }
       } catch {
-        // Token invalid or expired — clear it
+        // Token invalid or storage error — clear session
         await authStore.clearTokens();
         setCachedToken(null);
       } finally {
@@ -66,20 +73,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  const signOut = useCallback(() => {
-    const doLogout = async () => {
-      try {
-        const refresh = await authStore.getRefreshToken();
-        if (refresh) {
-          await mobileClient.logout(refresh).catch(() => undefined);
-        }
-      } finally {
-        await authStore.clearTokens();
-        setCachedToken(null);
-        setUserState(null);
+  const signOut = useCallback(async () => {
+    try {
+      const refresh = await authStore.getRefreshToken();
+      if (refresh) {
+        await mobileClient.logout(refresh).catch(() => undefined);
       }
-    };
-    doLogout();
+    } finally {
+      await authStore.clearTokens();
+      setCachedToken(null);
+      setUserState(null);
+    }
   }, []);
 
   // Register force-logout handler for 401 refresh failures

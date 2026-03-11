@@ -15,6 +15,8 @@ import { organizationsApi } from "~/lib/api/organizations";
 import type { BusinessType, CreateOrganizationDto } from "~/lib/api/organizations";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { getUser } from "~/utils/auth";
+import { APP_PHONE_PLACEHOLDER } from "~/config/locale";
+import { useTranslation } from "react-i18next";
 
 export const meta: MetaFunction = () => {
   return [
@@ -145,6 +147,7 @@ export default function NewOrganizationPage() {
   const navigate = useNavigate();
   const [selectedType, setSelectedType] = useState<BusinessType | null>(null);
   const [step, setStep] = useState(1);
+  const { t } = useTranslation();
 
   const isSubmitting = navigation.state === "submitting";
 
@@ -158,7 +161,7 @@ export default function NewOrganizationPage() {
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back</span>
+            <span>{t("common.back")}</span>
           </button>
         </div>
       </header>
@@ -202,9 +205,9 @@ export default function NewOrganizationPage() {
         </div>
 
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Create Your Organization</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t("organizations.createYourOrg")}</h1>
           <p className="text-muted-foreground mt-2">
-            Set up your business account to manage multiple listings and team members
+            {t("organizations.createSubtitle")}
           </p>
         </div>
 
@@ -220,10 +223,10 @@ export default function NewOrganizationPage() {
             <>
               <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-primary" />
-                Business Type
+                {t("organizations.businessType")}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Select the type of business entity for your organization
+                {t("organizations.businessTypeDesc")}
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {BUSINESS_TYPES.map((type) => (
@@ -271,7 +274,7 @@ export default function NewOrganizationPage() {
                   onClick={() => setStep(2)}
                   disabled={!selectedType}
                 >
-                  Continue
+                  {t("common.next")}
                 </UnifiedButton>
               </div>
             </>
@@ -281,14 +284,14 @@ export default function NewOrganizationPage() {
             <>
               <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Users className="w-5 h-5 text-primary" />
-                Organization Details
+                {t("organizations.orgDetails")}
               </h2>
               <input type="hidden" name="businessType" value={selectedType || ""} />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Organization Name *
+                    {t("organizations.name")} *
                   </label>
                   <input
                     type="text"
@@ -302,7 +305,7 @@ export default function NewOrganizationPage() {
                 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Description
+                    {t("organizations.description")}
                   </label>
                   <textarea
                     name="description"
@@ -315,7 +318,7 @@ export default function NewOrganizationPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Business Email *
+                    {t("organizations.businessEmail")} *
                   </label>
                   <input
                     type="email"
@@ -329,20 +332,20 @@ export default function NewOrganizationPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Phone Number
+                    {t("organizations.phone")}
                   </label>
                   <input
                     type="tel"
                     name="phoneNumber"
                     maxLength={20}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
-                    placeholder="+1 (555) 123-4567"
+                    placeholder={APP_PHONE_PLACEHOLDER}
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Tax ID / EIN
+                    {t("organizations.taxId")}
                   </label>
                   <input
                     type="text"
@@ -356,10 +359,10 @@ export default function NewOrganizationPage() {
 
               <div className="flex justify-between">
                 <UnifiedButton type="button" variant="outline" onClick={() => setStep(1)}>
-                  Back
+                  {t("common.back")}
                 </UnifiedButton>
                 <UnifiedButton type="button" onClick={() => setStep(3)}>
-                  Continue
+                  {t("common.next")}
                 </UnifiedButton>
               </div>
             </>
@@ -369,14 +372,14 @@ export default function NewOrganizationPage() {
             <>
               <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Shield className="w-5 h-5 text-primary" />
-                Business Address
+                {t("organizations.businessAddress")}
               </h2>
               <input type="hidden" name="businessType" value={selectedType || ""} />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Address Line 1
+                    {t("organizations.addressLine1")}
                   </label>
                   <input
                     type="text"
@@ -389,7 +392,7 @@ export default function NewOrganizationPage() {
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Address Line 2
+                    {t("organizations.addressLine2")}
                   </label>
                   <input
                     type="text"
@@ -402,51 +405,51 @@ export default function NewOrganizationPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    City
+                    {t("organizations.city")}
                   </label>
                   <input
                     type="text"
                     name="city"
                     maxLength={80}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
-                    placeholder="San Francisco"
+                    placeholder="Kathmandu"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    State / Province
+                    {t("organizations.stateProvince")}
                   </label>
                   <input
                     type="text"
                     name="state"
                     maxLength={80}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
-                    placeholder="CA"
+                    placeholder="Bagmati"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Postal Code
+                    {t("organizations.postalCode")}
                   </label>
                   <input
                     type="text"
                     name="postalCode"
                     maxLength={20}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
-                    placeholder="94105"
+                    placeholder="44600"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Country
+                    {t("organizations.country")}
                   </label>
                   <input
                     type="text"
                     name="country"
-                    defaultValue="United States"
+                    defaultValue="Nepal"
                     maxLength={80}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                   />
@@ -455,16 +458,16 @@ export default function NewOrganizationPage() {
 
               <div className="flex justify-between">
                 <UnifiedButton type="button" variant="outline" onClick={() => setStep(2)}>
-                  Back
+                  {t("common.back")}
                 </UnifiedButton>
                 <UnifiedButton type="submit" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Creating...
+                      {t("organizations.creating")}
                     </>
                   ) : (
-                    "Create Organization"
+                    t("organizations.create")
                   )}
                 </UnifiedButton>
               </div>
@@ -475,24 +478,24 @@ export default function NewOrganizationPage() {
         {/* Benefits Section */}
         <div className="mt-8 bg-muted/50 rounded-lg p-6">
           <h3 className="font-semibold text-foreground mb-4">
-            Organization Benefits
+            {t("organizations.benefits")}
           </h3>
           <ul className="space-y-3 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-              <span>Manage multiple listings under one business profile</span>
+              <span>{t("organizations.benefitMultiListings")}</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-              <span>Invite team members with role-based access</span>
+              <span>{t("organizations.benefitTeamMembers")}</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-              <span>Consolidated financial reporting and payouts</span>
+              <span>{t("organizations.benefitFinancial")}</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-              <span>Professional business verification badge</span>
+              <span>{t("organizations.benefitVerification")}</span>
             </li>
           </ul>
         </div>

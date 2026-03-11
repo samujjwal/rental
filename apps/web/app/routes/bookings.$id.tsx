@@ -4,7 +4,8 @@ import type {
   ActionFunctionArgs,
 } from "react-router";
 import { RouteErrorBoundary } from "~/components/ui";
-import { useLoaderData, useNavigate, useActionData, Form } from "react-router";
+import { useLoaderData, useNavigate, useActionData, Form, useNavigation } from "react-router";
+import { formatCurrency } from "~/lib/utils";
 import {
   ArrowLeft,
   Calendar,
@@ -30,6 +31,8 @@ import { useAuthStore } from "~/lib/store/auth";
 import { useEffect, useState, useCallback } from "react";
 import { getUser } from "~/utils/auth";
 import { SuccessCelebration } from "~/components/animations/SuccessCelebration";
+import { useTranslation } from "react-i18next";
+import { toast } from "~/lib/toast";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Booking Details | GharBatai Rentals" }];
@@ -96,7 +99,6 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     }
     return { booking };
   } catch (error) {
-    console.error("Failed to load booking:", error);
     throw redirect("/bookings");
   }
 }
@@ -121,6 +123,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     "start",
     "request_return",
     "complete",
+    "reject_return",
     "review",
   ]);
   if (!allowedIntents.has(intent)) {
@@ -163,7 +166,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
         {
           if (
             !(isOwner || isRenter || isAdmin) ||
-            !["confirmed", "pending_owner_approval"].includes(status)
+            !["confirmed", "pending_owner_approval", "pending_payment"].includes(status)
           ) {
             return { error: "Booking cannot be cancelled in its current state." };
           }
@@ -194,13 +197,27 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
         }
         await bookingsApi.approveReturn(bookingId);
         return { success: "Booking marked as complete" };
+      case "reject_return":
+        {
+          if (!(isOwner || isAdmin) || status !== "return_requested") {
+            return { error: "Return cannot be rejected in current booking state." };
+          }
+          const reason = String(formData.get("reason") || "")
+            .trim()
+            .slice(0, MAX_BOOKING_REASON_LENGTH);
+          if (!reason) {
+            return { error: "A reason is required to report damage." };
+          }
+          await bookingsApi.rejectReturn(bookingId, reason);
+          return { success: "Return rejected — dispute initiated" };
+        }
       case "review":
         {
           if (!["completed", "settled"].includes(status)) {
             return { error: "Reviews can only be submitted after completion." };
           }
           if (booking.review) {
-            return { error: "A review has already been submitted for this booking." };
+            return { error: "You have already submitted a review for this booking." };
           }
           const overallRating = Number(formData.get("rating"));
           const comment = String(formData.get("comment") || "")
@@ -245,8 +262,8 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-blue-100 text-blue-800",
   active: "bg-green-100 text-green-800",
   return_requested: "bg-amber-100 text-amber-800",
-  completed: "bg-gray-100 text-gray-800",
-  settled: "bg-gray-100 text-gray-800",
+  completed: "bg-muted text-foreground",
+  settled: "bg-muted text-foreground",
   cancelled: "bg-red-100 text-red-800",
   payment_failed: "bg-red-100 text-red-800",
   disputed: "bg-red-100 text-red-800",
@@ -270,21 +287,30 @@ const TIMELINE_STEPS = [
 ];
 
 export default function BookingDetail() {
+  const { t } = useTranslation();
   const { booking } = useLoaderData<{ booking: Booking }>();
   const actionData = useActionData<{ success?: string; error?: string }>();
+
+  // Show toast for action results
+  useEffect(() => {
+    if (actionData?.success) toast.success(actionData.success);
+    if (actionData?.error) toast.error(actionData.error);
+  }, [actionData]);
   const navigate = useNavigate();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [cancelIntent, setCancelIntent] = useState<"cancel" | "reject">("cancel");
+  const [cancelIntent, setCancelIntent] = useState<"cancel" | "reject" | "reject_return">("cancel");
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState("");
-  const [isSubmittingReview] = useState(false);
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === 'submitting';
 
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [paymentVerifyTimedOut, setPaymentVerifyTimedOut] = useState(false);
 
   const normalizedStatus = normalizeStatus(booking.status);
   const listingTitle = safeText(booking.listing?.title, "Listing");
@@ -302,7 +328,7 @@ export default function BookingDetail() {
     serviceFee: safeNumber(booking.serviceFee),
     deliveryFee: safeNumber(booking.deliveryFee),
     securityDeposit: safeNumber(booking.securityDeposit),
-    totalAmount: safeNumber(booking.totalAmount),
+    totalAmount: safeNumber(booking.totalPrice ?? booking.totalAmount),
   };
 
   // Check for successful payment redirect
@@ -314,16 +340,18 @@ export default function BookingDetail() {
 
     if (paymentSuccess && needsVerification) {
       setIsVerifyingPayment(true);
+      setPaymentVerifyTimedOut(false);
       
       // Poll for status update
       const interval = setInterval(() => {
         revalidator.revalidate();
       }, 2000);
 
-      // Stop polling after 30 seconds
+      // Stop polling after 30 seconds and surface recovery guidance
       const timeout = setTimeout(() => {
         clearInterval(interval);
         setIsVerifyingPayment(false);
+        setPaymentVerifyTimedOut(true);
       }, 30000);
 
       return () => {
@@ -332,9 +360,10 @@ export default function BookingDetail() {
       };
     } else if (normalizedStatus === "confirmed" && isVerifyingPayment) {
       setIsVerifyingPayment(false);
+      setPaymentVerifyTimedOut(false);
       setShowCelebration(true);
     }
-  }, [searchParams, normalizedStatus, booking.paymentStatus, revalidator]);
+  }, [searchParams, normalizedStatus, booking.paymentStatus, revalidator, isVerifyingPayment]);
 
   // Get current user from auth store to determine ownership
   const { user } = useAuthStore();
@@ -346,9 +375,10 @@ export default function BookingDetail() {
   const normalizedPaymentStatus = String(booking.paymentStatus || "").toLowerCase();
   const canConfirm = isOwner && normalizedStatus === "pending_owner_approval";
   const canReject = isOwner && normalizedStatus === "pending_owner_approval";
-  const canCancel = ["confirmed", "pending_owner_approval"].includes(normalizedStatus);
+  const canCancel = ["confirmed", "pending_owner_approval", "pending_payment"].includes(normalizedStatus);
   const canStart = isOwner && normalizedStatus === "confirmed";
   const canComplete = isOwner && normalizedStatus === "return_requested";
+  const canRejectReturn = isOwner && normalizedStatus === "return_requested";
   const canRequestReturn = !isOwner && normalizedStatus === "active";
   const canReview = ["completed", "settled"].includes(normalizedStatus) && !booking.review;
   const bookingDaysRaw =
@@ -364,7 +394,7 @@ export default function BookingDetail() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Success Celebration */}
       <SuccessCelebration
         show={showCelebration}
@@ -372,45 +402,58 @@ export default function BookingDetail() {
         message="Your payment was processed successfully. The owner will be notified and your rental is confirmed."
         onClose={() => setShowCelebration(false)}
       />
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate("/bookings")}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => navigate("/bookings")}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {t('bookings.backToBookings', 'Back to Bookings')}
+          </button>
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[normalizedStatus] || "bg-muted text-muted-foreground"}`}
             >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Bookings</span>
-            </button>
-            <div className="flex items-center gap-4">
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[normalizedStatus] || "bg-gray-100 text-gray-800"}`}
-              >
-                {normalizedStatus.replace(/_/g, " ").toUpperCase()}
-              </span>
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${PAYMENT_STATUS_COLORS[normalizedPaymentStatus] || "bg-gray-100 text-gray-800"}`}
-              >
-                Payment: {normalizedPaymentStatus}
-              </span>
-            </div>
+              {normalizedStatus.replace(/_/g, " ").toUpperCase()}
+            </span>
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${PAYMENT_STATUS_COLORS[normalizedPaymentStatus] || "bg-muted text-muted-foreground"}`}
+            >
+              {t('bookings.details.paymentLabel', 'Payment')}: {normalizedPaymentStatus}
+            </span>
           </div>
         </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Payment Verification Banner */}
         {isVerifyingPayment && (
           <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-4 rounded-lg flex items-center gap-3 animate-pulse">
             <RefreshCw className="w-5 h-5 animate-spin" />
             <div>
-              <p className="font-semibold">Verifying your payment...</p>
+              <p className="font-semibold">{t('bookings.details.verifyingPayment', 'Verifying your payment...')}</p>
               <p className="text-sm">
-                Please wait while we confirm your transaction with the payment
-                provider. This usually takes a few seconds.
+                {t('bookings.details.verifyingPaymentDesc', 'Please wait while we confirm your transaction with the payment provider. This usually takes a few seconds.')}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Payment verification timed out — recovery guidance */}
+        {paymentVerifyTimedOut && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-4 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold">{t('bookings.details.paymentPendingConfirmation', 'Payment received — confirmation taking longer than expected')}</p>
+              <p className="text-sm mt-1">
+                {t('bookings.details.paymentPendingDesc', 'Your payment was submitted. Confirmation may take a few more minutes to process. You can refresh this page to check the latest status, or contact support if it hasn\'t confirmed within 10 minutes.')}
+              </p>
+            </div>
+            <button
+              onClick={() => { setPaymentVerifyTimedOut(false); revalidator.revalidate(); }}
+              className="shrink-0 px-3 py-1.5 text-sm font-medium border border-amber-400 rounded-md hover:bg-amber-100 transition-colors"
+            >
+              {t('common.refresh', 'Refresh')}
+            </button>
           </div>
         )}
 
@@ -431,73 +474,108 @@ export default function BookingDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Timeline */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">
-                Booking Timeline
+            {/* Booking Progress Stepper */}
+            <div className="bg-card rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold text-foreground mb-6">
+                {t('bookings.details.bookingTimeline', 'Booking Progress')}
               </h2>
-              <div className="relative">
-                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200" />
-                <div className="space-y-8">
+              {/* Horizontal stepper — scrollable on small screens */}
+              <div className="overflow-x-auto pb-2">
+                <div className="flex items-center min-w-max">
                   {TIMELINE_STEPS.map((step, index) => {
                     const Icon = step.icon;
-                    const isCompleted = index <= currentStepIndex;
+                    const isCompleted = currentStepIndex >= 0 && index < currentStepIndex;
                     const isCurrent = index === currentStepIndex;
+                    const isPending = currentStepIndex < 0 || index > currentStepIndex;
 
                     return (
-                      <div
-                        key={step.status}
-                        className="relative flex items-start gap-4"
-                      >
-                        <div
-                          className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-full ${
-                            isCompleted
-                              ? "bg-primary-600 text-white"
-                              : "bg-gray-200 text-gray-400"
-                          }`}
-                        >
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1">
-                          <p
-                            className={`font-medium ${isCurrent ? "text-primary-600" : isCompleted ? "text-gray-900" : "text-gray-500"}`}
+                      <div key={step.status} className="flex items-center">
+                        {/* Step node */}
+                        <div className="flex flex-col items-center gap-1.5">
+                          <div
+                            className={`flex items-center justify-center w-9 h-9 rounded-full border-2 transition-all ${
+                              isCompleted
+                                ? "bg-primary border-primary text-primary-foreground"
+                                : isCurrent
+                                ? "bg-background border-primary text-primary ring-4 ring-primary/20"
+                                : "bg-muted border-border text-muted-foreground"
+                            }`}
+                          >
+                            {isCompleted ? (
+                              <CheckCircle className="w-4 h-4" />
+                            ) : (
+                              <Icon className="w-4 h-4" />
+                            )}
+                          </div>
+                          <span
+                            className={`text-xs font-medium text-center max-w-[72px] leading-tight ${
+                              isCurrent
+                                ? "text-primary"
+                                : isCompleted
+                                ? "text-foreground"
+                                : "text-muted-foreground"
+                            }`}
                           >
                             {step.label}
-                          </p>
-                          {isCurrent && (
-                            <p className="text-sm text-gray-500 mt-1">
-                              Current status
-                            </p>
-                          )}
+                          </span>
                         </div>
+                        {/* Connector line */}
+                        {index < TIMELINE_STEPS.length - 1 && (
+                          <div
+                            className={`h-0.5 w-10 sm:w-14 mx-1 rounded-full transition-all ${
+                              isCompleted ? "bg-primary" : "bg-border"
+                            }`}
+                          />
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
+              {currentStepIndex >= 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  {t('bookings.details.currentStatus', 'Current status')}:{" "}
+                  <span className="font-medium text-primary">
+                    {TIMELINE_STEPS[currentStepIndex]?.label ?? normalizedStatus.replace(/_/g, " ")}
+                  </span>
+                </p>
+              ) : ["cancelled", "disputed", "refunded", "payment_failed"].includes(normalizedStatus) ? (
+                <div className="mt-4 flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                  <XCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive font-medium">
+                    {normalizedStatus === "cancelled"
+                      ? t('bookings.details.cancelledNote', 'This booking was cancelled. No further actions are available.')
+                      : normalizedStatus === "disputed"
+                      ? t('bookings.details.disputedNote', 'A dispute has been filed. Our team will review and contact both parties within 2–3 business days.')
+                      : normalizedStatus === "refunded"
+                      ? t('bookings.details.refundedNote', 'This booking has been refunded. Funds should appear within 5–7 business days.')
+                      : t('bookings.details.paymentFailedNote', 'Payment failed. Use the "Retry Payment" button below to try again before the booking is auto-cancelled.')}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             {/* Listing Details */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Listing Details
+            <div className="bg-card rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold text-foreground mb-4">
+                {t('bookings.details.listingDetails', 'Listing Details')}
               </h2>
               <div className="flex gap-4">
-                {booking.listing?.photos?.[0] && (
+                {booking.listing?.images?.[0] && (
                   <img
-                    src={booking.listing.photos[0]}
+                    src={booking.listing.images[0]}
                     alt={listingTitle}
                     className="w-32 h-32 object-cover rounded-lg"
                   />
                 )}
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
                     {listingTitle}
                   </h3>
-                  <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                  <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
                     {listingDescription}
                   </p>
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-4 h-4" />
                       {listingCity}
@@ -514,57 +592,57 @@ export default function BookingDetail() {
             </div>
 
             {/* Booking Information */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Booking Information
+            <div className="bg-card rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold text-foreground mb-4">
+                {t('bookings.details.bookingInformation', 'Booking Information')}
               </h2>
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <div className="flex items-center gap-2 text-gray-600 mb-2">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <Calendar className="w-5 h-5" />
-                    <span className="font-medium">Rental Period</span>
+                    <span className="font-medium">{t('bookings.details.rentalPeriod', 'Rental Period')}</span>
                   </div>
-                  <p className="text-gray-900">
+                  <p className="text-foreground">
                     {safeDateLabel(booking.startDate, "MMM d, yyyy")} -{" "}
                     {safeDateLabel(booking.endDate, "MMM d, yyyy")}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {bookingDays} days
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {bookingDays} {t('bookings.details.days')}
                   </p>
                 </div>
 
                 <div>
-                  <div className="flex items-center gap-2 text-gray-600 mb-2">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <Package className="w-5 h-5" />
-                    <span className="font-medium">Delivery Method</span>
+                    <span className="font-medium">{t('listings.detail.deliveryMethod', 'Delivery Method')}</span>
                   </div>
-                  <p className="text-gray-900 capitalize">
+                  <p className="text-foreground capitalize">
                     {booking.deliveryMethod}
                   </p>
                   {booking.deliveryAddress && (
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       {booking.deliveryAddress}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <div className="flex items-center gap-2 text-gray-600 mb-2">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <Clock className="w-5 h-5" />
-                    <span className="font-medium">Booking Date</span>
+                    <span className="font-medium">{t('bookings.details.bookingDate', 'Booking Date')}</span>
                   </div>
-                  <p className="text-gray-900">
+                  <p className="text-foreground">
                     {safeDateLabel(booking.createdAt, "MMM d, yyyy h:mm a")}
                   </p>
                 </div>
 
                 {booking.specialRequests && (
                   <div>
-                    <div className="flex items-center gap-2 text-gray-600 mb-2">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
                       <FileText className="w-5 h-5" />
-                      <span className="font-medium">Special Requests</span>
+                      <span className="font-medium">{t('bookings.details.specialRequests', 'Special Requests')}</span>
                     </div>
-                    <p className="text-gray-900 text-sm">
+                    <p className="text-foreground text-sm">
                       {booking.specialRequests}
                     </p>
                   </div>
@@ -573,55 +651,55 @@ export default function BookingDetail() {
             </div>
 
             {/* Payment Details */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Payment Details
+            <div className="bg-card rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold text-foreground mb-4">
+                {t('bookings.details.paymentDetails', 'Payment Details')}
               </h2>
               <div className="space-y-3">
-                <div className="flex justify-between text-gray-600">
-                  <span>Rental Amount</span>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>{t('bookings.details.rentalAmount', 'Rental Amount')}</span>
                   <span className="font-medium">
-                    ${safeNumber(pricing.subtotal).toFixed(2)}
+                    {formatCurrency(safeNumber(pricing.subtotal))}
                   </span>
                 </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Service Fee</span>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>{t('bookings.details.serviceFee')}</span>
                   <span className="font-medium">
-                    ${safeNumber(pricing.serviceFee).toFixed(2)}
+                    {formatCurrency(safeNumber(pricing.serviceFee))}
                   </span>
                 </div>
                 {safeNumber(pricing.deliveryFee) > 0 && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Delivery Fee</span>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{t('listings.detail.deliveryFee', 'Delivery Fee')}</span>
                     <span className="font-medium">
-                      ${safeNumber(pricing.deliveryFee).toFixed(2)}
+                      {formatCurrency(safeNumber(pricing.deliveryFee))}
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between text-gray-600">
-                  <span>Security Deposit</span>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>{t('listings.detail.securityDeposit')}</span>
                   <span className="font-medium">
-                    ${safeNumber(pricing.securityDeposit).toFixed(2)}
+                    {formatCurrency(safeNumber(pricing.securityDeposit))}
                   </span>
                 </div>
-                <div className="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
-                  <span>Total Paid</span>
-                  <span>${safeNumber(pricing.totalAmount).toFixed(2)}</span>
+                <div className="border-t pt-3 flex justify-between text-lg font-bold text-foreground">
+                  <span>{t('bookings.details.totalPaid', 'Total Paid')}</span>
+                  <span>{formatCurrency(safeNumber(pricing.totalAmount))}</span>
                 </div>
               </div>
 
               {String(booking.paymentStatus).toUpperCase() === "PAID" && (
                 <div className="mt-4 flex items-center gap-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Payment completed</span>
+                  <span>{t('bookings.details.paymentCompleted', 'Payment completed')}</span>
                 </div>
               )}
             </div>
 
             {/* Review Section */}
             {booking.review && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Review</h2>
+              <div className="bg-card rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-foreground mb-4">{t('bookings.details.review', 'Review')}</h2>
                 <div className="flex items-center gap-1 mb-3">
                   {[...Array(5)].map((_, i) => (
                     <Star
@@ -629,17 +707,17 @@ export default function BookingDetail() {
                       className={`w-5 h-5 ${
                         i < reviewRating
                           ? "fill-yellow-400 text-yellow-400"
-                          : "text-gray-300"
+                          : "text-muted"
                       }`}
                     />
                   ))}
-                  <span className="ml-2 text-gray-600">
-                    {reviewRating.toFixed(1)} out of 5
+                  <span className="ml-2 text-muted-foreground">
+                    {reviewRating.toFixed(1)} {t('bookings.details.outOf', 'out of')} 5
                   </span>
                 </div>
-                <p className="text-gray-700">{reviewComment}</p>
-                <p className="text-sm text-gray-500 mt-3">
-                  Reviewed on{" "}
+                <p className="text-foreground">{reviewComment}</p>
+                <p className="text-sm text-muted-foreground mt-3">
+                  {t('bookings.details.reviewedOn', 'Reviewed on')}{" "}
                   {safeDateLabel(booking.review.createdAt, "MMM d, yyyy")}
                 </p>
               </div>
@@ -649,9 +727,9 @@ export default function BookingDetail() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Other Party Information */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
-                {isOwner ? "Renter" : "Owner"} Information
+            <div className="bg-card rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-bold text-foreground mb-4">
+                {isOwner ? t('bookings.renter', 'Renter') : t('listings.detail.owner', 'Owner')} {t('bookings.details.information', 'Information')}
               </h2>
               <div className="flex items-center gap-3 mb-4">
                 {isOwner ? (
@@ -663,17 +741,17 @@ export default function BookingDetail() {
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-semibold text-gray-700">
+                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-foreground">
                         {getInitials(renterFirstName, renterLastName)}
                       </div>
                     )}
                     <div>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-foreground">
                         {renterFirstName}{renterLastName ? ` ${renterLastName}` : ""}
                       </p>
                       <div className="flex items-center gap-1">
                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-muted-foreground">
                           {safeNumber(booking.renter.rating) > 0
                             ? safeNumber(booking.renter.rating).toFixed(1)
                             : "New"}
@@ -690,17 +768,17 @@ export default function BookingDetail() {
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-semibold text-gray-700">
+                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-foreground">
                         {getInitials(ownerFirstName, ownerLastName)}
                       </div>
                     )}
                     <div>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-foreground">
                         {ownerFirstName}{ownerLastName ? ` ${ownerLastName}` : ""}
                       </p>
                       <div className="flex items-center gap-1">
                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-muted-foreground">
                           {safeNumber(booking.owner.rating) > 0
                             ? safeNumber(booking.owner.rating).toFixed(1)
                             : "New"}
@@ -712,24 +790,79 @@ export default function BookingDetail() {
               </div>
               <button
                 onClick={() => navigate(`/messages?booking=${booking.id}`)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-background"
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>Send Message</span>
+                <span>{t('bookings.actions.sendMessage', 'Send Message')}</span>
               </button>
             </div>
 
+            {/* Next Required Action Banner */}
+            {(() => {
+              let banner: { icon: React.ReactNode; title: string; desc: string; variant: 'green' | 'blue' | 'amber' | 'red' | 'purple' } | null = null;
+              if (canConfirm) {
+                banner = { icon: <CheckCircle className="w-5 h-5" />, title: t('bookings.nextAction.confirmTitle', 'Action Required: Confirm or Reject'), desc: t('bookings.nextAction.confirmDesc', 'A renter is waiting. Review their request and confirm or reject below.'), variant: 'green' };
+              } else if (!isOwner && normalizedStatus === 'pending_payment') {
+                banner = { icon: <CheckCircle className="w-5 h-5" />, title: t('bookings.nextAction.payTitle', 'Complete Payment to Secure Your Booking'), desc: t('bookings.nextAction.payDesc', 'Your booking is reserved but not confirmed until payment is completed.'), variant: 'green' };
+              } else if (!isOwner && normalizedStatus === 'payment_failed') {
+                banner = { icon: <AlertCircle className="w-5 h-5" />, title: t('bookings.nextAction.retryTitle', 'Payment Failed — Retry Now'), desc: t('bookings.nextAction.retryDesc', 'Your payment did not go through. Retry to keep your booking.'), variant: 'red' };
+              } else if (isOwner && normalizedStatus === 'confirmed') {
+                banner = { icon: <CheckCircle className="w-5 h-5" />, title: t('bookings.nextAction.startTitle', 'Ready to Hand Over?'), desc: t('bookings.nextAction.startDesc', "When you've handed the item to the renter, mark the rental as started."), variant: 'blue' };
+              } else if (!isOwner && normalizedStatus === 'active') {
+                banner = { icon: <FileText className="w-5 h-5" />, title: t('bookings.nextAction.returnTitle', 'Done Using It? Request Return'), desc: t('bookings.nextAction.returnDesc', 'When you are finished, submit a return request so the owner can approve it.'), variant: 'amber' };
+              } else if (isOwner && normalizedStatus === 'return_requested') {
+                banner = { icon: <CheckCircle className="w-5 h-5" />, title: t('bookings.nextAction.inspectTitle', 'Inspect & Approve the Return'), desc: t('bookings.nextAction.inspectDesc', 'The renter has returned the item. Inspect it and confirm the return below.'), variant: 'green' };
+              } else if (canReview) {
+                banner = { icon: <Star className="w-5 h-5" />, title: t('bookings.nextAction.reviewTitle', 'Share Your Experience'), desc: t('bookings.nextAction.reviewDesc', 'Leave a review to help the community and complete your rental.'), variant: 'purple' };
+              }
+              if (!banner) return null;
+              const colorMap = {
+                green: 'bg-green-50 border-green-300 text-green-900',
+                blue: 'bg-blue-50 border-blue-300 text-blue-900',
+                amber: 'bg-amber-50 border-amber-300 text-amber-900',
+                red: 'bg-red-50 border-red-300 text-red-900',
+                purple: 'bg-purple-50 border-purple-300 text-purple-900',
+              };
+              const iconColorMap = {
+                green: 'text-green-600', blue: 'text-blue-600', amber: 'text-amber-600', red: 'text-red-600', purple: 'text-purple-600',
+              };
+              return (
+                <div className={`border rounded-lg p-4 ${colorMap[banner.variant]}`}>
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-0.5 flex-shrink-0 ${iconColorMap[banner.variant]}`}>{banner.icon}</span>
+                    <div>
+                      <p className="font-semibold text-sm">{banner.title}</p>
+                      <p className="text-xs mt-0.5 opacity-80">{banner.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Actions */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">Actions</h2>
+            <div className="bg-card rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-bold text-foreground mb-4">{t('bookings.details.actions', 'Actions')}</h2>
               <div className="space-y-3">
+                {/* Pay Now / Retry Payment */}
+                {!isOwner && ["pending_payment", "payment_failed"].includes(normalizedStatus) && (
+                  <button
+                    onClick={() => navigate(`/checkout/${booking.id}`)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold text-base"
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                    <span>{normalizedStatus === "payment_failed"
+                      ? t('bookings.actions.retryPayment', 'Retry Payment')
+                      : t('bookings.details.payNow', 'Pay Now')}</span>
+                  </button>
+                )}
+
                 {["confirmed", "active", "return_requested", "completed", "settled"].includes(normalizedStatus) && (
                   <button
                     onClick={() => navigate(`/disputes/new/${booking.id}`)}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50"
                   >
                     <AlertCircle className="w-4 h-4" />
-                    <span>File a Dispute</span>
+                    <span>{t('bookings.actions.fileDispute', 'File a Dispute')}</span>
                   </button>
                 )}
 
@@ -738,10 +871,11 @@ export default function BookingDetail() {
                     <input type="hidden" name="intent" value="confirm" />
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                      disabled={isSubmitting}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base"
                     >
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Confirm Booking</span>
+                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                      <span>{t('bookings.actions.confirmBooking', 'Confirm Booking')}</span>
                     </button>
                   </Form>
                 )}
@@ -751,10 +885,11 @@ export default function BookingDetail() {
                     <input type="hidden" name="intent" value="start" />
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                      disabled={isSubmitting}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base"
                     >
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Start Rental</span>
+                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                      <span>{t('bookings.actions.startRental', 'Start Rental')}</span>
                     </button>
                   </Form>
                 )}
@@ -764,10 +899,11 @@ export default function BookingDetail() {
                     <input type="hidden" name="intent" value="request_return" />
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                      disabled={isSubmitting}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base"
                     >
-                      <FileText className="w-4 h-4" />
-                      <span>Request Return</span>
+                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+                      <span>{t('bookings.actions.requestReturn', 'Request Return')}</span>
                     </button>
                   </Form>
                 )}
@@ -777,12 +913,26 @@ export default function BookingDetail() {
                     <input type="hidden" name="intent" value="complete" />
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                      disabled={isSubmitting}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base"
                     >
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Approve Return</span>
+                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                      <span>{t('bookings.actions.approveReturn', 'Approve Return')}</span>
                     </button>
                   </Form>
+                )}
+
+                {canRejectReturn && (
+                  <button
+                    onClick={() => {
+                      setCancelIntent("reject_return");
+                      setShowCancelModal(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{t('bookings.actions.reportDamage', 'Report Damage')}</span>
+                  </button>
                 )}
 
                 {canReview && (
@@ -791,7 +941,7 @@ export default function BookingDetail() {
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
                   >
                     <Star className="w-4 h-4" />
-                    <span>Leave Review</span>
+                    <span>{t('bookings.details.leaveReview')}</span>
                   </button>
                 )}
 
@@ -804,7 +954,7 @@ export default function BookingDetail() {
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <XCircle className="w-4 h-4" />
-                    <span>Decline Booking</span>
+                    <span>{t('bookings.actions.declineBooking', 'Decline Booking')}</span>
                   </button>
                 )}
 
@@ -817,16 +967,16 @@ export default function BookingDetail() {
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <XCircle className="w-4 h-4" />
-                    <span>Cancel Booking</span>
+                    <span>{t('bookings.details.cancelBooking')}</span>
                   </button>
                 )}
 
                 <button
                   onClick={() => navigate(listingId ? `/listings/${listingId}` : "/listings")}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-background"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>View Listing</span>
+                  <span>{t('bookings.details.viewListing')}</span>
                 </button>
               </div>
             </div>
@@ -836,10 +986,9 @@ export default function BookingDetail() {
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-medium text-blue-900 mb-1">Need Help?</h3>
+                  <h3 className="font-medium text-blue-900 mb-1">{t('bookings.details.needHelp', 'Need Help?')}</h3>
                   <p className="text-sm text-blue-700">
-                    Contact our support team if you have any questions or
-                    concerns about this booking.
+                    {t('bookings.details.needHelpDesc', 'Contact our support team if you have any questions or concerns about this booking.')}
                   </p>
                 </div>
               </div>
@@ -851,12 +1000,14 @@ export default function BookingDetail() {
       {/* Cancel Modal */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              {cancelIntent === "reject" ? "Decline Booking" : "Cancel Booking"}
+          <div className="bg-card rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-foreground mb-4">
+              {cancelIntent === "reject" ? t('bookings.actions.declineBooking', 'Decline Booking') : cancelIntent === "reject_return" ? t('bookings.actions.reportDamage', 'Report Damage') : t('bookings.details.cancelBooking')}
             </h3>
-            <p className="text-gray-600 mb-4">
-              Please provide a reason for this action:
+            <p className="text-muted-foreground mb-4">
+              {cancelIntent === "reject_return"
+                ? t('bookings.reportDamagePrompt', 'Please describe the damage or issue found during return inspection:')
+                : t('bookings.cancelReasonPrompt', 'Please provide a reason for this action:')}
             </p>
             <Form method="post">
               <input type="hidden" name="intent" value={cancelIntent} />
@@ -867,8 +1018,8 @@ export default function BookingDetail() {
                   setCancelReason(e.target.value.slice(0, MAX_BOOKING_REASON_LENGTH))
                 }
                 rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-4"
-                placeholder="Enter cancellation reason..."
+                className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-4"
+                placeholder={t('bookings.cancelPlaceholder', 'Enter cancellation reason...')}
                 required
               />
               <div className="flex justify-end gap-4">
@@ -878,16 +1029,16 @@ export default function BookingDetail() {
                     setShowCancelModal(false);
                     setCancelReason("");
                   }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-background"
                 >
-                  Keep Booking
+                  {t('bookings.keepBooking', 'Keep Booking')}
                 </button>
                 <button
                   type="submit"
-                  disabled={!cancelReason.trim()}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  disabled={!cancelReason.trim() || isSubmitting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {cancelIntent === "reject" ? "Decline Booking" : "Cancel Booking"}
+                  {isSubmitting ? t('bookings.processing', 'Processing...') : cancelIntent === "reject" ? t('bookings.actions.declineBooking', 'Decline Booking') : cancelIntent === "reject_return" ? t('bookings.actions.reportDamage', 'Report Damage') : t('bookings.details.cancelBooking')}
                 </button>
               </div>
             </Form>
@@ -898,14 +1049,14 @@ export default function BookingDetail() {
       {/* Review Modal */}
       {showReviewModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Form method="post" className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <Form method="post" className="bg-card rounded-lg p-6 max-w-md w-full mx-4">
             <input type="hidden" name="intent" value="review" />
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              Leave a Review
+            <h3 className="text-xl font-bold text-foreground mb-4">
+              {t('bookings.details.leaveReview')}
             </h3>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Rating
+              <label className="block text-sm font-medium text-foreground mb-2">
+                {t('reviews.rating')}
               </label>
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -914,23 +1065,24 @@ export default function BookingDetail() {
                     type="button"
                     onClick={() => setRating(star)}
                     className="focus:outline-none"
+                    aria-label={`Rate ${star} star${star !== 1 ? 's' : ''}`}
                   >
                     <Star
                       className={`w-8 h-8 ${
                         star <= rating
                           ? "fill-yellow-400 text-yellow-400"
-                          : "text-gray-300"
+                          : "text-muted"
                       }`}
                     />
                   </button>
                 ))}
-                <span className="ml-2 text-gray-600">{rating} out of 5</span>
+                <span className="ml-2 text-muted-foreground">{rating} {t('bookings.details.outOf', 'out of')} 5</span>
               </div>
               <input type="hidden" name="rating" value={rating} />
             </div>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Review
+              <label className="block text-sm font-medium text-foreground mb-2">
+                {t('reviews.comment', 'Review')}
               </label>
               <textarea
                 name="comment"
@@ -939,7 +1091,7 @@ export default function BookingDetail() {
                   setReview(e.target.value.slice(0, MAX_REVIEW_COMMENT_LENGTH))
                 }
                 rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Share your experience..."
                 required
               />
@@ -948,17 +1100,17 @@ export default function BookingDetail() {
               <button
                 type="button"
                 onClick={() => setShowReviewModal(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-background"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
-                disabled={isSubmittingReview || !review.trim()}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={isSubmitting || !review.trim()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {isSubmittingReview && <Loader2 className="w-4 h-4 animate-spin" />}
-                Submit Review
+                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {t('reviews.submitReview')}
               </button>
             </div>
           </Form>

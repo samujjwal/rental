@@ -23,9 +23,9 @@ test("diagnose renter login", async ({ page }) => {
   await page.click('button[type="submit"]');
   console.log("✓ Clicked submit button");
   
-  // Wait a bit for response
-  await page.waitForTimeout(3000);
-  
+  // Wait for page to settle
+  await page.waitForLoadState('networkidle');
+
   // Get the current URL
   const currentUrl = page.url();
   console.log(`Current URL after submit: ${currentUrl}`);

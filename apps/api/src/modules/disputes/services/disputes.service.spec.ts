@@ -8,6 +8,8 @@ import { DisputesService } from './disputes.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { NotificationsService } from '@/modules/notifications/services/notifications.service';
+import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
 import { DisputeStatus, UserRole } from '@rental-portal/database';
 
 describe('DisputesService', () => {
@@ -15,6 +17,7 @@ describe('DisputesService', () => {
   let prisma: any;
   let emailService: { sendEmail: jest.Mock };
   let cacheService: { publish: jest.Mock; subscribe: jest.Mock };
+  let mockNotificationsService: { sendNotification: jest.Mock };
 
   const renterId = 'renter-1';
   const ownerId = 'owner-1';
@@ -45,8 +48,10 @@ describe('DisputesService', () => {
   beforeEach(async () => {
     emailService = { sendEmail: jest.fn().mockResolvedValue(undefined) };
     cacheService = { publish: jest.fn().mockResolvedValue(undefined), subscribe: jest.fn().mockResolvedValue(undefined) };
-
+    mockNotificationsService = { sendNotification: jest.fn().mockResolvedValue(undefined) };
+    
     prisma = {
+      $transaction: jest.fn().mockImplementation((callback) => callback(prisma)),
       booking: { findUnique: jest.fn() },
       dispute: {
         create: jest.fn(),
@@ -65,6 +70,14 @@ describe('DisputesService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: EmailService, useValue: emailService },
         { provide: CacheService, useValue: cacheService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
+        {
+          provide: BookingStateMachineService,
+          useValue: {
+            transition: jest.fn().mockResolvedValue({ success: true }),
+            getValidTransitions: jest.fn().mockReturnValue([]),
+          },
+        },
       ],
     }).compile();
 

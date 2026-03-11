@@ -3,6 +3,7 @@ import { Form, Link, redirect, useActionData, useNavigation, useSubmit } from "r
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, ArrowLeft } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { authApi } from "~/lib/api/auth";
 import {
   forgotPasswordSchema,
@@ -14,7 +15,7 @@ import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Forgot Password - Universal Rental Portal" },
+    { title: "Forgot Password | GharBatai Rentals" },
     { name: "description", content: "Reset your password" },
   ];
 };
@@ -68,6 +69,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 }
 
 export default function ForgotPassword() {
+  const { t } = useTranslation();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -94,10 +96,10 @@ export default function ForgotPassword() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-3xl font-bold text-primary">Reset Password</h1>
+            <h1 className="text-3xl font-bold text-primary">{t('auth.forgotPassword.title')}</h1>
           </Link>
           <p className="text-muted-foreground mt-2">
-            Enter your email to reset your password
+            {t('auth.forgotPassword.description')}
           </p>
         </div>
 
@@ -109,18 +111,17 @@ export default function ForgotPassword() {
                 <Mail className="w-8 h-8 text-success" />
               </div>
               <h2 className="text-xl font-semibold text-foreground mb-2">
-                Check your email
+                {t('auth.forgotPassword.checkEmail', 'Check your email')}
               </h2>
               <p className="text-muted-foreground mb-6">
-                We've sent a password reset link to your email address. Please
-                check your inbox and follow the instructions.
+                {t('auth.forgotPassword.sentMessage', "We've sent a password reset link to your email address.")}
               </p>
               <Link
                 to="/auth/login"
                 className="inline-flex items-center gap-2 text-primary hover:text-primary/90 font-medium underline-offset-4 hover:underline"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Back to login
+                {t('auth.forgotPassword.backToLogin')}
               </Link>
             </div>
           ) : (
@@ -146,7 +147,7 @@ export default function ForgotPassword() {
                   htmlFor="email"
                   className="text-sm font-medium leading-none"
                 >
-                  Email Address
+                  {t('auth.login.email')}
                 </label>
                 <input
                   {...register("email")}
@@ -169,12 +170,12 @@ export default function ForgotPassword() {
                 {isSubmitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                    Sending...
+                    {t('auth.forgotPassword.sending')}
                   </>
                 ) : (
                   <>
                     <Mail className="w-4 h-4 mr-2" />
-                    Send Reset Link
+                    {t('auth.forgotPassword.send')}
                   </>
                 )}
               </UnifiedButton>
@@ -186,7 +187,7 @@ export default function ForgotPassword() {
                   className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  Back to login
+                  {t('auth.forgotPassword.backToLogin')}
                 </Link>
               </div>
             </Form>

@@ -9,6 +9,11 @@ import {
   Calendar,
   Package,
   ChevronRight,
+  Banknote,
+  HelpCircle,
+  FileWarning,
+  Star,
+  CreditCard,
 } from "lucide-react";
 import { disputesApi } from "~/lib/api/disputes";
 import { format } from "date-fns";
@@ -23,6 +28,7 @@ import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
 import { StatCardSkeleton, Skeleton } from "~/components/ui/skeleton";
 import { getUser } from "~/utils/auth";
+import { useTranslation } from "react-i18next";
 
 export const meta: MetaFunction = () => {
   return [
@@ -116,20 +122,29 @@ const STATUS_CONFIG: Record<
     icon: typeof Clock;
   }
 > = {
-  OPEN: { label: "Open", variant: "warning", icon: AlertTriangle },
-  UNDER_REVIEW: { label: "Under Review", variant: "default", icon: Clock },
-  INVESTIGATING: { label: "Investigating", variant: "default", icon: Clock },
-  RESOLVED: { label: "Resolved", variant: "success", icon: CheckCircle },
-  CLOSED: { label: "Closed", variant: "secondary", icon: XCircle },
+  OPEN: { label: "disputes.open", variant: "warning", icon: AlertTriangle },
+  UNDER_REVIEW: { label: "disputes.underReview", variant: "default", icon: Clock },
+  INVESTIGATING: { label: "disputes.investigating", variant: "default", icon: Clock },
+  RESOLVED: { label: "disputes.resolved", variant: "success", icon: CheckCircle },
+  CLOSED: { label: "disputes.closed", variant: "secondary", icon: XCircle },
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  PROPERTY_DAMAGE: "Property Damage",
-  MISSING_ITEMS: "Missing Items",
-  CONDITION_MISMATCH: "Condition Mismatch",
-  REFUND_REQUEST: "Refund Request",
-  PAYMENT_ISSUE: "Payment Issue",
-  OTHER: "Other",
+  PROPERTY_DAMAGE: "disputes.propertyDamage",
+  MISSING_ITEMS: "disputes.missingItems",
+  CONDITION_MISMATCH: "disputes.conditionMismatch",
+  REFUND_REQUEST: "disputes.refundRequest",
+  PAYMENT_ISSUE: "disputes.paymentIssue",
+  OTHER: "disputes.other",
+};
+
+const TYPE_ICON_CONFIG: Record<string, { icon: typeof Package; color: string; bg: string }> = {
+  PROPERTY_DAMAGE:    { icon: FileWarning, color: "text-destructive",    bg: "bg-destructive/10" },
+  MISSING_ITEMS:      { icon: Package,     color: "text-warning",         bg: "bg-warning/10" },
+  CONDITION_MISMATCH: { icon: Star,        color: "text-warning",         bg: "bg-warning/10" },
+  REFUND_REQUEST:     { icon: Banknote,    color: "text-success",         bg: "bg-success/10" },
+  PAYMENT_ISSUE:      { icon: CreditCard,  color: "text-destructive",     bg: "bg-destructive/10" },
+  OTHER:              { icon: HelpCircle,  color: "text-muted-foreground",bg: "bg-muted" },
 };
 const safeDateLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
@@ -141,23 +156,24 @@ const safeText = (value: unknown, fallback = ""): string => {
 };
 
 function DisputeCard({ dispute }: { dispute: DisputeExtended }) {
+  const { t } = useTranslation();
   const statusConfig = STATUS_CONFIG[dispute.status] || STATUS_CONFIG.OPEN;
   const StatusIcon = statusConfig.icon;
   const disputeId = safeText(dispute.id);
-  const disputeTitle = safeText(dispute.title) || TYPE_LABELS[dispute.type] || "Dispute";
-  const listingTitle = safeText(dispute.booking?.listing?.title, "Listing");
-  const disputeDescription = safeText(dispute.description, "No description provided.");
+  const disputeTitle = safeText(dispute.title) || (TYPE_LABELS[dispute.type] ? t(TYPE_LABELS[dispute.type]) : t("disputes.dispute"));
+  const listingTitle = safeText(dispute.booking?.listing?.title, t("common.listing"));
+  const disputeDescription = safeText(dispute.description, t("disputes.noDescription"));
+  const typeIconConfig = TYPE_ICON_CONFIG[dispute.type] ?? TYPE_ICON_CONFIG.OTHER;
+  const TypeIcon = typeIconConfig.icon;
 
   return (
     <Link to={disputeId ? `/disputes/${disputeId}` : "/disputes"}>
       <Card className="hover:shadow-md transition-shadow cursor-pointer">
         <CardContent className="p-6">
           <div className="flex gap-4">
-            {/* Listing Image */}
-            <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-              <div className="w-full h-full flex items-center justify-center">
-                <Package className="w-8 h-8 text-muted-foreground" />
-              </div>
+            {/* Type icon with colored background */}
+            <div className={cn("w-14 h-14 rounded-xl flex-shrink-0 flex items-center justify-center", typeIconConfig.bg)}>
+              <TypeIcon className={cn("w-7 h-7", typeIconConfig.color)} />
             </div>
 
             {/* Content */}
@@ -174,7 +190,7 @@ function DisputeCard({ dispute }: { dispute: DisputeExtended }) {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Badge variant={statusConfig.variant}>
                     <StatusIcon className="w-3 h-3 mr-1" />
-                    {statusConfig.label}
+                    {t(statusConfig.label)}
                   </Badge>
                 </div>
               </div>
@@ -186,11 +202,14 @@ function DisputeCard({ dispute }: { dispute: DisputeExtended }) {
                 </span>
                 <span className="flex items-center gap-1">
                   <MessageCircle className="w-4 h-4" />
-                  {dispute._count?.responses ?? 0} messages
+                  {t("disputes.messagesCount", { count: dispute._count?.responses ?? 0 })}
                 </span>
-                <span className="px-2 py-0.5 bg-muted rounded text-xs">
-                  {TYPE_LABELS[dispute.type] || dispute.type}
-                </span>
+                {dispute.amount != null && dispute.amount > 0 && (
+                  <span className="flex items-center gap-1 font-medium text-foreground">
+                    <Banknote className="w-4 h-4 text-muted-foreground" />
+                    {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(dispute.amount)}
+                  </span>
+                )}
               </div>
 
               <p className="text-sm text-muted-foreground line-clamp-2">
@@ -208,6 +227,7 @@ function DisputeCard({ dispute }: { dispute: DisputeExtended }) {
 }
 
 export default function DisputesPage() {
+  const { t } = useTranslation();
   const { disputes, stats, page, totalPages, error } = useLoaderData<typeof clientLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -244,43 +264,44 @@ export default function DisputesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-foreground">My Disputes</h1>
-            <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
-              Back to Dashboard
-            </Link>
-          </div>
-        </div>
-      </header>
-
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page header */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t("disputes.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("disputes.fileFromBooking", "To file a new dispute, open a booking and click \"File a Dispute\".")}</p>
+          </div>
+          <Link to="/bookings">
+            <UnifiedButton variant="outline" leftIcon={<AlertTriangle className="w-4 h-4" />}>
+              {t("disputes.fileNewDispute", "File a Dispute")}
+            </UnifiedButton>
+          </Link>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-              <p className="text-sm text-muted-foreground">Total</p>
+              <p className="text-sm text-muted-foreground">{t("common.total")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-warning">{stats.open}</p>
-              <p className="text-sm text-muted-foreground">Open</p>
+              <p className="text-sm text-muted-foreground">{t("disputes.open")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-primary">{stats.inProgress}</p>
-              <p className="text-sm text-muted-foreground">In Progress</p>
+              <p className="text-sm text-muted-foreground">{t("disputes.inProgress")}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-success">{stats.resolved}</p>
-              <p className="text-sm text-muted-foreground">Resolved</p>
+              <p className="text-sm text-muted-foreground">{t("disputes.resolved")}</p>
             </CardContent>
           </Card>
         </div>
@@ -296,7 +317,7 @@ export default function DisputesPage() {
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             )}
           >
-            All
+            {t("common.all")}
           </button>
           {Object.entries(STATUS_CONFIG).map(([status, config]) => (
             <button
@@ -309,7 +330,7 @@ export default function DisputesPage() {
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               )}
             >
-              {config.label}
+              {t(config.label)}
             </button>
           ))}
         </div>
@@ -324,14 +345,14 @@ export default function DisputesPage() {
             <Card>
               <CardContent className="p-12 text-center">
                 <CheckCircle className="w-12 h-12 text-success mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">No Disputes</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">{t("disputes.empty")}</h3>
                 <p className="text-muted-foreground mb-4">
                   {currentStatus
-                    ? `No ${STATUS_CONFIG[currentStatus]?.label?.toLowerCase?.() || ""} disputes found.`
-                    : "You don't have any disputes. Great job maintaining good rental relationships!"}
+                    ? t("disputes.noStatusDisputes", { status: t(STATUS_CONFIG[currentStatus]?.label || "") })
+                    : t("disputes.emptyDefaultDesc")}
                 </p>
                 <Link to="/bookings">
-                  <UnifiedButton variant="outline">View Bookings</UnifiedButton>
+                  <UnifiedButton variant="outline">{t("disputes.viewBookings")}</UnifiedButton>
                 </Link>
               </CardContent>
             </Card>
@@ -352,13 +373,12 @@ export default function DisputesPage() {
             <div className="flex items-start gap-4">
               <AlertTriangle className="w-6 h-6 text-warning flex-shrink-0" />
               <div>
-                <h3 className="font-semibold text-foreground mb-1">Need to Open a Dispute?</h3>
+                <h3 className="font-semibold text-foreground mb-1">{t("disputes.needToOpen")}</h3>
                 <p className="text-sm text-muted-foreground mb-3">
-                  If you're having issues with a rental, you can open a dispute from your booking page.
-                  Our support team will help mediate and find a fair resolution.
+                  {t("disputes.needToOpenDesc")}
                 </p>
                 <Link to="/bookings" className="text-sm text-primary font-medium hover:text-primary/80">
-                  View My Bookings →
+                  {t("disputes.viewMyBookings")}
                 </Link>
               </div>
             </div>

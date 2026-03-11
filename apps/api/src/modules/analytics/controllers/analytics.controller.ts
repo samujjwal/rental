@@ -1,7 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@/common/auth';
 import { AnalyticsService } from '../services/analytics.service';
 
 @ApiTags('analytics')

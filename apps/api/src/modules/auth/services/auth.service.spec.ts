@@ -10,6 +10,10 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { EmailService } from '@/common/email/email.service';
 import { UserRole, UserStatus } from '@rental-portal/database';
+import { FieldEncryptionService } from '@/common/encryption/field-encryption.service';
+import { SmsService } from './sms.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { getQueueToken } from '@nestjs/bull';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -28,7 +32,7 @@ describe('AuthService', () => {
     passwordHash: 'hashedPassword123',
     firstName: 'John',
     lastName: 'Doe',
-    phoneNumber: '+1234567890',
+    phone: '+1234567890',
     role: UserRole.CUSTOMER,
     status: UserStatus.ACTIVE,
     emailVerified: false,
@@ -65,6 +69,8 @@ describe('AuthService', () => {
     postalCode: null,
     country: null,
     deletedAt: null,
+    loginAttempts: 0,
+    lockedUntil: null,
   };
 
   const mockTokens = {
@@ -74,10 +80,11 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     const mockPrismaService = {
+      $transaction: jest.fn().mockImplementation((cb) => cb(mockPrismaService)),
       user: {
         findUnique: jest.fn(),
         create: jest.fn(),
-        update: jest.fn(),
+        update: jest.fn().mockResolvedValue({ loginAttempts: 1, lockedUntil: null }),
         findMany: jest.fn(),
       },
       session: {
@@ -91,6 +98,7 @@ describe('AuthService', () => {
     const mockPasswordService = {
       hash: jest.fn(),
       verify: jest.fn(),
+      validateStrength: jest.fn().mockReturnValue({ isValid: true, errors: [] }),
     };
 
     const mockTokenService = {
@@ -111,6 +119,7 @@ describe('AuthService', () => {
       get: jest.fn(),
       set: jest.fn(),
       del: jest.fn(),
+      delPattern: jest.fn().mockResolvedValue(undefined),
     };
 
     const mockEmailService = {
@@ -133,6 +142,17 @@ describe('AuthService', () => {
         { provide: CacheService, useValue: mockCacheService },
         { provide: EmailService, useValue: mockEmailService },
         { provide: ConfigService, useValue: mockConfigService },
+        {
+          provide: FieldEncryptionService,
+          useValue: {
+            encrypt: jest.fn((v: string) => v ? `enc:${v}` : null),
+            decrypt: jest.fn((v: string) => v ? v.replace(/^enc:/, '') : null),
+            isEncrypted: jest.fn((v: string) => typeof v === 'string' && v.startsWith('enc:')),
+          },
+        },
+        { provide: SmsService, useValue: { sendOtp: jest.fn().mockResolvedValue(undefined) } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: getQueueToken('emails'), useValue: { add: jest.fn().mockResolvedValue({}) } },
       ],
     }).compile();
 
@@ -220,7 +240,7 @@ describe('AuthService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             role: UserRole.USER,
-            status: UserStatus.ACTIVE,
+            status: UserStatus.PENDING_VERIFICATION,
           }),
         }),
       );
@@ -339,7 +359,7 @@ describe('AuthService', () => {
       (prismaService.user.create as jest.Mock).mockResolvedValue({
         ...mockUser,
         email: minimalDto.email,
-        phoneNumber: null,
+        phone: null,
         dateOfBirth: null,
       });
       (tokenService.generateTokens as jest.Mock).mockResolvedValue(mockTokens);
@@ -444,6 +464,166 @@ describe('AuthService', () => {
       const result = await service.validateSessionToken(mockUser.id, 'stale-access-token');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('account lockout', () => {
+    const loginDto: LoginDto = { email: 'test@example.com', password: 'wrong-password' };
+
+    it('should increment loginAttempts on failed login', async () => {
+      const userWithAttempts = { ...mockUser, loginAttempts: 2, lockedUntil: null };
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(userWithAttempts);
+      (passwordService.verify as jest.Mock).mockResolvedValue(false);
+      (prismaService.user.update as jest.Mock).mockResolvedValue({ loginAttempts: 3 });
+
+      await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
+
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ loginAttempts: { increment: 1 } }),
+        }),
+      );
+    });
+
+    it('should lock account after 5 failed attempts', async () => {
+      const userWith4Attempts = { ...mockUser, loginAttempts: 4, lockedUntil: null };
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(userWith4Attempts);
+      (passwordService.verify as jest.Mock).mockResolvedValue(false);
+      // First update call: atomic increment returns loginAttempts: 5
+      (prismaService.user.update as jest.Mock)
+        .mockResolvedValueOnce({ loginAttempts: 5 })
+        .mockResolvedValueOnce({});
+
+      await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
+
+      // Second update should lock the account
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            loginAttempts: 0,
+            lockedUntil: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('should reject login if account is locked', async () => {
+      const lockedUser = {
+        ...mockUser,
+        loginAttempts: 0,
+        lockedUntil: new Date(Date.now() + 10 * 60 * 1000), // locked for 10 more minutes
+      };
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(lockedUser);
+
+      await expect(service.login(loginDto)).rejects.toThrow(/temporarily locked/);
+    });
+
+    it('should allow login after lock expires', async () => {
+      const expiredLockUser = {
+        ...mockUser,
+        loginAttempts: 0,
+        lockedUntil: new Date(Date.now() - 60 * 1000), // lock expired 1 minute ago
+      };
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(expiredLockUser);
+      (passwordService.verify as jest.Mock).mockResolvedValue(true);
+      (tokenService.generateTokens as jest.Mock).mockResolvedValue(mockTokens);
+      (tokenService.createSession as jest.Mock).mockResolvedValue(undefined);
+      (prismaService.user.update as jest.Mock).mockResolvedValue(expiredLockUser);
+
+      const result = await service.login(loginDto);
+      expect(result).toHaveProperty('accessToken');
+    });
+
+    it('should reset loginAttempts on successful login', async () => {
+      const userWithAttempts = { ...mockUser, loginAttempts: 3, lockedUntil: null };
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(userWithAttempts);
+      (passwordService.verify as jest.Mock).mockResolvedValue(true);
+      (tokenService.generateTokens as jest.Mock).mockResolvedValue(mockTokens);
+      (tokenService.createSession as jest.Mock).mockResolvedValue(undefined);
+      (prismaService.user.update as jest.Mock).mockResolvedValue(userWithAttempts);
+
+      await service.login({ email: 'test@example.com', password: 'correct-password' });
+
+      // Should reset loginAttempts to 0
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ loginAttempts: 0, lockedUntil: null }),
+        }),
+      );
+    });
+  });
+
+  describe('password strength validation', () => {
+    it('should reject weak passwords during registration', async () => {
+      const weakPasswordDto: RegisterDto = {
+        email: 'weak@example.com',
+        password: '123',
+        firstName: 'Test',
+        lastName: 'User',
+      };
+
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (passwordService.validateStrength as jest.Mock).mockReturnValue({
+        isValid: false,
+        errors: ['Password must be at least 8 characters', 'Must contain uppercase letter'],
+      });
+
+      await expect(service.register(weakPasswordDto)).rejects.toThrow(BadRequestException);
+      expect(passwordService.hash).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refreshTokens', () => {
+    it('should return new tokens for a valid refresh token', async () => {
+      const mockSession = {
+        id: 'session-1',
+        refreshToken: 'valid-refresh-token',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user: { ...mockUser },
+      };
+
+      (prismaService.session as any).findUnique = jest.fn().mockResolvedValue(mockSession);
+      (prismaService.session as any).update = jest.fn().mockResolvedValue(mockSession);
+      (tokenService.generateTokens as jest.Mock).mockResolvedValue(mockTokens);
+
+      const result = await service.refreshTokens('valid-refresh-token');
+
+      expect(result).toHaveProperty('accessToken', mockTokens.accessToken);
+      expect(result).toHaveProperty('refreshToken', mockTokens.refreshToken);
+      expect(result).toHaveProperty('user');
+    });
+
+    it('should throw for invalid refresh token', async () => {
+      (prismaService.session as any).findUnique = jest.fn().mockResolvedValue(null);
+
+      await expect(service.refreshTokens('invalid-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw for expired refresh token and delete session', async () => {
+      const expiredSession = {
+        id: 'session-expired',
+        refreshToken: 'expired-token',
+        expiresAt: new Date(Date.now() - 60 * 1000), // expired 1 minute ago
+        user: { ...mockUser },
+      };
+
+      (prismaService.session as any).findUnique = jest.fn().mockResolvedValue(expiredSession);
+      (prismaService.session as any).delete = jest.fn().mockResolvedValue(undefined);
+
+      await expect(service.refreshTokens('expired-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should reject refresh for suspended user', async () => {
+      const suspendedSession = {
+        id: 'session-susp',
+        refreshToken: 'susp-token',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user: { ...mockUser, status: UserStatus.SUSPENDED },
+      };
+
+      (prismaService.session as any).findUnique = jest.fn().mockResolvedValue(suspendedSession);
+
+      await expect(service.refreshTokens('susp-token')).rejects.toThrow(UnauthorizedException);
     });
   });
 });

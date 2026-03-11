@@ -1,6 +1,7 @@
 
 import { Link, useLocation } from "react-router";
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "~/lib/utils";
 import {
   Menu,
@@ -28,6 +29,7 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ sections, className }: DashboardSidebarProps) {
   const location = useLocation();
+  const { t } = useTranslation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Close drawer on route change
@@ -145,7 +147,7 @@ export function DashboardSidebar({ sections, className }: DashboardSidebarProps)
             aria-label="Navigation menu"
           >
             <div className="flex items-center justify-between border-b p-4">
-              <span className="text-sm font-semibold text-foreground">Navigation</span>
+              <span className="text-sm font-semibold text-foreground">{t("common.navigation")}</span>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}

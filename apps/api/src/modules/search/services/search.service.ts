@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { EmbeddingService } from '@/modules/ai/services/embedding.service';
-import { PROPERTY_STATUS, VERIFICATION_STATUS, toNumber } from '@rental-portal/database';
+import { PropertyStatus, VerificationStatus, toNumber } from '@rental-portal/database';
 
 export interface SearchQuery {
   query?: string;
@@ -112,12 +112,12 @@ export class SearchService {
     size: number;
     aggregations?: any;
   }> {
-    const page = searchQuery.page || 1;
-    const size = searchQuery.size || 20;
+    const page = Math.max(1, Math.floor(Number(searchQuery.page) || 1));
+    const size = Math.min(100, Math.max(1, Math.floor(Number(searchQuery.size) || 20)));
     const skip = (page - 1) * size;
 
-    // Create cache key
-    const cacheKey = `search:${JSON.stringify(searchQuery)}`;
+    // Create cache key with deterministic JSON key ordering
+    const cacheKey = `search:${JSON.stringify(searchQuery, Object.keys(searchQuery).sort())}`;
 
     // Try cache first
     const cached = (await this.cache.get(cacheKey)) as any;
@@ -128,71 +128,54 @@ export class SearchService {
 
     // Build where clause
     const where: any = {
-      status: PROPERTY_STATUS.AVAILABLE,
-      verificationStatus: VERIFICATION_STATUS.VERIFIED,
+      status: PropertyStatus.AVAILABLE,
+      verificationStatus: VerificationStatus.VERIFIED,
     };
 
-    // Text search
+    // Full-text search via ILIKE (simplified version to avoid tsvector issues)
     if (searchQuery.query) {
-      where.OR = [
-        {
-          title: {
-            contains: searchQuery.query,
-            mode: 'insensitive',
-          },
-        },
-        {
-          description: {
-            contains: searchQuery.query,
-            mode: 'insensitive',
-          },
-        },
-        {
-          city: {
-            contains: searchQuery.query,
-            mode: 'insensitive',
-          },
-        },
-      ];
+      const ftsIds = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM properties
+         WHERE title ILIKE '%' || $1 || '%'
+           OR description ILIKE '%' || $1 || '%'
+           OR city ILIKE '%' || $1 || '%'`,
+        searchQuery.query,
+      );
+      const ids = ftsIds.map((r) => r.id);
+      if (ids.length === 0) {
+        // No matches — return empty immediately
+        const emptyResult = { results: [] as any[], total: 0, page, size };
+        await this.cache.set(cacheKey, emptyResult, 300);
+        return emptyResult;
+      }
+      where.id = { in: ids };
     }
 
-    // Category filter
+    // Category filter — DB-driven: resolve parent→children hierarchy instead of hardcoded slugs
     if (searchQuery.categoryId) {
-      const catId = searchQuery.categoryId.toUpperCase();
-      if (catId === 'SPACES') {
-        where.category = {
-          slug: {
-            in: [
-              'apartment',
-              'house',
-              'villa',
-              'studio',
-              'condo',
-              'townhouse',
-              'cottage',
-            ],
-          },
-        };
-      } else if (catId === 'VEHICLES') {
-        where.category = {
-          slug: { in: ['cars', 'motorcycles', 'bicycles', 'rvs-campers', 'boats'] },
-        };
-      } else if (catId === 'INSTRUMENTS') {
-        where.category = {
-          slug: { in: ['musical-instruments', 'audio-equipment'] },
-        };
-      } else if (catId === 'EVENT_VENUES') {
-        where.category = { slug: { in: ['event-venues'] } };
-      } else if (catId === 'EVENT_ITEMS' || catId === 'PARTY') {
-        where.category = { slug: { in: ['event-equipment', 'party-supplies'] } };
-      } else if (catId === 'WEARABLES') {
-        where.category = { slug: { in: ['formal-wear'] } };
-      } else if (catId === 'SPORTS') {
-        where.category = { slug: { in: ['sports-equipment'] } };
-      } else if (catId === 'PHOTOGRAPHY') {
-        where.category = { slug: { in: ['photography-equipment'] } };
+      // Try to find a category matching the given ID, slug, or name (case-insensitive)
+      const matchedCategory = await this.prisma.category.findFirst({
+        where: {
+          OR: [
+            { id: searchQuery.categoryId },
+            { slug: { equals: searchQuery.categoryId, mode: 'insensitive' } },
+            { name: { equals: searchQuery.categoryId, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (matchedCategory) {
+        // Find all child categories (one level deep) to include in the search
+        const childCategories = await this.prisma.category.findMany({
+          where: { parentId: matchedCategory.id, isActive: true },
+          select: { id: true },
+        });
+
+        const categoryIds = [matchedCategory.id, ...childCategories.map((c) => c.id)];
+        where.categoryId = { in: categoryIds };
       } else {
-        // Default to exact ID match or fuzzy name/slug match
+        // Fallback: fuzzy name/slug match
         where.OR = [
           { categoryId: searchQuery.categoryId },
           {
@@ -287,6 +270,25 @@ export class SearchService {
       }
     }
 
+    // Date availability filter: exclude listings with overlapping confirmed bookings
+    // and those with BLOCKED availability periods
+    if (searchQuery.dates?.startDate && searchQuery.dates?.endDate) {
+      where.bookings = {
+        none: {
+          status: { in: ['CONFIRMED', 'IN_PROGRESS', 'PENDING_PAYMENT', 'PENDING_OWNER_APPROVAL'] },
+          startDate: { lt: searchQuery.dates.endDate },
+          endDate: { gt: searchQuery.dates.startDate },
+        },
+      };
+      where.availability = {
+        none: {
+          status: 'BLOCKED',
+          startDate: { lt: searchQuery.dates.endDate },
+          endDate: { gt: searchQuery.dates.startDate },
+        },
+      };
+    }
+
     try {
       // For geo-search, we fetch more results to account for bounding-box
       // items that fall outside the actual radius circle, then filter+paginate
@@ -321,7 +323,7 @@ export class SearchService {
 
       // Apply precise Haversine distance filter for geo searches
       let filteredListings = listings;
-      let distanceMap = new Map<string, number>();
+      const distanceMap = new Map<string, number>();
 
       if (isGeoFiltered) {
         const lat = searchQuery.location!.lat!;
@@ -383,6 +385,75 @@ export class SearchService {
 
       // If text search returned few results, try semantic search for enrichment
       if (searchQuery.query && results.length < size && !isGeoFiltered) {
+        // ── Token-based similarity fallback ──────────────────────────────────
+        // If exact contains-match returned 0 results, search each meaningful
+        // word in the query individually (OR) to handle typos / partial terms.
+        if (results.length === 0) {
+          const stopWords = new Set(['the', 'a', 'an', 'in', 'on', 'at', 'for', 'of', 'to', 'is', 'and', 'or', 'with', 'by', 'np', 'npr']);
+          const tokens = searchQuery.query
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((t) => t.length >= 2 && !stopWords.has(t));
+
+          if (tokens.length > 0) {
+            const tokenWhere: any = {
+              status: PropertyStatus.AVAILABLE,
+              verificationStatus: VerificationStatus.VERIFIED,
+            };
+            // Copy non-text filters from original where
+            if (where.category) tokenWhere.category = where.category;
+            if (where.basePrice) tokenWhere.basePrice = where.basePrice;
+            if (where.bookingMode) tokenWhere.bookingMode = where.bookingMode;
+            if (where.condition) tokenWhere.condition = where.condition;
+
+            // Each token is tried against title, description, city
+            tokenWhere.OR = tokens.flatMap((token) => [
+              { title: { contains: token, mode: 'insensitive' } },
+              { description: { contains: token, mode: 'insensitive' } },
+              { city: { contains: token, mode: 'insensitive' } },
+              { state: { contains: token, mode: 'insensitive' } },
+            ]);
+
+            const similarListings = await this.prisma.listing.findMany({
+              where: tokenWhere,
+              include: {
+                owner: { select: { id: true, firstName: true, lastName: true, averageRating: true } },
+                category: { select: { id: true, name: true, slug: true } },
+              },
+              orderBy: this.buildSortOrder(searchQuery.sort),
+              take: size,
+              skip,
+            });
+
+            results.push(
+              ...similarListings.map((listing: any) => ({
+                id: listing.id,
+                title: listing.title,
+                description: listing.description,
+                slug: listing.slug,
+                categoryName: listing.category?.name || '',
+                categorySlug: listing.category?.slug || '',
+                city: listing.city,
+                state: listing.state,
+                country: listing.country,
+                location: { lat: listing.latitude, lon: listing.longitude },
+                basePrice: listing.basePrice,
+                currency: listing.currency,
+                photos: Array.isArray(listing.photos) ? listing.photos : [],
+                ownerName: `${listing.owner.firstName} ${listing.owner.lastName}`.trim(),
+                ownerRating: listing.owner.averageRating || 0,
+                averageRating: listing.averageRating || 0,
+                totalReviews: listing.totalReviews || 0,
+                bookingMode: listing.bookingMode,
+                condition: listing.condition,
+                features: Array.isArray(listing.features) ? listing.features : [],
+                score: this.calculateRelevanceScore(listing, searchQuery.query),
+                isSimilarMatch: true,
+              })),
+            );
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────────
         try {
           const semanticResults = await this.embeddingService.semanticSearch(
             searchQuery.query,
@@ -474,8 +545,8 @@ export class SearchService {
     try {
       const listings = await this.prisma.listing.findMany({
         where: {
-          status: PROPERTY_STATUS.AVAILABLE,
-          verificationStatus: VERIFICATION_STATUS.VERIFIED,
+          status: PropertyStatus.AVAILABLE,
+          verificationStatus: VerificationStatus.VERIFIED,
           OR: [
             {
               title: {
@@ -523,8 +594,8 @@ export class SearchService {
       const [listings, categories, locations] = await Promise.all([
         this.prisma.listing.findMany({
           where: {
-            status: PROPERTY_STATUS.AVAILABLE,
-            verificationStatus: VERIFICATION_STATUS.VERIFIED,
+            status: PropertyStatus.AVAILABLE,
+            verificationStatus: VerificationStatus.VERIFIED,
             OR: [
               {
                 title: {
@@ -567,8 +638,8 @@ export class SearchService {
         }),
         this.prisma.listing.findMany({
           where: {
-            status: PROPERTY_STATUS.AVAILABLE,
-            verificationStatus: VERIFICATION_STATUS.VERIFIED,
+            status: PropertyStatus.AVAILABLE,
+            verificationStatus: VerificationStatus.VERIFIED,
             OR: [
               {
                 city: {
@@ -646,8 +717,8 @@ export class SearchService {
       const similarListings = await this.prisma.listing.findMany({
         where: {
           id: { not: listingId },
-          status: PROPERTY_STATUS.AVAILABLE,
-          verificationStatus: VERIFICATION_STATUS.VERIFIED,
+          status: PropertyStatus.AVAILABLE,
+          verificationStatus: VerificationStatus.VERIFIED,
           categoryId: listing.categoryId,
           OR: [
             {
@@ -728,8 +799,8 @@ export class SearchService {
     const groups = await this.prisma.listing.groupBy({
       by: ['categoryId'],
       where: {
-        status: PROPERTY_STATUS.AVAILABLE,
-        verificationStatus: VERIFICATION_STATUS.VERIFIED,
+        status: PropertyStatus.AVAILABLE,
+        verificationStatus: VerificationStatus.VERIFIED,
       },
       _count: {
         categoryId: true,
@@ -886,7 +957,7 @@ export class SearchService {
       ]);
 
       return {
-        categories: (categories as any[]).map((c) => ({
+        categories: (categories as any[]).map((c: any) => ({
           key: c.categoryId,
           count: c._count,
         })),
@@ -895,11 +966,11 @@ export class SearchService {
           max: (priceRanges as any)._max.basePrice,
           avg: (priceRanges as any)._avg.basePrice,
         },
-        cities: (cities as any[]).map((c) => ({
+        cities: (cities as any[]).map((c: any) => ({
           key: c.city,
           count: c._count,
         })),
-        conditions: (conditions as any[]).map((c) => ({
+        conditions: (conditions as any[]).map((c: any) => ({
           key: c.condition,
           count: c._count,
         })),

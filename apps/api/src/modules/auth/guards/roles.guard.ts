@@ -1,4 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { i18nForbidden } from '@/common/errors/i18n-exceptions';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '@rental-portal/database';
 
@@ -47,7 +48,21 @@ export enum Permission {
  */
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   [UserRole.SUPER_ADMIN]: Object.values(Permission),
-  [UserRole.ADMIN]: Object.values(Permission),
+  [UserRole.ADMIN]: [
+    Permission.MANAGE_BOOKINGS,
+    Permission.VIEW_BOOKINGS,
+    Permission.MANAGE_LISTINGS,
+    Permission.MODERATE_LISTINGS,
+    Permission.MANAGE_USERS,
+    Permission.VIEW_USERS,
+    Permission.SUSPEND_USERS,
+    Permission.VIEW_FINANCIALS,
+    Permission.MANAGE_DISPUTES,
+    Permission.RESOLVE_DISPUTES,
+    Permission.MANAGE_CATEGORIES,
+    Permission.VIEW_ANALYTICS,
+    Permission.REVIEW_KYC,
+  ],
   [UserRole.OPERATIONS_ADMIN]: [
     Permission.MANAGE_BOOKINGS,
     Permission.VIEW_BOOKINGS,
@@ -101,7 +116,7 @@ export class RolesGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
 
     if (!user) {
-      throw new ForbiddenException('User not authenticated');
+      throw i18nForbidden('auth.notAuthenticated');
     }
 
     // Role check
@@ -111,7 +126,7 @@ export class RolesGuard implements CanActivate {
       const isAdmin = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN;
 
       if (!hasRole && !isAdmin) {
-        throw new ForbiddenException('Insufficient permissions');
+        throw i18nForbidden('auth.insufficientPermissions');
       }
     }
 
@@ -121,7 +136,7 @@ export class RolesGuard implements CanActivate {
       const hasAllPermissions = requiredPermissions.every((p) => userPermissions.includes(p));
 
       if (!hasAllPermissions) {
-        throw new ForbiddenException('Insufficient permissions for this action');
+        throw i18nForbidden('auth.insufficientPermissions');
       }
     }
 

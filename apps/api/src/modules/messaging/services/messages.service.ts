@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { Message } from '@rental-portal/database';
@@ -33,13 +34,13 @@ export class MessagesService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversation not found');
+      throw i18nNotFound('message.conversationNotFound');
     }
 
     const isParticipant = conversation.participants.some((p) => p.userId === userId);
 
     if (!isParticipant) {
-      throw new ForbiddenException('Not a participant in this conversation');
+      throw i18nForbidden('message.unauthorized');
     }
 
     // Moderate message content
@@ -111,13 +112,13 @@ export class MessagesService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversation not found');
+      throw i18nNotFound('message.conversationNotFound');
     }
 
     const isParticipant = conversation.participants.some((p) => p.userId === userId);
 
     if (!isParticipant) {
-      throw new ForbiddenException('Not a participant in this conversation');
+      throw i18nForbidden('message.unauthorized');
     }
 
     const where: any = {
@@ -179,14 +180,14 @@ export class MessagesService {
     });
 
     if (!message) {
-      throw new NotFoundException('Message not found');
+      throw i18nNotFound('message.notFound');
     }
 
     // Verify user is participant (but not sender)
     const isParticipant = message.conversation.participants.some((p) => p.userId === userId);
 
     if (!isParticipant || message.senderId === userId) {
-      throw new ForbiddenException('Cannot mark this message as read');
+      throw i18nForbidden('message.unauthorized');
     }
 
     await this.prisma.messageReadReceipt.upsert({
@@ -222,13 +223,13 @@ export class MessagesService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversation not found');
+      throw i18nNotFound('message.conversationNotFound');
     }
 
     const isParticipant = conversation.participants.some((p) => p.userId === userId);
 
     if (!isParticipant) {
-      throw new ForbiddenException('Not a participant in this conversation');
+      throw i18nForbidden('message.unauthorized');
     }
 
     const unreadMessages = await this.prisma.message.findMany({
@@ -296,20 +297,21 @@ export class MessagesService {
     });
 
     if (!message) {
-      throw new NotFoundException('Message not found');
+      throw i18nNotFound('message.notFound');
     }
 
     // Only sender can delete
     if (message.senderId !== userId) {
-      throw new ForbiddenException('Can only delete your own messages');
+      throw i18nForbidden('message.cannotDeleteOthers');
     }
 
-    // Soft delete - just mark as deleted
+    // Soft delete - mark as deleted and clear content
     await this.prisma.message.update({
       where: { id: messageId },
       data: {
         content: '[Message deleted]',
         attachments: [],
+        deletedAt: new Date(),
       },
     });
   }
@@ -339,14 +341,14 @@ export class MessagesService {
     });
 
     if (!message) {
-      throw new NotFoundException('Message not found');
+      throw i18nNotFound('message.notFound');
     }
 
     // Verify user is participant
     const isParticipant = message.conversation.participants.some((p) => p.userId === userId);
 
     if (!isParticipant) {
-      throw new ForbiddenException('Not a participant in this conversation');
+      throw i18nForbidden('message.unauthorized');
     }
 
     return message;

@@ -1,15 +1,24 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { CompositeScreenProps } from "@react-navigation/native";
+import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { SearchBar } from "../components/SearchBar";
 import { LocationInput } from "../components/LocationInput";
-import type { GeoSuggestion } from "@rental-portal/mobile-sdk";
+import { useAuth } from "../api/authContext";
+import type { GeoSuggestion } from '~/types';
 import type { RootStackParamList } from "../../App";
+import type { TabParamList } from "../navigation/TabNavigator";
 
 
-type Props = NativeStackScreenProps<RootStackParamList, "Home">;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, "HomeTab">,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 export function HomeScreen({ navigation }: Props) {
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -23,13 +32,13 @@ export function HomeScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.heading}>Find your next rental</Text>
       <SearchBar
         value={query}
         onChange={setQuery}
         onSubmit={(value) =>
-          navigation.navigate("Search", {
+          navigation.navigate("SearchTab", {
             query: value,
             location,
             lat: coords?.lat,
@@ -49,8 +58,10 @@ export function HomeScreen({ navigation }: Props) {
         />
         <Pressable
           style={styles.locationButton}
+          accessibilityLabel="Search this area"
+          accessibilityHint="Searches for listings in the selected location"
           onPress={() => {
-            navigation.navigate("Search", {
+            navigation.navigate("SearchTab", {
               query,
               location,
               lat: coords?.lat,
@@ -59,14 +70,16 @@ export function HomeScreen({ navigation }: Props) {
             });
           }}
         >
-          <Text style={styles.locationButtonText}>Use my location</Text>
+          <Text style={styles.locationButtonText}>Search this area</Text>
         </Pressable>
       </View>
 
       <Pressable
         style={styles.primaryButton}
+        accessibilityLabel="Search"
+        accessibilityRole="button"
         onPress={() =>
-          navigation.navigate("Search", {
+          navigation.navigate("SearchTab", {
             query,
             location,
             lat: coords?.lat,
@@ -81,36 +94,76 @@ export function HomeScreen({ navigation }: Props) {
       <View style={styles.quickLinks}>
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate("Bookings")}
+          accessibilityLabel="My Bookings"
+          accessibilityRole="button"
+          onPress={() => navigation.navigate("BookingsTab")}
         >
           <Text style={styles.secondaryButtonText}>My Bookings</Text>
         </Pressable>
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate("Messages")}
+          accessibilityLabel="Messages"
+          accessibilityRole="button"
+          onPress={() => navigation.navigate("MessagesTab")}
         >
           <Text style={styles.secondaryButtonText}>Messages</Text>
         </Pressable>
+        {user && (
+          <Pressable
+            style={styles.secondaryButton}
+            accessibilityLabel="My Favorites"
+            accessibilityRole="button"
+            onPress={() => navigation.navigate("Favorites")}
+          >
+            <Text style={styles.secondaryButtonText}>Favorites</Text>
+          </Pressable>
+        )}
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate("CreateListing")}
+          accessibilityLabel="List Item"
+          accessibilityHint="Create a new listing"
+          accessibilityRole="button"
+          onPress={() => {
+            if (!user) { navigation.navigate("Login"); return; }
+            navigation.navigate("CreateListing");
+          }}
         >
           <Text style={styles.secondaryButtonText}>List Item</Text>
         </Pressable>
+        {user?.role === "owner" && (
+          <Pressable
+            style={styles.secondaryButton}
+            accessibilityLabel="Owner Stats"
+            accessibilityHint="View your owner dashboard"
+            accessibilityRole="button"
+            onPress={() => navigation.navigate("OwnerDashboard")}
+          >
+            <Text style={styles.secondaryButtonText}>Owner Stats</Text>
+          </Pressable>
+        )}
+        {user && user.role !== "owner" && (
+          <Pressable
+            style={styles.secondaryButton}
+            accessibilityLabel="Become an Owner"
+            accessibilityRole="button"
+            onPress={() => navigation.navigate("BecomeOwner")}
+          >
+            <Text style={styles.secondaryButtonText}>Become Owner</Text>
+          </Pressable>
+        )}
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate("OwnerDashboard")}
-        >
-          <Text style={styles.secondaryButtonText}>Owner Stats</Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate("Reviews")}
+          accessibilityLabel="Reviews"
+          accessibilityRole="button"
+          onPress={() => {
+            if (!user) { navigation.navigate("Login"); return; }
+            navigation.navigate("Reviews");
+          }}
         >
           <Text style={styles.secondaryButtonText}>Reviews</Text>
         </Pressable>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -151,6 +204,7 @@ const styles = StyleSheet.create({
   quickLinks: {
     marginTop: 24,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
   },
   secondaryButton: {

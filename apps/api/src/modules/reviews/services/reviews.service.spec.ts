@@ -12,6 +12,7 @@ describe('ReviewsService', () => {
   let cache: CacheService;
 
   const mockPrismaService = {
+    $transaction: jest.fn().mockImplementation((cb) => cb(mockPrismaService)),
     booking: {
       findUnique: jest.fn(),
     },
@@ -174,9 +175,8 @@ describe('ReviewsService', () => {
     });
 
     it('should throw BadRequest if older than 7 days', async () => {
-      const oldDate = new Date();
-      oldDate.setDate(oldDate.getDate() - 8);
-      mockPrismaService.review.findUnique.mockResolvedValue({ ...mockReview, createdAt: oldDate });
+      const veryOldDate = new Date('2020-01-01T00:00:00.000Z'); // clearly > 7 days ago
+      mockPrismaService.review.findUnique.mockResolvedValue({ ...mockReview, createdAt: veryOldDate });
 
       await expect(service.update('review-1', 'user-1', {})).rejects.toThrow(BadRequestException);
     });

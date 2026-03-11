@@ -1,4 +1,6 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { StripeService } from './stripe.service';
 import { LedgerService } from './ledger.service';
@@ -6,10 +8,13 @@ import { PayoutStatus, UserRole, toNumber, decimalSubtract } from '@rental-porta
 
 @Injectable()
 export class PayoutsService {
+  private readonly logger = new Logger(PayoutsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly stripe: StripeService,
     private readonly ledger: LedgerService,
+    private readonly configService: ConfigService,
   ) {}
 
   async createPayout(
@@ -25,24 +30,24 @@ export class PayoutsService {
     });
 
     if (!owner?.stripeConnectId) {
-      throw new Error('Owner has not connected a payout account');
+      throw i18nBadRequest('payment.ownerNotConnected');
     }
 
     if (!owner.stripeOnboardingComplete) {
-      throw new Error('Owner account not verified');
+      throw i18nBadRequest('payment.ownerNotVerified');
     }
 
     // Get pending earnings
     const pendingEarnings = await this.getPendingEarnings(ownerId);
 
     if (pendingEarnings.amount === 0) {
-      throw new Error('No pending earnings to payout');
+      throw i18nBadRequest('payment.noPendingEarnings');
     }
 
     const payoutAmount = amount || pendingEarnings.amount;
 
     if (payoutAmount > pendingEarnings.amount) {
-      throw new Error('Insufficient funds');
+      throw i18nBadRequest('payment.insufficientFunds');
     }
 
     // Create Stripe payout
@@ -84,7 +89,7 @@ export class PayoutsService {
       // Fallback: If no booking exists (unlikely if they have earnings), we can't create a ledger entry
       // without violating FK constraints.
       // In a real scenario, we should handle this gracefully or have a 'System Booking'.
-      console.warn(`Payout ${payout.id} created but no booking found to attach ledger entry.`);
+      this.logger.warn(`Payout ${payout.id} created but no booking found to attach ledger entry.`);
     }
 
     return {
@@ -95,7 +100,7 @@ export class PayoutsService {
   }
 
   async getPendingEarnings(ownerId: string): Promise<{ amount: number; currency: string }> {
-    // Get completed bookings that haven't been paid out
+    // Get completed bookings that haven't been paid out, grouped by currency
     const earnings = await this.prisma.booking.aggregate({
       where: {
         listing: { ownerId },
@@ -121,9 +126,17 @@ export class PayoutsService {
     const totalEarnings = toNumber(earnings._sum.ownerEarnings || 0);
     const totalPayouts = toNumber(payouts._sum.amount || 0);
 
+    // Determine the user's primary currency from their preferences or most recent booking
+    const userPrefs = await this.prisma.userPreferences.findUnique({
+      where: { userId: ownerId },
+      select: { currency: true },
+    });
+
+    const currency = userPrefs?.currency || 'NPR';
+
     return {
       amount: decimalSubtract(totalEarnings, totalPayouts),
-      currency: 'USD',
+      currency,
     };
   }
 
@@ -157,7 +170,7 @@ export class PayoutsService {
     });
 
     let count = 0;
-    const PAYOUT_THRESHOLD = 50; // Minimum $50 for automatic payout
+    const PAYOUT_THRESHOLD = this.configService.get<number>('PAYOUT_THRESHOLD', 5000);
 
     for (const owner of owners) {
       try {
@@ -168,7 +181,7 @@ export class PayoutsService {
           count++;
         }
       } catch (error) {
-        console.error(`Failed to create payout for owner ${owner.id}:`, error);
+        this.logger.error(`Failed to create payout for owner ${owner.id}:`, error);
       }
     }
 

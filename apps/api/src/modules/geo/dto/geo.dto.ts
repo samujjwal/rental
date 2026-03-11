@@ -4,22 +4,22 @@ export class GeoAddressComponentsDto {
   @ApiProperty({ example: 'Baneshwor', required: false })
   subLocality?: string;
 
-  @ApiProperty({ example: 'Kathmandu', required: false })
+  @ApiProperty({ example: 'San Francisco', required: false })
   locality?: string;
 
   @ApiProperty({ example: 'Bagmati Province', required: false })
   adminAreaLevel1?: string;
 
-  @ApiProperty({ example: 'Kathmandu District', required: false })
+  @ApiProperty({ example: 'San Francisco County', required: false })
   adminAreaLevel2?: string;
 
   @ApiProperty({ example: '44600', required: false })
   postalCode?: string;
 
-  @ApiProperty({ example: 'NP', required: false })
+  @ApiProperty({ example: 'US', required: false })
   countryCode?: string;
 
-  @ApiProperty({ example: 'Nepal', required: false })
+  @ApiProperty({ example: 'United States', required: false })
   country?: string;
 }
 
@@ -41,11 +41,11 @@ export class GeoSuggestionDto {
   @ApiProperty({ example: 'nominatim:1234567', required: false })
   placeId?: string;
 
-  @ApiProperty({ example: 'Baneshwor, Kathmandu' })
+  @ApiProperty({ example: 'Market St, San Francisco' })
   shortLabel: string;
 
   @ApiProperty({
-    example: 'Baneshwor, Kathmandu Metropolitan City, Kathmandu, Bagmati, Nepal',
+    example: '123 Market St, San Francisco, CA 94105, United States',
   })
   formattedAddress: string;
 

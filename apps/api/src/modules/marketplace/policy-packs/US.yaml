@@ -1,0 +1,225 @@
+# United States Country Policy Pack
+# ISO 3166-1 Alpha-2: US
+
+general:
+  country_code: "US"
+  country_name: "United States"
+  currency:
+    code: "USD"
+    name: "US Dollar"
+    precision: 2
+    symbol: "$"
+    allow_fractional: true
+  locale: "en-US"
+  fallback_locale: "en-US"
+  timezone: "America/New_York"
+  utc_offset: "-05:00"
+  timezones:
+    - "America/New_York"
+    - "America/Chicago"
+    - "America/Denver"
+    - "America/Los_Angeles"
+    - "America/Anchorage"
+    - "Pacific/Honolulu"
+  languages:
+    - "en"
+    - "es"
+  date_format: "MM/DD/YYYY"
+  phone_prefix: "+1"
+  address_format:
+    structure: "Street/City/State/Zip"
+    requires_zip: true
+    requires_state: true
+    zip_regex: "^[0-9]{5}(-[0-9]{4})?$"
+    fields:
+      - { name: "address_line_1", required: true }
+      - { name: "address_line_2", required: false }
+      - { name: "city", required: true }
+      - { name: "state", required: true, enum: "US_STATES" }
+      - { name: "zip_code", required: true }
+
+identity:
+  host_verification:
+    required_documents:
+      - type: "SSN"
+        label: "Social Security Number"
+        mandatory: true
+        required_for: "TAX_COMPLIANCE"
+        storage: "ENCRYPTED_LAST_4_ONLY"
+      - type: "GOVERNMENT_ID"
+        label: "Government-Issued Photo ID"
+        mandatory: true
+        accepted_types:
+          - "DRIVERS_LICENSE"
+          - "STATE_ID"
+          - "PASSPORT"
+    minimum_age: 18
+    allow_foreign_hosts: true
+    foreign_host_documents:
+      - "PASSPORT"
+      - "VISA"
+      - "ITIN"
+    w9_required: true
+  renter_verification:
+    require_phone_verification: true
+    require_email_verification: true
+    require_document_for_high_value: false
+    background_check:
+      enabled: true
+      provider: "CHECKR"
+      required_for: "ALL_BOOKINGS"
+  kyc_provider: "PLAID_IDENTITY"
+  aml_screening: true
+  ofac_screening: true
+
+tax:
+  platform_level: []
+  # Tax is primarily state/city level in the US
+  subnational:
+    # State-level sales tax / transient occupancy tax
+    CA:
+      transient_occupancy_tax:
+        rate: 0.12  # Average — varies by city
+        applied_to: ["BASE_PRICE"]
+        remitted_by: "PLATFORM"
+        registration_required: true
+      state_sales_tax:
+        rate: 0.0725
+        applied_to: ["SERVICE_FEE"]
+        remitted_by: "PLATFORM"
+    NY:
+      hotel_room_occupancy_tax:
+        rate: 0.0585
+        applied_to: ["BASE_PRICE"]
+        remitted_by: "PLATFORM"
+      state_sales_tax:
+        rate: 0.04
+        applied_to: ["BASE_PRICE", "SERVICE_FEE"]
+        remitted_by: "PLATFORM"
+      nyc_hotel_tax:
+        rate: 0.05875
+        applied_to: ["BASE_PRICE"]
+        condition: "city == 'New York'"
+        remitted_by: "PLATFORM"
+    FL:
+      transient_rental_tax:
+        rate: 0.06
+        applied_to: ["BASE_PRICE"]
+        remitted_by: "PLATFORM"
+      county_tourist_tax:
+        rate_range: [0.01, 0.06]
+        applied_to: ["BASE_PRICE"]
+        remitted_by: "PLATFORM"
+        note: "Varies by county"
+    TX:
+      hotel_occupancy_tax:
+        rate: 0.06
+        applied_to: ["BASE_PRICE"]
+        remitted_by: "PLATFORM"
+      state_sales_tax:
+        rate: 0.0625
+        applied_to: ["SERVICE_FEE"]
+        remitted_by: "PLATFORM"
+    HI:
+      transient_accommodations_tax:
+        rate: 0.1025
+        applied_to: ["BASE_PRICE"]
+        remitted_by: "PLATFORM"
+      general_excise_tax:
+        rate: 0.04
+        applied_to: ["BASE_PRICE", "SERVICE_FEE"]
+        remitted_by: "PLATFORM"
+    CO:
+      state_sales_tax:
+        rate: 0.029
+        applied_to: ["BASE_PRICE"]
+        remitted_by: "PLATFORM"
+      lodging_tax:
+        rate_range: [0.02, 0.08]
+        applied_to: ["BASE_PRICE"]
+        note: "Varies by municipality"
+
+  withholding_tax:
+    enabled: false
+  host_income_reporting:
+    # 1099-K threshold per IRS rules (2024+)
+    form: "1099-K"
+    threshold: 600  # USD
+    frequency: "ANNUAL"
+    submission_deadline: "January 31"
+
+payments:
+  supported_methods:
+    - "STRIPE"
+    - "CREDIT_CARD"
+    - "DEBIT_CARD"
+    - "ACH"
+    - "APPLE_PAY"
+    - "GOOGLE_PAY"
+  default_method: "STRIPE"
+  payout_methods:
+    - "ACH"
+    - "STRIPE_CONNECT"
+    - "CHECK"
+  payout_frequency: "DAILY"
+  payout_minimum: 25  # USD
+  escrow_hold_days: 1
+  max_foreign_currency_withdrawal: null
+
+booking:
+  min_duration_hours: 1
+  max_duration_days: 365
+  advance_booking_max_days: 365
+  cancellation_minimum_hours: 24
+  instant_book_enabled: true
+  allow_hourly: true
+  require_guest_count: true
+  max_guests_default: 16
+
+compliance:
+  short_term_rental_cap:
+    enabled: true
+    varies_by_jurisdiction: true
+    examples:
+      - jurisdiction: "New York City"
+        max_days_per_year: 0
+        note: "Illegal unless registered, host present, < 30 days"
+      - jurisdiction: "Los Angeles"
+        max_days_per_year: 120
+        note: "Home sharing ordinance"
+      - jurisdiction: "San Francisco"
+        max_days_per_year: 90
+        note: "Unhosted, unlimited for hosted"
+      - jurisdiction: "Nashville"
+        max_days_per_year: null
+        note: "Permit required, owner-occupied only in some zones"
+  business_registration_required: true
+  business_registration_varies_by: "CITY"
+  safety_requirements:
+    fire_extinguisher: true
+    smoke_detector: true
+    carbon_monoxide_detector: true
+    first_aid_kit: false
+    emergency_exit_plan: true
+  insurance_required: true
+  insurance_minimum_coverage: 1000000  # USD liability
+  data_retention_days: 2555  # ~7 years for tax
+  ada_compliance:
+    required: true
+    applies_to: "COMMERCIAL_PROPERTIES"
+  fair_housing:
+    enabled: true
+    anti_discrimination_policy: true
+    protected_classes:
+      - "RACE"
+      - "COLOR"
+      - "RELIGION"
+      - "SEX"
+      - "NATIONAL_ORIGIN"
+      - "FAMILIAL_STATUS"
+      - "DISABILITY"
+  w9_equivalent:
+    required: true
+    form: "W-9"
+    threshold: 0
+    foreign_host_form: "W-8BEN"

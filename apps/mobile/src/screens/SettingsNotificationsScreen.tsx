@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Switch } from "react-native";
 import { mobileClient } from "../api/client";
-import type { NotificationPreferences } from "@rental-portal/mobile-sdk";
+import type { NotificationPreferences } from '~/types';
 
 const DEFAULT_PREFS: NotificationPreferences = {
   email: true,

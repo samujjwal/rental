@@ -1,0 +1,119 @@
+# Bangladesh Country Policy Pack
+# ISO 3166-1 Alpha-2: BD
+
+general:
+  country_code: "BD"
+  country_name: "Bangladesh"
+  currency:
+    code: "BDT"
+    name: "Bangladeshi Taka"
+    precision: 2
+    symbol: "৳"
+    allow_fractional: true
+  locale: "bn-BD"
+  fallback_locale: "en-BD"
+  timezone: "Asia/Dhaka"
+  utc_offset: "+06:00"
+  languages:
+    - "bn"
+    - "en"
+  date_format: "DD/MM/YYYY"
+  phone_prefix: "+880"
+  address_format:
+    structure: "Division/District/Upazila/Union"
+    requires_zip: true
+    requires_state: false
+    zip_regex: "^[1-9][0-9]{3}$"
+    fields:
+      - { name: "division", required: true }
+      - { name: "district", required: true }
+      - { name: "upazila", required: false }
+      - { name: "postal_code", required: true }
+      - { name: "address_line_1", required: true }
+
+identity:
+  host_verification:
+    required_documents:
+      - type: "NID"
+        label: "National Identity Card"
+        mandatory: true
+        api_integration: "BD_NID_VERIFICATION"
+      - type: "TIN"
+        label: "Tax Identification Number"
+        mandatory: true
+        required_for: "TAX_COMPLIANCE"
+    minimum_age: 18
+    allow_foreign_hosts: true
+    foreign_host_documents:
+      - "PASSPORT"
+  renter_verification:
+    require_phone_verification: true
+    require_email_verification: false
+    require_document_for_high_value: true
+    high_value_threshold: 500000  # BDT
+  kyc_provider: "BD_E_KYC"
+  aml_screening: true
+
+tax:
+  platform_level:
+    - type: "VAT"
+      name: "Value Added Tax"
+      rate: 0.15
+      applied_to: ["SERVICE_FEE", "BASE_PRICE"]
+      remitted_by: "PLATFORM"
+      effective_from: "2012-07-01"
+  host_level:
+    - type: "AIT"
+      name: "Advance Income Tax"
+      rate: 0.05
+      applied_to: ["HOST_INCOME"]
+      remitted_by: "PLATFORM"
+      threshold: 0
+  withholding_tax:
+    enabled: true
+    rate: 0.05
+    threshold: 0
+    remitted_by: "PLATFORM"
+
+payments:
+  supported_methods:
+    - "BKASH"
+    - "NAGAD"
+    - "ROCKET"
+    - "BANK_TRANSFER"
+    - "DEBIT_CARD"
+    - "CREDIT_CARD"
+  default_method: "BKASH"
+  payout_methods:
+    - "BANK_TRANSFER"
+    - "BKASH"
+    - "NAGAD"
+  payout_frequency: "WEEKLY"
+  payout_minimum: 1000  # BDT
+  escrow_hold_days: 2
+  max_foreign_currency_withdrawal: null
+
+booking:
+  min_duration_hours: 1
+  max_duration_days: 365
+  advance_booking_max_days: 180
+  cancellation_minimum_hours: 24
+  instant_book_enabled: true
+  allow_hourly: true
+  require_guest_count: true
+  max_guests_default: 20
+
+compliance:
+  short_term_rental_cap:
+    enabled: false
+  business_registration_required: false
+  safety_requirements:
+    fire_extinguisher: true
+    smoke_detector: false
+    first_aid_kit: false
+  insurance_required: false
+  data_retention_days: 1825  # 5 years
+  w9_equivalent:
+    required: true
+    form: "TIN_CERTIFICATE"
+    threshold: 0

@@ -4,33 +4,26 @@ import { authApi } from "~/lib/api/auth";
 import { useAuthStore } from "~/lib/store/auth";
 import { getSession, sessionStorage as cookieSessionStorage } from "~/utils/auth";
 import { RouteErrorBoundary } from "~/components/ui";
+import { useTranslation } from "react-i18next";
 
 const getRefreshToken = () =>
-  typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
+  typeof window !== "undefined" ? null : null; // B-29: refresh token is now in httpOnly cookie
 
 async function performLogout() {
-  const refreshToken = getRefreshToken();
-
-  // Invalidate server session before clearing local tokens.
-  if (refreshToken) {
-    try {
-      await authApi.logout(refreshToken);
-    } catch (error) {
-      console.error("Logout API error (ignoring):", error);
-    }
+  // B-29: Refresh token is sent automatically via httpOnly cookie.
+  // Call logout endpoint to clear the cookie server-side.
+  try {
+    await authApi.logout();
+  } catch {
+    // ignored
   }
+
+  // Clear auth store (single source of truth — also removes persist key)
+  useAuthStore.getState().clearAuth();
 
   if (typeof window !== "undefined") {
-    // Clear all auth-related storage immediately
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("user");
-    localStorage.removeItem("auth-storage");
     window.sessionStorage.clear();
   }
-  
-  // Clear auth store
-  useAuthStore.getState().clearAuth();
 }
 
 async function clearServerSession(request: Request) {
@@ -64,9 +57,10 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 }
 
 export default function LogoutPage() {
+  const { t } = useTranslation();
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <p className="text-muted-foreground">Logging out...</p>
+      <p className="text-muted-foreground">{t("auth.loggingOut")}</p>
     </div>
   );
 }

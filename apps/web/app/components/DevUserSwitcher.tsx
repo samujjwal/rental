@@ -49,7 +49,12 @@ const DEV_USERS: DevUser[] = [
 export function DevUserSwitcher() {
   const navigate = useNavigate();
   const [isLoggingIn, setIsLoggingIn] = useState<string | null>(null);
-  const [devPassword, setDevPassword] = useState("password123");
+  const defaultDevPassword =
+    import.meta.env.MODE === "development"
+      ? import.meta.env.VITE_DEV_LOGIN_PASSWORD ?? "password123"
+      : "";
+  const devSecret = import.meta.env.VITE_DEV_LOGIN_SECRET;
+  const [devPassword, setDevPassword] = useState(defaultDevPassword);
   const [errorMessage, setErrorMessage] = useState("");
   const normalizeRole = (role?: string) => String(role || "").toUpperCase();
 
@@ -77,7 +82,7 @@ export function DevUserSwitcher() {
       let response;
       if (import.meta.env.MODE === "development") {
         try {
-          response = await authApi.devLogin({ email, role: roleKey });
+          response = await authApi.devLogin({ email, role: roleKey, secret: devSecret });
         } catch {
           response = await authApi.login({ email, password: devPassword });
         }
@@ -95,8 +100,8 @@ export function DevUserSwitcher() {
         }
       }
       
-      // Update auth store
-      useAuthStore.getState().setAuth(response.user, response.accessToken, response.refreshToken);
+      // Update auth store (B-29: refreshToken is in httpOnly cookie)
+      useAuthStore.getState().setAuth(response.user, response.accessToken);
 
       // Create session cookie
       await createUserSession({

@@ -52,9 +52,12 @@ export async function registerForPushNotifications(): Promise<string | null> {
     if (authToken && pushToken) {
       try {
         await mobileClient.registerDeviceToken(pushToken, Platform.OS);
-      } catch {
-        // Silently fail — the method may not be supported yet
-        console.warn('Failed to register device token with backend');
+      } catch (err: any) {
+        // Silently fail but log to console rather than warn, or log safely.
+        // During tests, mock devices might fail backend registration harmlessly.
+        if (process.env.NODE_ENV !== 'test') {
+          console.debug('Device token registration skipped or failed:', err?.message);
+        }
       }
     }
 
@@ -110,15 +113,24 @@ export type NotificationNavigator = {
 export function setupNotificationNavigation(navigator: NotificationNavigator): () => void {
   // Handle notification tapped (app in background)
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
-    (response) => {
+    async (response) => {
       const data = response.notification.request.content.data;
       routeNotification(navigator, data);
+      // Clear badge when user taps a notification
+      await Notifications.setBadgeCountAsync(0).catch(() => undefined);
     },
   );
 
-  // Handle notification received (app in foreground) — auto-handled by handler above
-  const receivedSubscription = Notifications.addNotificationReceivedListener((_notification) => {
-    // Could update badge count, refresh data, etc.
+  // Handle notification received (app in foreground) — update badge count
+  const receivedSubscription = Notifications.addNotificationReceivedListener(async (_notification) => {
+    try {
+      // Fetch updated badge count from the OS-level badge
+      const count = await Notifications.getBadgeCountAsync();
+      // Increment badge by 1 for the incoming notification
+      await Notifications.setBadgeCountAsync(Math.max(0, count) + 1);
+    } catch {
+      // Badge update is best-effort; silently ignore failures
+    }
   });
 
   // Check if app was opened from a notification (cold start)
@@ -135,28 +147,60 @@ export function setupNotificationNavigation(navigator: NotificationNavigator): (
   };
 }
 
-function routeNotification(
+/** @internal exported for unit testing */
+export function routeNotification(
   navigator: NotificationNavigator,
   data: Record<string, any>,
 ): void {
-  const { type, bookingId, conversationId, listingId } = data ?? {};
+  // Support both legacy `type` and the canonical `notificationType` field
+  const type: string = data?.notificationType ?? data?.type ?? '';
+  const { bookingId, conversationId, listingId, disputeId } = data ?? {};
 
   switch (type) {
+    // Booking lifecycle
+    case 'booking_request':
     case 'booking_update':
+    case 'booking_confirmed':
     case 'booking_approved':
     case 'booking_rejected':
     case 'booking_cancelled':
       if (bookingId) navigator.navigate('BookingDetail', { bookingId });
       break;
+
+    // Payment events — navigate to the booking detail so users can retry
+    case 'payment_failed':
+    case 'payment_success':
+    case 'payment_received':
+    case 'refund_processed':
+      if (bookingId) navigator.navigate('BookingDetail', { bookingId });
+      break;
+
+    // Messaging
     case 'new_message':
       if (conversationId) navigator.navigate('MessageThread', { conversationId });
       break;
+
+    // Reviews
     case 'new_review':
+    case 'review_request':
+      if (bookingId) navigator.navigate('BookingDetail', { bookingId });
+      else if (listingId) navigator.navigate('Listing', { listingId });
+      break;
+
+    // Disputes
+    case 'dispute_opened':
+    case 'dispute_updated':
+      if (disputeId) navigator.navigate('DisputeDetail', { disputeId });
+      else if (bookingId) navigator.navigate('BookingDetail', { bookingId });
+      break;
+
+    // Listing events
     case 'listing_update':
       if (listingId) navigator.navigate('Listing', { listingId });
       break;
+
     default:
-      // Navigate to notification list or home
+      // Unknown notification type — no navigation
       break;
   }
 }

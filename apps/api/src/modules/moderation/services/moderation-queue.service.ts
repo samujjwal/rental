@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ModerationFlag } from './content-moderation.service';
 
@@ -111,7 +112,7 @@ export class ModerationQueueService {
     });
 
     if (!queueItem) {
-      throw new Error('Queue item not found');
+      throw i18nNotFound('moderation.queueItemNotFound');
     }
 
     // Update status

@@ -9,15 +9,13 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
 import { SearchService, SearchQuery } from '../services/search.service';
 import { RecommendationService } from '../services/recommendation.service';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@/modules/auth/guards/roles.guard';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
+import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
 import { UserRole } from '@rental-portal/database';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import { SearchResponseDto } from '../dto/search.dto';
 
 @ApiTags('Search')
@@ -41,10 +39,12 @@ export class SearchController {
   @ApiQuery({
     name: 'sort',
     required: false,
-    enum: ['relevance', 'price_asc', 'price_desc', 'rating', 'newest'],
+    enum: ['relevance', 'price_asc', 'price_desc', 'rating', 'newest', 'distance'],
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'size', required: false, type: Number })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'ISO 8601 date for availability start' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'ISO 8601 date for availability end' })
   @ApiOkResponse({ type: SearchResponseDto, description: 'Search results retrieved' })
   async search(
     @Query('query') query?: string,
@@ -61,6 +61,8 @@ export class SearchController {
     @Query('sort') sort?: string,
     @Query('page') page?: number,
     @Query('size') size?: number,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
     const searchQuery: SearchQuery = {
       query,
@@ -76,6 +78,14 @@ export class SearchController {
 
     if (minPrice || maxPrice) {
       searchQuery.priceRange = { min: minPrice, max: maxPrice };
+    }
+
+    if (startDate && endDate) {
+      const parsedStart = new Date(startDate);
+      const parsedEnd = new Date(endDate);
+      if (!isNaN(parsedStart.getTime()) && !isNaN(parsedEnd.getTime())) {
+        searchQuery.dates = { startDate: parsedStart, endDate: parsedEnd };
+      }
     }
 
     const deliveryEnabled = delivery === 'true' || delivery === '1';
@@ -167,5 +177,38 @@ export class SearchController {
       message: 'Search statistics - PostgreSQL based',
       type: 'postgresql',
     };
+  }
+
+  @Get('nearby')
+  @ApiOperation({ summary: 'Get nearby listings by coordinates' })
+  @ApiQuery({ name: 'lat', required: true, type: Number })
+  @ApiQuery({ name: 'lng', required: true, type: Number })
+  @ApiQuery({ name: 'radius', required: false, type: Number, description: 'Radius in km (default 10)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max results (default 20)' })
+  @ApiResponse({ status: 200, description: 'Nearby listings retrieved' })
+  async getNearbyListings(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+    @Query('radius') radius?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      throw new BadRequestException('lat and lng must be valid numbers');
+    }
+
+    const radiusKm = radius ? parseFloat(radius) : 10;
+    const maxResults = limit ? parseInt(limit, 10) : 20;
+
+    return this.searchService.search({
+      location: {
+        lat: latitude,
+        lon: longitude,
+        radius: `${radiusKm}km`,
+      },
+      size: maxResults,
+    } as SearchQuery);
   }
 }

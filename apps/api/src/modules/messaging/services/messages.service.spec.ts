@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 
 describe('MessagesService', () => {
@@ -34,6 +35,12 @@ describe('MessagesService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: ContentModerationService,
+          useValue: {
+            moderateText: jest.fn().mockResolvedValue({ isApproved: true, flags: [] }),
+          },
         },
       ],
     }).compile();

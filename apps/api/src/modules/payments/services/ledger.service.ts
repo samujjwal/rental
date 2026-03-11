@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import {
   LedgerSide,
@@ -7,6 +8,7 @@ import {
   LedgerEntryStatus,
   toNumber,
 } from '@rental-portal/database';
+import { roundForCurrency } from '@rental-portal/shared-types';
 
 // Export for test imports
 export { TransactionType, AccountType };
@@ -22,7 +24,14 @@ export interface LedgerEntryDto {
 
 @Injectable()
 export class LedgerService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly defaultCurrency: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {
+    this.defaultCurrency = this.config.get<string>('platform.defaultCurrency', 'USD');
+  }
 
   /**
    * Double-entry bookkeeping: Every transaction creates two entries (debit + credit)
@@ -40,7 +49,7 @@ export class LedgerService {
       currency: string;
     },
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       // 1. Renter pays total amount (debit renter cash/bank, credit platform liability)
       await tx.ledgerEntry.createMany({
         data: [
@@ -49,7 +58,7 @@ export class LedgerService {
             accountType: AccountType.CASH, // Renter's "account"
             transactionType: TransactionType.PAYMENT,
             side: LedgerSide.DEBIT,
-            amount: amounts.total,
+            amount: roundForCurrency(amounts.total, amounts.currency),
             currency: amounts.currency,
             description: 'Booking payment',
             status: LedgerEntryStatus.SETTLED,
@@ -59,7 +68,7 @@ export class LedgerService {
             accountType: AccountType.LIABILITY, // Platform liability
             transactionType: TransactionType.PAYMENT,
             side: LedgerSide.CREDIT,
-            amount: amounts.total,
+            amount: roundForCurrency(amounts.total, amounts.currency),
             currency: amounts.currency,
             description: 'Booking payment received',
             status: LedgerEntryStatus.SETTLED,
@@ -75,7 +84,7 @@ export class LedgerService {
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.PLATFORM_FEE,
             side: LedgerSide.DEBIT,
-            amount: amounts.platformFee,
+            amount: roundForCurrency(amounts.platformFee, amounts.currency),
             currency: amounts.currency,
             description: 'Platform fee',
             status: LedgerEntryStatus.SETTLED,
@@ -85,7 +94,7 @@ export class LedgerService {
             accountType: AccountType.REVENUE,
             transactionType: TransactionType.PLATFORM_FEE,
             side: LedgerSide.CREDIT,
-            amount: amounts.platformFee,
+            amount: roundForCurrency(amounts.platformFee, amounts.currency),
             currency: amounts.currency,
             description: 'Platform fee revenue',
             status: LedgerEntryStatus.SETTLED,
@@ -101,7 +110,7 @@ export class LedgerService {
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.SERVICE_FEE,
             side: LedgerSide.DEBIT,
-            amount: amounts.serviceFee,
+            amount: roundForCurrency(amounts.serviceFee, amounts.currency),
             currency: amounts.currency,
             description: 'Service fee',
             status: LedgerEntryStatus.SETTLED,
@@ -111,7 +120,7 @@ export class LedgerService {
             accountType: AccountType.REVENUE,
             transactionType: TransactionType.SERVICE_FEE,
             side: LedgerSide.CREDIT,
-            amount: amounts.serviceFee,
+            amount: roundForCurrency(amounts.serviceFee, amounts.currency),
             currency: amounts.currency,
             description: 'Service fee revenue',
             status: LedgerEntryStatus.SETTLED,
@@ -124,7 +133,7 @@ export class LedgerService {
       // Actually standard: Owner Earnings = Total - ServiceFee - PlatformFee.
       // The parameter says 'subtotal'. Let's stick to the logic provided in params.
       // previous code: const ownerEarnings = amounts.subtotal - amounts.platformFee;
-      const calculatedOwnerEarnings = amounts.subtotal - amounts.platformFee;
+      const calculatedOwnerEarnings = roundForCurrency(amounts.subtotal - amounts.platformFee, amounts.currency);
 
       await tx.ledgerEntry.createMany({
         data: [
@@ -159,15 +168,15 @@ export class LedgerService {
     amount: number,
     currency: string,
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       await tx.ledgerEntry.createMany({
         data: [
           {
             bookingId,
             accountType: AccountType.CASH,
             transactionType: TransactionType.REFUND,
-            // Refund: Debit = Receive money back
-            side: LedgerSide.DEBIT,
+            // Refund: Credit CASH = money leaves the platform
+            side: LedgerSide.CREDIT,
             amount: amount,
             currency,
             description: 'Booking refund',
@@ -177,7 +186,8 @@ export class LedgerService {
             bookingId,
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.REFUND,
-            side: LedgerSide.CREDIT,
+            // Refund: Debit LIABILITY = platform's liability to renter decreases
+            side: LedgerSide.DEBIT,
             amount: amount,
             currency,
             description: 'Refund processed',
@@ -217,7 +227,7 @@ export class LedgerService {
     currency: string,
     payoutId: string,
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       await tx.ledgerEntry.createMany({
         data: [
           {
@@ -251,7 +261,7 @@ export class LedgerService {
     amount: number,
     currency: string,
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       await tx.ledgerEntry.createMany({
         data: [
           {
@@ -285,7 +295,7 @@ export class LedgerService {
     amount: number,
     currency: string,
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       await tx.ledgerEntry.createMany({
         data: [
           {
@@ -313,7 +323,7 @@ export class LedgerService {
     });
   }
 
-  async getUserBalance(userId: string, currency: string = 'USD'): Promise<number> {
+  async getUserBalance(userId: string, currency?: string): Promise<number> {
     // Determine balance by aggregating Booking-related ledger entries?
     // Since LedgerEntry doesn't have userId, this is hard.
     // We assume AccountType.RECEIVABLE for Owner Earnings + Payouts matches ownerId.
@@ -362,7 +372,7 @@ export class LedgerService {
   async getPlatformRevenue(
     startDate: Date,
     endDate: Date,
-    currency: string = 'USD',
+    currency?: string,
   ): Promise<{
     platformFees: number;
     serviceFees: number;
@@ -413,8 +423,8 @@ export class LedgerService {
       endDate?: Date;
     } = {},
   ) {
-    const page = options.page || 1;
-    const limit = options.limit || 20;
+    const page = Math.max(1, options.page || 1);
+    const limit = Math.min(Math.max(1, options.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     // Get user's bookings (both as owner and renter)
@@ -547,7 +557,7 @@ export class LedgerService {
 
   async getOwnerEarningsSummary(
     ownerId: string,
-    currency: string = 'USD',
+    currency?: string,
   ): Promise<{ thisMonth: number; lastMonth: number; total: number; currency: string }> {
     const bookings = await this.prisma.booking.findMany({
       where: { ownerId },

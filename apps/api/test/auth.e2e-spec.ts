@@ -30,6 +30,14 @@ describe('Authentication (e2e)', () => {
   });
 
   afterAll(async () => {
+    // Cleanup all test users created during this suite
+    try {
+      await prisma.user.deleteMany({
+        where: { email: { contains: '@test.com' } },
+      });
+    } catch {
+      // Ignore cleanup failures
+    }
     await prisma.$disconnect();
     await app.close();
   });

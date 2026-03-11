@@ -1,7 +1,11 @@
 import { Link, Outlet, redirect, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Bell, LogOut, User, Search } from "lucide-react";
 import { getUser } from "~/utils/auth";
+import { ThemeToggle } from "~/components/theme";
+import { LanguageSelector } from "~/components/language";
+import { CurrencySelector } from "~/components/CurrencySelector";
 
 /**
  * Shared layout for all authenticated dashboard pages.
@@ -19,6 +23,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 }
 
 export default function DashboardLayout() {
+  const { t } = useTranslation();
   const { user } = useLoaderData<typeof clientLoader>();
   const displayName =
     [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "User";
@@ -43,15 +48,18 @@ export default function DashboardLayout() {
               className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground border rounded-lg hover:bg-muted transition-colors"
             >
               <Search className="w-4 h-4" />
-              <span>Search rentals…</span>
+              <span>{t('nav.searchRentals', 'Search rentals…')}</span>
             </Link>
 
             {/* Right actions */}
             <div className="flex items-center gap-3">
+              <LanguageSelector size="sm" iconOnly />
+              <CurrencySelector />
+              <ThemeToggle size="sm" />
               <Link
                 to="/notifications"
                 className="p-2 text-muted-foreground hover:text-foreground transition-colors relative"
-                aria-label="Notifications"
+                aria-label={t('nav.notifications')}
               >
                 <Bell className="w-5 h-5" />
               </Link>
@@ -76,7 +84,7 @@ export default function DashboardLayout() {
               <Link
                 to="/auth/logout"
                 className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-                aria-label="Sign out"
+                aria-label={t('nav.logout')}
               >
                 <LogOut className="w-4 h-4" />
               </Link>

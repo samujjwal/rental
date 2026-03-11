@@ -18,7 +18,7 @@ export function EditListingScreen({ route }: Props) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const [bookingMode, setBookingMode] = useState<"REQUEST" | "INSTANT">("REQUEST");
+  const [bookingMode, setBookingMode] = useState<"REQUEST" | "INSTANT_BOOK">("REQUEST");
   const [images, setImages] = useState<SelectedImage[]>([]);
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const { user } = useAuth();
@@ -36,9 +36,9 @@ export function EditListingScreen({ route }: Props) {
         setImages(photos.map((uri: string) => ({ uri })));
         if (listing.bookingMode) {
           const mode = listing.bookingMode.toUpperCase();
-          setBookingMode(mode === "INSTANT_BOOK" || mode === "INSTANT" ? "INSTANT" : "REQUEST");
+          setBookingMode(mode === "INSTANT_BOOK" || mode === "INSTANT" ? "INSTANT_BOOK" : "REQUEST");
         } else if (listing.instantBooking != null) {
-          setBookingMode(listing.instantBooking ? "INSTANT" : "REQUEST");
+          setBookingMode(listing.instantBooking ? "INSTANT_BOOK" : "REQUEST");
         }
       } catch (err) {
         setError("Unable to load listing details.");
@@ -65,7 +65,7 @@ export function EditListingScreen({ route }: Props) {
         title,
         description,
         basePrice: Number(price),
-        pricingMode: "DAILY",
+        pricingMode: "PER_DAY",
         bookingMode,
         categorySpecificData: {},
       });
@@ -160,14 +160,14 @@ export function EditListingScreen({ route }: Props) {
         <Pressable
           style={[
             styles.toggleButton,
-            bookingMode === "INSTANT" && styles.toggleButtonActive,
+            bookingMode === "INSTANT_BOOK" && styles.toggleButtonActive,
           ]}
-          onPress={() => setBookingMode("INSTANT")}
+          onPress={() => setBookingMode("INSTANT_BOOK")}
         >
           <Text
             style={[
               styles.toggleText,
-              bookingMode === "INSTANT" && styles.toggleTextActive,
+              bookingMode === "INSTANT_BOOK" && styles.toggleTextActive,
             ]}
           >
             Instant
@@ -176,7 +176,7 @@ export function EditListingScreen({ route }: Props) {
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {status ? <Text style={styles.status}>{status}</Text> : null}
-      <Pressable style={styles.primaryButton} onPress={handleSave}>
+      <Pressable style={styles.primaryButton} onPress={handleSave} disabled={loading}>
         <Text style={styles.primaryButtonText}>
           {loading ? "Saving..." : "Save"}
         </Text>

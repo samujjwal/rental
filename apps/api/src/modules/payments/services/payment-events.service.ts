@@ -161,11 +161,31 @@ export class PaymentEventsService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Refund failed for booking ${bookingId}: ${error.message}`, error.stack);
 
-      // Mark refund as failed in DB
-      await this.prisma.refund.update({
-        where: { id: refundRecordId },
-        data: { status: 'FAILED' },
-      }).catch((e) => this.logger.error(`Failed to update refund status: ${e.message}`));
+      // Mark refund as failed in DB with retry to ensure status consistency
+      const maxRetries = 3;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await this.prisma.refund.update({
+            where: { id: refundRecordId },
+            data: { status: 'FAILED' },
+          });
+          this.logger.log(`Refund status updated to FAILED for ${refundRecordId} (attempt ${attempt})`);
+          break;
+        } catch (e) {
+          this.logger.error(
+            `Failed to update refund status for ${refundRecordId} (attempt ${attempt}/${maxRetries}): ${e.message}`,
+          );
+          if (attempt < maxRetries) {
+            await new Promise((r) => setTimeout(r, 1000 * attempt));
+          } else {
+            // CRITICAL: Refund status is now permanently stale — alert ops
+            this.logger.error(
+              `CRITICAL: Unable to update refund status for ${refundRecordId} after ${maxRetries} attempts. ` +
+              `Manual intervention required. Booking: ${bookingId}`,
+            );
+          }
+        }
+      }
     }
   }
 

@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
-import type { SearchResult } from '@rental-portal/mobile-sdk';
+import type { SearchResult } from '~/types';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { formatCurrency } from '../utils/currency';
+import { pricingModeLabel } from '../utils/pricing';
 
 type ListingCardProps = {
   listing: SearchResult;
@@ -21,7 +23,7 @@ export function ListingCard({
       style={styles.card}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${listing.title}, $${listing.basePrice} per day${listing.averageRating > 0 ? `, rated ${listing.averageRating.toFixed(1)} stars` : ''}`}
+      accessibilityLabel={`${listing.title || 'Listing'}, ${formatCurrency(listing.basePrice ?? 0)} per day${listing.averageRating != null && listing.averageRating > 0 ? `, rated ${listing.averageRating?.toFixed(1)} stars` : ''}`}
       accessibilityHint="Opens listing details"
     >
       <View style={styles.imageContainer}>
@@ -55,10 +57,10 @@ export function ListingCard({
           {listing.city}{listing.state ? `, ${listing.state}` : ''}
         </Text>
         <View style={styles.footer}>
-          <Text style={styles.price}>${listing.basePrice}/day</Text>
-          {listing.averageRating > 0 && (
+          <Text style={styles.price}>{formatCurrency(listing.basePrice)}{pricingModeLabel(listing.pricingMode)}</Text>
+          {listing.averageRating != null && listing.averageRating > 0 && (
             <Text style={styles.rating}>
-              {'\u2B50'} {listing.averageRating.toFixed(1)}
+              {'\u2B50'} {listing.averageRating?.toFixed(1)}
             </Text>
           )}
         </View>

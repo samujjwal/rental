@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { useFocusEffect } from '@react-navigation/native';
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { BookingSummary, ReviewResponse } from "@rental-portal/mobile-sdk";
+import type { BookingSummary, ReviewResponse } from '~/types';
+import { formatDate } from '../utils/date';
 
 export function ReviewsScreen() {
   const { user } = useAuth();
@@ -76,13 +78,17 @@ export function ReviewsScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchUserReviews();
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserReviews();
+    }, [user])
+  );
 
-  useEffect(() => {
-    fetchBookings(reviewMode);
-  }, [user, reviewMode]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchBookings(reviewMode);
+    }, [user, reviewMode])
+  );
 
   const completedBookings = useMemo(() => {
     return bookings.filter((booking) => {
@@ -111,7 +117,7 @@ export function ReviewsScreen() {
                 <View style={styles.card}>
                   <Text style={styles.rating}>Rating: {item.overallRating}</Text>
                   {item.comment ? <Text style={styles.comment}>{item.comment}</Text> : null}
-                  <Text style={styles.meta}>{item.createdAt}</Text>
+                  <Text style={styles.meta}>{formatDate(item.createdAt)}</Text>
                 </View>
               )}
               ListEmptyComponent={<Text style={styles.status}>No reviews yet.</Text>}
@@ -157,7 +163,7 @@ export function ReviewsScreen() {
                     {booking.listing?.title || "Listing"}
                   </Text>
                   <Text style={styles.bookingMeta}>
-                    {booking.startDate} → {booking.endDate}
+                    {formatDate(booking.startDate)} → {formatDate(booking.endDate)}
                   </Text>
                 </Pressable>
               ))}
@@ -171,14 +177,19 @@ export function ReviewsScreen() {
                 {selectedBooking.listing?.title || "Listing"}
               </Text>
               <Text style={styles.selectionText}>
-                {selectedBooking.startDate} → {selectedBooking.endDate}
+                {formatDate(selectedBooking.startDate)} → {formatDate(selectedBooking.endDate)}
               </Text>
             </View>
           ) : null}
 
           <TextInput
             value={rating}
-            onChangeText={setRating}
+            onChangeText={(text) => {
+              if (text === '') { setRating(''); return; }
+              const num = parseInt(text, 10);
+              if (isNaN(num)) return;
+              setRating(String(Math.min(5, Math.max(1, num))));
+            }}
             placeholder="Rating (1-5)"
             keyboardType="number-pad"
             style={styles.input}

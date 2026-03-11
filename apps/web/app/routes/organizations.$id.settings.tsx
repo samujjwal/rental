@@ -1,5 +1,5 @@
 
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, useLoaderData, useActionData, useNavigate, Link, redirect } from "react-router";
 import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
@@ -8,8 +8,14 @@ import { RouteErrorBoundary } from "~/components/ui/error-state";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { Organization as ApiOrganization } from "~/lib/api/organizations";
 import { getUser } from "~/utils/auth";
+import { APP_PHONE_PLACEHOLDER } from "~/config/locale";
+import { useTranslation } from "react-i18next";
 
 export const ErrorBoundary = RouteErrorBoundary;
+
+export const meta: MetaFunction = () => [
+  { title: "Settings | Organization | GharBatai Rentals" },
+];
 
 type Organization = ApiOrganization & {
   settings?: {
@@ -181,6 +187,7 @@ export default function OrganizationSettings() {
   const navigate = useNavigate();
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivateConfirmation, setDeactivateConfirmation] = useState("");
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (actionData?.redirect) {
@@ -198,11 +205,11 @@ export default function OrganizationSettings() {
               to="/organizations"
               className="text-primary hover:text-primary/80"
             >
-              ← Back to Organizations
+              ← {t("organizations.backToOrgs")}
             </Link>
           </div>
           <h1 className="text-3xl font-bold text-foreground">
-            Organization Settings
+            {t("organizations.orgSettings")}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {organization.name}
@@ -227,13 +234,13 @@ export default function OrganizationSettings() {
           {/* Basic Information */}
           <div className="bg-card shadow rounded-lg p-6">
             <h2 className="text-lg font-medium text-foreground mb-4">
-              Basic Information
+              {t("organizations.basicInfo")}
             </h2>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Organization Name *
+                  {t("organizations.name")} *
                 </label>
                 <input
                   type="text"
@@ -247,7 +254,7 @@ export default function OrganizationSettings() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Slug (URL identifier)
+                  {t("organizations.slug")}
                 </label>
                 <input
                   type="text"
@@ -256,13 +263,13 @@ export default function OrganizationSettings() {
                   className="w-full border border-input rounded-md px-3 py-2 bg-muted text-muted-foreground"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Slug cannot be changed after creation
+                  {t("organizations.slugCannotChange")}
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Business Type
+                  {t("organizations.businessType")}
                 </label>
                 <input
                   type="text"
@@ -274,7 +281,7 @@ export default function OrganizationSettings() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Description
+                  {t("organizations.description")}
                 </label>
                 <textarea
                   name="description"
@@ -291,13 +298,13 @@ export default function OrganizationSettings() {
           {/* Contact Information */}
           <div className="bg-card shadow rounded-lg p-6">
             <h2 className="text-lg font-medium text-foreground mb-4">
-              Contact Information
+              {t("organizations.contactInfo")}
             </h2>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Website
+                  {t("organizations.website")}
                 </label>
                 <input
                   type="url"
@@ -311,7 +318,7 @@ export default function OrganizationSettings() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Email Address
+                  {t("organizations.emailAddress")}
                 </label>
                 <input
                   type="email"
@@ -325,21 +332,21 @@ export default function OrganizationSettings() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Phone Number
+                  {t("organizations.phone")}
                 </label>
                 <input
                   type="tel"
                   name="phoneNumber"
                   defaultValue={organization.phone || ""}
                   maxLength={20}
-                  placeholder="+1 (555) 123-4567"
+                  placeholder={APP_PHONE_PLACEHOLDER}
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Address
+                  {t("organizations.address")}
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <input
@@ -390,7 +397,7 @@ export default function OrganizationSettings() {
           {/* Organization Settings */}
           <div className="bg-card shadow rounded-lg p-6">
             <h2 className="text-lg font-medium text-foreground mb-4">
-              Organization Settings
+              {t("organizations.orgSettings")}
             </h2>
 
             <div className="space-y-4">
@@ -409,11 +416,10 @@ export default function OrganizationSettings() {
                     htmlFor="autoApproveMembers"
                     className="font-medium text-foreground"
                   >
-                    Auto-approve new members
+                    {t("organizations.autoApproveMembers")}
                   </label>
                   <p className="text-sm text-muted-foreground">
-                    Automatically approve member join requests without manual
-                    review
+                    {t("organizations.autoApproveMembersDesc")}
                   </p>
                 </div>
               </div>
@@ -433,11 +439,10 @@ export default function OrganizationSettings() {
                     htmlFor="requireInsurance"
                     className="font-medium text-foreground"
                   >
-                    Require insurance for all listings
+                    {t("organizations.requireInsurance")}
                   </label>
                   <p className="text-sm text-muted-foreground">
-                    All listings from this organization must have valid
-                    insurance
+                    {t("organizations.requireInsuranceDesc")}
                   </p>
                 </div>
               </div>
@@ -457,10 +462,10 @@ export default function OrganizationSettings() {
                     htmlFor="allowPublicProfile"
                     className="font-medium text-foreground"
                   >
-                    Public profile
+                    {t("organizations.publicProfile")}
                   </label>
                   <p className="text-sm text-muted-foreground">
-                    Allow your organization profile to be visible to all users
+                    {t("organizations.publicProfileDesc")}
                   </p>
                 </div>
               </div>
@@ -470,12 +475,12 @@ export default function OrganizationSettings() {
           {/* Verification Status */}
           <div className="bg-card shadow rounded-lg p-6">
             <h2 className="text-lg font-medium text-foreground mb-4">
-              Verification Status
+              {t("organizations.verificationStatus")}
             </h2>
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Current Status</p>
+                <p className="text-sm text-muted-foreground">{t("organizations.currentStatus")}</p>
                 <p className="mt-1 text-lg font-medium">
                   <span
                     className={cn(
@@ -493,7 +498,7 @@ export default function OrganizationSettings() {
               </div>
               {organization.verificationStatus === "PENDING" && (
                 <p className="text-sm text-muted-foreground">
-                  Your verification request is being reviewed
+                  {t("organizations.verificationPending")}
                 </p>
               )}
               {organization.verificationStatus === "REJECTED" && (
@@ -501,7 +506,7 @@ export default function OrganizationSettings() {
                   to="/contact"
                   className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90"
                 >
-                  Contact Support
+                  {t("organizations.contactSupport")}
                 </Link>
               )}
             </div>
@@ -513,7 +518,7 @@ export default function OrganizationSettings() {
               type="submit"
               className="px-6 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
             >
-              Save Changes
+              {t("organizations.saveChanges")}
             </button>
           </div>
         </Form>
@@ -521,16 +526,16 @@ export default function OrganizationSettings() {
         {/* Danger Zone */}
         <div className="mt-8 bg-card shadow rounded-lg p-6 border-2 border-destructive/20">
           <h2 className="text-lg font-medium text-destructive mb-4">
-            Danger Zone
+            {t("organizations.dangerZone")}
           </h2>
 
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">
-                Deactivate Organization
+                {t("organizations.deactivateOrg")}
               </p>
               <p className="text-sm text-muted-foreground">
-                Deactivating will hide all listings and prevent new bookings
+                {t("organizations.deactivateDesc")}
               </p>
             </div>
             <button
@@ -541,7 +546,7 @@ export default function OrganizationSettings() {
               }}
               className="px-4 py-2 bg-destructive text-destructive-foreground text-sm font-medium rounded-md hover:bg-destructive/90"
             >
-              Deactivate
+              {t("organizations.deactivate")}
             </button>
           </div>
         </div>
@@ -552,16 +557,14 @@ export default function OrganizationSettings() {
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-medium text-foreground mb-4">
-              Deactivate Organization?
+              {t("organizations.deactivateConfirm")}
             </h3>
             <p className="text-sm text-muted-foreground mb-6">
-              Are you sure you want to deactivate this organization? All
-              listings will be hidden and you won't be able to create new
-              bookings. You can reactivate it later.
+              {t("organizations.deactivateConfirmDesc")}
             </p>
             <div className="mb-6">
               <label className="block text-sm font-medium text-foreground mb-2">
-                Type DEACTIVATE to confirm
+                {t("organizations.typeDeactivate")}
               </label>
               <input
                 type="text"
@@ -588,14 +591,14 @@ export default function OrganizationSettings() {
                 }}
                 className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="submit"
                 disabled={deactivateConfirmation.trim().toUpperCase() !== "DEACTIVATE"}
                 className="px-4 py-2 text-sm font-medium text-destructive-foreground bg-destructive rounded-md hover:bg-destructive/90"
               >
-                Deactivate
+                {t("organizations.deactivate")}
               </button>
             </Form>
           </div>

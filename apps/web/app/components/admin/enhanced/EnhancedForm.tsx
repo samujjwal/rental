@@ -14,7 +14,8 @@ import {
   AlertCircle,
   CheckCircle,
 } from "lucide-react";
-import { useForm } from "@tanstack/react-form";
+import { useForm, Controller } from "react-hook-form";
+import { APP_LOCALE } from "~/config/locale";
 
 export interface FieldConfig {
   name: string;
@@ -122,19 +123,20 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
 
   const form = useForm({
     defaultValues: initialData,
-    onSubmit: async ({ value }) => {
-      try {
-        await onSubmit(value);
-        setToast({ type: "success", message: "Form submitted successfully!" });
-        setFormErrors({});
-      } catch (error) {
-        setToast({
-          type: "error",
-          message: error instanceof Error ? error.message : "Failed to submit form",
-        });
-      }
-    },
   });
+
+  const handleFormSubmit = useCallback(async (value: Record<string, unknown>) => {
+    try {
+      await onSubmit(value);
+      setToast({ type: "success", message: "Form submitted successfully!" });
+      setFormErrors({});
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error instanceof Error ? error.message : "Failed to submit form",
+      });
+    }
+  }, [onSubmit]);
 
   const validateField = useCallback(
     (field: FieldConfig, value: unknown): string | null => {
@@ -161,7 +163,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
 
   const validateStep = useCallback(() => {
     const errors: Record<string, string> = {};
-    const formData = form.state.values;
+    const formData = form.getValues();
     currentFields.forEach((field) => {
       if (field.showIf && !field.showIf(formData)) return;
       const value = formData[field.name];
@@ -170,7 +172,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
     });
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [currentFields, form.state.values, validateField]);
+  }, [currentFields, form, validateField]);
 
   const handleNext = useCallback(() => { if (validateStep()) setActiveStep((prev) => prev + 1); }, [validateStep]);
   const handleBack = useCallback(() => { setActiveStep((prev) => prev - 1); }, []);
@@ -179,7 +181,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
   useEffect(() => {
     if (!enableAutoSave || !onAutoSave || isViewMode) return;
     const timer = setInterval(async () => {
-      const formData = form.state.values;
+      const formData = form.getValues();
       if (Object.keys(formData).length > 0) {
         setAutoSaving(true);
         try {
@@ -193,22 +195,27 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
       }
     }, autoSaveInterval);
     return () => clearInterval(timer);
-  }, [enableAutoSave, onAutoSave, autoSaveInterval, form.state.values, isViewMode]);
+  }, [enableAutoSave, onAutoSave, autoSaveInterval, form, isViewMode]);
 
   const renderField = useCallback(
     (field: FieldConfig) => {
-      const formData = form.state.values;
+      const formData = form.getValues();
       if (field.showIf && !field.showIf(formData)) return null;
       const fieldError = formErrors[field.name];
       const isDisabled = field.disabled || isViewMode;
 
       return (
-        <form.Field
+        <Controller
           key={field.name}
-          name={field.name as keyof typeof form.state.values}
-          validators={{ onChange: ({ value }) => validateField(field, value) }}
-        >
-          {(fieldApi) => {
+          name={field.name}
+          control={form.control}
+          rules={{
+            validate: (value) => {
+              const err = validateField(field, value);
+              return err ?? true;
+            },
+          }}
+          render={({ field: rhfField }) => {
             const hasError = !!fieldError;
 
             switch (field.type) {
@@ -223,12 +230,12 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                       <select
                         multiple
                         className={inputCls(hasError)}
-                        value={Array.isArray(fieldApi.state.value) ? (fieldApi.state.value as string[]) : []}
+                        value={Array.isArray(rhfField.value) ? (rhfField.value as string[]) : []}
                         onChange={(e) => {
                           const selected = Array.from(e.target.selectedOptions, (o) => o.value);
-                          fieldApi.handleChange(selected as unknown);
+                          rhfField.onChange(selected);
                         }}
-                        onBlur={() => fieldApi.handleBlur()}
+                        onBlur={rhfField.onBlur}
                         disabled={isDisabled}
                       >
                         {field.options?.map((opt) => (
@@ -238,9 +245,9 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     ) : (
                       <select
                         className={inputCls(hasError)}
-                        value={String(fieldApi.state.value ?? "")}
-                        onChange={(e) => fieldApi.handleChange(e.target.value as unknown)}
-                        onBlur={() => fieldApi.handleBlur()}
+                        value={String(rhfField.value ?? "")}
+                        onChange={(e) => rhfField.onChange(e.target.value)}
+                        onBlur={rhfField.onBlur}
                         disabled={isDisabled}
                       >
                         <option value="">Select...</option>
@@ -263,16 +270,16 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     <button
                       type="button"
                       role="switch"
-                      aria-checked={!!fieldApi.state.value}
+                      aria-checked={!!rhfField.value}
                       disabled={isDisabled}
-                      onClick={() => fieldApi.handleChange(!fieldApi.state.value)}
+                      onClick={() => rhfField.onChange(!rhfField.value)}
                       className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${
-                        fieldApi.state.value ? "bg-primary" : "bg-input"
+                        rhfField.value ? "bg-primary" : "bg-input"
                       }`}
                     >
                       <span
                         className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform ${
-                          fieldApi.state.value ? "translate-x-5" : "translate-x-0"
+                          rhfField.value ? "translate-x-5" : "translate-x-0"
                         }`}
                       />
                     </button>
@@ -291,12 +298,12 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                       type="date"
                       className={inputCls(hasError)}
                       value={
-                        fieldApi.state.value && typeof fieldApi.state.value !== "object"
-                          ? new Date(fieldApi.state.value as string | number).toISOString().split("T")[0]
+                        rhfField.value && typeof rhfField.value !== "object"
+                          ? new Date(rhfField.value as string | number).toISOString().split("T")[0]
                           : ""
                       }
-                      onChange={(e) => fieldApi.handleChange(e.target.value as unknown)}
-                      onBlur={() => fieldApi.handleBlur()}
+                      onChange={(e) => rhfField.onChange(e.target.value)}
+                      onBlur={rhfField.onBlur}
                       disabled={isDisabled}
                     />
                     {(fieldError || field.helperText) && (
@@ -317,9 +324,9 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     <textarea
                       className={inputCls(hasError)}
                       rows={field.rows || 4}
-                      value={String(fieldApi.state.value ?? "")}
-                      onChange={(e) => fieldApi.handleChange(e.target.value as unknown)}
-                      onBlur={() => fieldApi.handleBlur()}
+                      value={String(rhfField.value ?? "")}
+                      onChange={(e) => rhfField.onChange(e.target.value)}
+                      onBlur={rhfField.onBlur}
                       placeholder={field.placeholder}
                       disabled={isDisabled}
                     />
@@ -341,9 +348,9 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     <input
                       type="number"
                       className={inputCls(hasError)}
-                      value={String(fieldApi.state.value ?? "")}
-                      onChange={(e) => fieldApi.handleChange(e.target.value ? Number(e.target.value) : null)}
-                      onBlur={() => fieldApi.handleBlur()}
+                      value={String(rhfField.value ?? "")}
+                      onChange={(e) => rhfField.onChange(e.target.value ? Number(e.target.value) : null)}
+                      onBlur={rhfField.onBlur}
                       placeholder={field.placeholder}
                       min={field.validation?.min}
                       max={field.validation?.max}
@@ -367,9 +374,9 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                     <input
                       type={field.type}
                       className={inputCls(hasError)}
-                      value={String(fieldApi.state.value ?? "")}
-                      onChange={(e) => fieldApi.handleChange(e.target.value as unknown)}
-                      onBlur={() => fieldApi.handleBlur()}
+                      value={String(rhfField.value ?? "")}
+                      onChange={(e) => rhfField.onChange(e.target.value)}
+                      onBlur={rhfField.onBlur}
                       placeholder={field.placeholder}
                       disabled={isDisabled}
                     />
@@ -382,7 +389,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
                 );
             }
           }}
-        </form.Field>
+        />
       );
     },
     [form, formErrors, isViewMode, validateField]
@@ -407,7 +414,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
             ) : lastSaved ? (
               <>
                 <Check className="h-3.5 w-3.5 text-green-600" />
-                <span>Saved {lastSaved.toLocaleTimeString()}</span>
+                <span>Saved {lastSaved.toLocaleTimeString(APP_LOCALE)}</span>
               </>
             ) : null}
           </div>
@@ -456,7 +463,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
           e.preventDefault();
           e.stopPropagation();
           if (isSteppedLayout && !isLastStep) handleNext();
-          else form.handleSubmit();
+          else form.handleSubmit(handleFormSubmit)(e);
         }}
       >
         <div className="flex flex-col gap-4">{currentFields.map(renderField)}</div>

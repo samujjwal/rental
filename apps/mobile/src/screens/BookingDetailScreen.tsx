@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useCallback } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, Image, Pressable } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { BookingDetail } from "@rental-portal/mobile-sdk";
+import type { BookingDetail } from '~/types';
+import { formatCurrency } from '../utils/currency';
+import { formatDate } from '../utils/date';
 
 
 type Props = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
@@ -14,6 +17,7 @@ export function BookingDetailScreen({ route, navigation }: Props) {
   const { user } = useAuth();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [actionStatus, setActionStatus] = useState("");
 
   const fetchBooking = async () => {
@@ -29,9 +33,11 @@ export function BookingDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  useEffect(() => {
-    fetchBooking();
-  }, [bookingId, user]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchBooking();
+    }, [bookingId, user])
+  );
 
   if (!user) {
     return (
@@ -67,13 +73,14 @@ export function BookingDetailScreen({ route, navigation }: Props) {
   const canConfirm = isOwner && normalizedStatus === "PENDING_OWNER_APPROVAL";
   const canCancel = normalizedStatus === "CONFIRMED";
   const canStart = isOwner && normalizedStatus === "CONFIRMED";
-  const canRequestReturn = isRenter && ["IN_PROGRESS", "ACTIVE"].includes(normalizedStatus);
+  const canRequestReturn = isRenter && normalizedStatus === "IN_PROGRESS";
   const canApproveReturn = isOwner && normalizedStatus === "AWAITING_RETURN_INSPECTION";
-  const canPay = isRenter && ["PENDING_PAYMENT", "PENDING"].includes(normalizedStatus);
+  const canPay = isRenter && ["PENDING_PAYMENT"].includes(normalizedStatus);
   const canDispute = isRenter && ["CONFIRMED", "IN_PROGRESS", "AWAITING_RETURN_INSPECTION", "COMPLETED", "SETTLED"].includes(normalizedStatus);
 
   const handleAction = async (action: "approve" | "cancel" | "reject" | "start" | "request-return" | "approve-return") => {
     setActionStatus("");
+    setActionLoading(true);
     try {
       if (action === "approve") await mobileClient.approveBooking(bookingId);
       if (action === "cancel") await mobileClient.cancelBooking(bookingId, "Cancelled via mobile");
@@ -84,6 +91,8 @@ export function BookingDetailScreen({ route, navigation }: Props) {
       fetchBooking();
     } catch (err) {
       setActionStatus("Unable to update booking.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -97,13 +106,13 @@ export function BookingDetailScreen({ route, navigation }: Props) {
       <Text style={styles.value}>{booking.status}</Text>
       <Text style={styles.label}>Dates</Text>
       <Text style={styles.value}>
-        {booking.startDate} → {booking.endDate}
+        {formatDate(booking.startDate)} → {formatDate(booking.endDate)}
       </Text>
       {booking.totalAmount != null || booking.totalPrice != null ? (
         <>
           <Text style={styles.label}>Total</Text>
           <Text style={styles.value}>
-            ${booking.totalAmount ?? booking.totalPrice}
+            {formatCurrency(booking.totalAmount ?? booking.totalPrice)}
           </Text>
         </>
       ) : null}
@@ -116,32 +125,32 @@ export function BookingDetailScreen({ route, navigation }: Props) {
         </Pressable>
       )}
       {canConfirm && (
-        <Pressable style={styles.secondaryButton} onPress={() => handleAction("approve")}>
+        <Pressable style={[styles.secondaryButton, actionLoading && { opacity: 0.5 }]} onPress={() => handleAction("approve")} disabled={actionLoading}>
           <Text style={styles.secondaryButtonText}>Approve Booking</Text>
         </Pressable>
       )}
       {isOwner && normalizedStatus === "PENDING_OWNER_APPROVAL" && (
-        <Pressable style={styles.cancelButton} onPress={() => handleAction("reject")}>
+        <Pressable style={[styles.cancelButton, actionLoading && { opacity: 0.5 }]} onPress={() => handleAction("reject")} disabled={actionLoading}>
           <Text style={styles.cancelButtonText}>Decline Booking</Text>
         </Pressable>
       )}
       {canStart && (
-        <Pressable style={styles.secondaryButton} onPress={() => handleAction("start")}>
+        <Pressable style={[styles.secondaryButton, actionLoading && { opacity: 0.5 }]} onPress={() => handleAction("start")} disabled={actionLoading}>
           <Text style={styles.secondaryButtonText}>Start Booking</Text>
         </Pressable>
       )}
       {canRequestReturn && (
-        <Pressable style={styles.secondaryButton} onPress={() => handleAction("request-return")}>
+        <Pressable style={[styles.secondaryButton, actionLoading && { opacity: 0.5 }]} onPress={() => handleAction("request-return")} disabled={actionLoading}>
           <Text style={styles.secondaryButtonText}>Request Return</Text>
         </Pressable>
       )}
       {canApproveReturn && (
-        <Pressable style={styles.secondaryButton} onPress={() => handleAction("approve-return")}>
+        <Pressable style={[styles.secondaryButton, actionLoading && { opacity: 0.5 }]} onPress={() => handleAction("approve-return")} disabled={actionLoading}>
           <Text style={styles.secondaryButtonText}>Approve Return</Text>
         </Pressable>
       )}
       {canCancel && (
-        <Pressable style={styles.cancelButton} onPress={() => handleAction("cancel")}>
+        <Pressable style={[styles.cancelButton, actionLoading && { opacity: 0.5 }]} onPress={() => handleAction("cancel")} disabled={actionLoading}>
           <Text style={styles.cancelButtonText}>Cancel Booking</Text>
         </Pressable>
       )}

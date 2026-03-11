@@ -1,8 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { i18nUnauthorized, i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { TokenService } from './token.service';
+import { MfaService } from './mfa.service';
 import { UserRole, UserStatus } from '@rental-portal/database';
+import * as crypto from 'crypto';
 
 export interface OAuthProfile {
   provider: 'google' | 'apple';
@@ -27,6 +30,7 @@ export class OAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokenService: TokenService,
+    private readonly mfaService: MfaService,
     private readonly config: ConfigService,
   ) {}
 
@@ -83,7 +87,15 @@ export class OAuthService {
 
     // Check if account is active
     if (user.status !== UserStatus.ACTIVE) {
-      throw new Error('Account is suspended');
+      throw i18nUnauthorized('auth.accountSuspended');
+    }
+
+    // MFA enforcement: OAuth login must not bypass MFA for existing users with MFA enabled.
+    // New users created via OAuth cannot have MFA enabled yet, so skip for isNewUser.
+    if (!isNewUser && user.mfaEnabled) {
+      // OAuth does not supply an MFA code in the same request.
+      // Signal the client to re-present with an MFA code via password login flow.
+      throw i18nBadRequest('auth.mfaRequired');
     }
 
     // Generate tokens
@@ -102,7 +114,8 @@ export class OAuthService {
       },
     });
 
-    const { passwordHash, mfaSecret, ...sanitized } = user;
+    // Explicitly strip all sensitive fields — mfaBackupCodes must not be returned to clients
+    const { passwordHash, mfaSecret, mfaBackupCodes, ...sanitized } = user;
 
     return {
       user: sanitized,
@@ -118,19 +131,23 @@ export class OAuthService {
   async verifyGoogleToken(idToken: string): Promise<OAuthProfile> {
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
 
+    if (!clientId) {
+      throw i18nUnauthorized('auth.googleNotConfigured');
+    }
+
     const response = await fetch(
       `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
     );
 
     if (!response.ok) {
-      throw new Error('Invalid Google token');
+      throw i18nUnauthorized('auth.invalidGoogleToken');
     }
 
     const payload = await response.json();
 
     // Verify audience
-    if (clientId && payload.aud !== clientId) {
-      throw new Error('Google token audience mismatch');
+    if (payload.aud !== clientId) {
+      throw i18nUnauthorized('auth.googleAudienceMismatch');
     }
 
     return {
@@ -150,19 +167,60 @@ export class OAuthService {
     // Decode the JWT to extract claims (Apple tokens are JWTs)
     const parts = identityToken.split('.');
     if (parts.length !== 3) {
-      throw new Error('Invalid Apple token format');
+      throw i18nUnauthorized('auth.appleInvalidFormat');
+    }
+
+    // Fetch Apple's public keys and verify the JWT signature
+    try {
+      const jwksResponse = await fetch('https://appleid.apple.com/auth/keys');
+      if (!jwksResponse.ok) {
+        throw i18nUnauthorized('auth.appleKeysFetchFailed');
+      }
+      const jwks = await jwksResponse.json();
+
+      // Decode header to get the key ID
+      const header = JSON.parse(Buffer.from(parts[0], 'base64').toString('utf-8'));
+      const key = jwks.keys?.find((k: any) => k.kid === header.kid);
+      if (!key) {
+        throw i18nUnauthorized('auth.appleKeyNotFound');
+      }
+
+      // Verify signature using the public key
+      const publicKey = crypto.createPublicKey({ key, format: 'jwk' });
+      const signatureValid = crypto.verify(
+        header.alg === 'RS256' ? 'RSA-SHA256' : 'RSA-SHA256',
+        Buffer.from(`${parts[0]}.${parts[1]}`),
+        publicKey,
+        Buffer.from(parts[2], 'base64url'),
+      );
+      if (!signatureValid) {
+        throw i18nUnauthorized('auth.appleSignatureFailed');
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      this.logger.warn('Apple token signature verification failed', error);
+      throw i18nUnauthorized('auth.appleVerificationFailed');
     }
 
     const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
 
     // Verify issuer
     if (payload.iss !== 'https://appleid.apple.com') {
-      throw new Error('Invalid Apple token issuer');
+      throw i18nUnauthorized('auth.appleInvalidIssuer');
+    }
+
+    // Verify audience (client ID) — prevents cross-app token reuse
+    const appleClientId = this.config.get<string>('APPLE_CLIENT_ID');
+    if (!appleClientId) {
+      throw i18nUnauthorized('auth.appleNotConfigured');
+    }
+    if (payload.aud !== appleClientId) {
+      throw i18nUnauthorized('auth.appleAudienceMismatch');
     }
 
     // Verify not expired
     if (payload.exp && payload.exp < Date.now() / 1000) {
-      throw new Error('Apple token expired');
+      throw i18nUnauthorized('auth.appleTokenExpired');
     }
 
     return {

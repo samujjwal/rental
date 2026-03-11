@@ -8,11 +8,13 @@ const API_BASE_URL =
 
 class ApiClient {
   private client: AxiosInstance;
+  private refreshPromise: Promise<{ accessToken: string; refreshToken: string }> | null = null;
 
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
       timeout: 30000,
+      withCredentials: true, // Send httpOnly cookies for auth (B-29)
       headers: {
         "Content-Type": "application/json",
       },
@@ -30,7 +32,7 @@ class ApiClient {
         }
 
         if (typeof window !== "undefined") {
-          const token = localStorage.getItem("accessToken");
+          const token = useAuthStore.getState().accessToken;
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
           }
@@ -56,6 +58,16 @@ class ApiClient {
           return Promise.reject(error);
         }
 
+        // Handle server errors (5xx)
+        if (error.response?.status >= 500) {
+          if (typeof window !== "undefined") {
+            toast.error("Something went wrong on our end. Please try again later.", {
+              description: `Server error (${error.response.status})`,
+            });
+          }
+          return Promise.reject(error);
+        }
+
         // Handle unauthorized (401)
         if (
           error.response?.status === 401 &&
@@ -66,33 +78,28 @@ class ApiClient {
           originalRequest._retry = true;
 
           try {
-            const refreshToken = localStorage.getItem("refreshToken");
-            if (refreshToken) {
-              const response = await this.client.post("/auth/refresh", {
-                refreshToken,
-              });
-
-              const { accessToken, refreshToken: newRefreshToken } =
-                response.data;
-
-              // Update both localStorage and auth store
-              localStorage.setItem("accessToken", accessToken);
-              localStorage.setItem("refreshToken", newRefreshToken);
-
-              // Update the auth store with new tokens
-              const authStore = useAuthStore.getState();
-              authStore.setTokens(accessToken, newRefreshToken);
-
-              originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-              return this.client(originalRequest);
+            // Refresh token is sent automatically via httpOnly cookie (B-29).
+            // No need to read it from store or send in body.
+            // Coalesce concurrent 401 refreshes into a single request
+            if (!this.refreshPromise) {
+              this.refreshPromise = this.client
+                .post("/auth/refresh", {})
+                .then((res) => res.data)
+                .finally(() => {
+                  this.refreshPromise = null;
+                });
             }
+
+            const { accessToken } = await this.refreshPromise;
+
+            // Update the auth store with new access token
+            const authStore = useAuthStore.getState();
+            authStore.setAccessToken(accessToken);
+
+            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+            return this.client(originalRequest);
           } catch (refreshError) {
             // Refresh failed, logout user
-            localStorage.removeItem("accessToken");
-            localStorage.removeItem("refreshToken");
-            localStorage.removeItem("user");
-
-            // Clear auth store
             const authStore = useAuthStore.getState();
             authStore.clearAuth();
 

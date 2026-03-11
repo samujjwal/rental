@@ -1,11 +1,9 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DisputesService } from '../services/disputes.service';
+import { DisputeEscalationService } from '../services/dispute-escalation.service';
 import { CreateDisputeDto, UpdateDisputeDto, AddResponseDto, CloseDisputeDto } from '../dto/dispute.dto';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@/modules/auth/guards/roles.guard';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
 import { DisputeStatus, UserRole } from '@rental-portal/database';
 
 type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
@@ -15,7 +13,10 @@ type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<Ret
 @Controller('disputes')
 @UseGuards(JwtAuthGuard)
 export class DisputesController {
-  constructor(private readonly disputesService: DisputesService) {}
+  constructor(
+    private readonly disputesService: DisputesService,
+    private readonly escalationService: DisputeEscalationService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a dispute' })
@@ -44,7 +45,7 @@ export class DisputesController {
   @Get('admin/all')
   @ApiOperation({ summary: 'Get all disputes (admin only)' })
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, 'SUPER_ADMIN' as any, 'OPERATIONS_ADMIN' as any, 'SUPPORT_ADMIN' as any)
   async getAllDisputes(
     @CurrentUser('id') userId: string,
     @Query('status') status?: DisputeStatus,
@@ -63,7 +64,7 @@ export class DisputesController {
   @Get('admin/stats')
   @ApiOperation({ summary: 'Get dispute statistics (admin only)' })
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, 'SUPER_ADMIN' as any, 'OPERATIONS_ADMIN' as any, 'SUPPORT_ADMIN' as any)
   async getStats(@CurrentUser('id') userId: string) {
     return this.disputesService.getDisputeStats(userId);
   }
@@ -97,12 +98,40 @@ export class DisputesController {
   }
 
   @Post(':id/close')
-  @ApiOperation({ summary: 'Close dispute' })
+  @ApiOperation({ summary: 'Close dispute (initiator or admin)' })
   async closeDispute(
     @Param('id') disputeId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CloseDisputeDto,
   ): Promise<AsyncMethodResult<DisputesService['closeDispute']>> {
     return this.disputesService.closeDispute(disputeId, userId, dto.reason);
+  }
+
+  @Post(':id/escalate')
+  @ApiOperation({ summary: 'Escalate a dispute to the next level' })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, 'SUPER_ADMIN' as any, 'OPERATIONS_ADMIN' as any, 'SUPPORT_ADMIN' as any)
+  async escalateDispute(
+    @Param('id') disputeId: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: { reason: string },
+  ) {
+    return this.escalationService.escalateDispute(disputeId, body.reason, userId);
+  }
+
+  @Get(':id/escalations')
+  @ApiOperation({ summary: 'Get escalation history for a dispute' })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, 'SUPER_ADMIN' as any, 'OPERATIONS_ADMIN' as any, 'SUPPORT_ADMIN' as any)
+  async getEscalationHistory(@Param('id') disputeId: string) {
+    return this.escalationService.getEscalationHistory(disputeId);
+  }
+
+  @Post('admin/check-sla')
+  @ApiOperation({ summary: 'Check and auto-escalate overdue disputes (admin)' })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, 'SUPER_ADMIN' as any, 'OPERATIONS_ADMIN' as any, 'SUPPORT_ADMIN' as any)
+  async checkSlaEscalations(@CurrentUser('id') userId: string) {
+    return this.escalationService.processAutoEscalations();
   }
 }

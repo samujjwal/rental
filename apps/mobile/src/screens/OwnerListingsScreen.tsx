@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useCallback } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, Image } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { ListingDetail } from "@rental-portal/mobile-sdk";
+import type { ListingDetail } from '~/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, "OwnerListings">;
 
@@ -16,18 +17,20 @@ export function OwnerListingsScreen({ navigation }: Props) {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      try {
-        const data = await mobileClient.getMyListings();
-        setListings(data || []);
-      } catch (err) {
-        setStatus("Unable to load listings.");
-      }
-    };
-    load();
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      const load = async () => {
+        try {
+          const data = await mobileClient.getMyListings();
+          setListings(data || []);
+        } catch (err) {
+          setStatus("Unable to load listings.");
+        }
+      };
+      load();
+    }, [user])
+  );
 
   const handleListingAction = async (listingId: string, action: "publish" | "pause" | "activate" | "delete") => {
     setActionLoadingId(listingId);
@@ -74,8 +77,8 @@ export function OwnerListingsScreen({ navigation }: Props) {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            {item.images?.[0] ? (
-              <Image source={{ uri: item.images[0] }} style={styles.image} />
+            {(item.photos?.[0] || item.images?.[0]) ? (
+              <Image source={{ uri: item.photos?.[0] || item.images?.[0] }} style={styles.image} />
             ) : (
               <View style={styles.imagePlaceholder}>
                 <Text style={styles.imagePlaceholderText}>

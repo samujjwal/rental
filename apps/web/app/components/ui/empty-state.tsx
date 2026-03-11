@@ -1,6 +1,7 @@
 
 import React from "react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { cn } from "~/lib/utils";
 import { UnifiedButton } from "./unified-button";
 
@@ -154,133 +155,166 @@ export const EmptyStatePresets = {
   }: {
     searchTerm?: string;
     onClearFilters?: () => void;
-  }) => (
+  }) => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="🔍"
-      title={searchTerm ? `No results found for "${searchTerm}"` : "No results found"}
-      description="Try adjusting your search or filters to find what you're looking for."
+      title={searchTerm ? t("common.noSearchResultsFor", { searchTerm }) : t("common.noResults")}
+      description={t("common.tryAdjustingFilters")}
       action={
         onClearFilters
-          ? { label: "Clear Filters", onClick: onClearFilters }
+          ? { label: t("search.clearFilters"), onClick: onClearFilters }
           : undefined
       }
-      secondaryAction={{ label: "Browse All", href: "/search" }}
+      secondaryAction={{ label: t("common.browseAll"), href: "/search" }}
     />
-  ),
+    );
+  },
 
   /**
    * No bookings
    */
-  NoBookings: () => (
+  NoBookings: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="📅"
-      title="You have no bookings yet"
-      description="Start exploring items to rent!"
-      action={{ label: "Browse Listings", href: "/search" }}
+      title={t("common.noBookingsYet")}
+      description={t("common.startExploring")}
+      action={{ label: t("common.browseListings"), href: "/search" }}
     />
-  ),
+    );
+  },
 
   /**
    * No listings (for owners)
    */
-  NoListings: () => (
+  NoListings: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="📦"
-      title="You haven't created any listings"
-      description="Share your items and start earning!"
-      action={{ label: "Create Your First Listing", href: "/listings/new" }}
+      title={t("common.noListingsCreated")}
+      description={t("common.shareAndEarn")}
+      action={{ label: t("common.createFirstListing"), href: "/listings/new" }}
     />
-  ),
+    );
+  },
 
   /**
    * No favorites
    */
-  NoFavorites: () => (
+  NoFavorites: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="❤️"
-      title="No favorites yet"
-      description="Save items you love to easily find them later."
-      action={{ label: "Explore Listings", href: "/search" }}
+      title={t("common.noFavoritesYet")}
+      description={t("common.saveFavorites")}
+      action={{ label: t("common.exploreListings"), href: "/search" }}
     />
-  ),
+    );
+  },
 
   /**
    * No messages
    */
-  NoMessages: () => (
+  NoMessages: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="💬"
-      title="No messages yet"
-      description="Start a conversation with a host or renter."
-      action={{ label: "Browse Listings", href: "/search" }}
+      title={t("common.noMessagesYet")}
+      description={t("common.startConversation")}
+      action={{ label: t("common.browseListings"), href: "/search" }}
     />
-  ),
+    );
+  },
 
   /**
    * No reviews
    */
-  NoReviews: () => (
+  NoReviews: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="⭐"
-      title="No reviews yet"
-      description="Complete a booking to leave your first review."
+      title={t("common.noReviewsYet")}
+      description={t("common.completeBookingForReview")}
     />
-  ),
+    );
+  },
 
   /**
    * No notifications
    */
-  NoNotifications: () => (
+  NoNotifications: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="🔔"
-      title="No notifications"
-      description="You're all caught up!"
+      title={t("common.noNotifications")}
+      description={t("common.allCaughtUp")}
       size="sm"
     />
-  ),
+    );
+  },
 
   /**
    * No disputes
    */
-  NoDisputes: () => (
+  NoDisputes: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="✅"
-      title="No disputes"
-      description="All issues have been resolved."
+      title={t("common.noDisputes")}
+      description={t("common.allIssuesResolved")}
     />
-  ),
+    );
+  },
 
   /**
    * No team members
    */
-  NoTeamMembers: () => (
+  NoTeamMembers: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="👥"
-      title="No team members yet"
-      description="Invite team members to help manage your organization."
-      action={{ label: "Invite Member", href: "#invite" }}
+      title={t("common.noTeamMembersYet")}
+      description={t("common.inviteTeamMembers")}
+      action={{ label: t("common.inviteMember"), href: "#invite" }}
     />
-  ),
+    );
+  },
 
   /**
    * No transactions
    */
-  NoTransactions: () => (
+  NoTransactions: () => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="💰"
-      title="No transactions yet"
-      description="Your transaction history will appear here."
+      title={t("common.noTransactionsYet")}
+      description={t("common.transactionHistoryHere")}
     />
-  ),
+    );
+  },
 
   /**
    * Generic empty state
    */
-  Generic: ({ title, description }: { title?: string; description?: string }) => (
+  Generic: ({ title, description }: { title?: string; description?: string }) => {
+    const { t } = useTranslation();
+    return (
     <EmptyState
       icon="📭"
-      title={title || "Nothing here yet"}
-      description={description || "Check back later for updates."}
+      title={title || t("common.nothingHereYet")}
+      description={description || t("common.checkBackLater")}
     />
-  ),
+    );
+  },
 };

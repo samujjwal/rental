@@ -126,7 +126,7 @@ test.describe('Disputes Flow', () => {
         });
 
         // Should show uploaded file
-        await expect(page.locator('text=/evidence\.jpg|uploaded/i')).toBeVisible();
+        await expect(page.locator('text=/evidence[.]jpg|uploaded/i')).toBeVisible();
       }
     });
   });

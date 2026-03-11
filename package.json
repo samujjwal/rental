@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@10.28.2",
-  "description": "Universal Rental Portal - Multi-category marketplace platform",
+  "description": "GharBatai Rentals - Multi-category marketplace platform",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -12,11 +12,28 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
+    "test:comprehensive": "./comprehensive-test-suite.sh",
+    "test:all": "./comprehensive-test-suite.sh",
+    "test:unit": "turbo run test",
+    "test:integration": "turbo run test:e2e",
+    "test:e2e": "./playwright-test-runner.sh",
+    "test:playwright": "./playwright-test-runner.sh",
+    "test:playwright:core": "cd apps/web && npm run e2e:core",
+    "test:playwright:full": "cd apps/web && npm run e2e:full",
+    "test:api": "./automated-test-suite.sh",
+    "test:frontend": "node automated-frontend-tests.js",
+    "test:security": "cd apps/api && npm run test:security",
+    "test:performance": "cd apps/api && npm run load:all",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "arch-lint": "turbo run arch-lint",
     "clean": "turbo run clean && rm -rf node_modules",
+    "test:smoke": "pnpm --filter @rental-portal/api test:smoke",
+    "test:property": "pnpm --filter @rental-portal/api test:property",
+    "test:chaos": "pnpm --filter @rental-portal/api test:chaos",
+    "test:cov": "turbo run test:cov",
     "db:migrate": "cd packages/database && npm run migrate:dev",
     "db:studio": "cd packages/database && npm run studio",
     "db:seed": "cd packages/database && npm run seed",
@@ -25,18 +42,20 @@
     "lint-staged": "lint-staged"
   },
   "devDependencies": {
+    "@elastic/elasticsearch": "^9.3.4",
     "@types/node": "^25.1.0",
+    "dependency-cruiser": "^17.3.8",
     "husky": "^9.1.7",
     "lint-staged": "^15.3.1",
     "prettier": "^3.8.1",
+    "puppeteer": "^24.39.0",
+    "redis": "^5.11.0",
+    "sharp": "^0.34.5",
     "turbo": "^2.8.0",
     "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
-  },
-  "dependencies": {
-    "@sendgrid/mail": "^8.1.6"
   }
 }

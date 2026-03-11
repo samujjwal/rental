@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { MetaFunction } from "react-router";
+import { useTranslation } from "react-i18next";
 import { RouteErrorBoundary } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
@@ -10,15 +11,17 @@ export const meta: MetaFunction = () => {
 };
 
 export default function PrivacyPage() {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="container mx-auto max-w-3xl px-4 py-16">
-        <h1 className="text-4xl font-bold tracking-tight">Privacy Policy</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Last updated: June 2025</p>
+        <h1 className="text-4xl font-bold tracking-tight">{t("pages.privacy.title")}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t("pages.privacy.lastUpdated")}: {t("pages.privacy.lastUpdatedDate")}</p>
 
         <div className="mt-10 space-y-8 text-base leading-7 text-foreground/80">
           <section>
-            <h2 className="text-xl font-semibold text-foreground">1. Information We Collect</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section1")}</h2>
             <p className="mt-2">
               When you create an account, list an item, or make a booking, we collect personal
               information you provide, such as your name, email address, phone number, payment
@@ -31,7 +34,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">2. How We Use Your Information</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section2")}</h2>
             <ul className="mt-2 list-disc pl-6 space-y-1">
               <li>To create and manage your account</li>
               <li>To process bookings and facilitate payments between renters and owners</li>
@@ -43,7 +46,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">3. Information Sharing</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section3")}</h2>
             <p className="mt-2">
               We share your information only as necessary to provide our services:
             </p>
@@ -57,7 +60,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">4. Data Security</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section4")}</h2>
             <p className="mt-2">
               We implement industry-standard security measures, including encryption of data in
               transit (TLS) and at rest, secure password hashing, and regular security audits. Payment
@@ -66,7 +69,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">5. Cookies &amp; Tracking</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section5")}</h2>
             <p className="mt-2">
               We use essential cookies for authentication and session management. We may also use
               analytics cookies to understand how users interact with our platform. You can manage
@@ -77,7 +80,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">6. Your Rights</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section6")}</h2>
             <p className="mt-2">Depending on your location, you may have the right to:</p>
             <ul className="mt-2 list-disc pl-6 space-y-1">
               <li>Access and download a copy of your personal data</li>
@@ -95,7 +98,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">7. Data Retention</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section7")}</h2>
             <p className="mt-2">
               We retain your personal data for as long as your account is active or as needed to
               provide services. After account deletion, we retain certain data for up to 3 years to
@@ -104,7 +107,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">8. Changes to This Policy</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section8")}</h2>
             <p className="mt-2">
               We may update this policy from time to time. We will notify you of material changes via
               email or an in-app notice. Continued use of GharBatai after changes constitutes
@@ -113,7 +116,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">9. Contact Us</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.privacy.section9")}</h2>
             <p className="mt-2">
               If you have questions about this Privacy Policy, please contact us at{" "}
               <a href="mailto:privacy@gharbatai.com" className="text-primary hover:underline">
@@ -125,11 +128,11 @@ export default function PrivacyPage() {
         </div>
 
         <div className="mt-12 flex gap-4 text-sm text-muted-foreground">
-          <Link to="/terms" className="hover:text-primary">Terms of Service</Link>
+          <Link to="/terms" className="hover:text-primary">{t("pages.privacy.termsOfService")}</Link>
           <span>·</span>
-          <Link to="/cookies" className="hover:text-primary">Cookie Policy</Link>
+          <Link to="/cookies" className="hover:text-primary">{t("pages.privacy.cookiePolicy")}</Link>
           <span>·</span>
-          <Link to="/" className="hover:text-primary">Back to Home</Link>
+          <Link to="/" className="hover:text-primary">{t("common.backToHome")}</Link>
         </div>
       </div>
     </div>

@@ -14,16 +14,22 @@ test.describe("Responsive Design", () => {
   test.describe("Mobile (390x844)", () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
-    test("should render homepage content without breaking layout", async ({ page }) => {
+    test("should render homepage content without breaking layout", async ({
+      page,
+    }) => {
       await page.goto("/");
       await expect(page.locator("h1")).toBeVisible();
-      await expect(page.locator('input[placeholder="What are you looking for?"]')).toBeVisible();
+      await expect(
+        page.locator('input[placeholder="What are you looking for?"]')
+      ).toBeVisible();
     });
 
     test("should render search page controls", async ({ page }) => {
       await page.goto("/search");
-      await expect(page.locator('input[placeholder="Search for items..."]')).toBeVisible();
-      await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeVisible();
+      await expect(page.locator('input[name="query"]')).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Filters", exact: true })
+      ).toBeVisible();
     });
 
     test("should render listing details on mobile", async ({ page }) => {
@@ -34,7 +40,9 @@ test.describe("Responsive Design", () => {
       await expect(page.locator('input[type="date"]').first()).toBeVisible();
     });
 
-    test("should stack renter dashboard stats vertically on mobile", async ({ page }) => {
+    test("should stack renter dashboard stats vertically on mobile", async ({
+      page,
+    }) => {
       await loginAs(page, testUsers.renter);
       await page.goto("/dashboard/renter");
 
@@ -42,7 +50,10 @@ test.describe("Responsive Design", () => {
       await expect(cards.first()).toBeVisible();
 
       const firstCard = cards.first().locator("..");
-      const secondCard = page.locator("p:text-is('Active Rentals')").first().locator("..");
+      const secondCard = page
+        .locator("p:text-is('Active Bookings')")
+        .first()
+        .locator("..");
       const firstBox = await firstCard.boundingBox();
       const secondBox = await secondCard.boundingBox();
 
@@ -63,7 +74,7 @@ test.describe("Responsive Design", () => {
 
     test("should render search page results area", async ({ page }) => {
       await page.goto("/search");
-      await expect(page.locator('input[placeholder="Search for items..."]')).toBeVisible();
+      await expect(page.locator('input[name="query"]')).toBeVisible();
       await expect(page.locator("main")).toBeVisible();
     });
   });
@@ -74,12 +85,19 @@ test.describe("Responsive Design", () => {
     test("should show desktop navigation links", async ({ page }) => {
       await page.goto("/");
       await expect(page.locator('a[href="/search"]').first()).toBeVisible();
-      await expect(page.locator('a[href="/listings/new"]').first()).toBeVisible();
+      await expect(
+        page.locator('a[href="/listings/new"]').first()
+      ).toBeVisible();
     });
 
-    test("should render search filters and sorting controls", async ({ page }) => {
+    test("should render search filters and sorting controls", async ({
+      page,
+    }) => {
       await page.goto("/search");
-      const filtersButton = page.getByRole("button", { name: "Filters", exact: true });
+      const filtersButton = page.getByRole("button", {
+        name: "Filters",
+        exact: true,
+      });
       await expect(filtersButton).toBeVisible();
       const minPrice = page.locator('input[name="minPrice"]');
       if (!(await minPrice.isVisible().catch(() => false))) {
@@ -107,7 +125,9 @@ test.describe("Accessibility Baseline", () => {
   test("should support keyboard focus traversal on login", async ({ page }) => {
     await page.goto("/auth/login");
     await page.keyboard.press("Tab");
-    const activeTag = await page.evaluate(() => document.activeElement?.tagName || "");
+    const activeTag = await page.evaluate(
+      () => document.activeElement?.tagName || ""
+    );
     expect(activeTag.length).toBeGreaterThan(0);
   });
 
@@ -117,7 +137,9 @@ test.describe("Accessibility Baseline", () => {
     await expect(page.locator('input[type="password"]')).toBeVisible();
   });
 
-  test("should keep form fields operable via keyboard input", async ({ page }) => {
+  test("should keep form fields operable via keyboard input", async ({
+    page,
+  }) => {
     await page.goto("/auth/login");
     const email = page.locator('input[type="email"]');
     const password = page.locator('input[type="password"]');
@@ -129,7 +151,9 @@ test.describe("Accessibility Baseline", () => {
     await expect(password).toHaveValue("Password123!");
   });
 
-  test("should include alt text on visible listing/detail images", async ({ page }) => {
+  test("should include alt text on visible listing/detail images", async ({
+    page,
+  }) => {
     await page.goto("/search");
     const firstImage = page.locator("img[alt]").first();
     if ((await firstImage.count()) === 0) return;

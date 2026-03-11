@@ -11,12 +11,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { IsString, IsOptional, IsEnum, IsDateString } from 'class-validator';
 import { KycService, UploadDocumentDto, ReviewDocumentDto } from '../services/kyc.service';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@/modules/auth/guards/roles.guard';
-import { Permission } from '@/modules/auth/guards/roles.guard';
-import { Permissions } from '@/modules/auth/decorators/permissions.decorator';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
+import { JwtAuthGuard, RolesGuard, Permission, Permissions, CurrentUser, Roles } from '@/common/auth';
 import { UserRole, IdentityDocumentType } from '@rental-portal/database';
 
 class UploadDocumentRequestDto {
@@ -61,6 +56,12 @@ export class KycController {
   @ApiOperation({ summary: 'Get my identity documents' })
   async getMyDocuments(@CurrentUser('id') userId: string) {
     return this.kycService.getUserDocuments(userId);
+  }
+
+  @Get('documents/history')
+  @ApiOperation({ summary: 'Get KYC document status history for current user' })
+  async getDocumentHistory(@CurrentUser('id') userId: string) {
+    return this.kycService.getDocumentHistory(userId);
   }
 
   @Get('documents/pending')

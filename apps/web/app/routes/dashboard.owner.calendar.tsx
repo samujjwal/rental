@@ -8,13 +8,18 @@ import {
   Plus,
   Clock,
   User,
-  DollarSign,
+  Banknote,
 } from "lucide-react";
 import { bookingsApi } from "~/lib/api/bookings";
 import { listingsApi } from "~/lib/api/listings";
-import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
+import { PortalPageLayout } from "~/components/layout";
 import type { Listing } from "~/types/listing";
 import { getUser } from "~/utils/auth";
+import { APP_LOCALE } from "~/config/locale";
+import { ownerNavSections } from "~/config/navigation";
+import { formatCurrency, formatDate } from "~/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export const meta: MetaFunction = () => {
   return [
@@ -67,8 +72,8 @@ interface CalendarBooking {
     firstName: string;
     lastName: string | null;
   };
-  totalAmount: number;
-  totalPrice?: number;
+  totalPrice: number;
+  totalAmount?: number; // backward-compat alias for totalPrice
 }
 
 const safeNumber = (value: unknown): number => {
@@ -83,7 +88,7 @@ const safeStatus = (value: unknown): string =>
   String(value || "").toLowerCase();
 const safeDateLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
-  return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : formatDate(date);
 };
 const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
@@ -91,7 +96,10 @@ const safeText = (value: unknown, fallback = ""): string => {
 };
 
 export default function OwnerCalendarPage() {
-  const { bookings, listings, error } = useLoaderData<typeof clientLoader>() as {
+  const { t } = useTranslation();
+  const { bookings, listings, error } = useLoaderData<
+    typeof clientLoader
+  >() as {
     bookings: CalendarBooking[];
     listings: Listing[];
     error: string | null;
@@ -114,11 +122,12 @@ export default function OwnerCalendarPage() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = new Date(year, month, 1).getDay();
 
-  // Month names
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
+  // Month names — locale-aware
+  const monthNames = Array.from({ length: 12 }, (_, i) =>
+    new Intl.DateTimeFormat(APP_LOCALE, { month: "long" }).format(
+      new Date(2020, i, 1)
+    )
+  );
 
   // Navigate months
   const goToPrevMonth = () => {
@@ -199,253 +208,281 @@ export default function OwnerCalendarPage() {
     );
   };
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background p-8">
-        <div className="max-w-6xl mx-auto">
+  return (
+    <PortalPageLayout
+      title={t("dashboard.calendar.bookingCalendar")}
+      description="Manage your rental calendar"
+      sidebarSections={ownerNavSections}
+      banner={
+        error ? (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
             {error}
           </div>
+        ) : null
+      }
+      actions={
+        <Link to="/listings/new">
+          <UnifiedButton size="sm">
+            <Plus className="w-4 h-4 mr-2" />
+            {t("dashboard.calendar.newListing")}
+          </UnifiedButton>
+        </Link>
+      }
+      contentClassName="space-y-6"
+    >
+      {error ? (
+        <div className="rounded-xl border border-dashed border-border/70 bg-card/50 p-10 text-center text-muted-foreground">
+          Calendar data is currently unavailable.
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+      ) : (
+        <>
+          {/* Controls */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Link to="/dashboard/owner" className="text-muted-foreground hover:text-foreground">
-                ← Back to Dashboard
-              </Link>
-              <h1 className="text-2xl font-bold text-foreground">Booking Calendar</h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <Link to="/listings/new">
-                <UnifiedButton size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Listing
-                </UnifiedButton>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Controls */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
-            {/* Month Navigation */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={goToPrevMonth}
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <h2 className="text-xl font-semibold min-w-[180px] text-center">
-                {monthNames[month]} {year}
-              </h2>
-              <button
-                onClick={goToNextMonth}
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-            <UnifiedButton variant="outline" size="sm" onClick={goToToday}>
-              Today
-            </UnifiedButton>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Listing Filter */}
-            <select
-              value={activeListingFilter}
-              onChange={(e) => setSelectedListing(e.target.value)}
-              className="px-3 py-2 border border-input rounded-lg bg-background text-sm"
-            >
-              <option value="all">All Listings</option>
-              {listings.map((listing) => (
-                <option key={listing.id} value={listing.id}>
-                  {listing.title}
-                </option>
-              ))}
-            </select>
-
-            <div className="px-3 py-2 text-sm font-medium rounded-lg border border-input bg-background">
-              Month view
-            </div>
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div className="flex flex-wrap items-center gap-4 mb-6 text-sm">
-          <span className="text-muted-foreground">Legend:</span>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-success"></span>
-            <span>Confirmed</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-warning"></span>
-            <span>Pending</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-info"></span>
-            <span>In Progress</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-muted-foreground"></span>
-            <span>Completed</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-destructive"></span>
-            <span>Cancelled</span>
-          </div>
-        </div>
-
-        {/* Calendar Grid */}
-        <div className="bg-card border rounded-xl overflow-hidden">
-          {/* Day Headers */}
-          <div className="grid grid-cols-7 border-b bg-muted/50">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-              <div
-                key={day}
-                className="p-3 text-center text-sm font-semibold text-muted-foreground"
-              >
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar Days */}
-          <div className="grid grid-cols-7">
-            {calendarDays.map((day, index) => {
-              const dayBookings = day ? getBookingsForDate(day) : [];
-              const isCurrentDay = isToday(day);
-
-              return (
-                <div
-                  key={index}
-                  className={`min-h-[120px] border-b border-r p-2 ${
-                    day ? "bg-background" : "bg-muted/30"
-                  } ${isCurrentDay ? "bg-primary/5" : ""}`}
+              {/* Month Navigation */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goToPrevMonth}
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
                 >
-                  {day && (
-                    <>
-                      <div
-                        className={`text-sm font-medium mb-1 ${
-                          isCurrentDay
-                            ? "bg-primary text-primary-foreground w-7 h-7 rounded-full flex items-center justify-center"
-                            : "text-foreground"
-                        }`}
-                      >
-                        {day}
-                      </div>
-                      <div className="space-y-1">
-                        {dayBookings.slice(0, 3).map((booking: CalendarBooking) => (
-                          (() => {
-                            const bookingId = safeText(booking.id);
-                            const listingTitle = safeText(booking.listing?.title, "Booking");
-                            return (
-                              <Link
-                                key={booking.id}
-                                to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
-                                className={`block text-xs p-1 rounded truncate text-white ${getStatusColor(booking.status)} hover:opacity-80 transition-opacity`}
-                              >
-                                {listingTitle}
-                              </Link>
-                            );
-                          })()
-                        ))}
-                        {dayBookings.length > 3 && (
-                          <div className="text-xs text-muted-foreground">
-                            +{dayBookings.length - 3} more
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <h2 className="text-xl font-semibold min-w-[180px] text-center">
+                  {monthNames[month]} {year}
+                </h2>
+                <button
+                  onClick={goToNextMonth}
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+              <UnifiedButton variant="outline" size="sm" onClick={goToToday}>
+                {t("dashboard.calendar.today")}
+              </UnifiedButton>
+            </div>
 
-        {/* Upcoming Bookings List */}
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold text-foreground mb-4">
-            Upcoming Bookings
-          </h3>
-          <div className="space-y-3">
-            {filteredBookings
-              .filter((b: CalendarBooking) => {
+            <div className="flex items-center gap-4">
+              {/* Listing Filter */}
+              <select
+                value={activeListingFilter}
+                onChange={(e) => setSelectedListing(e.target.value)}
+                className="px-3 py-2 border border-input rounded-lg bg-background text-sm"
+              >
+                <option value="all">
+                  {t("dashboard.calendar.allListings")}
+                </option>
+                {listings.map((listing) => (
+                  <option key={listing.id} value={listing.id}>
+                    {listing.title}
+                  </option>
+                ))}
+              </select>
+
+              <div className="px-3 py-2 text-sm font-medium rounded-lg border border-input bg-background">
+                {t("dashboard.calendar.monthView")}
+              </div>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <span className="text-muted-foreground">
+              {t("dashboard.calendar.legend")}
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-success"></span>
+              <span>{t("bookings.status.confirmed")}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-warning"></span>
+              <span>{t("bookings.status.pending")}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-info"></span>
+              <span>{t("bookings.status.inProgress")}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-muted-foreground"></span>
+              <span>{t("bookings.status.completed")}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-destructive"></span>
+              <span>{t("bookings.status.cancelled")}</span>
+            </div>
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="bg-card border rounded-xl overflow-hidden">
+            {/* Day Headers */}
+            <div className="grid grid-cols-7 border-b bg-muted/50">
+              {Array.from(
+                { length: 7 },
+                (_, i) =>
+                  new Intl.DateTimeFormat(APP_LOCALE, {
+                    weekday: "short",
+                  }).format(new Date(2024, 0, 7 + i)) // 2024-01-07 is Sunday
+              ).map((day) => (
+                <div
+                  key={day}
+                  className="p-3 text-center text-sm font-semibold text-muted-foreground"
+                >
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* Calendar Days */}
+            <div className="grid grid-cols-7">
+              {calendarDays.map((day, index) => {
+                const dayBookings = day ? getBookingsForDate(day) : [];
+                const isCurrentDay = isToday(day);
+
+                return (
+                  <div
+                    key={index}
+                    className={`min-h-[120px] border-b border-r p-2 ${
+                      day ? "bg-background" : "bg-muted/30"
+                    } ${isCurrentDay ? "bg-primary/5" : ""}`}
+                  >
+                    {day && (
+                      <>
+                        <div
+                          className={`text-sm font-medium mb-1 ${
+                            isCurrentDay
+                              ? "bg-primary text-primary-foreground w-7 h-7 rounded-full flex items-center justify-center"
+                              : "text-foreground"
+                          }`}
+                        >
+                          {day}
+                        </div>
+                        <div className="space-y-1">
+                          {dayBookings
+                            .slice(0, 3)
+                            .map((booking: CalendarBooking) =>
+                              (() => {
+                                const bookingId = safeText(booking.id);
+                                const listingTitle = safeText(
+                                  booking.listing?.title,
+                                  "Booking"
+                                );
+                                return (
+                                  <Link
+                                    key={booking.id}
+                                    to={
+                                      bookingId
+                                        ? `/bookings/${bookingId}`
+                                        : "/bookings"
+                                    }
+                                    className={`block text-xs p-1 rounded truncate text-white ${getStatusColor(booking.status)} hover:opacity-80 transition-opacity`}
+                                  >
+                                    {listingTitle}
+                                  </Link>
+                                );
+                              })()
+                            )}
+                          {dayBookings.length > 3 && (
+                            <div className="text-xs text-muted-foreground">
+                              {t("dashboard.calendar.moreBookings", {
+                                count: dayBookings.length - 3,
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Upcoming Bookings List */}
+          <div>
+            <h3 className="text-lg font-semibold text-foreground mb-4">
+              {t("bookings.upcoming")}
+            </h3>
+            <div className="space-y-3">
+              {filteredBookings
+                .filter((b: CalendarBooking) => {
+                  const startAt = safeTime(b.startDate);
+                  return Number.isFinite(startAt) && startAt >= Date.now();
+                })
+                .slice(0, 5)
+                .map((booking: CalendarBooking) =>
+                  (() => {
+                    const bookingId = safeText(booking.id);
+                    const renterFirstName = safeText(
+                      booking.renter?.firstName,
+                      "Renter"
+                    );
+                    const renterLastName = safeText(booking.renter?.lastName);
+                    const listingTitle = safeText(
+                      booking.listing?.title,
+                      "Booking"
+                    );
+                    return (
+                      <Link
+                        key={booking.id}
+                        to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
+                        className="flex items-center justify-between p-4 bg-card border rounded-lg hover:border-primary/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`w-2 h-12 rounded-full ${getStatusColor(booking.status)}`}
+                          />
+                          <div>
+                            <h4 className="font-medium text-foreground">
+                              {listingTitle}
+                            </h4>
+                            <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <User className="w-4 h-4" />
+                                {renterFirstName}
+                                {renterLastName ? ` ${renterLastName}` : ""}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                {safeDateLabel(booking.startDate)} -{" "}
+                                {safeDateLabel(booking.endDate)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-1 text-foreground font-semibold">
+                            <Banknote className="w-4 h-4" />
+                            {formatCurrency(
+                              safeNumber(
+                                booking.totalPrice ?? booking.totalAmount
+                              )
+                            )}
+                          </div>
+                          <span
+                            className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full text-white ${getStatusColor(booking.status)}`}
+                          >
+                            {String(booking.status || "").replace(/_/g, " ")}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })()
+                )}
+              {filteredBookings.filter((b: CalendarBooking) => {
                 const startAt = safeTime(b.startDate);
                 return Number.isFinite(startAt) && startAt >= Date.now();
-              })
-              .slice(0, 5)
-              .map((booking: CalendarBooking) => (
-                (() => {
-                  const bookingId = safeText(booking.id);
-                  const renterFirstName = safeText(booking.renter?.firstName, "Renter");
-                  const renterLastName = safeText(booking.renter?.lastName);
-                  const listingTitle = safeText(booking.listing?.title, "Booking");
-                  return (
-                <Link
-                  key={booking.id}
-                  to={bookingId ? `/bookings/${bookingId}` : "/bookings"}
-                  className="flex items-center justify-between p-4 bg-card border rounded-lg hover:border-primary/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-2 h-12 rounded-full ${getStatusColor(booking.status)}`} />
-                    <div>
-                      <h4 className="font-medium text-foreground">
-                        {listingTitle}
-                      </h4>
-                      <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <User className="w-4 h-4" />
-                          {renterFirstName}{renterLastName ? ` ${renterLastName}` : ""}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          {safeDateLabel(booking.startDate)} - {safeDateLabel(booking.endDate)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center gap-1 text-foreground font-semibold">
-                      <DollarSign className="w-4 h-4" />
-                      {safeNumber(booking.totalAmount ?? booking.totalPrice).toFixed(2)}
-                    </div>
-                    <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full text-white ${getStatusColor(booking.status)}`}>
-                      {String(booking.status || "").replace(/_/g, " ")}
-                    </span>
-                  </div>
-                </Link>
-                  );
-                })()
-              ))}
-            {filteredBookings.filter((b: CalendarBooking) => {
-              const startAt = safeTime(b.startDate);
-              return Number.isFinite(startAt) && startAt >= Date.now();
-            }).length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <CalendarIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No upcoming bookings</p>
-              </div>
-            )}
+              }).length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CalendarIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>{t("dashboard.calendar.noUpcomingBookings")}</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </PortalPageLayout>
   );
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

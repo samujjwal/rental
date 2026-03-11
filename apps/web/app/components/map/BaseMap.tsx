@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import type { Map as LeafletMap, LatLngBoundsExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { APP_MAP_CENTER } from '~/config/locale';
 
 export interface BaseMapProps {
     center?: [number, number];
@@ -53,7 +54,7 @@ function MapEventHandler({
 }
 
 export function BaseMap({
-    center = [37.7749, -122.4194], // Default to San Francisco
+    center = APP_MAP_CENTER,
     zoom = 12,
     bounds,
     className = 'h-full w-full',
@@ -79,7 +80,8 @@ export function BaseMap({
                 maxZoom={19}
             />
             <MapEventHandler onMapReady={onMapReady} onBoundsChange={onBoundsChange} />
-            {children}
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {children as any}
         </MapContainer>
     );
 }

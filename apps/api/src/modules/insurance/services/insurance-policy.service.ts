@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceStatus } from '@rental-portal/database';
 import { $Enums } from '@rental-portal/database';
@@ -6,7 +7,10 @@ import { InsurancePolicy } from './insurance.service';
 
 @Injectable()
 export class InsurancePolicyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   /**
    * Create insurance policy record
@@ -23,7 +27,7 @@ export class InsurancePolicyService {
         coverage: data.coverageAmount ?? 0,
         coverageAmount: data.coverageAmount ?? 0,
         premium: 0,
-        currency: 'USD',
+        currency: this.config.get<string>('platform.defaultCurrency', 'USD'),
         status: (data.status as $Enums.InsuranceStatus) ?? $Enums.InsuranceStatus.ACTIVE,
         startDate: data.effectiveDate as Date,
         endDate: data.expirationDate as Date,

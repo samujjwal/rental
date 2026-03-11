@@ -1,11 +1,12 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import {
   Settings,
   Globe,
   Clock,
-  DollarSign,
+  Banknote,
   Save,
   CheckCircle,
   XCircle,
@@ -14,6 +15,7 @@ import {
 import { adminApi, type SystemSettings } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { APP_CURRENCY } from "~/config/locale";
 
 export const meta: MetaFunction = () => {
   return [
@@ -25,7 +27,7 @@ export const meta: MetaFunction = () => {
 const defaultSettings: SystemSettings = {
   siteName: "RentalPortal",
   supportEmail: "support@example.com",
-  defaultCurrency: "USD",
+  defaultCurrency: APP_CURRENCY,
   timezone: "UTC",
   maintenanceMode: false,
   allowRegistration: true,
@@ -162,8 +164,9 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   }
 }
 
-const currencies = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "INR"];
+const currencies = [APP_CURRENCY, "USD", "EUR", "GBP", "CAD", "AUD", "JPY", "INR"];
 const timezones = [
+  "Asia/Kathmandu",
   "UTC",
   "America/New_York",
   "America/Los_Angeles",
@@ -176,6 +179,7 @@ const timezones = [
 ];
 
 export default function GeneralSettingsPage() {
+  const { t } = useTranslation();
   const { settings, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -197,7 +201,7 @@ export default function GeneralSettingsPage() {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold mb-2">Error Loading Settings</h3>
+          <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingSettings")}</h3>
           <p className="text-red-600">{error}</p>
         </div>
       </div>
@@ -212,11 +216,11 @@ export default function GeneralSettingsPage() {
           to="/admin/system"
           className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
         >
-          ← Back to System Settings
+          {t("admin.backToSystemSettings")}
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900">General Settings</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("admin.generalSettings")}</h1>
         <p className="text-gray-600 mt-1">
-          Configure basic platform settings and defaults
+          {t("admin.generalSettingsSubtitle")}
         </p>
       </div>
 
@@ -240,13 +244,13 @@ export default function GeneralSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Globe className="w-5 h-5 text-blue-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Site Information</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.siteInformation")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="siteName" className="block text-sm font-medium text-gray-700 mb-1">
-                Site Name
+                {t("admin.siteNameLabel")}
               </label>
               <input
                 type="text"
@@ -260,7 +264,7 @@ export default function GeneralSettingsPage() {
 
             <div>
               <label htmlFor="supportEmail" className="block text-sm font-medium text-gray-700 mb-1">
-                Support Email
+                {t("admin.supportEmail")}
               </label>
               <input
                 type="email"
@@ -278,18 +282,18 @@ export default function GeneralSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Clock className="w-5 h-5 text-green-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Regional Settings</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.regionalSettings")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="defaultCurrency" className="block text-sm font-medium text-gray-700 mb-1">
-                Default Currency
+                {t("admin.defaultCurrency")}
               </label>
               <select
                 id="defaultCurrency"
                 name="defaultCurrency"
-                value={formValues.defaultCurrency || "USD"}
+                value={formValues.defaultCurrency || APP_CURRENCY}
                 onChange={(e) => setFormValues({ ...formValues, defaultCurrency: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -303,7 +307,7 @@ export default function GeneralSettingsPage() {
 
             <div>
               <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-1">
-                Default Timezone
+                {t("admin.defaultTimezone")}
               </label>
               <select
                 id="timezone"
@@ -325,14 +329,14 @@ export default function GeneralSettingsPage() {
         {/* Business Rules */}
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
-            <DollarSign className="w-5 h-5 text-yellow-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Business Rules</h2>
+            <Banknote className="w-5 h-5 text-yellow-500" />
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.businessRules")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label htmlFor="commissionRate" className="block text-sm font-medium text-gray-700 mb-1">
-                Commission Rate (%)
+                {t("admin.commissionRate")}
               </label>
               <input
                 type="number"
@@ -349,7 +353,7 @@ export default function GeneralSettingsPage() {
 
             <div>
               <label htmlFor="minRentalDays" className="block text-sm font-medium text-gray-700 mb-1">
-                Minimum Rental Days
+                {t("admin.minRentalDays")}
               </label>
               <input
                 type="number"
@@ -364,7 +368,7 @@ export default function GeneralSettingsPage() {
 
             <div>
               <label htmlFor="maxRentalDays" className="block text-sm font-medium text-gray-700 mb-1">
-                Maximum Rental Days
+                {t("admin.maxRentalDays")}
               </label>
               <input
                 type="number"
@@ -379,7 +383,7 @@ export default function GeneralSettingsPage() {
 
             <div>
               <label htmlFor="maxListingsPerUser" className="block text-sm font-medium text-gray-700 mb-1">
-                Max Listings Per User
+                {t("admin.maxListingsPerUser")}
               </label>
               <input
                 type="number"
@@ -398,15 +402,15 @@ export default function GeneralSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Settings className="w-5 h-5 text-purple-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Platform Controls</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.platformControls")}</h2>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Maintenance Mode</p>
+                <p className="font-medium text-gray-900">{t("admin.maintenanceMode")}</p>
                 <p className="text-sm text-gray-500">
-                  When enabled, only admins can access the platform
+                  {t("admin.maintenanceModeDesc")}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -425,9 +429,9 @@ export default function GeneralSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Allow Registration</p>
+                <p className="font-medium text-gray-900">{t("admin.allowRegistration")}</p>
                 <p className="text-sm text-gray-500">
-                  Allow new users to register on the platform
+                  {t("admin.allowRegistrationDesc")}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -445,9 +449,9 @@ export default function GeneralSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Require Email Verification</p>
+                <p className="font-medium text-gray-900">{t("admin.requireEmailVerification")}</p>
                 <p className="text-sm text-gray-500">
-                  Users must verify their email before accessing features
+                  {t("admin.requireEmailVerificationDesc")}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -471,12 +475,12 @@ export default function GeneralSettingsPage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
+                {t("admin.saving")}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Save Settings
+                {t("admin.saveSettings")}
               </>
             )}
           </UnifiedButton>

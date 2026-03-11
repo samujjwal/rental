@@ -1,6 +1,7 @@
 
 import React from "react";
 import { Link, isRouteErrorResponse, useRouteError, useRevalidator } from "react-router";
+import { useTranslation } from "react-i18next";
 import { cn } from "~/lib/utils";
 import { UnifiedButton } from "./unified-button";
 
@@ -63,6 +64,7 @@ export function ErrorState({
   error,
   children,
 }: ErrorStateProps) {
+  const { t } = useTranslation();
   const sizes = {
     sm: {
       wrapper: "py-8 px-4",
@@ -109,7 +111,7 @@ export function ErrorState({
         </div>
       )}
       <h3 className={cn("mt-4 text-foreground", sizeStyles.title)}>
-        {title || "Something went wrong"}
+        {title || t("errors.somethingWentWrong")}
       </h3>
       {message && (
         <p
@@ -126,13 +128,13 @@ export function ErrorState({
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           {onRetry && (
             <UnifiedButton variant="primary" onClick={onRetry}>
-              Try Again
+              {t("errors.tryAgain")}
             </UnifiedButton>
           )}
           {showHomeButton && (
             <Link to="/">
               <UnifiedButton variant="outline">
-                Go to Home
+                {t("errors.goToHome")}
               </UnifiedButton>
             </Link>
           )}
@@ -162,121 +164,148 @@ export const ErrorStatePresets = {
   /**
    * 404 Not Found
    */
-  NotFound: ({ message }: { message?: string } = {}) => (
+  NotFound: ({ message }: { message?: string } = {}) => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       code={404}
-      title="Page not found"
-      message={message || "The page you're looking for doesn't exist or has been moved."}
+      title={t("errors.pageNotFound")}
+      message={message || t("errors.pageNotFoundDesc")}
     />
-  ),
+    );
+  },
 
   /**
    * 500 Server Error
    */
-  ServerError: ({ onRetry }: { onRetry?: () => void } = {}) => (
+  ServerError: ({ onRetry }: { onRetry?: () => void } = {}) => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       icon="⚠️"
-      title="Something went wrong"
-      message="We're working on it. Please try again later."
+      title={t("errors.somethingWentWrong")}
+      message={t("errors.workingOnIt")}
       onRetry={onRetry}
     />
-  ),
+    );
+  },
 
   /**
    * 401 Unauthorized
    */
-  Unauthorized: () => (
+  Unauthorized: () => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       icon="🔒"
-      title="Access Denied"
-      message="You don't have permission to view this page."
+      title={t("errors.accessDenied")}
+      message={t("errors.noPermission")}
       showHomeButton
     />
-  ),
+    );
+  },
 
   /**
    * 403 Forbidden
    */
-  Forbidden: () => (
+  Forbidden: () => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       icon="🚫"
-      title="Access Forbidden"
-      message="You don't have permission to perform this action."
+      title={t("errors.accessForbidden")}
+      message={t("errors.noPermissionAction")}
       showHomeButton
     />
-  ),
+    );
+  },
 
   /**
    * Session Expired
    */
-  SessionExpired: () => (
+  SessionExpired: () => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       icon="🔒"
-      title="Session Expired"
-      message="Your session has expired for security. Please log in again."
+      title={t("errors.sessionExpired")}
+      message={t("errors.sessionExpiredMessage")}
       showHomeButton={false}
     >
       <Link to="/auth/login">
         <UnifiedButton variant="primary" className="mt-6">
-          Log In
+          {t("nav.login")}
         </UnifiedButton>
       </Link>
     </ErrorState>
-  ),
+    );
+  },
 
   /**
    * Network Error
    */
-  NetworkError: ({ onRetry }: { onRetry?: () => void } = {}) => (
+  NetworkError: ({ onRetry }: { onRetry?: () => void } = {}) => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       icon="📡"
-      title="Connection Error"
-      message="Please check your internet connection and try again."
+      title={t("errors.connectionError")}
+      message={t("errors.checkConnection")}
       onRetry={onRetry}
     />
-  ),
+    );
+  },
 
   /**
    * Listing Not Available
    */
-  ListingNotAvailable: () => (
+  ListingNotAvailable: () => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       icon="ℹ️"
-      title="Listing no longer available"
-      message="The owner may have removed or paused this listing."
+      title={t("errors.listingNotAvailable")}
+      message={t("errors.listingRemovedOrPaused")}
       showHomeButton={false}
     >
       <Link to="/search">
         <UnifiedButton variant="primary" className="mt-6">
-          Browse Similar Listings
+          {t("errors.browseSimilar")}
         </UnifiedButton>
       </Link>
     </ErrorState>
-  ),
+    );
+  },
 
   /**
    * Payment Failed
    */
-  PaymentFailed: ({ onRetry }: { onRetry?: () => void } = {}) => (
+  PaymentFailed: ({ onRetry }: { onRetry?: () => void } = {}) => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       icon="❌"
-      title="Payment Failed"
-      message="Your card was declined. Please try another payment method or contact your bank."
+      title={t("errors.paymentFailed")}
+      message={t("errors.cardDeclined")}
       onRetry={onRetry}
     />
-  ),
+    );
+  },
 
   /**
    * Dates Unavailable
    */
-  DatesUnavailable: () => (
+  DatesUnavailable: () => {
+    const { t } = useTranslation();
+    return (
     <ErrorState
       icon="⚠️"
-      title="These dates are no longer available"
-      message="Someone just booked for these dates."
+      title={t("errors.datesUnavailable")}
+      message={t("errors.datesJustBooked")}
       showHomeButton={false}
     />
-  ),
+    );
+  },
 };
 
 // Extend ErrorState to accept children
@@ -306,6 +335,7 @@ export { ErrorStateWithChildren };
 export function RouteErrorBoundary() {
   const error = useRouteError();
   const revalidator = useRevalidator();
+  const { t } = useTranslation();
 
   if (isRouteErrorResponse(error)) {
     return (
@@ -314,18 +344,18 @@ export function RouteErrorBoundary() {
           code={error.status}
           title={
             error.status === 404
-              ? "Page not found"
+              ? t("errors.pageNotFound")
               : error.status === 401
-                ? "Unauthorized"
+                ? t("errors.unauthorized")
                 : error.status === 403
-                  ? "Access Forbidden"
-                  : "Something went wrong"
+                  ? t("errors.accessForbidden")
+                  : t("errors.somethingWentWrong")
           }
           message={
             error.statusText ||
             (error.status === 404
-              ? "The page you're looking for doesn't exist."
-              : "An error occurred while loading this page.")
+              ? t("errors.pageNotFoundDesc")
+              : t("errors.anErrorOccurred"))
           }
         />
       </div>
@@ -340,7 +370,7 @@ export function RouteErrorBoundary() {
     <div className="flex min-h-[50vh] items-center justify-center">
       <ErrorState
         icon="⚠️"
-        title="Something went wrong"
+        title={t("errors.somethingWentWrong")}
         message={errorMessage}
         onRetry={() => revalidator.revalidate()}
         error={errorInstance}

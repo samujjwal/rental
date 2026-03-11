@@ -14,15 +14,14 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { NotificationsService, NotificationPreferences } from '../services/notifications.service';
 import { PushNotificationService } from '../services/push-notification.service';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@/modules/auth/guards/roles.guard';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
 import { NotificationType, UserRole } from '@rental-portal/database';
 import {
   RegisterDeviceDto,
   UnregisterDeviceDto,
 } from '../dto/notification.dto';
+import { UpdateNotificationPreferencesDto } from '../dto/notification-preferences.dto';
+import { CreateNotificationDto } from '../dto/create-notification.dto';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
@@ -88,9 +87,9 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Update notification preferences' })
   async updatePreferences(
     @CurrentUser('id') userId: string,
-    @Body() preferences: Partial<NotificationPreferences>,
+    @Body() dto: UpdateNotificationPreferencesDto,
   ) {
-    await this.notificationsService.updatePreferences(userId, preferences);
+    await this.notificationsService.updatePreferences(userId, dto);
     return this.notificationsService.getPreferences(userId);
   }
 
@@ -110,7 +109,10 @@ export class NotificationsController {
   @Post('devices/unregister')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Unregister device from push notifications' })
-  async unregisterDevice(@Body() dto: UnregisterDeviceDto) {
+  async unregisterDevice(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UnregisterDeviceDto,
+  ) {
     await this.pushService.unregisterDeviceToken(dto.token);
     return { success: true };
   }
@@ -122,22 +124,15 @@ export class NotificationsController {
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create notification (admin only)' })
   async createNotification(
-    @Body() data: {
-      userId: string;
-      type: string;
-      title: string;
-      message: string;
-      channels?: ('EMAIL' | 'SMS' | 'PUSH' | 'IN_APP')[];
-      priority?: 'LOW' | 'NORMAL' | 'HIGH';
-    },
+    @Body() dto: CreateNotificationDto,
   ) {
     return this.notificationsService.sendNotification({
-      userId: data.userId,
-      type: data.type as NotificationType,
-      title: data.title,
-      message: data.message,
-      channels: data.channels,
-      priority: data.priority,
+      userId: dto.userId,
+      type: dto.type,
+      title: dto.title,
+      message: dto.message,
+      channels: dto.channels,
+      priority: dto.priority,
     });
   }
 }

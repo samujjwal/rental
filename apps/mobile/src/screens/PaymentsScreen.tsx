@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, FlatList } from "react-native";
+import { useFocusEffect } from '@react-navigation/native';
 import { mobileClient } from "../api/client";
-import type { PaymentBalance, PaymentTransaction } from "@rental-portal/mobile-sdk";
+import type { PaymentBalance, PaymentTransaction } from '~/types';
+import { formatCurrency } from '../utils/currency';
 
 export function PaymentsScreen() {
   const [balance, setBalance] = useState<PaymentBalance | null>(null);
@@ -9,23 +11,25 @@ export function PaymentsScreen() {
   const [earnings, setEarnings] = useState<{ amount: number; currency: string } | null>(null);
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [balanceData, transactionData, earningsData] = await Promise.all([
-          mobileClient.getPaymentBalance(),
-          mobileClient.getPaymentTransactions(),
-          mobileClient.getPaymentEarnings(),
-        ]);
-        setBalance(balanceData);
-        setTransactions(transactionData.transactions || []);
-        setEarnings(earningsData);
-      } catch (err) {
-        setStatus("Unable to load payment data.");
-      }
-    };
-    load();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        try {
+          const [balanceData, transactionData, earningsData] = await Promise.all([
+            mobileClient.getPaymentBalance(),
+            mobileClient.getPaymentTransactions(),
+            mobileClient.getPaymentEarnings(),
+          ]);
+          setBalance(balanceData);
+          setTransactions(transactionData.transactions || []);
+          setEarnings(earningsData);
+        } catch (err) {
+          setStatus("Unable to load payment data.");
+        }
+      };
+      load();
+    }, [])
+  );
 
   return (
     <View style={styles.container}>
@@ -34,7 +38,7 @@ export function PaymentsScreen() {
         <View style={styles.card}>
           <Text style={styles.label}>Total Balance</Text>
           <Text style={styles.value}>
-            {balance.currency} {balance.balance}
+            {formatCurrency(balance.balance, balance.currency)}
           </Text>
         </View>
       ) : null}
@@ -42,7 +46,7 @@ export function PaymentsScreen() {
         <View style={styles.card}>
           <Text style={styles.label}>Available for payout</Text>
           <Text style={styles.value}>
-            {earnings.currency} {earnings.amount}
+            {formatCurrency(earnings.amount, earnings.currency)}
           </Text>
         </View>
       ) : null}
@@ -55,7 +59,7 @@ export function PaymentsScreen() {
           <View style={styles.card}>
             <Text style={styles.title}>{item.type}</Text>
             <Text style={styles.subtitle}>
-              {item.currency} {item.amount} · {item.status}
+              {formatCurrency(item.amount, item.currency)} · {item.status}
             </Text>
           </View>
         )}

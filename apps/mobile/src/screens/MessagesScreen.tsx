@@ -1,35 +1,77 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import { CompositeScreenProps, useFocusEffect } from "@react-navigation/native";
 import type { RootStackParamList } from "../../App";
+import type { TabParamList } from "../navigation/TabNavigator";
 import { useAuth } from "../api/authContext";
 import { mobileClient } from "../api/client";
-import type { ConversationSummary } from "@rental-portal/mobile-sdk";
+import { connectSocket, onNewMessage } from "../api/socket";
+import type { ConversationSummary } from '~/types';
+import { formatDate } from '../utils/date';
 
 
-type Props = NativeStackScreenProps<RootStackParamList, "Messages">;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, 'MessagesTab'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 export function MessagesScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const isMounted = React.useRef(true);
 
-  useEffect(() => {
-    const fetchConversations = async () => {
-      if (!user) return;
-      setLoading(true);
-      try {
-        const response = await mobileClient.getConversations();
-        setConversations(response.items || []);
-      } catch (error) {
-        setConversations([]);
-      } finally {
+  React.useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const fetchConversations = useCallback(async () => {
+    if (!user || !isMounted.current) return;
+    setLoading(true);
+    try {
+      const response = await mobileClient.getConversations();
+      if (!isMounted.current) return;
+      setConversations(response.items || []);
+    } catch (error) {
+      if (!isMounted.current) return;
+      setConversations([]);
+    } finally {
+      if (isMounted.current) {
         setLoading(false);
       }
+    }
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchConversations();
+    }, [fetchConversations])
+  );
+
+  // Real-time: refresh conversation list when a new message arrives via WebSocket
+  useEffect(() => {
+    if (!user) return;
+    let cleanupNewMessage: (() => void) | undefined;
+
+    const setupSocket = async () => {
+      const socket = await connectSocket();
+      if (!socket) return;
+      cleanupNewMessage = onNewMessage(() => {
+        // Re-fetch conversation list to update last message and ordering
+        fetchConversations();
+      });
     };
 
-    fetchConversations();
-  }, [user]);
+    setupSocket();
+
+    return () => {
+      cleanupNewMessage?.();
+    };
+  }, [user, fetchConversations]);
 
   if (!user) {
     return (
@@ -38,6 +80,8 @@ export function MessagesScreen({ navigation }: Props) {
         <Text style={styles.message}>Sign in to view your messages.</Text>
         <Pressable
           style={styles.primaryButton}
+          accessibilityLabel="Sign In"
+          accessibilityRole="button"
           onPress={() => navigation.navigate("Login")}
         >
           <Text style={styles.primaryButtonText}>Sign In</Text>
@@ -58,6 +102,9 @@ export function MessagesScreen({ navigation }: Props) {
           renderItem={({ item }) => (
             <Pressable
               style={styles.card}
+              accessibilityLabel={`Conversation with ${item.participants?.find((p) => p.id !== user?.id)?.name || "unknown"}`}
+              accessibilityHint="Opens the message thread"
+              accessibilityRole="button"
               onPress={() => navigation.navigate("MessageThread", { conversationId: item.id })}
             >
               <Text style={styles.title}>
@@ -65,7 +112,7 @@ export function MessagesScreen({ navigation }: Props) {
               </Text>
               <Text style={styles.subtitle}>{item.lastMessage || "No messages yet"}</Text>
               {item.updatedAt && (
-                <Text style={styles.meta}>Updated: {item.updatedAt}</Text>
+                <Text style={styles.meta}>Updated: {formatDate(item.updatedAt)}</Text>
               )}
             </Pressable>
           )}

@@ -8,6 +8,8 @@ import React, {
 import { UnifiedButton } from "~/components/ui";
 import { AlertTriangle, RefreshCw, Home, Bug } from "lucide-react";
 import { requestNavigation, requestRevalidate } from "~/lib/navigation";
+import { APP_LOCALE } from "~/config/locale";
+import i18next from "i18next";
 
 // ============================================================================
 // Error Types
@@ -250,20 +252,20 @@ export class ErrorBoundary extends Component<
             </div>
 
             <h1 className="text-xl font-semibold text-gray-900 mb-2">
-              Something went wrong
+              {i18next.t("errors.somethingWentWrong")}
             </h1>
 
             <p className="text-gray-600 mb-6">
               {error.recoverable
-                ? "We encountered an error that can be recovered from. Please try again."
-                : "We encountered an unexpected error. Please refresh the page or contact support if the problem persists."}
+                ? i18next.t("errors.recoverableMessage")
+                : i18next.t("errors.unexpectedMessage")}
             </p>
 
             {import.meta.env.MODE === "development" &&
               this.props.showErrorDetails && (
                 <details className="mb-6">
                   <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
-                    Error Details
+                    {i18next.t("errors.errorDetails")}
                   </summary>
                   <div className="mt-2 p-3 bg-gray-100 rounded text-xs font-mono overflow-auto max-h-40">
                     <div className="mb-2">
@@ -309,8 +311,8 @@ export class ErrorBoundary extends Component<
                   variant="primary"
                 >
                   {this.state.retryCount > 0
-                    ? `Retry (${this.state.retryCount}/${this.props.maxRetries || 3})`
-                    : "Retry"}
+                    ? i18next.t("errors.retryCount", { current: this.state.retryCount, max: this.props.maxRetries || 3 })
+                    : i18next.t("common.retry")}
                 </UnifiedButton>
               )}
 
@@ -319,26 +321,26 @@ export class ErrorBoundary extends Component<
                 onClick={this.handleGoHome}
                 leftIcon={<Home className="w-4 h-4" />}
               >
-                Go Home
+                {i18next.t("errors.goHome")}
               </UnifiedButton>
 
               {import.meta.env.MODE === "development" && (
                 <UnifiedButton
                   variant="ghost"
                   onClick={() => {
-                    console.log("Error details:", error);
-                    console.log("Error info:", this.state.errorInfo);
+                    console.error("Error details:", error);
+                    console.error("Error info:", this.state.errorInfo);
                   }}
                   leftIcon={<Bug className="w-4 h-4" />}
                 >
-                  Debug
+                  {i18next.t("errors.debug")}
                 </UnifiedButton>
               )}
             </div>
 
             {error.context?.component && (
               <p className="text-xs text-gray-500 mt-4 text-center">
-                Error occurred in: {error.context.component}
+                {i18next.t("errors.errorOccurredIn", { component: error.context.component })}
               </p>
             )}
           </div>
@@ -505,6 +507,8 @@ interface ErrorReportingConfig {
 class ErrorReportingService {
   private config: ErrorReportingConfig = {};
   private initialized = false;
+  private boundHandleGlobalError: ((event: ErrorEvent) => void) | null = null;
+  private boundHandleUnhandledRejection: ((event: PromiseRejectionEvent) => void) | null = null;
 
   init(config: ErrorReportingConfig) {
     this.config = { ...this.config, ...config };
@@ -512,12 +516,28 @@ class ErrorReportingService {
 
     // Set up global error handlers
     if (typeof window !== "undefined") {
-      window.addEventListener("error", this.handleGlobalError.bind(this));
+      this.boundHandleGlobalError = this.handleGlobalError.bind(this);
+      this.boundHandleUnhandledRejection = this.handleUnhandledRejection.bind(this);
+      window.addEventListener("error", this.boundHandleGlobalError);
       window.addEventListener(
         "unhandledrejection",
-        this.handleUnhandledRejection.bind(this)
+        this.boundHandleUnhandledRejection
       );
     }
+  }
+
+  destroy() {
+    if (typeof window !== "undefined") {
+      if (this.boundHandleGlobalError) {
+        window.removeEventListener("error", this.boundHandleGlobalError);
+        this.boundHandleGlobalError = null;
+      }
+      if (this.boundHandleUnhandledRejection) {
+        window.removeEventListener("unhandledrejection", this.boundHandleUnhandledRejection);
+        this.boundHandleUnhandledRejection = null;
+      }
+    }
+    this.initialized = false;
   }
 
   private handleGlobalError = (event: ErrorEvent) => {
@@ -561,17 +581,18 @@ class ErrorReportingService {
 
   captureException(error: AppError | Error, context?: unknown) {
     if (!this.initialized) {
-      console.warn("ErrorReporting not initialized");
+      // Only warn in development
+      if (import.meta.env.MODE === "development") {
+        console.warn("ErrorReporting not initialized");
+      }
       return;
     }
 
     // In a real implementation, this would send to Sentry, Bugsnag, etc.
-    if (import.meta.env.MODE === "production") {
-      // Send to error reporting service
-      console.log("Error captured:", error, context);
-    } else {
+    if (import.meta.env.MODE === "development") {
       console.error("Error captured:", error, context);
     }
+    // In production: silently send to error tracking service — no console output
   }
 
   captureMessage(
@@ -684,7 +705,7 @@ export function DevErrorOverlay() {
             <div className="font-medium">{error.name}</div>
             <div className="text-gray-300">{error.message}</div>
             <div className="text-gray-400">
-              {error.timestamp.toLocaleTimeString()} - {error.severity}
+              {error.timestamp.toLocaleTimeString(APP_LOCALE)} - {error.severity}
             </div>
           </div>
         ))}

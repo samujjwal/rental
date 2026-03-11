@@ -1,5 +1,6 @@
 import type { MetaFunction } from "react-router";
 import { redirect } from "react-router";
+import { useTranslation } from "react-i18next";
 import { getUser } from "~/utils/auth";
 import { RouteErrorBoundary } from "~/components/ui";
 
@@ -23,12 +24,13 @@ export async function clientLoader({ request }: { request: Request }) {
 }
 
 export default function EarningsPage() {
+  const { t } = useTranslation();
   // This page always redirects; fallback in case loader doesn't fire
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="text-center">
-        <h1 className="text-2xl font-bold mb-2">Redirecting...</h1>
-        <p className="text-muted-foreground">Taking you to your earnings dashboard.</p>
+        <h1 className="text-2xl font-bold mb-2">{t("earnings.redirecting")}</h1>
+        <p className="text-muted-foreground">{t("earnings.redirectingDesc")}</p>
       </div>
     </div>
   );

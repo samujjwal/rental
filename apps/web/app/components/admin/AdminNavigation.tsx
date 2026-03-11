@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router";
+import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard,
   Users,
@@ -15,10 +16,11 @@ import {
   Mail,
   TrendingUp,
   Package,
-  DollarSign,
+  Banknote,
   Zap,
   Star,
   Heart,
+  CheckSquare,
 } from "lucide-react";
 
 interface MenuItem {
@@ -34,83 +36,84 @@ interface MenuCategory {
 
 const menuItems: MenuCategory[] = [
   {
-    category: "Main",
+    category: "admin.nav.main",
     items: [
-      { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-      { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+      { name: "admin.nav.dashboard", href: "/admin", icon: LayoutDashboard },
+      { name: "admin.nav.analytics", href: "/admin/analytics", icon: BarChart3 },
     ],
   },
   {
-    category: "User Management",
+    category: "admin.nav.userManagement",
     items: [
-      { name: "Users", href: "/admin/entities/users", icon: Users },
+      { name: "admin.nav.users", href: "/admin/entities/users", icon: Users },
       {
-        name: "Organizations",
+        name: "admin.nav.organizations",
         href: "/admin/entities/organizations",
         icon: Building,
       },
     ],
   },
   {
-    category: "Content Management",
+    category: "admin.nav.contentManagement",
     items: [
-      { name: "Listings", href: "/admin/entities/listings", icon: Home },
-      { name: "Categories", href: "/admin/entities/categories", icon: Package },
-      { name: "Reviews", href: "/admin/entities/reviews", icon: Star },
+      { name: "admin.nav.listings", href: "/admin/entities/listings", icon: Home },
+      { name: "admin.nav.listingApprovals", href: "/admin/listings", icon: CheckSquare },
+      { name: "admin.nav.categories", href: "/admin/entities/categories", icon: Package },
+      { name: "admin.nav.reviews", href: "/admin/entities/reviews", icon: Star },
       {
-        name: "Messages",
+        name: "admin.nav.messages",
         href: "/admin/entities/messages",
         icon: MessageSquare,
       },
-      { name: "Favorites", href: "/admin/entities/favorites", icon: Heart },
+      { name: "admin.nav.favorites", href: "/admin/entities/favorites", icon: Heart },
     ],
   },
   {
-    category: "Bookings & Payments",
+    category: "admin.nav.bookingsPayments",
     items: [
-      { name: "Bookings", href: "/admin/entities/bookings", icon: Calendar },
-      { name: "Payments", href: "/admin/entities/payments", icon: CreditCard },
-      { name: "Refunds", href: "/admin/entities/refunds", icon: DollarSign },
-      { name: "Payouts", href: "/admin/entities/payouts", icon: TrendingUp },
+      { name: "admin.nav.bookings", href: "/admin/entities/bookings", icon: Calendar },
+      { name: "admin.nav.payments", href: "/admin/entities/payments", icon: CreditCard },
+      { name: "admin.nav.refunds", href: "/admin/entities/refunds", icon: Banknote },
+      { name: "admin.nav.payouts", href: "/admin/entities/payouts", icon: TrendingUp },
     ],
   },
   {
-    category: "Disputes & Moderation",
+    category: "admin.nav.disputesModeration",
     items: [
       {
-        name: "Disputes",
+        name: "admin.nav.disputes",
         href: "/admin/entities/disputes",
         icon: AlertTriangle,
       },
     ],
   },
   {
-    category: "Insurance",
+    category: "admin.nav.insurance",
     items: [
       {
-        name: "Insurance Policies",
+        name: "admin.nav.insurancePolicies",
         href: "/admin/entities/insurance",
         icon: Shield,
       },
-      { name: "Claims", href: "/admin/entities/claims", icon: FileText },
+      { name: "admin.nav.claims", href: "/admin/entities/claims", icon: FileText },
     ],
   },
   {
-    category: "Notifications",
+    category: "admin.nav.notifications",
     items: [
       {
-        name: "Notifications",
+        name: "admin.nav.notificationsItem",
         href: "/admin/entities/notifications",
         icon: Mail,
       },
     ],
   },
   {
-    category: "System",
+    category: "admin.nav.system",
     items: [
-      { name: "System Settings", href: "/admin/system", icon: Settings },
+      { name: "admin.nav.systemSettings", href: "/admin/system", icon: Settings },
       {
-        name: "Power Operations",
+        name: "admin.nav.powerOperations",
         href: "/admin/system/power-operations",
         icon: Zap,
       },
@@ -120,6 +123,7 @@ const menuItems: MenuCategory[] = [
 
 export function AdminNavigation() {
   const location = useLocation();
+  const { t } = useTranslation();
 
   return (
     <aside
@@ -128,19 +132,20 @@ export function AdminNavigation() {
       className="w-64 bg-white shadow-sm border-r h-screen overflow-y-auto flex flex-col"
     >
       <div className="p-4 border-b">
-        <h2 className="text-lg font-semibold text-gray-900">Admin Panel</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{t("admin.panel")}</h2>
       </div>
       <nav className="p-4 space-y-6 flex-1" aria-label="Main admin menu">
         {menuItems.map((category) => (
           <div key={category.category}>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              {category.category}
+              {t(category.category)}
             </h3>
             <ul className="space-y-1">
               {category.items.map((item) => {
                 const isActive =
                   location.pathname === item.href ||
-                  location.pathname.startsWith(item.href + "/");
+                  (item.href !== "/admin" &&
+                    location.pathname.startsWith(item.href + "/"));
                 const Icon = item.icon;
 
                 return (
@@ -154,7 +159,7 @@ export function AdminNavigation() {
                       }`}
                     >
                       <Icon className="w-4 h-4" />
-                      <span>{item.name}</span>
+                      <span>{t(item.name)}</span>
                     </Link>
                   </li>
                 );
@@ -164,7 +169,7 @@ export function AdminNavigation() {
         ))}
       </nav>
       <div className="p-4 border-t">
-        <p className="text-xs text-gray-500 text-center">Rental Portal Admin</p>
+        <p className="text-xs text-gray-500 text-center">{t("admin.footer")}</p>
       </div>
     </aside>
   );

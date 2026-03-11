@@ -73,13 +73,30 @@ export class BookingProcessor {
 
       // Check if expired
       if (new Date() >= expiresAt) {
-        await this.prisma.booking.update({
-          where: { id: bookingId },
-          data: {
-            status: BookingStatus.CANCELLED,
-            cancelledAt: new Date(),
-            cancellationReason: 'Expired - Payment not received within time limit',
-          },
+        await this.prisma.$transaction(async (tx: any) => {
+          const updated = await tx.booking.updateMany({
+            where: {
+              id: bookingId,
+              status: { in: ['PENDING_OWNER_APPROVAL', 'PENDING_PAYMENT'] },
+            },
+            data: {
+              status: BookingStatus.CANCELLED,
+              cancelledAt: new Date(),
+              cancellationReason: 'Expired - Payment not received within time limit',
+            },
+          });
+
+          if (updated.count > 0) {
+            await tx.bookingStateHistory.create({
+              data: {
+                bookingId,
+                fromStatus: booking.status as BookingStatus,
+                toStatus: BookingStatus.CANCELLED,
+                changedBy: 'SYSTEM',
+                metadata: JSON.stringify({ source: 'expiration_processor', expiresAt: expiresAt.toISOString() }),
+              },
+            });
+          }
         });
 
         // Notify renter
@@ -183,18 +200,33 @@ export class BookingProcessor {
         const hasSevereDamage = damages?.damages?.some?.((d: any) => d.severity === 'SEVERE');
 
         if (!hasSevereDamage) {
-          await this.prisma.booking.update({
-            where: { id: bookingId },
-            data: {
-              status: BookingStatus.COMPLETED,
-              completedAt: new Date(),
-            },
+          await this.prisma.$transaction(async (tx: any) => {
+            const updated = await tx.booking.updateMany({
+              where: {
+                id: bookingId,
+                status: BookingStatus.AWAITING_RETURN_INSPECTION,
+              },
+              data: {
+                status: BookingStatus.COMPLETED,
+                completedAt: new Date(),
+              },
+            });
+
+            if (updated.count > 0) {
+              await tx.bookingStateHistory.create({
+                data: {
+                  bookingId,
+                  fromStatus: BookingStatus.AWAITING_RETURN_INSPECTION,
+                  toStatus: BookingStatus.COMPLETED,
+                  changedBy: 'SYSTEM',
+                  metadata: JSON.stringify({ source: 'auto_complete_processor', returnReportId: returnReport.id }),
+                },
+              });
+            }
           });
 
-          // Queue payment release
-          await job.queue.add('release-payment', { bookingId }, { delay: 1000 });
-
-          this.logger.log(`Auto-completed booking ${bookingId}`);
+          // Settlement will be handled by the auto-settlement cron after 48-hour dispute window
+          this.logger.log(`Auto-completed booking ${bookingId}, awaiting settlement after dispute window`);
         }
       }
     } catch (error) {
@@ -211,17 +243,97 @@ export class BookingProcessor {
     const { bookingId, status, reason } = job.data;
 
     try {
-      await this.prisma.booking.update({
-        where: { id: bookingId },
-        data: {
-          status,
-          ...(reason && { cancellationReason: reason }),
-        },
+      await this.prisma.$transaction(async (tx: any) => {
+        const currentBooking = await tx.booking.findUnique({
+          where: { id: bookingId },
+          select: { status: true },
+        });
+
+        if (!currentBooking) {
+          this.logger.warn(`Booking ${bookingId} not found for status update`);
+          return;
+        }
+
+        await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            status,
+            ...(reason && { cancellationReason: reason }),
+          },
+        });
+
+        await tx.bookingStateHistory.create({
+          data: {
+            bookingId,
+            fromStatus: currentBooking.status as BookingStatus,
+            toStatus: status,
+            changedBy: 'SYSTEM',
+            metadata: JSON.stringify({ source: 'status_update_processor', reason }),
+          },
+        });
       });
 
       this.logger.log(`Updated booking ${bookingId} to status ${status}`);
     } catch (error) {
       this.logger.error(`Error updating booking status: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel a PAYMENT_FAILED booking after the 24-hour grace period expires.
+   * Enqueued by BookingStateMachineService when a booking enters PAYMENT_FAILED state.
+   */
+  @Process('expire-payment-failed')
+  async handlePaymentFailedExpiry(job: Job<{ bookingId: string }>) {
+    const { bookingId } = job.data;
+
+    try {
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { listing: true, renter: true },
+      });
+
+      if (!booking || booking.status !== BookingStatus.PAYMENT_FAILED) {
+        this.logger.log(
+          `Booking ${bookingId} is no longer PAYMENT_FAILED (status: ${booking?.status}), skipping cancellation`,
+        );
+        return;
+      }
+
+      await this.prisma.$transaction(async (tx: any) => {
+        await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: BookingStatus.CANCELLED,
+            cancelledAt: new Date(),
+            cancellationReason: 'Payment grace period expired',
+          },
+        });
+
+        await tx.bookingStateHistory.create({
+          data: {
+            bookingId,
+            fromStatus: BookingStatus.PAYMENT_FAILED,
+            toStatus: BookingStatus.CANCELLED,
+            changedBy: 'SYSTEM',
+            metadata: JSON.stringify({ source: 'expire_payment_failed_processor' }),
+          },
+        });
+      });
+
+      await this.notificationsService.sendNotification({
+        userId: booking.renterId,
+        type: NotificationType.BOOKING_CANCELLED,
+        title: 'Booking Cancelled',
+        message: `Your booking for "${booking.listing.title}" was cancelled after the payment retry window expired.`,
+        data: { bookingId },
+        channels: ['EMAIL', 'IN_APP'],
+      });
+
+      this.logger.log(`Booking ${bookingId} cancelled after PAYMENT_FAILED grace period`);
+    } catch (error) {
+      this.logger.error(`Error expiring PAYMENT_FAILED booking ${bookingId}: ${error.message}`);
       throw error;
     }
   }

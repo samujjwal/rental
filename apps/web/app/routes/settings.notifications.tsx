@@ -1,6 +1,8 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData, redirect } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Form, Link, useActionData, useLoaderData, redirect } from "react-router";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { User, Bell, Shield, CreditCard } from "lucide-react";
 import { notificationsApi, type NotificationPreferences } from "~/lib/api/notifications";
 import { getUser } from "~/utils/auth";
 import { RouteErrorBoundary } from "~/components/ui";
@@ -27,7 +29,6 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     const preferences = await notificationsApi.getPreferences();
     return { preferences, error: null };
   } catch (error: unknown) {
-    console.error("Failed to fetch notification preferences:", error);
     // Return default preferences if API fails
     return {
       preferences: DEFAULT_PREFS,
@@ -107,7 +108,15 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   }
 }
 
+export const meta: MetaFunction = () => {
+  return [
+    { title: "Notification Settings | GharBatai Rentals" },
+    { name: "description", content: "Manage your email and push notification preferences" },
+  ];
+};
+
 export default function NotificationSettings() {
+  const { t } = useTranslation();
   const { preferences: initialPreferences, error: loadError } =
     useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
@@ -122,10 +131,10 @@ export default function NotificationSettings() {
     label: string;
     description: string;
   }> = [
-    { key: "email", label: "Email", description: "Send updates to your inbox" },
-    { key: "push", label: "Push", description: "Real-time alerts on your device" },
-    { key: "sms", label: "SMS", description: "Text messages for urgent updates" },
-    { key: "inApp", label: "In-App", description: "In-app activity notifications" },
+    { key: "email", label: t("settings.notificationSettings.email"), description: t("settings.notificationSettings.emailDesc") },
+    { key: "push", label: t("settings.notificationSettings.push"), description: t("settings.notificationSettings.pushDesc") },
+    { key: "sms", label: t("settings.notificationSettings.sms"), description: t("settings.notificationSettings.smsDesc") },
+    { key: "inApp", label: t("settings.notificationSettings.inApp"), description: t("settings.notificationSettings.inAppDesc") },
   ];
 
   const typePrefs: Array<{
@@ -135,28 +144,28 @@ export default function NotificationSettings() {
   }> = [
     {
       key: "bookingUpdates",
-      label: "Booking Updates",
-      description: "Booking requests, confirmations, and changes",
+      label: t("settings.notificationSettings.bookingUpdates"),
+      description: t("settings.notificationSettings.bookingUpdatesDesc"),
     },
     {
       key: "paymentUpdates",
-      label: "Payment Updates",
-      description: "Payments sent, received, and payouts",
+      label: t("settings.notificationSettings.paymentUpdates"),
+      description: t("settings.notificationSettings.paymentUpdatesDesc"),
     },
     {
       key: "messageAlerts",
-      label: "Messages",
-      description: "New messages from other users",
+      label: t("settings.notificationSettings.messages"),
+      description: t("settings.notificationSettings.messagesDesc"),
     },
     {
       key: "reviewAlerts",
-      label: "Reviews",
-      description: "New reviews and rating updates",
+      label: t("settings.notificationSettings.reviews"),
+      description: t("settings.notificationSettings.reviewsDesc"),
     },
     {
       key: "marketingEmails",
-      label: "Marketing",
-      description: "Promotions and product updates",
+      label: t("settings.notificationSettings.marketing"),
+      description: t("settings.notificationSettings.marketingDesc"),
     },
   ];
 
@@ -171,17 +180,51 @@ export default function NotificationSettings() {
   };
 
   return (
-    <div className="min-h-screen bg-background py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-card shadow rounded-lg">
+    <div className="min-h-screen bg-background">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Sidebar Navigation */}
+          <aside className="md:col-span-1">
+            <nav className="bg-card rounded-lg border p-2 space-y-1">
+              <Link
+                to="/settings/profile"
+                className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors"
+              >
+                <User className="w-5 h-5" />
+                {t("settings.profile", "Profile")}
+              </Link>
+              <Link
+                to="/settings/notifications"
+                className="w-full flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-lg font-medium"
+              >
+                <Bell className="w-5 h-5" />
+                {t("settings.notifications", "Notifications")}
+              </Link>
+              <Link
+                to="/settings/security"
+                className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors"
+              >
+                <Shield className="w-5 h-5" />
+                {t("settings.security", "Security")}
+              </Link>
+              <Link
+                to="/settings/billing"
+                className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors"
+              >
+                <CreditCard className="w-5 h-5" />
+                {t("settings.billing", "Billing")}
+              </Link>
+            </nav>
+          </aside>
+          <div className="md:col-span-3">
+            <div className="bg-card shadow rounded-lg">
           {/* Header */}
           <div className="px-6 py-5 border-b border-border">
             <h1 className="text-2xl font-bold text-foreground">
-              Notification Preferences
+              {t("settings.notificationSettings.title")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Choose how you want to receive notifications for different
-              activities
+              {t("settings.notificationSettings.description")}
             </p>
           </div>
 
@@ -203,7 +246,7 @@ export default function NotificationSettings() {
           <div className="px-6 py-6 space-y-6">
             <div>
               <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-                Channels
+                {t("settings.notificationSettings.channels")}
               </h2>
               <div className="mt-4 grid grid-cols-1 gap-4">
                 {channelPrefs.map((pref) => (
@@ -234,7 +277,7 @@ export default function NotificationSettings() {
 
             <div>
               <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-                Activity Types
+                {t("settings.notificationSettings.activityTypes")}
               </h2>
               <div className="mt-4 grid grid-cols-1 gap-4">
                 {typePrefs.map((pref) => (
@@ -279,7 +322,7 @@ export default function NotificationSettings() {
                   }}
                   className="text-primary hover:text-primary/80"
                 >
-                  Enable All
+                  {t("settings.notificationSettings.enableAll")}
                 </button>
                 <button
                   type="button"
@@ -292,7 +335,7 @@ export default function NotificationSettings() {
                   }}
                   className="text-primary hover:text-primary/80"
                 >
-                  Disable All
+                  {t("settings.notificationSettings.disableAll")}
                 </button>
               </div>
 
@@ -307,7 +350,7 @@ export default function NotificationSettings() {
                   type="submit"
                   className="px-6 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
                 >
-                  Save Preferences
+                  {t("settings.notificationSettings.savePreferences")}
                 </button>
               </Form>
             </div>
@@ -331,14 +374,14 @@ export default function NotificationSettings() {
               </div>
               <div className="ml-3 text-sm text-primary/80">
                 <p>
-                  <strong>Note:</strong> Some notifications (like critical
-                  security alerts) cannot be disabled for your account safety.
+                  <strong>{t("settings.notificationSettings.note")}</strong> {t("settings.notificationSettings.securityNote")}
                 </p>
                 <p className="mt-1">
-                  SMS notifications may incur standard message rates from your
-                  carrier.
+                  {t("settings.notificationSettings.smsNote")}
                 </p>
               </div>
+            </div>
+          </div>
             </div>
           </div>
         </div>

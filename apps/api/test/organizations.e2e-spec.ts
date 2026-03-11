@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { OrganizationRole, OrganizationStatus, UserRole } from '@rental-portal/database';
-import { cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
 
 describe('Organizations (e2e)', () => {
   let app: INestApplication;
@@ -19,10 +19,10 @@ describe('Organizations (e2e)', () => {
   let outsiderToken: string;
   let outsiderUserId: string;
 
-  const ownerEmail = 'org-owner@test.com';
-  const memberEmail = 'org-member@test.com';
-  const adminMemberEmail = 'org-admin-member@test.com';
-  const outsiderEmail = 'org-outsider@test.com';
+  const ownerEmail = buildTestEmail('org-owner');
+  const memberEmail = buildTestEmail('org-member');
+  const adminMemberEmail = buildTestEmail('org-admin-member');
+  const outsiderEmail = buildTestEmail('org-outsider');
 
   const createOrganizationPayload = () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;

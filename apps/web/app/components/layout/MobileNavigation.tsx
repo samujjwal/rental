@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { cn } from "~/lib/utils";
 import {
   Menu,
@@ -55,22 +56,22 @@ interface MobileNavigationProps {
 }
 
 const publicNavItems: MobileNavItem[] = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/search", label: "Browse", icon: Search },
+  { href: "/", label: "nav.home", icon: Home },
+  { href: "/search", label: "nav.browse", icon: Search },
 ];
 
 const renterNavItems: MobileNavItem[] = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/search", label: "Browse", icon: Search },
-  { href: "/bookings", label: "My Bookings", icon: Calendar },
-  { href: "/favorites", label: "Favorites", icon: Heart },
+  { href: "/", label: "nav.home", icon: Home },
+  { href: "/search", label: "nav.browse", icon: Search },
+  { href: "/bookings", label: "nav.myBookings", icon: Calendar },
+  { href: "/favorites", label: "nav.favorites", icon: Heart },
 ];
 
 const ownerNavItems: MobileNavItem[] = [
-  { href: "/dashboard/owner", label: "Dashboard", icon: Home },
-  { href: "/listings", label: "Listings", icon: Search },
-  { href: "/bookings?view=owner", label: "Bookings", icon: Calendar },
-  { href: "/dashboard/owner/earnings", label: "Earnings", icon: Settings },
+  { href: "/dashboard/owner", label: "nav.dashboard", icon: Home },
+  { href: "/listings", label: "nav.listings", icon: Search },
+  { href: "/bookings?view=owner", label: "nav.bookings", icon: Calendar },
+  { href: "/dashboard/owner/earnings", label: "nav.earnings", icon: Settings },
 ];
 
 /**
@@ -85,6 +86,7 @@ export function MobileHeader({
   onLogout,
 }: MobileNavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { t } = useTranslation();
 
   return (
     <>
@@ -133,7 +135,7 @@ export function MobileHeader({
                 to="/auth/login"
                 className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
               >
-                Login
+                {t("nav.login")}
               </Link>
             )}
           </div>
@@ -171,12 +173,11 @@ function MobileSlideMenu({
   onLogout?: () => void;
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const handleLogout = async () => {
-    const refreshToken =
-      typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
     try {
-      await authApi.logout(refreshToken || undefined);
+      await authApi.logout();
     } catch {
       // Ignore logout API errors
     }
@@ -210,7 +211,7 @@ function MobileSlideMenu({
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <span className="text-lg font-bold">G</span>
             </div>
-            <span className="font-semibold">GharBatai</span>
+            <span className="font-semibold">{t("common.appNameShort")}</span>
           </Link>
         </div>
 
@@ -222,7 +223,7 @@ function MobileSlideMenu({
             className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm text-muted-foreground hover:bg-accent"
           >
             <Search className="h-4 w-4" />
-            Search rentals...
+            {t("nav.searchRentals")}
           </NavLink>
         </div>
 
@@ -242,7 +243,7 @@ function MobileSlideMenu({
               }
             >
               <Home className="h-5 w-5" />
-              Home
+              {t("nav.home")}
             </NavLink>
             <NavLink
               to="/search"
@@ -257,7 +258,7 @@ function MobileSlideMenu({
               }
             >
               <Search className="h-5 w-5" />
-              Browse Categories
+              {t("nav.browseCategories")}
             </NavLink>
 
             {isAuthenticated && (
@@ -275,7 +276,7 @@ function MobileSlideMenu({
                   }
                 >
                   <Calendar className="h-5 w-5" />
-                  My Bookings
+                  {t("nav.myBookings")}
                 </NavLink>
                 <NavLink
                   to="/messages"
@@ -291,7 +292,7 @@ function MobileSlideMenu({
                 >
                   <span className="flex items-center gap-3">
                     <MessageCircle className="h-5 w-5" />
-                    Messages
+                    {t("nav.messages")}
                   </span>
                   {messageCount && messageCount > 0 && (
                     <Badge variant="destructive" className="text-xs">
@@ -312,7 +313,7 @@ function MobileSlideMenu({
                   }
                 >
                   <Heart className="h-5 w-5" />
-                  Favorites
+                  {t("nav.favorites")}
                 </NavLink>
               </>
             )}
@@ -337,7 +338,7 @@ function MobileSlideMenu({
                   }
                 >
                   <Settings className="h-5 w-5" />
-                  Account Settings
+                  {t("nav.accountSettings")}
                 </NavLink>
                 <NavLink
                   to="/help"
@@ -352,14 +353,14 @@ function MobileSlideMenu({
                   }
                 >
                   <HelpCircle className="h-5 w-5" />
-                  Help Center
+                  {t("nav.helpCenter")}
                 </NavLink>
                 <button
                   onClick={handleLogout}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   <LogOut className="h-5 w-5" />
-                  Log Out
+                  {t("nav.logout")}
                 </button>
               </>
             ) : (
@@ -370,7 +371,7 @@ function MobileSlideMenu({
                   className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
                 >
                   <User className="h-5 w-5" />
-                  Log In
+                  {t("nav.login")}
                 </Link>
                 <Link
                   to="/auth/signup"
@@ -378,7 +379,7 @@ function MobileSlideMenu({
                   className="flex items-center gap-3 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
                   <Plus className="h-5 w-5" />
-                  Sign Up
+                  {t("nav.signup")}
                 </Link>
               </>
             )}
@@ -399,7 +400,7 @@ function MobileSlideMenu({
                   onClick={onClose}
                   className="text-xs text-muted-foreground hover:text-primary"
                 >
-                  View profile
+                  {t("nav.viewProfile")}
                 </Link>
               </div>
             </div>
@@ -420,6 +421,7 @@ export function MobileBottomNav({
   isAuthenticated?: boolean;
   userType?: "renter" | "owner" | "admin";
 }) {
+  const { t } = useTranslation();
   const items = isAuthenticated
     ? userType === "owner"
       ? ownerNavItems
@@ -441,7 +443,7 @@ export function MobileBottomNav({
             }
           >
             <item.icon className="h-5 w-5" />
-            <span>{item.label}</span>
+            <span>{t(item.label)}</span>
           </NavLink>
         ))}
       </div>

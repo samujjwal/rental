@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 
 export interface FilterCondition {
   field: string;
@@ -29,6 +30,29 @@ export interface FilterGroup {
 
 @Injectable()
 export class FilterBuilderService {
+  /** Whitelist of fields that are safe to filter on — prevents access to sensitive data */
+  private static readonly ALLOWED_FIELDS = new Set([
+    'id', 'status', 'role', 'createdAt', 'updatedAt', 'deletedAt',
+    'email', 'firstName', 'lastName', 'phone', 'name',
+    'title', 'description', 'category', 'type', 'slug',
+    'price', 'pricePerDay', 'pricePerWeek', 'pricePerMonth',
+    'city', 'state', 'country', 'zipCode',
+    'isActive', 'isVerified', 'isFeatured', 'isPublished',
+    'startDate', 'endDate', 'totalPrice',
+    'rating', 'averageRating', 'totalReviews',
+    'organizationId', 'categoryId', 'listingId', 'bookingId', 'ownerId', 'renterId',
+    'stripeId', 'stripeConnectId',
+  ]);
+
+  /**
+   * Validate that a field name is in the allowed whitelist
+   */
+  private validateField(field: string): void {
+    if (!FilterBuilderService.ALLOWED_FIELDS.has(field)) {
+      throw new BadRequestException(`Filtering on field '${field}' is not allowed`);
+    }
+  }
+
   /**
    * Build Prisma where clause from filter conditions
    */
@@ -70,6 +94,9 @@ export class FilterBuilderService {
   private buildSingleFilter(filter: FilterCondition): any {
     const { field, operator, value, values } = filter;
 
+    // Validate field is in whitelist
+    this.validateField(field);
+
     switch (operator) {
       case 'eq':
         return { [field]: value };
@@ -106,13 +133,13 @@ export class FilterBuilderService {
 
       case 'between':
         if (!Array.isArray(value) || value.length !== 2) {
-          throw new Error('BETWEEN operator requires array with exactly 2 values');
+          throw i18nBadRequest('admin.betweenRequiresTwoValues');
         }
         return { [field]: { gte: value[0], lte: value[1] } };
 
       case 'not_between':
         if (!Array.isArray(value) || value.length !== 2) {
-          throw new Error('NOT_BETWEEN operator requires array with exactly 2 values');
+          throw i18nBadRequest('admin.notBetweenRequiresTwoValues');
         }
         return {
           OR: [{ [field]: { lt: value[0] } }, { [field]: { gt: value[1] } }],
@@ -137,7 +164,7 @@ export class FilterBuilderService {
         }
 
       default:
-        throw new Error(`Unsupported operator: ${operator}`);
+        throw new BadRequestException(`Unsupported operator: ${operator}`);
     }
   }
 

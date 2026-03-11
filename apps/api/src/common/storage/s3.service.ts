@@ -73,7 +73,7 @@ export class S3StorageService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.region = this.config.get('AWS_REGION', 'us-east-1');
+    this.region = this.config.get('AWS_REGION') || this.config.get('aws.region');
     this.bucketName = this.config.get('AWS_S3_BUCKET_NAME');
 
     if (!this.bucketName) {
@@ -91,10 +91,10 @@ export class S3StorageService {
   }
 
   /**
-   * Upload file to S3
+   * Upload file to S3 (with exponential-backoff retry on transient errors)
    */
   async uploadFile(options: FileUploadOptions): Promise<FileUploadResult> {
-    try {
+    return this.withRetry(async () => {
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: options.key,
@@ -115,23 +115,19 @@ export class S3StorageService {
         contentType: options.contentType,
       };
 
-      // Save file record to database
+      // Save file record to database (best-effort — not retried)
       await this.saveFileRecord(result, options.metadata);
 
       this.logger.log(`File uploaded successfully: ${options.key}`);
-
       return result;
-    } catch (error) {
-      this.logger.error('Failed to upload file to S3', error);
-      throw error;
-    }
+    }, 'uploadFile');
   }
 
   /**
-   * Get presigned URL for file upload
+   * Get presigned URL for file upload (with retry on transient errors)
    */
   async getUploadPresignedUrl(options: PresignedUrlOptions): Promise<string> {
-    try {
+    return this.withRetry(async () => {
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: options.key,
@@ -140,13 +136,8 @@ export class S3StorageService {
       });
 
       const expiresIn = options.expiresIn || 3600; // 1 hour default
-      const signedUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
-
-      return signedUrl;
-    } catch (error) {
-      this.logger.error('Failed to generate upload presigned URL', error);
-      throw error;
-    }
+      return getSignedUrl(this.s3Client, command, { expiresIn });
+    }, 'getUploadPresignedUrl');
   }
 
   /**
@@ -219,7 +210,7 @@ export class S3StorageService {
         nextContinuationToken: response.NextContinuationToken,
         maxKeys: response.MaxKeys || 1000,
         commonPrefixes:
-          (response.CommonPrefixes?.map((prefix) => prefix.Prefix || []) as string[]) || [],
+          response.CommonPrefixes?.map((prefix) => prefix.Prefix || '') || [],
       };
     } catch (error) {
       this.logger.error('Failed to list files in S3', error);
@@ -257,9 +248,9 @@ export class S3StorageService {
         const command = new CreateBucketCommand({
           Bucket: this.bucketName,
           CreateBucketConfiguration:
-            this.region !== 'us-east-1'
+            this.region !== 'ap-south-1'
               ? {
-                  LocationConstraint: this.region as any,
+                  LocationConstraint: this.region as import('@aws-sdk/client-s3').BucketLocationConstraint,
                 }
               : undefined,
         });
@@ -451,6 +442,58 @@ export class S3StorageService {
       this.logger.error('S3 configuration test failed', error);
       return { success: false, message: error.message };
     }
+  }
+
+  /**
+   * Exponential-backoff retry wrapper for transient S3 errors.
+   * Permanent errors (e.g. NoSuchBucket, AccessDenied) are not retried.
+   */
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    label: string,
+    maxRetries = 3,
+  ): Promise<T> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        const isTransient = this.isTransientS3Error(error);
+        if (!isTransient || attempt === maxRetries) {
+          throw error;
+        }
+        const delay = Math.min(500 * 2 ** attempt, 8000);
+        this.logger.warn(
+          `S3 ${label} attempt ${attempt + 1}/${maxRetries + 1} failed (transient), retrying in ${delay}ms`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    // TypeScript: unreachable but required for type narrowing
+    throw new Error(`S3 ${label} exhausted retries`);
+  }
+
+  /** Classify S3/network errors as transient (retryable) or permanent. */
+  private isTransientS3Error(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const code = (error as { code?: string; name?: string; $metadata?: { httpStatusCode?: number } }).code
+      ?? (error as { name?: string }).name;
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+
+    // Permanent errors — do not retry
+    const permanent = new Set([
+      'NoSuchBucket',
+      'NoSuchKey',
+      'AccessDenied',
+      'InvalidAccessKeyId',
+      'SignatureDoesNotMatch',
+      'EntityTooLarge',
+      'QuotaExceededError',
+    ]);
+    if (code && permanent.has(code)) return false;
+    if (status && status >= 400 && status < 500 && status !== 429) return false;
+
+    // Transient: network timeouts, throttling, 5xx server errors
+    return true;
   }
 
   private async saveFileRecord(

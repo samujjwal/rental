@@ -7,17 +7,33 @@ test.describe("Homepage", () => {
 
   test("should display hero and search controls", async ({ page }) => {
     await expect(page.locator("h1")).toBeVisible();
-    await expect(page.locator('input[placeholder="What are you looking for?"]')).toBeVisible();
+    await expect(
+      page.locator('input[placeholder="What are you looking for?"]')
+    ).toBeVisible();
     await expect(page.locator('input[placeholder="Location"]')).toBeVisible();
   });
 
   test("should navigate to search from hero action", async ({ page }) => {
-    const clicked = await page
-      .locator('a[href^="/search"], button:has-text("Search")')
-      .first()
-      .click()
-      .then(() => true)
-      .catch(() => false);
+    const heroSearch = page.locator('input[role="combobox"]').first();
+    const heroSearchButton = page
+      .getByRole("button", { name: "Search" })
+      .first();
+    const hasHeroSearch = await heroSearch.isVisible().catch(() => false);
+
+    const clicked = hasHeroSearch
+      ? await heroSearch
+          .fill("camera")
+          .then(async () => {
+            await heroSearchButton.click();
+            return true;
+          })
+          .catch(() => false)
+      : await page
+          .locator('a[href^="/search"]')
+          .first()
+          .click()
+          .then(() => true)
+          .catch(() => false);
 
     if (!clicked) return;
     await expect(page).toHaveURL(/\/search/);
@@ -27,7 +43,9 @@ test.describe("Homepage", () => {
     await expect(page.locator("text=Browse by Category")).toBeVisible();
   });
 
-  test("should navigate from a category card when available", async ({ page }) => {
+  test("should navigate from a category card when available", async ({
+    page,
+  }) => {
     const categoryLink = page.locator('a[href^="/search"]').nth(1);
     if ((await categoryLink.count()) === 0) return;
     await categoryLink.click();
@@ -35,7 +53,9 @@ test.describe("Homepage", () => {
   });
 
   test("should show how it works section", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "How It Works" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "How It Works" })
+    ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
   });
 

@@ -1,23 +1,20 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, INestApplication } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, INestApplication, Logger } from '@nestjs/common';
 import { PrismaWrapper } from '@rental-portal/database';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class PrismaService extends PrismaWrapper implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PrismaService.name);
+
   constructor(private configService: ConfigService) {
     const databaseUrl = configService.get<string>('DATABASE_URL') || process.env.DATABASE_URL;
 
     if (!databaseUrl) {
-      console.log(
-        'Available env vars:',
-        Object.keys(process.env).filter((k) => k.includes('DATABASE')),
-      );
-      throw new Error('DATABASE_URL is not configured');
+      throw new Error('DATABASE_URL is not configured. Ensure the environment variable is set.');
     }
 
-    console.log('DATABASE_URL found:', databaseUrl.substring(0, 20) + '...');
-
     super();
+    this.logger.log('Database connection configured');
   }
 
   async onModuleInit() {

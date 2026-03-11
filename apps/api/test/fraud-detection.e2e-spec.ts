@@ -4,13 +4,16 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { UserRole } from '@rental-portal/database';
-import { createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, createUserWithRole } from './e2e-helpers';
 
 describe('Fraud Detection (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let adminToken: string;
   let userToken: string;
+
+  const adminEmail = buildTestEmail('fraud-admin');
+  const userEmail = buildTestEmail('fraud-user');
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -28,7 +31,7 @@ describe('Fraud Detection (e2e)', () => {
     await prisma.user.deleteMany({
       where: {
         email: {
-          in: ['fraud-admin@test.com', 'fraud-user@test.com'],
+          in: [adminEmail, userEmail],
         },
       },
     });
@@ -39,7 +42,7 @@ describe('Fraud Detection (e2e)', () => {
     await prisma.user.deleteMany({
       where: {
         email: {
-          in: ['fraud-admin@test.com', 'fraud-user@test.com'],
+          in: [adminEmail, userEmail],
         },
       },
     });
@@ -47,7 +50,7 @@ describe('Fraud Detection (e2e)', () => {
     const admin = await createUserWithRole({
       app,
       prisma,
-      email: 'fraud-admin@test.com',
+      email: adminEmail,
       password: 'TestPass123!',
       firstName: 'Fraud',
       lastName: 'Admin',
@@ -58,7 +61,7 @@ describe('Fraud Detection (e2e)', () => {
     const user = await createUserWithRole({
       app,
       prisma,
-      email: 'fraud-user@test.com',
+      email: userEmail,
       password: 'TestPass123!',
       firstName: 'Fraud',
       lastName: 'User',

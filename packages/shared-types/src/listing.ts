@@ -4,6 +4,35 @@
 // ============================================================================
 
 import type { PaginationParams } from './api';
+import { PropertyCondition } from './enums';
+
+// ---------------------------------------------------------------------------
+// Condition mapping helpers
+// The API returns raw Prisma enum values (EXCELLENT, GOOD, FAIR, POOR).
+// Frontends display friendlier labels (new, like-new, good, fair, poor).
+// ---------------------------------------------------------------------------
+
+/** Lowercase condition labels used by frontends */
+export type FrontendCondition = 'new' | 'like-new' | 'good' | 'fair' | 'poor';
+
+/** Union of API (DB) values and frontend-friendly values */
+export type ListingConditionValue = PropertyCondition | FrontendCondition;
+
+/** Map a raw DB condition to the frontend-friendly label */
+export function normalizeCondition(
+  condition?: string | null,
+): FrontendCondition {
+  const upper = String(condition ?? '').toUpperCase();
+  if (upper === 'EXCELLENT') return 'new';
+  if (upper === 'GOOD') return 'good';
+  if (upper === 'FAIR') return 'fair';
+  if (upper === 'POOR') return 'poor';
+  // already a frontend value – pass through
+  const lower = String(condition ?? '').toLowerCase();
+  if (['new', 'like-new', 'good', 'fair', 'poor'].includes(lower))
+    return lower as FrontendCondition;
+  return 'good'; // safe default
+}
 
 /** Listing image */
 export interface ListingImage {
@@ -32,7 +61,155 @@ export interface DeliveryOptions {
   shipping: boolean;
 }
 
-/** Create listing input */
+/** Full listing record (as returned by API) */
+export interface Listing {
+  id: string;
+  ownerId: string;
+  title: string;
+  description: string;
+  category: string | { id: string; name: string; slug: string };
+  subcategory: string | null;
+  basePrice: number;
+  pricePerWeek: number | null;
+  pricePerMonth: number | null;
+  currency: string;
+  condition: ListingConditionValue;
+  location: {
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+    coordinates: {
+      lat: number;
+      lng: number;
+    };
+  };
+  photos: string[];
+  images?: string[];
+  categoryId?: string;
+  availability: 'available' | 'rented' | 'maintenance' | 'unavailable';
+  status?:
+    | 'AVAILABLE'
+    | 'RENTED'
+    | 'MAINTENANCE'
+    | 'UNAVAILABLE'
+    | 'DRAFT'
+    | 'SUSPENDED'
+    | 'ARCHIVED';
+  availabilitySchedule: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+  instantBooking: boolean;
+  deliveryOptions: {
+    pickup: boolean;
+    delivery: boolean;
+    shipping: boolean;
+  };
+  deliveryRadius: number | null;
+  deliveryFee: number | null;
+  securityDeposit: number;
+  minimumRentalPeriod: number;
+  maximumRentalPeriod: number | null;
+  cancellationPolicy: 'flexible' | 'moderate' | 'strict';
+  rules: string | null;
+  features: string[];
+  rating: number | null;
+  totalReviews: number;
+  totalBookings: number;
+  totalEarnings?: number;
+  views: number;
+  featured: boolean;
+  verified: boolean;
+  categorySlug?: string | null;
+  categorySpecificData?: Record<string, unknown>;
+  owner: {
+    id: string;
+    firstName: string;
+    lastName: string | null;
+    avatar: string | null;
+    rating: number | null;
+    verified: boolean;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Create listing request body */
+export interface CreateListingRequest {
+  title: string;
+  description: string;
+  category: string;
+  subcategory?: string;
+  basePrice: number;
+  pricePerWeek?: number;
+  pricePerMonth?: number;
+  condition: ListingConditionValue;
+  location: {
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+    coordinates: {
+      lat: number;
+      lng: number;
+    };
+  };
+  photos: string[];
+  instantBooking?: boolean;
+  deliveryOptions: {
+    pickup: boolean;
+    delivery: boolean;
+    shipping: boolean;
+  };
+  deliveryRadius?: number;
+  deliveryFee?: number;
+  securityDeposit: number;
+  minimumRentalPeriod: number;
+  maximumRentalPeriod?: number;
+  cancellationPolicy: 'flexible' | 'moderate' | 'strict';
+  rules?: string;
+  features?: string[];
+  categorySpecificData?: Record<string, unknown>;
+}
+
+/** Update listing request body */
+export type UpdateListingRequest = Partial<CreateListingRequest>;
+
+/** Listing search response */
+export interface ListingSearchResponse {
+  listings: Listing[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  facets?: {
+    categories: { name: string; count: number }[];
+    conditions: { name: string; count: number }[];
+    priceRanges: { min: number; max: number; count: number }[];
+  };
+}
+
+/** Category */
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  icon: string;
+  requiredFields?: string[];
+  searchableFields?: string[];
+  templateSchema?: string;
+  subcategories: {
+    id: string;
+    name: string;
+    slug: string;
+  }[];
+}
+
+/** Create listing input (alias for backward compat) */
 export interface CreateListingInput {
   title: string;
   description: string;
@@ -113,5 +290,5 @@ export interface ListingSearchParams extends PaginationParams {
   condition?: string;
   instantBooking?: boolean;
   delivery?: boolean;
-  sortBy?: string;
+  sortBy?: 'price-asc' | 'price-desc' | 'rating' | 'newest' | 'popular' | string;
 }

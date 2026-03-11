@@ -7,39 +7,51 @@ import { ArrowLeft, ArrowRight, Upload, X, CheckCircle, Sparkles, TrendingUp } f
 import { listingsApi } from "~/lib/api/listings";
 import { uploadApi } from "~/lib/api/upload";
 import { aiApi } from "~/lib/api/ai";
+import { geoApi } from "~/lib/api/geo";
 import { listingSchema, type ListingInput } from "~/lib/validation/listing";
 import type { z } from "zod";
 import { redirect } from "react-router";
 import { cn } from "~/lib/utils";
+import { APP_MAP_CENTER } from "~/config/locale";
 import { toast } from "~/lib/toast";
 import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { Card, CardContent } from "~/components/ui";
 import { getUser } from "~/utils/auth";
+import { useTranslation } from "react-i18next";
 import { VoiceListingAssistant } from "~/components/listings/VoiceListingAssistant";
 import { CategorySpecificFields } from "~/components/listings/CategorySpecificFields";
 import { getCategoryFields } from "~/lib/category-fields";
+import {
+  ListingStepIndicator,
+  LocationStep,
+  DetailsStep,
+  PricingStep,
+  ImageUploadStep,
+} from "~/components/listings/steps";
 const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
 const KEYWORD_PRICE_HINTS: Array<{ pattern: RegExp; price: number }> = [
-  { pattern: /(camera|lens|gopro|drone)/i, price: 45 },
-  { pattern: /(car|suv|truck|van)/i, price: 85 },
-  { pattern: /(bike|bicycle|scooter)/i, price: 25 },
-  { pattern: /(tool|drill|saw|ladder)/i, price: 30 },
-  { pattern: /(dress|suit|tuxedo|fashion)/i, price: 35 },
-  { pattern: /(speaker|party|event|projector)/i, price: 55 },
+  { pattern: /(camera|lens|gopro|drone)/i, price: 5000 },
+  { pattern: /(car|suv|truck|van)/i, price: 10000 },
+  { pattern: /(bike|bicycle|scooter)/i, price: 2500 },
+  { pattern: /(tool|drill|saw|ladder)/i, price: 3000 },
+  { pattern: /(dress|suit|tuxedo|fashion)/i, price: 3500 },
+  { pattern: /(speaker|party|event|projector)/i, price: 6000 },
 ];
 const CITY_COORDINATE_HINTS: Record<string, { lat: number; lng: number }> = {
-  "san francisco": { lat: 37.7749, lng: -122.4194 },
-  "new york": { lat: 40.7128, lng: -74.006 },
-  "los angeles": { lat: 34.0522, lng: -118.2437 },
-  chicago: { lat: 41.8781, lng: -87.6298 },
-  houston: { lat: 29.7604, lng: -95.3698 },
-  seattle: { lat: 47.6062, lng: -122.3321 },
-  miami: { lat: 25.7617, lng: -80.1918 },
+  // City hints are region-specific; in production, use the geocoding API instead.
+  // These serve as quick fallbacks when the geocoder is unavailable.
+  kathmandu: { lat: 27.7172, lng: 85.324 },
+  pokhara: { lat: 28.2096, lng: 83.9856 },
+  lalitpur: { lat: 27.6588, lng: 85.3247 },
+  bharatpur: { lat: 27.6833, lng: 84.4333 },
+  biratnagar: { lat: 26.4525, lng: 87.2718 },
+  birgunj: { lat: 27.0104, lng: 84.8777 },
+  dharan: { lat: 26.8065, lng: 87.2846 },
 };
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Create Listing - Universal Rental Portal" },
+    { title: "Create Listing | GharBatai Rentals" },
     { name: "description", content: "List your item for rent" },
   ];
 };
@@ -140,6 +152,7 @@ const STEPS = [
 ];
 
 export default function CreateListing() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const submit = useSubmit();
   const actionData = useActionData<typeof clientAction>();
@@ -154,6 +167,7 @@ export default function CreateListing() {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [categorySpecificData, setCategorySpecificData] = useState<Record<string, unknown>>({});
+  const [hasDraft, setHasDraft] = useState(false);
   const [priceSuggestion, setPriceSuggestion] = useState<{
     averagePrice: number;
     medianPrice: number;
@@ -168,6 +182,7 @@ export default function CreateListing() {
     setValue,
     getValues,
     setError,
+    trigger,
     formState: { errors },
   } = useForm<z.input<typeof listingSchema>>({
     resolver: zodResolver(listingSchema),
@@ -204,26 +219,74 @@ export default function CreateListing() {
     setCategorySpecificData((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const DRAFT_KEY = 'listingDraft_v1';
+
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (!saved) return;
+      const { step, values } = JSON.parse(saved) as { step: number; values: Record<string, unknown> };
+      setHasDraft(true);
+      // Don't auto-restore — let user choose via the banner
+      void step; void values;
+    } catch { /* corrupt draft */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Autosave every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ step: currentStep, values: getValues() }));
+      } catch { /* storage full */ }
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [currentStep, getValues]);
+
+  const restoreDraft = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (!saved) return;
+      const { step, values } = JSON.parse(saved) as { step: number; values: Record<string, unknown> };
+      Object.entries(values).forEach(([key, val]) => {
+        setValue(key as Parameters<typeof setValue>[0], val as never);
+      });
+      setCurrentStep(Math.min(Math.max(1, step), STEPS.length));
+      setHasDraft(false);
+    } catch { /* ignore */ }
+  }, [setValue]);
+
+  const discardDraft = useCallback(() => {
+    localStorage.removeItem(DRAFT_KEY);
+    setHasDraft(false);
+  }, []);
+
   // Real-time listing completeness score
-  const watchedValues = watch();
+  const watchedTitle = watch('title');
+  const watchedDescription = watch('description');
+  const watchedCategory = watch('category');
+  const watchedBasePrice = watch('basePrice');
+  const watchedCondition = watch('condition');
+  const watchedLocation = watch('location');
+  const watchedFeatures = watch('features');
   const completenessScore = useMemo(() => {
     const checks = [
-      { filled: !!watchedValues.title && watchedValues.title.length >= 10, weight: 10 },
-      { filled: !!watchedValues.description && watchedValues.description.length >= 50, weight: 15 },
-      { filled: !!watchedValues.category, weight: 10 },
-      { filled: typeof watchedValues.basePrice === 'number' && watchedValues.basePrice > 0, weight: 10 },
-      { filled: !!watchedValues.condition, weight: 5 },
-      { filled: !!watchedValues.location?.city, weight: 10 },
-      { filled: !!watchedValues.location?.address, weight: 5 },
-      { filled: !!watchedValues.location?.country, weight: 5 },
+      { filled: !!watchedTitle && watchedTitle.length >= 10, weight: 10 },
+      { filled: !!watchedDescription && watchedDescription.length >= 50, weight: 15 },
+      { filled: !!watchedCategory, weight: 10 },
+      { filled: typeof watchedBasePrice === 'number' && watchedBasePrice > 0, weight: 10 },
+      { filled: !!watchedCondition, weight: 5 },
+      { filled: !!watchedLocation?.city, weight: 10 },
+      { filled: !!watchedLocation?.address, weight: 5 },
+      { filled: !!watchedLocation?.country, weight: 5 },
       { filled: imageUrls.length >= 3, weight: 20 },
       { filled: imageUrls.length >= 5, weight: 5 },
-      { filled: !!watchedValues.features && watchedValues.features.length > 0, weight: 5 },
+      { filled: !!watchedFeatures && watchedFeatures.length > 0, weight: 5 },
     ];
     const total = checks.reduce((s, c) => s + c.weight, 0);
     const earned = checks.filter((c) => c.filled).reduce((s, c) => s + c.weight, 0);
     return Math.round((earned / total) * 100);
-  }, [watchedValues, imageUrls]);
+  }, [watchedTitle, watchedDescription, watchedCategory, watchedBasePrice, watchedCondition, watchedLocation, watchedFeatures, imageUrls]);
 
   useEffect(() => {
     imageUrlsRef.current = imageUrls;
@@ -303,14 +366,14 @@ export default function CreateListing() {
     const validFiles = files.filter(
       (file) => file.type.startsWith("image/") && file.size <= MAX_IMAGE_FILE_SIZE
     );
-    if (files.length + imageFiles.length > 10) {
+    if (validFiles.length !== files.length) {
+      toast.warning("Only image files up to 10MB are allowed.");
+    }
+    if (validFiles.length + imageFiles.length > 10) {
       toast.warning("Maximum 10 images allowed");
       return;
     }
-    if (validFiles.length !== files.length) {
-      toast.warning("Only image files up to 10MB are allowed.");
-      return;
-    }
+    if (validFiles.length === 0) return;
 
     const newImageUrls = validFiles.map((file) => URL.createObjectURL(file));
     setImageUrls([...imageUrls, ...newImageUrls]);
@@ -359,18 +422,40 @@ export default function CreateListing() {
       formData.append("intent", "create");
       formData.append("data", JSON.stringify(payload));
 
+      // Clear autosaved draft on successful submission
+      localStorage.removeItem(DRAFT_KEY);
       submit(formData, { method: "post" });
     } catch (error) {
-      console.error("Failed to create listing:", error);
       toast.error("Failed to create listing. Please try again.");
       setIsSubmitting(false);
     }
   };
 
-  const nextStep = () => {
-    if (currentStep < STEPS.length) {
-      setCurrentStep(currentStep + 1);
+  const STEP_VALIDATION_FIELDS: Record<number, string[]> = {
+    1: ["title", "description", "category"],
+    2: ["basePrice", "securityDeposit", "condition"],
+    3: [
+      "location.address",
+      "location.city",
+      "location.state",
+      "location.country",
+      "location.postalCode",
+    ],
+    4: ["deliveryOptions", "minimumRentalPeriod", "cancellationPolicy"],
+    5: [], // Images validated separately via imageFiles
+  };
+
+  const nextStep = async () => {
+    if (currentStep >= STEPS.length) return;
+    const fieldsToValidate = STEP_VALIDATION_FIELDS[currentStep] || [];
+    if (fieldsToValidate.length > 0) {
+      const valid = await trigger(fieldsToValidate as any);
+      if (!valid) {
+        toast.error("Please fix the errors before proceeding.");
+        return;
+      }
     }
+    setCurrentStep(currentStep + 1);
   };
 
   const prevStep = () => {
@@ -422,18 +507,35 @@ export default function CreateListing() {
 
   const inferDailyPrice = (title: string, description: string): number => {
     const text = `${title} ${description}`;
-    const explicit = text.match(/\$?\s*(\d{1,4})(?:\.\d+)?\s*(?:\/day|per day|daily)/i);
+    const explicit = text.match(/(?:[A-Z]{2,4}\s*\.?|[^\w\s])?\s*(\d{1,6})(?:\.\d+)?\s*(?:\/day|per day|daily)/i);
     if (explicit) return Math.max(1, Math.min(10000, Number(explicit[1])));
     const hint = KEYWORD_PRICE_HINTS.find((entry) => entry.pattern.test(text));
     return hint?.price ?? 30;
   };
 
-  const inferCoordinates = (city: string, lat?: number, lng?: number) => {
+  const inferCoordinates = async (city: string, lat?: number, lng?: number) => {
     if (typeof lat === "number" && typeof lng === "number") {
       return { lat, lng };
     }
     const key = city.trim().toLowerCase();
-    return CITY_COORDINATE_HINTS[key] || { lat: 0, lng: 0 };
+    // Fast path: use hardcoded hints for known cities
+    if (CITY_COORDINATE_HINTS[key]) {
+      return CITY_COORDINATE_HINTS[key];
+    }
+    // Slow path: call geocoding API for unknown cities
+    if (city.trim()) {
+      try {
+        const country = getValues("location.country") || "Nepal";
+        const result = await geoApi.autocomplete(`${city.trim()}, ${country}`, { limit: 1 });
+        if (result.results?.length > 0) {
+          const coords = result.results[0].coordinates;
+          return { lat: coords.lat, lng: coords.lon };
+        }
+      } catch {
+        // Geocoding failed, fall through to default
+      }
+    }
+    return { lat: APP_MAP_CENTER[0], lng: APP_MAP_CENTER[1] };
   };
 
   const inferFeatureHints = (title: string, description: string): string[] => {
@@ -470,7 +572,6 @@ export default function CreateListing() {
       formData.append("data", JSON.stringify(payload));
       submit(formData, { method: "post" });
     } catch (error) {
-      console.error("Failed to create listing:", error);
       toast.error("Failed to create listing. Please try again.");
       setIsSubmitting(false);
     }
@@ -508,6 +609,14 @@ export default function CreateListing() {
     const category = values.category || inferCategoryId(title, description) || "";
     const condition = values.condition || inferCondition(title, description);
 
+    if (imageFiles.length === 0) {
+      setError("photos", {
+        type: "manual",
+        message: "At least one image is required",
+      });
+      return;
+    }
+
     // Validate required category-specific fields
     const catSlug = categories.find((c) => c.id === category)?.slug;
     const catFields = getCategoryFields(catSlug);
@@ -524,7 +633,7 @@ export default function CreateListing() {
         ? values.basePrice
         : priceSuggestion?.medianPrice ?? inferDailyPrice(title, description);
     const city = String(values.location?.city || "").trim();
-    const coords = inferCoordinates(
+    const coords = await inferCoordinates(
       city,
       values.location?.coordinates?.lat,
       values.location?.coordinates?.lng
@@ -563,7 +672,7 @@ export default function CreateListing() {
         postalCode: values.location?.postalCode || "",
         coordinates: coords,
       },
-      images: values.photos || [],
+      photos: values.photos || [],
     };
 
     setValue("category", aiFilled.category);
@@ -581,7 +690,7 @@ export default function CreateListing() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-card border-b">
+      <div className="border-b bg-card">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <button
@@ -589,32 +698,57 @@ export default function CreateListing() {
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
-              Back
+              {t('common.back')}
             </button>
             <h1 className="text-xl font-bold text-foreground">
-              Create New Listing
+              {t('listings.create.title')}
             </h1>
             <div className="w-20" />
           </div>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Draft restore banner */}
+        {hasDraft && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-sm text-amber-900">
+              {t('listings.create.draftFound', 'You have an unsaved draft. Would you like to continue where you left off?')}
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={restoreDraft}
+                className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+              >
+                {t('listings.create.restoreDraft', 'Restore Draft')}
+              </button>
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="rounded-md border border-amber-400 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+              >
+                {t('common.discard', 'Discard')}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mb-6 rounded-lg border border-primary/20 bg-primary/5 p-4">
-          <h2 className="text-lg font-semibold text-foreground">Quick Create (AI-assisted)</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('listings.create.quickCreate', 'Quick Create (AI-assisted)')}</h2>
           <p className="text-sm text-muted-foreground">
-            Fill a few basics, upload images, then click once. AI will auto-fill missing details.
+            {t('listings.create.quickCreateDesc', 'Fill a few basics, upload images, then click once. AI will auto-fill missing details.')}
           </p>
         </div>
 
         <div className="mb-8 rounded-lg border border-input bg-card p-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-foreground">Title *</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">{t('listings.create.titleLabel')} *</label>
               <input
                 {...register("title")}
                 type="text"
-                maxLength={100}
+                maxLength={200}
                 placeholder="e.g., Sony A7 IV camera with 24-70 lens"
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 focus:ring-2 focus:ring-ring"
               />
@@ -622,7 +756,7 @@ export default function CreateListing() {
             </div>
             <div className="md:col-span-2">
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-foreground">Description *</label>
+                <label className="block text-sm font-medium text-foreground">{t('listings.create.descriptionLabel')} *</label>
                 <button
                   type="button"
                   onClick={handleGenerateDescription}
@@ -630,13 +764,13 @@ export default function CreateListing() {
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
                 >
                   <Sparkles className={cn("w-3.5 h-3.5", isGeneratingDescription && "animate-spin")} />
-                  {isGeneratingDescription ? "Generating…" : "Generate with AI"}
+                  {isGeneratingDescription ? t('listings.create.generating', 'Generating…') : t('listings.create.generateWithAI', 'Generate with AI')}
                 </button>
               </div>
               <textarea
                 {...register("description")}
                 rows={4}
-                maxLength={2000}
+                maxLength={5000}
                 placeholder="Describe the item and what is included..."
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 focus:ring-2 focus:ring-ring"
               />
@@ -645,13 +779,13 @@ export default function CreateListing() {
               )}
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Category</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">{t('listings.create.categoryLabel')}</label>
               <select
                 {...register("category")}
                 data-testid="category-select"
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 focus:ring-2 focus:ring-ring"
               >
-                <option value="">{loadingCategories ? "Loading categories..." : "Auto (AI will choose)"}</option>
+                <option value="">{loadingCategories ? t('listings.create.loadingCategories', 'Loading categories...') : t('listings.create.autoCategory', 'Auto (AI will choose)')}</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -660,12 +794,12 @@ export default function CreateListing() {
               </select>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">City *</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">{t('listings.create.city')} *</label>
               <input
                 {...register("location.city")}
                 type="text"
                 maxLength={80}
-                placeholder="San Francisco"
+                placeholder="Kathmandu"
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 focus:ring-2 focus:ring-ring"
               />
               {errors.location?.city && (
@@ -673,42 +807,42 @@ export default function CreateListing() {
               )}
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Address *</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">{t('listings.create.address')} *</label>
               <input
                 {...register("location.address")}
                 type="text"
                 maxLength={200}
-                placeholder="123 Main St"
+                placeholder="Durbar Marg"
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 focus:ring-2 focus:ring-ring"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">State *</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">{t('listings.create.state', 'State')} *</label>
               <input
                 {...register("location.state")}
                 type="text"
                 maxLength={80}
-                placeholder="CA"
+                placeholder="Bagmati"
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 focus:ring-2 focus:ring-ring"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Country *</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">{t('listings.create.country', 'Country')} *</label>
               <input
                 {...register("location.country")}
                 type="text"
                 maxLength={80}
-                placeholder="USA"
+                placeholder="Nepal"
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 focus:ring-2 focus:ring-ring"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Postal Code *</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">{t('listings.create.zipCode')} *</label>
               <input
                 {...register("location.postalCode")}
                 type="text"
                 maxLength={20}
-                placeholder="94102"
+                placeholder="44600"
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 focus:ring-2 focus:ring-ring"
               />
             </div>
@@ -727,9 +861,9 @@ export default function CreateListing() {
               data-testid="image-upload-area"
             >
               <Upload className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="mb-3 text-sm text-muted-foreground">Upload at least one image</p>
+              <p className="mb-3 text-sm text-muted-foreground">{t('listings.create.uploadAtLeastOne', 'Upload at least one image')}</p>
               <label className="inline-block cursor-pointer rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">
-                Choose Files
+                {t('listings.create.chooseFiles', 'Choose Files')}
                 <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
               </label>
             </div>
@@ -761,7 +895,7 @@ export default function CreateListing() {
               leftIcon={!isSubmitting ? <CheckCircle className="h-5 w-5" /> : undefined}
               variant="success"
             >
-              {isSubmitting ? "Creating..." : "Create New Listing"}
+              {isSubmitting ? t('listings.create.creating', 'Creating...') : t('listings.create.createNewListing', 'Create New Listing')}
             </UnifiedButton>
           </div>
         </div>
@@ -772,7 +906,7 @@ export default function CreateListing() {
             onClick={() => setShowAdvancedEditor((prev) => !prev)}
             className="text-sm font-semibold text-primary hover:underline"
           >
-            {showAdvancedEditor ? "Hide Advanced Manual Editor" : "Open Advanced Manual Editor"}
+            {showAdvancedEditor ? t('listings.create.hideAdvanced', 'Hide Advanced Manual Editor') : t('listings.create.showAdvanced', 'Open Advanced Manual Editor')}
           </button>
         </div>
 
@@ -781,7 +915,7 @@ export default function CreateListing() {
             {/* Completeness Progress Bar */}
             <div className="mb-6 p-4 bg-card rounded-lg border">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-foreground">Listing Completeness</span>
+                <span className="text-sm font-medium text-foreground">{t('listings.create.completeness', 'Listing Completeness')}</span>
                 <span className={cn(
                   "text-sm font-bold",
                   completenessScore >= 80 ? "text-success" : completenessScore >= 50 ? "text-warning" : "text-muted-foreground"
@@ -800,54 +934,13 @@ export default function CreateListing() {
               </div>
               {completenessScore < 80 && (
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  Complete more fields to improve visibility and attract more renters
+                  {t('listings.create.completeMoreFields', 'Complete more fields to improve visibility and attract more renters')}
                 </p>
               )}
             </div>
-            <div className="mb-8" data-testid="step-indicator">
-          <div className="flex items-center justify-between mb-2">
-            {STEPS.map((step, index) => (
-              <div key={step.id} className="flex items-center">
-                <div
-                  className={cn(
-                    "flex items-center justify-center w-10 h-10 rounded-full transition-colors",
-                    currentStep > step.id
-                      ? "bg-success text-success-foreground"
-                      : currentStep === step.id
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {currentStep > step.id ? (
-                    <CheckCircle className="w-6 h-6" />
-                  ) : (
-                    step.id
-                  )}
-                </div>
-                {index < STEPS.length - 1 && (
-                  <div
-                    className={cn(
-                      "w-full h-1 mx-2 transition-colors",
-                      currentStep > step.id ? "bg-success" : "bg-muted"
-                    )}
-                    style={{ minWidth: "60px" }}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between text-sm text-muted-foreground">
-            {STEPS.map((step) => (
-              <div
-                key={step.id}
-                className="text-center"
-                style={{ width: "80px" }}
-              >
-                {step.name}
-              </div>
-            ))}
-          </div>
-        </div>
+            <div data-testid="step-indicator">
+              <ListingStepIndicator steps={STEPS} currentStep={currentStep} />
+            </div>
           </div>
         )}
 
@@ -874,17 +967,17 @@ export default function CreateListing() {
               {currentStep === 1 && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-foreground mb-6">
-                    Basic Information
+                    {t('listings.create.basicInfo')}
                   </h2>
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Title *
+                      {t('listings.create.titleLabel')} *
                     </label>
                     <input
                       {...register("title")}
                       type="text"
-                      maxLength={100}
+                      maxLength={200}
                       placeholder="e.g., Professional DSLR Camera Canon EOS 5D"
                       className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                     />
@@ -897,12 +990,12 @@ export default function CreateListing() {
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Description *
+                      {t('listings.create.descriptionLabel')} *
                     </label>
                     <textarea
                       {...register("description")}
                       rows={6}
-                      maxLength={2000}
+                      maxLength={5000}
                       placeholder="Describe your item in detail..."
                       className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                     />
@@ -915,7 +1008,7 @@ export default function CreateListing() {
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Category *
+                      {t('listings.create.categoryLabel')} *
                     </label>
                   <select
                     {...register("category")}
@@ -923,7 +1016,7 @@ export default function CreateListing() {
                     className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                   >
                     <option value="">
-                      {loadingCategories ? "Loading categories..." : "Select a category"}
+                      {loadingCategories ? t('listings.create.loadingCategories', 'Loading categories...') : t('listings.create.selectCategory', 'Select a category')}
                     </option>
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
@@ -954,466 +1047,36 @@ export default function CreateListing() {
 
               {/* Step 2: Pricing */}
               {currentStep === 2 && (
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-bold text-foreground mb-6">
-                    Pricing & Condition
-                  </h2>
-
-                  {/* Price Suggestion Banner */}
-                  {priceSuggestion && (
-                    <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                      <div className="text-sm">
-                        <p className="font-medium text-blue-900 dark:text-blue-100">
-                          Price suggestion based on {priceSuggestion.sampleSize} similar listing{priceSuggestion.sampleSize !== 1 ? "s" : ""}
-                        </p>
-                        <p className="text-blue-700 dark:text-blue-300 mt-1">
-                          Suggested range: <strong>${priceSuggestion.suggestedRange.low} – ${priceSuggestion.suggestedRange.high}/day</strong>
-                          {" "}(avg ${priceSuggestion.averagePrice}, median ${priceSuggestion.medianPrice})
-                        </p>
-                        <button
-                          type="button"
-                          className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                          onClick={() => setValue("basePrice", priceSuggestion.medianPrice)}
-                        >
-                          Use median price (${priceSuggestion.medianPrice})
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Price per Day * ($)
-                    </label>
-                    <input
-                      {...register("basePrice", { valueAsNumber: true })}
-                      type="number"
-                      min="1"
-                      step="0.01"
-                      placeholder="25.00"
-                      className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                    />
-                    {errors.basePrice && (
-                      <p className="mt-1 text-sm text-destructive">
-                        {errors.basePrice.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Price per Week ($)
-                      </label>
-                      <input
-                        {...register("pricePerWeek", { valueAsNumber: true })}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="150.00"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Price per Month ($)
-                      </label>
-                      <input
-                        {...register("pricePerMonth", { valueAsNumber: true })}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="500.00"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Security Deposit * ($)
-                    </label>
-                    <input
-                      {...register("securityDeposit", { valueAsNumber: true })}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="100.00"
-                      className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                    />
-                    {errors.securityDeposit && (
-                      <p className="mt-1 text-sm text-destructive">
-                        {errors.securityDeposit.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Condition *
-                    </label>
-                    <select
-                      {...register("condition")}
-                      className="w-full px-4 py-3 border border-input rounded-lg bg-background capitalize focus:ring-2 focus:ring-ring transition-colors"
-                    >
-                      <option value="">Select condition</option>
-                      <option value="new">New</option>
-                      <option value="like-new">Like New</option>
-                      <option value="good">Good</option>
-                      <option value="fair">Fair</option>
-                      <option value="poor">Poor</option>
-                    </select>
-                    {errors.condition && (
-                      <p className="mt-1 text-sm text-destructive">
-                        {errors.condition.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <PricingStep
+                  register={register}
+                  errors={errors}
+                  priceSuggestion={priceSuggestion}
+                  onUseSuggestedPrice={(price) => setValue("basePrice", price)}
+                />
               )}
 
               {/* Step 3: Location */}
               {currentStep === 3 && (
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-bold text-foreground mb-6">
-                    Location
-                  </h2>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Address *
-                    </label>
-                    <input
-                      {...register("location.address")}
-                      type="text"
-                      maxLength={200}
-                      placeholder="123 Main Street"
-                      className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                    />
-                    {errors.location?.address && (
-                      <p className="mt-1 text-sm text-destructive">
-                        {errors.location.address.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        City *
-                      </label>
-                      <input
-                        {...register("location.city")}
-                        type="text"
-                        maxLength={80}
-                        placeholder="San Francisco"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                      {errors.location?.city && (
-                        <p className="mt-1 text-sm text-destructive">
-                          {errors.location.city.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        State *
-                      </label>
-                      <input
-                        {...register("location.state")}
-                        type="text"
-                        maxLength={80}
-                        placeholder="CA"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                      {errors.location?.state && (
-                        <p className="mt-1 text-sm text-destructive">
-                          {errors.location.state.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Country *
-                      </label>
-                      <input
-                        {...register("location.country")}
-                        type="text"
-                        maxLength={80}
-                        placeholder="USA"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                      {errors.location?.country && (
-                        <p className="mt-1 text-sm text-destructive">
-                          {errors.location.country.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Postal Code *
-                      </label>
-                      <input
-                        {...register("location.postalCode")}
-                        type="text"
-                        maxLength={20}
-                        placeholder="94102"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                      {errors.location?.postalCode && (
-                        <p className="mt-1 text-sm text-destructive">
-                          {errors.location.postalCode.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Latitude *
-                      </label>
-                      <input
-                        {...register("location.coordinates.lat", {
-                          valueAsNumber: true,
-                        })}
-                        type="number"
-                        step="any"
-                        placeholder="37.7749"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Longitude *
-                      </label>
-                      <input
-                        {...register("location.coordinates.lng", {
-                          valueAsNumber: true,
-                        })}
-                        type="number"
-                        step="any"
-                        placeholder="-122.4194"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <LocationStep register={register} errors={errors} />
               )}
 
               {/* Step 4: Details */}
               {currentStep === 4 && (
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-bold text-foreground mb-6">
-                    Rental Details
-                  </h2>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-3">
-                      Delivery Options *
-                    </label>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2">
-                        <input
-                          {...register("deliveryOptions.pickup")}
-                          type="checkbox"
-                          className="w-4 h-4 text-primary rounded border-input focus:ring-ring"
-                        />
-                        <span className="text-foreground">Pickup</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          {...register("deliveryOptions.delivery")}
-                          type="checkbox"
-                          className="w-4 h-4 text-primary rounded border-input focus:ring-ring"
-                        />
-                        <span className="text-foreground">Delivery</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          {...register("deliveryOptions.shipping")}
-                          type="checkbox"
-                          className="w-4 h-4 text-primary rounded border-input focus:ring-ring"
-                        />
-                        <span className="text-foreground">Shipping</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {deliveryOptions?.delivery && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Delivery Radius (miles)
-                        </label>
-                        <input
-                          {...register("deliveryRadius", {
-                            valueAsNumber: true,
-                          })}
-                          type="number"
-                          min="0"
-                          placeholder="10"
-                          className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Delivery Fee ($)
-                        </label>
-                        <input
-                          {...register("deliveryFee", { valueAsNumber: true })}
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="15.00"
-                          className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Minimum Rental Period (days) *
-                      </label>
-                      <input
-                        {...register("minimumRentalPeriod", {
-                          valueAsNumber: true,
-                        })}
-                        type="number"
-                        min="1"
-                        placeholder="1"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                      {errors.minimumRentalPeriod && (
-                        <p className="mt-1 text-sm text-destructive">
-                          {errors.minimumRentalPeriod.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Maximum Rental Period (days)
-                      </label>
-                      <input
-                        {...register("maximumRentalPeriod", {
-                          valueAsNumber: true,
-                        })}
-                        type="number"
-                        min="1"
-                        placeholder="30"
-                        className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Cancellation Policy *
-                    </label>
-                    <select
-                      {...register("cancellationPolicy")}
-                      className="w-full px-4 py-3 border border-input rounded-lg bg-background capitalize focus:ring-2 focus:ring-ring transition-colors"
-                    >
-                      <option value="flexible">Flexible</option>
-                      <option value="moderate">Moderate</option>
-                      <option value="strict">Strict</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Rental Rules
-                    </label>
-                    <textarea
-                      {...register("rules")}
-                      rows={4}
-                      maxLength={1000}
-                      placeholder="Any specific rules or requirements..."
-                      className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="flex items-center gap-2">
-                      <input
-                        {...register("instantBooking")}
-                        type="checkbox"
-                        className="w-4 h-4 text-primary rounded border-input focus:ring-ring"
-                      />
-                      <span className="text-sm font-medium text-foreground">
-                        Allow instant booking (no approval needed)
-                      </span>
-                    </label>
-                  </div>
-                </div>
+                <DetailsStep
+                  register={register}
+                  errors={errors}
+                  showDeliveryFields={!!deliveryOptions?.delivery}
+                />
               )}
 
               {/* Step 5: Images */}
               {currentStep === 5 && (
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-bold text-foreground mb-6">
-                    Upload Images
-                  </h2>
-
-                  <div
-                    className="border-2 border-dashed border-input rounded-lg p-8 text-center hover:border-primary/50 transition-colors"
-                    data-testid="image-upload-area"
-                  >
-                    <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground mb-4">
-                      Upload up to 10 images of your item
-                    </p>
-                    <label className="inline-block px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 cursor-pointer transition-colors">
-                      Choose Files
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-
-                  {imageUrls.length > 0 && (
-                    <div className="grid grid-cols-3 gap-4">
-                      {imageUrls.map((url, index) => (
-                        <div key={index} className="relative aspect-square" data-testid="image-preview">
-                          <img
-                            src={url}
-                            alt={`Upload ${index + 1}`}
-                            className="w-full h-full object-cover rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeImage(index)}
-                            className="absolute top-2 right-2 bg-destructive text-destructive-foreground p-1 rounded-full hover:bg-destructive/90 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {errors.photos && (
-                    <p className="text-sm text-destructive">
-                      {errors.photos.message}
-                    </p>
-                  )}
-                </div>
+                <ImageUploadStep
+                  imageUrls={imageUrls}
+                  onUpload={handleImageUpload}
+                  onRemove={removeImage}
+                  error={errors.photos?.message}
+                />
               )}
 
               {/* Navigation Buttons */}
@@ -1425,7 +1088,7 @@ export default function CreateListing() {
                     onClick={prevStep}
                     leftIcon={<ArrowLeft className="w-5 h-5" />}
                   >
-                    Previous
+                    {t('listings.create.previous', 'Previous')}
                   </UnifiedButton>
                 ) : (
                   <div />
@@ -1437,7 +1100,7 @@ export default function CreateListing() {
                     onClick={nextStep}
                     rightIcon={<ArrowRight className="w-5 h-5" />}
                   >
-                    Next
+                    {t('common.next')}
                   </UnifiedButton>
                 ) : (
                   <UnifiedButton
@@ -1447,7 +1110,7 @@ export default function CreateListing() {
                     leftIcon={!isSubmitting ? <CheckCircle className="w-5 h-5" /> : undefined}
                     variant="success"
                   >
-                    {isSubmitting ? "Creating..." : "Create Listing"}
+                    {isSubmitting ? t('listings.create.creating', 'Creating...') : t('listings.create.createListing', 'Create Listing')}
                   </UnifiedButton>
                 )}
               </div>
@@ -1468,7 +1131,7 @@ export default function CreateListing() {
             leftIcon={!isSubmitting ? <CheckCircle className="h-5 w-5" /> : undefined}
             variant="success"
           >
-            {isSubmitting ? "Creating..." : "Create New Listing"}
+            {isSubmitting ? t('listings.create.creating', 'Creating...') : t('listings.create.createNewListing', 'Create New Listing')}
           </UnifiedButton>
         </div>
       </div>
@@ -1477,4 +1140,3 @@ export default function CreateListing() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

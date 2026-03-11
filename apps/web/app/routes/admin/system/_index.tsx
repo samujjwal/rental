@@ -1,5 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link } from "react-router";
+import { useTranslation } from "react-i18next";
+import { useState } from "react";
 import {
   Settings,
   Zap,
@@ -11,6 +13,8 @@ import {
   Key,
   Activity,
   HardDrive,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
@@ -63,103 +67,117 @@ interface SettingsCategory {
 }
 
 export default function SystemSettingsPage() {
+  const { t } = useTranslation();
   const { generalSettings, systemHealth, databaseInfo, error } =
     useLoaderData<typeof clientLoader>();
 
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    new Set(["core", "infrastructure", "security", "monitoring"])
+  );
+
+  const toggleGroup = (key: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const settingsCategories: SettingsCategory[] = [
     {
-      title: "General Settings",
-      description: "Site name, contact information, and basic configuration",
+      title: t("admin.generalSettings"),
+      description: t("admin.generalSettingsDesc"),
       icon: Settings,
       href: "/admin/system/general",
       status: "active",
       stats: [
         {
-          label: "Site Name",
+          label: t("admin.siteName"),
           value:
             typeof generalSettings?.siteName === "string" && generalSettings.siteName.trim()
               ? generalSettings.siteName
-              : "Rental Portal",
+              : "GharBatai Rentals",
         },
         {
-          label: "Maintenance",
+          label: t("admin.maintenance"),
           value:
-            Boolean((generalSettings as { maintenanceMode?: unknown } | null)?.maintenanceMode)
+            (generalSettings as { maintenanceMode?: unknown } | null)?.maintenanceMode
               ? "ON"
               : "OFF",
         },
       ],
     },
     {
-      title: "Power Operations",
-      description: "System maintenance, backups, and critical operations",
+      title: t("admin.powerOperations"),
+      description: t("admin.powerOperationsDesc"),
       icon: Zap,
       href: "/admin/system/power-operations",
       status: systemHealth?.services?.database?.status === "healthy" ? "active" : "warning",
       stats: [
-        { label: "API Status", value: systemHealth?.status || "Unknown" },
-        { label: "Uptime", value: `${systemHealth?.uptime || 0}%` },
+        { label: t("admin.apiStatus"), value: systemHealth?.status || "Unknown" },
+        { label: t("admin.uptime"), value: `${systemHealth?.uptime || 0}%` },
       ],
     },
     {
-      title: "Database Management",
-      description: "Database configuration, backups, and monitoring",
+      title: t("admin.databaseManagement"),
+      description: t("admin.databaseManagementDesc"),
       icon: Database,
       href: "/admin/system/database",
       status: systemHealth?.services?.database?.status === "healthy" ? "active" : "warning",
       stats: [
-        { label: "Status", value: systemHealth?.services?.database?.status || "Unknown" },
+        { label: t("admin.status"), value: systemHealth?.services?.database?.status || "Unknown" },
         {
-          label: "Connections",
+          label: t("admin.connections"),
           value: `${databaseInfo?.connections || 0}`,
         },
       ],
     },
     {
-      title: "Notification Settings",
-      description: "Email, SMS, and push notification configuration",
+      title: t("admin.notificationSettings"),
+      description: t("admin.notificationSettingsDesc"),
       icon: Bell,
       href: "/admin/system/notifications",
       status: "active",
     },
     {
-      title: "Security Settings",
-      description: "Authentication, authorization, and security policies",
+      title: t("admin.securitySettings"),
+      description: t("admin.securitySettingsDesc"),
       icon: Shield,
       href: "/admin/system/security",
       status: "active",
     },
     {
-      title: "API Keys",
-      description: "Manage third-party service integrations",
+      title: t("admin.apiKeys"),
+      description: t("admin.apiKeysDesc"),
       icon: Key,
       href: "/admin/system/api-keys",
       status: "active",
     },
     {
-      title: "Email Service",
-      description: "Email provider configuration and templates",
+      title: t("admin.emailService"),
+      description: t("admin.emailServiceDesc"),
       icon: Mail,
       href: "/admin/system/email",
       status: "active",
     },
     {
-      title: "Environment Variables",
-      description: "System environment configuration",
+      title: t("admin.environmentVariables"),
+      description: t("admin.environmentVariablesDesc"),
       icon: Server,
       href: "/admin/system/environment",
       status: "active",
     },
     {
-      title: "System Logs",
-      description: "View and manage application logs",
+      title: t("admin.systemLogs"),
+      description: t("admin.systemLogsDesc"),
       icon: Activity,
       href: "/admin/system/logs",
       status: "active",
     },
     {
-      title: "Backup Management",
-      description: "Database backups and restore operations",
+      title: t("admin.backupManagement"),
+      description: t("admin.backupManagementDesc"),
       icon: HardDrive,
       href: "/admin/system/backups",
       status: "active",
@@ -170,7 +188,7 @@ export default function SystemSettingsPage() {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold mb-2">Error Loading System Settings</h3>
+          <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingSystemSettings")}</h3>
           <p className="text-red-600">{error}</p>
         </div>
       </div>
@@ -180,9 +198,9 @@ export default function SystemSettingsPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">System Settings</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">{t("admin.systemSettings")}</h1>
         <p className="text-gray-600">
-          Configure and manage system-wide settings and integrations
+          {t("admin.systemSettingsDesc")}
         </p>
       </div>
 
@@ -192,7 +210,7 @@ export default function SystemSettingsPage() {
           <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">API Status</p>
+                <p className="text-sm text-gray-600 mb-1">{t("admin.apiStatus")}</p>
                 <p className="text-2xl font-bold text-green-600">
                   {systemHealth.status || "Unknown"}
                 </p>
@@ -203,7 +221,7 @@ export default function SystemSettingsPage() {
           <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Database</p>
+                <p className="text-sm text-gray-600 mb-1">{t("admin.database")}</p>
                 <p className="text-2xl font-bold text-green-600">
                   {systemHealth.services?.database?.status || "Unknown"}
                 </p>
@@ -214,7 +232,7 @@ export default function SystemSettingsPage() {
           <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Uptime</p>
+                <p className="text-sm text-gray-600 mb-1">{t("admin.uptime")}</p>
                 <p className="text-2xl font-bold text-blue-600">
                   {systemHealth.uptime || 0}%
                 </p>
@@ -225,7 +243,7 @@ export default function SystemSettingsPage() {
           <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Cache Status</p>
+                <p className="text-sm text-gray-600 mb-1">{t("admin.cacheStatus")}</p>
                 <p className="text-2xl font-bold text-green-600">
                   {systemHealth.services?.redis?.status || "N/A"}
                 </p>
@@ -236,82 +254,129 @@ export default function SystemSettingsPage() {
         </div>
       )}
 
-      {/* Settings Categories Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {settingsCategories.map((category) => {
-          const Icon = category.icon;
-          const statusColor =
-            category.status === "active"
-              ? "bg-green-100 text-green-800"
-              : category.status === "warning"
-                ? "bg-yellow-100 text-yellow-800"
-                : "bg-red-100 text-red-800";
+      {/* Settings Categories — Grouped Accordion */}
+      {(() => {
+        const groups: { key: string; title: string; hrefs: string[] }[] = [
+          {
+            key: "core",
+            title: t("admin.groupCore", "Core Settings"),
+            hrefs: ["/admin/system/general", "/admin/system/notifications", "/admin/system/email"],
+          },
+          {
+            key: "infrastructure",
+            title: t("admin.groupInfrastructure", "Infrastructure"),
+            hrefs: ["/admin/system/database", "/admin/system/backups", "/admin/system/environment"],
+          },
+          {
+            key: "security",
+            title: t("admin.groupSecurity", "Security & Access"),
+            hrefs: ["/admin/system/security", "/admin/system/api-keys"],
+          },
+          {
+            key: "monitoring",
+            title: t("admin.groupMonitoring", "Monitoring & Operations"),
+            hrefs: ["/admin/system/logs", "/admin/system/power-operations"],
+          },
+        ];
 
-          return (
-            <Link
-              key={category.href}
-              to={category.href}
-              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200 p-6 group"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
-                    <Icon className="w-6 h-6 text-blue-600" />
-                  </div>
-                  {category.status && (
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}
-                    >
-                      {category.status}
-                    </span>
+        return (
+          <div className="space-y-4">
+            {groups.map((group) => {
+              const items = settingsCategories.filter((c) => group.hrefs.includes(c.href));
+              const isOpen = openGroups.has(group.key);
+              return (
+                <div key={group.key} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.key)}
+                    className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                  >
+                    <span className="font-semibold text-gray-900">{group.title}</span>
+                    {isOpen ? (
+                      <ChevronUp className="w-5 h-5 text-gray-500" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-gray-500" />
+                    )}
+                  </button>
+                  {isOpen && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-white">
+                      {items.map((category) => {
+                        const Icon = category.icon;
+                        const statusColor =
+                          category.status === "active"
+                            ? "bg-green-100 text-green-800"
+                            : category.status === "warning"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800";
+
+                        return (
+                          <Link
+                            key={category.href}
+                            to={category.href}
+                            className="bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow p-5 group"
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center space-x-3">
+                                <div className="p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
+                                  <Icon className="w-5 h-5 text-blue-600" />
+                                </div>
+                                {category.status && (
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                                    {category.status}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <h3 className="text-base font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
+                              {category.title}
+                            </h3>
+                            <p className="text-sm text-gray-500 mb-3">{category.description}</p>
+                            {category.stats && (
+                              <div className="border-t pt-3 space-y-1">
+                                {category.stats.map((stat, idx) => (
+                                  <div key={idx} className="flex justify-between text-xs">
+                                    <span className="text-gray-500">{stat.label}:</span>
+                                    <span className="font-medium text-gray-900">{stat.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-              </div>
-
-              <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-                {category.title}
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">{category.description}</p>
-
-              {category.stats && (
-                <div className="border-t pt-4 space-y-2">
-                  {category.stats.map((stat, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-gray-600">{stat.label}:</span>
-                      <span className="font-medium text-gray-900">{stat.value}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Link>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Quick Actions */}
       <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{t("admin.quickActions")}</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Link
             to="/admin/system/power-operations"
             className="flex items-center space-x-3 p-4 bg-white rounded-lg hover:shadow transition-shadow"
           >
             <Zap className="w-5 h-5 text-yellow-600" />
-            <span className="font-medium text-gray-900">Power Operations</span>
+            <span className="font-medium text-gray-900">{t("admin.powerOperations")}</span>
           </Link>
           <Link
             to="/admin/system/logs"
             className="flex items-center space-x-3 p-4 bg-white rounded-lg hover:shadow transition-shadow"
           >
             <Activity className="w-5 h-5 text-blue-600" />
-            <span className="font-medium text-gray-900">View System Logs</span>
+            <span className="font-medium text-gray-900">{t("admin.viewSystemLogs")}</span>
           </Link>
           <Link
             to="/admin/system/backups"
             className="flex items-center space-x-3 p-4 bg-white rounded-lg hover:shadow transition-shadow"
           >
             <HardDrive className="w-5 h-5 text-green-600" />
-            <span className="font-medium text-gray-900">Manage Backups</span>
+            <span className="font-medium text-gray-900">{t("admin.manageBackups")}</span>
           </Link>
         </div>
       </div>

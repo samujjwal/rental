@@ -1,10 +1,12 @@
 import { io, Socket } from 'socket.io-client';
 import { getToken } from './authStore';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3400';
+import { SOCKET_BASE_URL } from '~/config';
 
 let socket: Socket | null = null;
 let currentToken: string | null = null;
+
+// Track registered event handlers so they survive reconnects
+const registeredHandlers: Array<{ event: string; callback: (...args: any[]) => void }> = [];
 
 export type SocketStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 
@@ -41,7 +43,7 @@ export async function connectSocket(): Promise<Socket | null> {
   currentToken = token;
   notifyStatusChange('connecting');
 
-  socket = io(`${API_BASE_URL}/messaging`, {
+  socket = io(`${SOCKET_BASE_URL}/messaging`, {
     auth: { token },
     transports: ['websocket'],
     reconnection: true,
@@ -61,6 +63,11 @@ export async function connectSocket(): Promise<Socket | null> {
 
   socket.on('connect_error', () => {
     notifyStatusChange('error');
+  });
+
+  // Replay all registered handlers on the new socket
+  registeredHandlers.forEach(({ event, callback }) => {
+    socket?.on(event, callback);
   });
 
   return socket;
@@ -134,9 +141,12 @@ export function onNewMessage(
   }) => void,
 ): () => void {
   const handler = (data: any) => callback(data);
+  registeredHandlers.push({ event: 'new_message', callback: handler });
   socket?.on('new_message', handler);
   return () => {
     socket?.off('new_message', handler);
+    const idx = registeredHandlers.findIndex((h) => h.event === 'new_message' && h.callback === handler);
+    if (idx !== -1) registeredHandlers.splice(idx, 1);
   };
 }
 
@@ -147,9 +157,12 @@ export function onTypingIndicator(
   callback: (data: { conversationId: string; userId: string; isTyping: boolean }) => void,
 ): () => void {
   const handler = (data: any) => callback(data);
+  registeredHandlers.push({ event: 'typing', callback: handler });
   socket?.on('typing', handler);
   return () => {
     socket?.off('typing', handler);
+    const idx = registeredHandlers.findIndex((h) => h.event === 'typing' && h.callback === handler);
+    if (idx !== -1) registeredHandlers.splice(idx, 1);
   };
 }
 
@@ -160,9 +173,12 @@ export function onMessagesRead(
   callback: (data: { conversationId: string; userId: string }) => void,
 ): () => void {
   const handler = (data: any) => callback(data);
+  registeredHandlers.push({ event: 'messages_read', callback: handler });
   socket?.on('messages_read', handler);
   return () => {
     socket?.off('messages_read', handler);
+    const idx = registeredHandlers.findIndex((h) => h.event === 'messages_read' && h.callback === handler);
+    if (idx !== -1) registeredHandlers.splice(idx, 1);
   };
 }
 
@@ -171,8 +187,11 @@ export function onMessagesRead(
  */
 export function onUnreadCount(callback: (data: { count: number }) => void): () => void {
   const handler = (data: any) => callback(data);
+  registeredHandlers.push({ event: 'unread_count', callback: handler });
   socket?.on('unread_count', handler);
   return () => {
     socket?.off('unread_count', handler);
+    const idx = registeredHandlers.findIndex((h) => h.event === 'unread_count' && h.callback === handler);
+    if (idx !== -1) registeredHandlers.splice(idx, 1);
   };
 }

@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { MetaFunction } from "react-router";
+import { useTranslation } from "react-i18next";
 import { RouteErrorBoundary } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
@@ -10,15 +11,17 @@ export const meta: MetaFunction = () => {
 };
 
 export default function TermsPage() {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="container mx-auto max-w-3xl px-4 py-16">
-        <h1 className="text-4xl font-bold tracking-tight">Terms of Service</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Last updated: June 2025</p>
+        <h1 className="text-4xl font-bold tracking-tight">{t("pages.terms.title")}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t("pages.terms.lastUpdated")}: {t("pages.terms.lastUpdatedDate")}</p>
 
         <div className="mt-10 space-y-8 text-base leading-7 text-foreground/80">
           <section>
-            <h2 className="text-xl font-semibold text-foreground">1. Acceptance of Terms</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section1")}</h2>
             <p className="mt-2">
               By accessing or using GharBatai ("the Platform"), you agree to be bound by these Terms
               of Service. If you do not agree, you may not use the Platform. We reserve the right to
@@ -27,7 +30,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">2. Account Registration</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section2")}</h2>
             <p className="mt-2">
               You must be at least 18 years old to create an account. You are responsible for
               maintaining the security of your account credentials and for all activity that occurs
@@ -37,7 +40,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">3. Platform Services</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section3")}</h2>
             <p className="mt-2">
               GharBatai provides a marketplace connecting individuals who wish to rent items
               ("Renters") with individuals who own items available for rent ("Owners"). GharBatai
@@ -47,7 +50,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">4. Listing &amp; Booking</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section4")}</h2>
             <ul className="mt-2 list-disc pl-6 space-y-1">
               <li>Owners are responsible for the accuracy of their listing descriptions, pricing, and availability</li>
               <li>All listings are subject to review and may be removed if they violate our policies</li>
@@ -57,7 +60,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">5. Payments &amp; Fees</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section5")}</h2>
             <p className="mt-2">
               All payments are processed through our payment partner, Stripe. GharBatai charges a
               platform fee (15% to owners) and a service fee (5% to renters) on each transaction.
@@ -71,7 +74,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">6. Disputes &amp; Refunds</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section6")}</h2>
             <p className="mt-2">
               If a dispute arises between a renter and owner, both parties should first attempt to
               resolve it directly. If resolution is not reached, either party may file a dispute
@@ -82,7 +85,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">7. Insurance &amp; Liability</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section7")}</h2>
             <p className="mt-2">
               Owners may be required to provide proof of insurance for certain listing categories.
               GharBatai is not liable for damage, loss, or injury arising from the use of rented
@@ -91,7 +94,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">8. Prohibited Conduct</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section8")}</h2>
             <ul className="mt-2 list-disc pl-6 space-y-1">
               <li>Listing prohibited, illegal, or stolen items</li>
               <li>Providing false or misleading information</li>
@@ -103,7 +106,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">9. Account Suspension &amp; Termination</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section9")}</h2>
             <p className="mt-2">
               We reserve the right to suspend or terminate any account that violates these terms,
               engages in fraudulent activity, or poses a risk to the community. Users may also
@@ -112,7 +115,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">10. Limitation of Liability</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section10")}</h2>
             <p className="mt-2">
               GharBatai provides the Platform "as is" without warranties of any kind. To the maximum
               extent permitted by law, GharBatai shall not be liable for any indirect, incidental,
@@ -121,7 +124,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">11. Governing Law</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section11")}</h2>
             <p className="mt-2">
               These Terms are governed by the laws of the jurisdiction in which GharBatai operates.
               Any disputes arising under these terms shall be resolved through binding arbitration.
@@ -129,7 +132,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">12. Contact</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("pages.terms.section12")}</h2>
             <p className="mt-2">
               Questions about these Terms? Contact us at{" "}
               <a href="mailto:legal@gharbatai.com" className="text-primary hover:underline">
@@ -141,11 +144,11 @@ export default function TermsPage() {
         </div>
 
         <div className="mt-12 flex gap-4 text-sm text-muted-foreground">
-          <Link to="/privacy" className="hover:text-primary">Privacy Policy</Link>
+          <Link to="/privacy" className="hover:text-primary">{t("pages.terms.privacyPolicy")}</Link>
           <span>·</span>
-          <Link to="/cookies" className="hover:text-primary">Cookie Policy</Link>
+          <Link to="/cookies" className="hover:text-primary">{t("pages.terms.cookiePolicy")}</Link>
           <span>·</span>
-          <Link to="/" className="hover:text-primary">Back to Home</Link>
+          <Link to="/" className="hover:text-primary">{t("common.backToHome")}</Link>
         </div>
       </div>
     </div>

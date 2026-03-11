@@ -45,6 +45,11 @@ export type {
 
 // Booking contract types
 export type {
+  Booking,
+  CreateBookingRequest,
+  BookingCalculation,
+  BookingAvailability,
+  CreateReviewRequest,
   CreateBookingInput,
   UpdateBookingInput,
   CalculatePriceInput,
@@ -56,6 +61,11 @@ export type {
 
 // Listing contract types
 export type {
+  Listing,
+  CreateListingRequest,
+  UpdateListingRequest,
+  ListingSearchResponse,
+  Category,
   ListingImage,
   ListingLocation,
   DeliveryOptions,
@@ -69,10 +79,26 @@ export type {
 // User contract types
 export type {
   AuthResponse,
+  User,
+  PublicUser,
   UserProfile,
+  UserProfileExtended,
+  UserPreferences,
+  NotificationPreferences,
   UpdateProfileInput,
+  UpdateUserRequest,
   LoginInput,
   SignupInput,
+} from '@rental-portal/shared-types';
+
+// Auth contract types
+export type {
+  LoginRequest,
+  SignupRequest,
+  RefreshTokenRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+  VerifyEmailRequest,
 } from '@rental-portal/shared-types';
 
 // Payment contract types

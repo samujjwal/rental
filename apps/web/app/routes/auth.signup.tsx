@@ -4,17 +4,19 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, UserPlus } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { authApi } from "~/lib/api/auth";
 import { useAuthStore } from "~/lib/store/auth";
 import { createUserSession } from "~/utils/auth";
 import { signupSchema, type SignupInput } from "~/lib/validation/auth";
+import { APP_PHONE_PLACEHOLDER } from "~/config/locale";
 import { cn } from "~/lib/utils";
 import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Sign Up - Universal Rental Portal" },
+    { title: "Sign Up | GharBatai Rentals" },
     { name: "description", content: "Create a new account" },
   ];
 };
@@ -64,29 +66,30 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     firstName: validatedFirstName,
     lastName: validatedLastName,
     phone: validatedPhone,
-    role: validatedRole,
   } = validation.data;
+  const validatedRole = parsedForm.role;
 
   try {
+    // Pass the selected role to the API
     const response = await authApi.signup({
       email: validatedEmail,
       password: validatedPassword,
       firstName: validatedFirstName,
       lastName: validatedLastName || undefined,
       phone: validatedPhone || undefined,
-      // Note: role is not sent - API creates all users as 'renter'
-      // Users can upgrade to 'owner' via /become-owner
+      role: validatedRole,
     });
 
     // Update auth store immediately for better SPA experience
-    useAuthStore.getState().setAuth(response.user, response.accessToken, response.refreshToken);
+    // B-29: refreshToken is now stored in httpOnly cookie by the API
+    useAuthStore.getState().setAuth(response.user, response.accessToken);
 
     return createUserSession({
       userId: response.user.id,
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
       remember: false,
-      redirectTo: "/dashboard",
+      redirectTo: "/",
     });
   } catch (error: unknown) {
     return {
@@ -101,6 +104,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 }
 
 export default function Signup() {
+  const { t } = useTranslation();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const [showPassword, setShowPassword] = useState(false);
@@ -154,10 +158,10 @@ export default function Signup() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-3xl font-bold text-primary">Sign Up</h1>
+            <h1 className="text-3xl font-bold text-primary">{t('auth.signup.title')}</h1>
           </Link>
           <p className="text-muted-foreground mt-2">
-            Create your account to get started
+            {t('auth.signup.subtitle', 'Create your account to get started')}
           </p>
         </div>
 
@@ -183,7 +187,7 @@ export default function Signup() {
             {/* Role Selection */}
             <div className="space-y-2 mb-6">
               <label className="text-sm font-medium leading-none">
-                I want to
+                {t('auth.signup.iWantTo', 'I want to')}
               </label>
               <div className="grid grid-cols-2 gap-4">
                 <label className="relative flex items-center justify-center p-4 border-2 border-input rounded-lg cursor-pointer hover:border-primary has-[:checked]:border-primary has-[:checked]:bg-primary/5">
@@ -193,7 +197,7 @@ export default function Signup() {
                     value="renter"
                     className="sr-only"
                   />
-                  <span className="text-sm font-medium">Rent items</span>
+                  <span className="text-sm font-medium">{t('auth.signup.rentItems', 'Rent items')}</span>
                 </label>
                 <label className="relative flex items-center justify-center p-4 border-2 border-input rounded-lg cursor-pointer hover:border-primary has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input
@@ -202,7 +206,7 @@ export default function Signup() {
                     value="owner"
                     className="sr-only"
                   />
-                  <span className="text-sm font-medium">List items</span>
+                  <span className="text-sm font-medium">{t('auth.signup.listItems', 'List items')}</span>
                 </label>
               </div>
               {errors.role && (
@@ -219,7 +223,7 @@ export default function Signup() {
                   htmlFor="firstName"
                   className="text-sm font-medium leading-none"
                 >
-                  First Name *
+                  {t('auth.signup.firstName')} *
                 </label>
                 <input
                   {...register("firstName")}
@@ -228,7 +232,7 @@ export default function Signup() {
                   name="firstName"
                   maxLength={50}
                   className={inputClasses}
-                  placeholder="John"
+                  placeholder="Ram"
                 />
                 {errors.firstName && (
                   <p className="text-sm text-destructive">
@@ -241,7 +245,7 @@ export default function Signup() {
                   htmlFor="lastName"
                   className="text-sm font-medium leading-none"
                 >
-                  Last Name
+                  {t('auth.signup.lastName')}
                 </label>
                 <input
                   {...register("lastName")}
@@ -250,7 +254,7 @@ export default function Signup() {
                   name="lastName"
                   maxLength={50}
                   className={inputClasses}
-                  placeholder="Doe"
+                  placeholder="Sharma"
                 />
                 {errors.lastName && (
                   <p className="text-sm text-destructive">
@@ -266,7 +270,7 @@ export default function Signup() {
                 htmlFor="email"
                 className="text-sm font-medium leading-none"
               >
-                Email Address *
+                {t('auth.signup.email')} *
               </label>
               <input
                 {...register("email")}
@@ -290,7 +294,7 @@ export default function Signup() {
                 htmlFor="phone"
                 className="text-sm font-medium leading-none"
               >
-                Phone Number
+                {t('auth.signup.phone')}
               </label>
               <input
                 {...register("phone")}
@@ -299,7 +303,7 @@ export default function Signup() {
                 name="phone"
                 maxLength={20}
                 className={inputClasses}
-                placeholder="+1234567890"
+                placeholder={APP_PHONE_PLACEHOLDER}
               />
               {errors.phone && (
                 <p className="text-sm text-destructive">
@@ -314,7 +318,7 @@ export default function Signup() {
                 htmlFor="password"
                 className="text-sm font-medium leading-none"
               >
-                Password *
+                {t('auth.signup.password')} *
               </label>
               <div className="relative">
                 <input
@@ -330,6 +334,7 @@ export default function Signup() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -344,7 +349,7 @@ export default function Signup() {
                 <div className="mt-2">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs text-muted-foreground">
-                      Password strength:
+                      {t('auth.signup.passwordStrength', 'Password strength:')}
                     </span>
                     <span
                       className={cn(
@@ -389,7 +394,7 @@ export default function Signup() {
                 htmlFor="confirmPassword"
                 className="text-sm font-medium leading-none"
               >
-                Confirm Password *
+                {t('auth.signup.confirmPassword')} *
               </label>
               <div className="relative">
                 <input
@@ -405,6 +410,7 @@ export default function Signup() {
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -429,22 +435,29 @@ export default function Signup() {
               fullWidth
               variant="primary"
             >
-              {isSubmitting ? "Creating account..." : "Create Account"}
+              {isSubmitting ? t('auth.signup.creating') : t('auth.signup.create')}
             </UnifiedButton>
           </Form>
 
           {/* Sign In Link */}
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
-              Already have an account?{" "}
+              {t('auth.signup.hasAccount')}{" "}
               <Link
                 to="/auth/login"
                 className="text-primary hover:text-primary/90 font-medium underline-offset-4 hover:underline"
               >
-                Sign in
+                {t('auth.signup.signIn')}
               </Link>
             </p>
           </div>
+        </div>
+
+        {/* Trust signals */}
+        <div className="mt-6 flex items-center justify-center gap-6 text-xs text-muted-foreground flex-wrap">
+          <span>🔒 Secure &amp; encrypted</span>
+          <span>⭐ 10,000+ renters</span>
+          <span>🛡️ Insured transactions</span>
         </div>
       </div>
     </div>
@@ -452,4 +465,3 @@ export default function Signup() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

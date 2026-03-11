@@ -13,6 +13,7 @@ describe('SearchService', () => {
   };
 
   const mockPrismaService = {
+    $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: 'listing-1' }]),
     listing: {
       count: jest.fn(),
       findMany: jest.fn(),
@@ -139,6 +140,159 @@ describe('SearchService', () => {
 
       expect(similar).toHaveLength(1);
       expect(similar[0].title).toBe('Similar Listing');
+    });
+  });
+
+  // ---------- Geo search tests ----------
+  describe('search — geo/proximity filtering', () => {
+    const baseListing = (id: string, lat: number, lon: number, title = 'Listing') => ({
+      id,
+      title,
+      description: 'desc',
+      slug: id,
+      basePrice: 100,
+      currency: 'NPR',
+      city: 'Kathmandu',
+      state: 'Bagmati',
+      country: 'Nepal',
+      latitude: lat,
+      longitude: lon,
+      photos: [],
+      status: 'AVAILABLE',
+      verificationStatus: 'VERIFIED',
+      averageRating: 4.0,
+      totalReviews: 5,
+      bookingMode: 'INSTANT_BOOK',
+      condition: 'Good',
+      features: [],
+      owner: { id: 'owner-1', firstName: 'Ram', lastName: 'Sharma', averageRating: 4.0 },
+      category: { id: 'cat-1', name: 'Tools', slug: 'tools' },
+    });
+
+    beforeEach(() => {
+      mockCacheService.get.mockResolvedValue(null);
+    });
+
+    it('should filter listings within radius (Haversine)', async () => {
+      // Center: Kathmandu (27.7172, 85.3240)
+      // Nearby: ~2 km away (within 5km radius)
+      // Far: ~50 km away (outside 5km radius)
+      mockPrismaService.listing.findMany.mockResolvedValue([
+        baseListing('near-1', 27.7200, 85.3300, 'Nearby Listing'),  // ~0.7 km
+        baseListing('far-1', 27.25, 85.32, 'Far Listing'),            // ~52 km
+      ]);
+
+      const result = await service.search({
+        location: { lat: 27.7172, lon: 85.3240, radius: '5km' },
+      });
+
+      // Only the nearby listing should pass the Haversine filter
+      expect(result.results.some((r) => r.id === 'near-1')).toBe(true);
+      expect(result.results.some((r) => r.id === 'far-1')).toBe(false);
+    });
+
+    it('should include distance in results for geo search', async () => {
+      mockPrismaService.listing.findMany.mockResolvedValue([
+        baseListing('near-1', 27.7200, 85.3300, 'Nearby'),
+      ]);
+
+      const result = await service.search({
+        location: { lat: 27.7172, lon: 85.3240, radius: '10km' },
+      });
+
+      expect(result.results).toHaveLength(1);
+      // Distance should be populated and roughly < 1 km
+      const dist = result.results[0].distance;
+      expect(dist).toBeDefined();
+      expect(dist).toBeLessThan(2);
+    });
+
+    it('should sort results by distance when sort=distance', async () => {
+      // Provide listings in reverse distance order
+      mockPrismaService.listing.findMany.mockResolvedValue([
+        baseListing('mid-1', 27.74, 85.33, 'Mid'),     // ~2.6 km
+        baseListing('near-1', 27.718, 85.325, 'Near'),  // ~0.1 km
+        baseListing('far-3', 27.76, 85.34, 'Farther'),  // ~5 km
+      ]);
+
+      const result = await service.search({
+        location: { lat: 27.7172, lon: 85.3240, radius: '10km' },
+        sort: 'distance',
+      });
+
+      const ids = result.results.map((r) => r.id);
+      expect(ids[0]).toBe('near-1');
+      // The mid listing should come before the farther one
+      const midIdx = ids.indexOf('mid-1');
+      const farIdx = ids.indexOf('far-3');
+      expect(midIdx).toBeLessThan(farIdx);
+    });
+
+    it('should apply bounding-box pre-filter in the Prisma where clause', async () => {
+      mockPrismaService.listing.findMany.mockResolvedValue([]);
+      mockPrismaService.listing.count.mockResolvedValue(0);
+
+      await service.search({
+        location: { lat: 27.7172, lon: 85.3240, radius: '10km' },
+      });
+
+      // Verify that findMany was called with latitude/longitude bounding box
+      const findManyCall = mockPrismaService.listing.findMany.mock.calls[0][0];
+      expect(findManyCall.where.latitude).toBeDefined();
+      expect(findManyCall.where.latitude.gte).toBeDefined();
+      expect(findManyCall.where.latitude.lte).toBeDefined();
+      expect(findManyCall.where.longitude).toBeDefined();
+      expect(findManyCall.where.longitude.gte).toBeDefined();
+      expect(findManyCall.where.longitude.lte).toBeDefined();
+
+      // Bounding box should be roughly ±0.09 degrees for 10km radius (10/111)
+      const latDelta = findManyCall.where.latitude.lte - findManyCall.where.latitude.gte;
+      expect(latDelta).toBeGreaterThan(0.15);
+      expect(latDelta).toBeLessThan(0.25);
+    });
+
+    it('should default to 25km radius when no radius specified', async () => {
+      mockPrismaService.listing.findMany.mockResolvedValue([
+        baseListing('within-25km', 27.90, 85.40, 'Within 25km'),  // ~21 km
+      ]);
+
+      const result = await service.search({
+        location: { lat: 27.7172, lon: 85.3240 },
+      });
+
+      // With default 25km radius, a listing 21km away should be included
+      expect(result.results.some((r) => r.id === 'within-25km')).toBe(true);
+    });
+
+    it('should handle radius in miles', async () => {
+      // 3mi ≈ 4.83km
+      mockPrismaService.listing.findMany.mockResolvedValue([
+        baseListing('close', 27.72, 85.33, 'Close'),   // ~0.7 km — within 3mi
+        baseListing('far', 27.78, 85.38, 'Far'),         // ~9 km — outside 3mi
+      ]);
+
+      const result = await service.search({
+        location: { lat: 27.7172, lon: 85.3240, radius: '3mi' },
+      });
+
+      expect(result.results.some((r) => r.id === 'close')).toBe(true);
+      expect(result.results.some((r) => r.id === 'far')).toBe(false);
+    });
+
+    it('should exclude listings with null coordinates', async () => {
+      mockPrismaService.listing.findMany.mockResolvedValue([
+        baseListing('has-coords', 27.72, 85.33, 'Valid'),
+        { ...baseListing('no-lat', 0, 85.33, 'No Lat'), latitude: null },
+        { ...baseListing('no-lon', 27.72, 0, 'No Lon'), longitude: null },
+      ]);
+
+      const result = await service.search({
+        location: { lat: 27.7172, lon: 85.3240, radius: '5km' },
+      });
+
+      expect(result.results.some((r) => r.id === 'has-coords')).toBe(true);
+      expect(result.results.some((r) => r.id === 'no-lat')).toBe(false);
+      expect(result.results.some((r) => r.id === 'no-lon')).toBe(false);
     });
   });
 });

@@ -11,6 +11,9 @@ describe('ConversationsService', () => {
     listing: {
       findUnique: jest.fn(),
     },
+    user: {
+      findUnique: jest.fn(),
+    },
     conversation: {
       create: jest.fn(),
       findFirst: jest.fn(),
@@ -18,6 +21,10 @@ describe('ConversationsService', () => {
       findMany: jest.fn(),
       count: jest.fn(),
       delete: jest.fn(),
+    },
+    conversationParticipant: {
+      deleteMany: jest.fn(),
+      count: jest.fn(),
     },
   };
 
@@ -47,6 +54,7 @@ describe('ConversationsService', () => {
 
     it('should return existing conversation if found', async () => {
       mockPrismaService.listing.findUnique.mockResolvedValue({ id: 'listing-1' });
+      mockPrismaService.user.findUnique.mockResolvedValue({ id: 'user-2', status: 'ACTIVE' });
       const existingConv = { id: 'conv-1', type: 'BOOKING' };
       mockPrismaService.conversation.findFirst.mockResolvedValue(existingConv);
 
@@ -60,6 +68,7 @@ describe('ConversationsService', () => {
 
     it('should create new conversation if not found', async () => {
       mockPrismaService.listing.findUnique.mockResolvedValue({ id: 'listing-1' });
+      mockPrismaService.user.findUnique.mockResolvedValue({ id: 'user-2', status: 'ACTIVE' });
       mockPrismaService.conversation.findFirst.mockResolvedValue(null);
 
       const newConv = { id: 'conv-2', type: 'BOOKING' };

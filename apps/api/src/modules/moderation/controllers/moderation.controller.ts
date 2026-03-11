@@ -9,12 +9,12 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  NotFoundException,
 } from '@nestjs/common';
+import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '@/modules/auth/guards/roles.guard';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
+import { UserRole } from '@rental-portal/database';
 import { ContentModerationService } from '../services/content-moderation.service';
 
 @ApiTags('Moderation')
@@ -25,7 +25,7 @@ export class ModerationController {
   constructor(private readonly moderationService: ContentModerationService) {}
 
   @Get('queue')
-  @Roles('ADMIN' as any)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get moderation queue (admin only)' })
   @ApiResponse({ status: 200, description: 'Queue retrieved' })
   async getQueue(
@@ -41,7 +41,7 @@ export class ModerationController {
   }
 
   @Post('queue/:entityId/approve')
-  @Roles('ADMIN' as any)
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Approve flagged content (admin only)' })
   @ApiResponse({ status: 200, description: 'Content approved' })
@@ -56,7 +56,7 @@ export class ModerationController {
   }
 
   @Post('queue/:entityId/reject')
-  @Roles('ADMIN' as any)
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reject flagged content (admin only)' })
   @ApiResponse({ status: 200, description: 'Content rejected' })
@@ -71,7 +71,7 @@ export class ModerationController {
   }
 
   @Get('history/:userId')
-  @Roles('ADMIN' as any)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get user moderation history (admin only)' })
   @ApiResponse({ status: 200, description: 'History retrieved' })
   async getUserHistory(@Param('userId') userId: string) {
@@ -79,10 +79,13 @@ export class ModerationController {
   }
 
   @Post('test/text')
-  @Roles('ADMIN' as any)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Test text moderation (admin only)' })
   @ApiResponse({ status: 200, description: 'Moderation result' })
   async testTextModeration(@Body('text') text: string) {
+    if (process.env.NODE_ENV === 'production') {
+      throw i18nNotFound('common.notFound');
+    }
     return this.moderationService.moderateMessage(text);
   }
 }

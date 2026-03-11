@@ -1,30 +1,50 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView } from "react-native";
+import { useFocusEffect } from '@react-navigation/native';
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { UserStats } from "@rental-portal/mobile-sdk";
+import type { UserStats } from '~/types';
+
+const STAT_CARDS = [
+  { key: "listingsCount",   label: "Listings",    color: "#2563EB", bg: "#DBEAFE", emoji: "🏠" },
+  { key: "bookingsAsOwner", label: "Bookings",    color: "#16A34A", bg: "#DCFCE7", emoji: "📅" },
+  { key: "totalReviews",    label: "Reviews",     color: "#D97706", bg: "#FEF3C7", emoji: "💬" },
+  { key: "averageRating",   label: "Avg. Rating", color: "#7C3AED", bg: "#EDE9FE", emoji: "⭐" },
+] as const;
+
+const QUICK_LINKS = [
+  { label: "My Listings",  screen: "OwnerListings"   },
+  { label: "Calendar",     screen: "OwnerCalendar"   },
+  { label: "Earnings",     screen: "OwnerEarnings"   },
+  { label: "Insights",     screen: "OwnerInsights"   },
+  { label: "Performance",  screen: "OwnerPerformance"},
+  { label: "Payments",     screen: "Payments"        },
+] as const;
 
 export function OwnerDashboardScreen({ navigation }: { navigation: any }) {
   const { user } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      if (!user) return;
-      setLoading(true);
-      try {
-        const response = await mobileClient.getUserStats();
-        setStats(response);
-      } catch (err) {
-        setStats(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      const fetchStats = async () => {
+        if (!user) return;
+        setLoading(true);
+        setError("");
+        try {
+          const response = await mobileClient.getUserStats();
+          setStats(response);
+        } catch {
+          setError("Unable to load stats.");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchStats();
+    }, [user])
+  );
 
   if (!user) {
     return (
@@ -36,94 +56,78 @@ export function OwnerDashboardScreen({ navigation }: { navigation: any }) {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <Text style={styles.heading}>Owner Dashboard</Text>
+      <Text style={styles.subheading}>Welcome back, {user.firstName || "Owner"}</Text>
+
       {loading ? (
-        <ActivityIndicator size="small" color="#111827" />
+        <ActivityIndicator size="small" color="#2563EB" style={{ marginTop: 16 }} />
+      ) : error ? (
+        <Text style={styles.error}>{error}</Text>
       ) : stats ? (
-        <View style={styles.card}>
-          <Text style={styles.label}>Listings</Text>
-          <Text style={styles.value}>{stats.listingsCount}</Text>
-          <Text style={styles.label}>Bookings as Owner</Text>
-          <Text style={styles.value}>{stats.bookingsAsOwner}</Text>
-          <Text style={styles.label}>Bookings as Renter</Text>
-          <Text style={styles.value}>{stats.bookingsAsRenter}</Text>
-          <Text style={styles.label}>Average Rating</Text>
-          <Text style={styles.value}>{stats.averageRating ?? "N/A"}</Text>
-          <Text style={styles.label}>Total Reviews</Text>
-          <Text style={styles.value}>{stats.totalReviews ?? 0}</Text>
+        <View style={styles.statsGrid}>
+          {STAT_CARDS.map(({ key, label, color, bg, emoji }) => {
+            const raw = (stats as unknown as Record<string, unknown>)[key as string];
+            const val = typeof raw === "number" ? raw : 0;
+            const display =
+              key === "averageRating"
+                ? val > 0 ? `${val.toFixed(1)} ★` : "—"
+                : String(val);
+            return (
+              <View key={key} style={[styles.statCard, { borderTopColor: color }]}>
+                <View style={[styles.statIconBox, { backgroundColor: bg }]}>
+                  <Text style={styles.statEmoji}>{emoji}</Text>
+                </View>
+                <Text style={[styles.statValue, { color }]}>{display}</Text>
+                <Text style={styles.statLabel}>{label}</Text>
+              </View>
+            );
+          })}
         </View>
-      ) : (
-        <Text style={styles.status}>No stats available.</Text>
-      )}
-      <View style={styles.quickRow}>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("OwnerListings")}>
-          <Text style={styles.quickText}>Listings</Text>
-        </Pressable>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("OwnerCalendar")}>
-          <Text style={styles.quickText}>Calendar</Text>
-        </Pressable>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("OwnerEarnings")}>
-          <Text style={styles.quickText}>Earnings</Text>
-        </Pressable>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("OwnerInsights")}>
-          <Text style={styles.quickText}>Insights</Text>
-        </Pressable>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("OwnerPerformance")}>
-          <Text style={styles.quickText}>Performance</Text>
-        </Pressable>
-        <Pressable style={styles.quickButton} onPress={() => navigation.navigate("Payments")}>
-          <Text style={styles.quickText}>Payments</Text>
-        </Pressable>
+      ) : null}
+
+      <Text style={styles.sectionTitle}>Quick Access</Text>
+      <View style={styles.quickGrid}>
+        {QUICK_LINKS.map(({ label, screen }) => (
+          <Pressable
+            key={screen}
+            style={({ pressed }) => [styles.quickCard, pressed && { opacity: 0.75 }]}
+            onPress={() => navigation.navigate(screen)}
+          >
+            <Text style={styles.quickText}>{label}</Text>
+          </Pressable>
+        ))}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll:      { flex: 1, backgroundColor: "#F9FAFB" },
+  container:   { padding: 20, paddingBottom: 40 },
+  heading:     { fontSize: 22, fontWeight: "800", color: "#111827", marginBottom: 2 },
+  subheading:  { fontSize: 14, color: "#6B7280", marginBottom: 20 },
+  error:       { color: "#DC2626", marginTop: 12 },
+  status:      { color: "#6B7280", marginTop: 8 },
+  statsGrid:   { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 28 },
+  statCard: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#F9FAFB",
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 12,
-  },
-  card: {
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    padding: 16,
+    minWidth: "44%",
     backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 14,
+    borderTopWidth: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  label: {
-    marginTop: 8,
-    color: "#6B7280",
-  },
-  value: {
-    fontWeight: "700",
-    color: "#111827",
-  },
-  status: {
-    color: "#6B7280",
-  },
-  quickRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 16,
-  },
-  quickButton: {
-    backgroundColor: "#111827",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  quickText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
+  statIconBox:   { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  statEmoji:     { fontSize: 18 },
+  statValue:     { fontSize: 22, fontWeight: "800", marginBottom: 2 },
+  statLabel:     { fontSize: 12, color: "#6B7280" },
+  sectionTitle:  { fontSize: 16, fontWeight: "700", color: "#111827", marginBottom: 12 },
+  quickGrid:     { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  quickCard:     { backgroundColor: "#111827", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10 },
+  quickText:     { color: "#FFFFFF", fontWeight: "600", fontSize: 13 },
 });

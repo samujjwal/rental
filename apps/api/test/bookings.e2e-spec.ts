@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { BookingStatus, PropertyStatus, UserRole, BookingMode } from '@rental-portal/database';
-import { cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
 
 describe('Bookings (e2e)', () => {
   let app: INestApplication;
@@ -16,6 +16,8 @@ describe('Bookings (e2e)', () => {
   let categoryId: string;
   let listingId: string;
   let bookingId: string;
+  const ownerEmail = buildTestEmail('booking-owner');
+  const renterEmail = buildTestEmail('booking-renter');
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -46,19 +48,19 @@ describe('Bookings (e2e)', () => {
     // Clean up test data
     await cleanupCoreRelationalData(prisma);
     await prisma.listing.deleteMany({
-      where: { owner: { email: { contains: '@bookingtest.com' } } },
+      where: { owner: { email: { in: [ownerEmail, renterEmail] } } },
     });
     await prisma.category.deleteMany({
       where: { slug: { contains: 'test-category' } },
     });
     await prisma.user.deleteMany({
-      where: { email: { contains: '@bookingtest.com' } },
+      where: { email: { in: [ownerEmail, renterEmail] } },
     });
 
     const owner = await createUserWithRole({
       app,
       prisma,
-      email: 'owner@bookingtest.com',
+      email: ownerEmail,
       firstName: 'Test',
       lastName: 'Owner',
       phoneNumber: '+1234567890',
@@ -70,7 +72,7 @@ describe('Bookings (e2e)', () => {
     const renter = await createUserWithRole({
       app,
       prisma,
-      email: 'renter@bookingtest.com',
+      email: renterEmail,
       firstName: 'Test',
       lastName: 'Renter',
       phoneNumber: '+1234567891',

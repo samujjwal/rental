@@ -1,10 +1,12 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams, Link, useRevalidator } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import { AlertCircle, Search } from "lucide-react";
 import { adminApi, type AuditLogEntry } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { formatDateTime } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
   return [
@@ -15,7 +17,7 @@ export const meta: MetaFunction = () => {
 
 const safeDateTimeLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
-  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "Unknown date" : formatDateTime(date);
 };
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
@@ -74,6 +76,7 @@ function getEntityLink(entity: unknown, entityId?: string) {
 }
 
 export default function AuditLogsPage() {
+  const { t } = useTranslation();
   const { logs, total, page, limit, error } = useLoaderData<typeof clientLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
@@ -109,10 +112,10 @@ export default function AuditLogsPage() {
           <div className="text-center">
             <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
             <h1 className="text-2xl font-bold text-foreground mb-2">
-              Unable to load audit logs
+              {t("admin.unableToLoadAuditLogs")}
             </h1>
             <p className="text-muted-foreground mb-6">{error}</p>
-            <UnifiedButton onClick={() => revalidator.revalidate()}>Try Again</UnifiedButton>
+            <UnifiedButton onClick={() => revalidator.revalidate()}>{t("admin.tryAgain")}</UnifiedButton>
           </div>
         </div>
       </div>
@@ -127,10 +130,10 @@ export default function AuditLogsPage() {
             to="/admin/system"
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            ← Back to System Settings
+            {t("admin.backToSystemSettings")}
           </Link>
-          <h1 className="text-2xl font-bold text-foreground mt-2">Audit Logs</h1>
-          <p className="text-sm text-muted-foreground">Security and admin activity history</p>
+          <h1 className="text-2xl font-bold text-foreground mt-2">{t("admin.auditLogs")}</h1>
+          <p className="text-sm text-muted-foreground">{t("admin.activityHistory")}</p>
         </div>
       </header>
 
@@ -138,22 +141,22 @@ export default function AuditLogsPage() {
         <div className="bg-card border rounded-lg p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
             <div className="flex-1">
-              <label className="text-sm text-muted-foreground">Action</label>
+              <label className="text-sm text-muted-foreground">{t("admin.action")}</label>
               <input
                 type="text"
                 value={currentAction}
                 onChange={(e) => handleFilterChange("action", e.target.value)}
-                placeholder="e.g. create, suspend, update"
+                placeholder={t("admin.actionPlaceholder")}
                 className="mt-1 w-full border border-input rounded-lg px-3 py-2 bg-background"
               />
             </div>
             <div className="flex-1">
-              <label className="text-sm text-muted-foreground">User ID</label>
+              <label className="text-sm text-muted-foreground">{t("admin.userId")}</label>
               <input
                 type="text"
                 value={currentUserId}
                 onChange={(e) => handleFilterChange("userId", e.target.value)}
-                placeholder="Filter by admin user ID"
+                placeholder={t("admin.userIdPlaceholder")}
                 className="mt-1 w-full border border-input rounded-lg px-3 py-2 bg-background"
               />
             </div>
@@ -162,7 +165,7 @@ export default function AuditLogsPage() {
                 variant="outline"
                 onClick={() => setSearchParams(new URLSearchParams())}
               >
-                Clear Filters
+                {t("admin.clearFilters")}
               </UnifiedButton>
             )}
           </div>
@@ -172,18 +175,18 @@ export default function AuditLogsPage() {
           {rows.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground">
               <Search className="w-10 h-10 mx-auto mb-3" />
-              No audit logs found
+              {t("admin.noAuditLogsFound")}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">When</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Action</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Entity</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Admin</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">IP</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.when")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.action")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.entityColumn")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.adminColumn")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.ip")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -221,7 +224,7 @@ export default function AuditLogsPage() {
           {totalPages > 1 && (
             <div className="p-4 border-t flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
+                {t("admin.pageOf", { current: page, total: totalPages })}
               </p>
               <div className="flex gap-2">
                 <UnifiedButton
@@ -230,7 +233,7 @@ export default function AuditLogsPage() {
                   onClick={() => handlePageChange(page - 1)}
                   disabled={page <= 1}
                 >
-                  Previous
+                  {t("admin.previous")}
                 </UnifiedButton>
                 <UnifiedButton
                   variant="outline"
@@ -238,7 +241,7 @@ export default function AuditLogsPage() {
                   onClick={() => handlePageChange(page + 1)}
                   disabled={page >= totalPages}
                 >
-                  Next
+                  {t("admin.next")}
                 </UnifiedButton>
               </div>
             </div>

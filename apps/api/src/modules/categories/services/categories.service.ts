@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { Category, PricingMode } from '@rental-portal/database';
@@ -22,7 +23,7 @@ export class CategoriesService {
 
   async create(dto: CreateCategoryDto): Promise<Category> {
     if (!dto?.name?.trim() || !dto?.slug?.trim() || dto.templateSchema === undefined) {
-      throw new BadRequestException('name, slug, and templateSchema are required');
+      throw i18nBadRequest('category.requiredFields');
     }
 
     // Check if slug already exists
@@ -134,7 +135,7 @@ export class CategoriesService {
     // Check for children
     const children = await this.getChildren(id);
     if (children.length > 0) {
-      throw new BadRequestException('Cannot delete category with nested subcategories');
+      throw i18nBadRequest('category.hasSubcategories');
     }
 
     // Check if category has listings
@@ -236,7 +237,7 @@ export class CategoriesService {
     const buildTree = (parentId: string | null = null): any[] => {
       return categories
         .filter((c) => c.parentId === parentId)
-        .map((c) => ({
+        .map((c: any) => ({
           ...c,
           children: buildTree(c.id),
         }));

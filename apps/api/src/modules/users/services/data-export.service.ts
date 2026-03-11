@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
 
 export interface UserDataExport {
@@ -28,7 +29,7 @@ export class DataExportService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw i18nNotFound('auth.userNotFound');
     }
 
     // Fetch all user data in parallel
@@ -41,7 +42,7 @@ export class DataExportService {
             status: true,
             startDate: true,
             endDate: true,
-            totalAmount: true,
+            totalPrice: true,
             createdAt: true,
             listing: { select: { title: true } },
           },

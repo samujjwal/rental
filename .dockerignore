@@ -60,5 +60,4 @@ temp
 azure-pipelines.yml
 
 # Docker
-Dockerfile
 docker-compose*.yml

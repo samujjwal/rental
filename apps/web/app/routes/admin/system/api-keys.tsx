@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import {
   Key,
@@ -19,6 +20,7 @@ import {
 import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { formatDate } from "~/lib/utils";
 
 // Local type for API key from the server
 interface ServerApiKey {
@@ -42,7 +44,7 @@ export const meta: MetaFunction = () => {
 
 const safeDateLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
-  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "Unknown date" : formatDate(date);
 };
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
@@ -178,6 +180,7 @@ const availableScopes = [
 ];
 
 export default function ApiKeysPage() {
+  const { t } = useTranslation();
   const { apiKeys, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -232,7 +235,7 @@ export default function ApiKeysPage() {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold mb-2">Error Loading API Keys</h3>
+          <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingApiKeys")}</h3>
           <p className="text-red-600">{error}</p>
         </div>
       </div>
@@ -248,16 +251,16 @@ export default function ApiKeysPage() {
             to="/admin/system"
             className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
           >
-            ← Back to System Settings
+            {t("admin.backToSystemSettings")}
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">API Keys</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{t("admin.apiKeys")}</h1>
           <p className="text-gray-600 mt-1">
-            Manage API keys for external integrations and services
+            {t("admin.apiKeysSubtitle")}
           </p>
         </div>
         <UnifiedButton onClick={() => setShowCreateForm(true)}>
           <Plus className="w-4 h-4 mr-2" />
-          Create API Key
+          {t("admin.createApiKey")}
         </UnifiedButton>
       </div>
 
@@ -270,7 +273,7 @@ export default function ApiKeysPage() {
             <div className="mt-3 p-3 bg-white rounded border border-green-200">
               <p className="text-sm text-gray-700 mb-2">
                 <AlertTriangle className="w-4 h-4 inline-block mr-1 text-yellow-500" />
-                Copy this key now. You won't be able to see it again!
+                {t("admin.copyKeyWarning")}
               </p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono break-all">
@@ -302,7 +305,7 @@ export default function ApiKeysPage() {
       {showCreateForm && (
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Create New API Key</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.createNewApiKey")}</h2>
             <button
               onClick={() => setShowCreateForm(false)}
               className="text-gray-500 hover:text-gray-700"
@@ -316,7 +319,7 @@ export default function ApiKeysPage() {
 
             <div className="mb-4">
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Key Name
+                {t("admin.keyName")}
               </label>
               <input
                 type="text"
@@ -324,14 +327,14 @@ export default function ApiKeysPage() {
                 name="name"
                 required
                 maxLength={100}
-                placeholder="e.g., Mobile App Production"
+                placeholder={t("admin.keyNamePlaceholder")}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Permissions (Scopes)
+                {t("admin.permissions")}
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {availableScopes.map((scope) => (
@@ -364,7 +367,7 @@ export default function ApiKeysPage() {
 
             <div className="mb-6">
               <label htmlFor="expiresInDays" className="block text-sm font-medium text-gray-700 mb-1">
-                Expires In
+                {t("admin.expiresIn")}
               </label>
               <select
                 id="expiresInDays"
@@ -385,18 +388,18 @@ export default function ApiKeysPage() {
                 variant="outline"
                 onClick={() => setShowCreateForm(false)}
               >
-                Cancel
+                {t("admin.cancel")}
               </UnifiedButton>
               <UnifiedButton type="submit" disabled={isSubmitting && formIntent === "create"}>
                 {isSubmitting && formIntent === "create" ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
+                    {t("admin.creating")}
                   </>
                 ) : (
                   <>
                     <Key className="w-4 h-4 mr-2" />
-                    Create Key
+                    {t("admin.createKey")}
                   </>
                 )}
               </UnifiedButton>
@@ -408,14 +411,14 @@ export default function ApiKeysPage() {
       {/* API Keys List */}
       <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Existing API Keys</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t("admin.existingApiKeys")}</h2>
         </div>
 
         {apiKeys.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <Key className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            <p>No API keys created yet</p>
-            <p className="text-sm mt-1">Create your first API key to enable external integrations</p>
+            <p>{t("admin.noApiKeys")}</p>
+            <p className="text-sm mt-1">{t("admin.noApiKeysDesc")}</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
@@ -496,7 +499,7 @@ export default function ApiKeysPage() {
                           disabled={isSubmitting}
                         >
                           <RefreshCw className="w-4 h-4 mr-1" />
-                          Regenerate
+                          {t("admin.regenerate")}
                         </UnifiedButton>
                       </Form>
 
@@ -511,7 +514,7 @@ export default function ApiKeysPage() {
                               variant="destructive"
                               disabled={isSubmitting}
                             >
-                              Confirm
+                              {t("admin.confirm")}
                             </UnifiedButton>
                           </Form>
                           <UnifiedButton
@@ -519,7 +522,7 @@ export default function ApiKeysPage() {
                             size="sm"
                             onClick={() => setConfirmRevoke(null)}
                           >
-                            Cancel
+                            {t("admin.cancel")}
                           </UnifiedButton>
                         </div>
                       ) : (
@@ -528,7 +531,7 @@ export default function ApiKeysPage() {
                           onClick={() => setConfirmRevoke(key.id)}
                         >
                           <Trash2 className="w-4 h-4 mr-1" />
-                          Revoke
+                          {t("admin.revokeKey")}
                         </UnifiedButton>
                       )}
                     </div>
@@ -545,12 +548,12 @@ export default function ApiKeysPage() {
         <div className="flex items-start">
           <Shield className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" />
           <div>
-            <h3 className="text-sm font-medium text-yellow-800">Security Best Practices</h3>
+            <h3 className="text-sm font-medium text-yellow-800">{t("admin.securityBestPractices")}</h3>
             <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside space-y-1">
-              <li>Never share API keys in public repositories or client-side code</li>
-              <li>Use environment variables to store keys in your applications</li>
-              <li>Rotate keys regularly and revoke unused keys</li>
-              <li>Use the minimum required scopes for each integration</li>
+              <li>{t("admin.securityTip1")}</li>
+              <li>{t("admin.securityTip2")}</li>
+              <li>{t("admin.securityTip3")}</li>
+              <li>{t("admin.securityTip4")}</li>
             </ul>
           </div>
         </div>

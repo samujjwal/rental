@@ -3,9 +3,9 @@ import { INestApplication } from '@nestjs/common';
 
 export function setupSwagger(app: INestApplication): void {
   const config = new DocumentBuilder()
-    .setTitle('Universal Rental Portal API')
+    .setTitle('GharBatai Rentals API')
     .setDescription(
-      'API documentation for the Universal Rental Portal platform. This API enables users to list, search, book, and manage rental items across various categories.',
+      'API documentation for the GharBatai Rentals platform. This API enables users to list, search, book, and manage rental items across various categories.',
     )
     .setVersion('1.0')
     .addBearerAuth(
@@ -46,6 +46,6 @@ export function setupSwagger(app: INestApplication): void {
       tagsSorter: 'alpha',
       operationsSorter: 'alpha',
     },
-    customSiteTitle: 'Universal Rental Portal API Documentation',
+    customSiteTitle: 'GharBatai Rentals API Documentation',
   });
 }

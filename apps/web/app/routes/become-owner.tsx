@@ -1,8 +1,9 @@
 import type { MetaFunction } from "react-router";
-import { Link, Form, useActionData, useNavigation, redirect } from "react-router";
-import { useState } from "react";
+import { Link, Form, useActionData, useNavigation, redirect, useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { useTranslation, Trans } from "react-i18next";
 import {
-  DollarSign,
+  Banknote,
   TrendingUp,
   Users,
   Shield,
@@ -25,6 +26,7 @@ import {
 } from "~/components/ui";
 import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
 
 export const meta: MetaFunction = () => {
@@ -73,47 +75,48 @@ export async function clientAction({ request }: { request: Request }) {
 
 const benefits = [
   {
-    icon: DollarSign,
-    title: "Earn Extra Income",
-    description: "Turn your idle items into a source of income. The average owner earns $500/month.",
+    icon: Banknote,
+    titleKey: "pages.becomeOwner.benefitEarnTitle",
+    descKey: "pages.becomeOwner.benefitEarnDesc",
+    descParams: { amount: formatCurrency(50000) },
   },
   {
     icon: Shield,
-    title: "Protected Rentals",
-    description: "Our insurance coverage protects your items against damage during rentals.",
+    titleKey: "pages.becomeOwner.benefitProtectedTitle",
+    descKey: "pages.becomeOwner.benefitProtectedDesc",
   },
   {
     icon: Users,
-    title: "Trusted Community",
-    description: "All renters are verified with ID checks and reviews from previous owners.",
+    titleKey: "pages.becomeOwner.benefitCommunityTitle",
+    descKey: "pages.becomeOwner.benefitCommunityDesc",
   },
   {
     icon: Calendar,
-    title: "Flexible Schedule",
-    description: "You control when your items are available. Block dates anytime.",
+    titleKey: "pages.becomeOwner.benefitFlexibleTitle",
+    descKey: "pages.becomeOwner.benefitFlexibleDesc",
   },
 ];
 
 const steps = [
   {
     number: 1,
-    title: "Create Your Listing",
-    description: "Add photos, description, and set your price for each item.",
+    titleKey: "pages.becomeOwner.step1Title",
+    descKey: "pages.becomeOwner.step1Desc",
   },
   {
     number: 2,
-    title: "Set Availability",
-    description: "Choose when your items can be rented and set booking preferences.",
+    titleKey: "pages.becomeOwner.step2Title",
+    descKey: "pages.becomeOwner.step2Desc",
   },
   {
     number: 3,
-    title: "Accept Bookings",
-    description: "Review requests and accept bookings that work for you.",
+    titleKey: "pages.becomeOwner.step3Title",
+    descKey: "pages.becomeOwner.step3Desc",
   },
   {
     number: 4,
-    title: "Get Paid",
-    description: "Receive payments directly to your bank account after each rental.",
+    titleKey: "pages.becomeOwner.step4Title",
+    descKey: "pages.becomeOwner.step4Desc",
   },
 ];
 
@@ -122,8 +125,8 @@ const testimonials = [
     name: "Sarah M.",
     avatar: null,
     rating: 5,
-    quote: "I've earned over $3,000 renting out my photography equipment. The platform makes it so easy!",
-    earnings: "$3,200",
+    quote: `I've earned over ${formatCurrency(300000)} renting out my photography equipment. The platform makes it so easy!`,
+    earnings: formatCurrency(320000),
     items: "Camera gear",
   },
   {
@@ -131,7 +134,7 @@ const testimonials = [
     avatar: null,
     rating: 5,
     quote: "Great way to make my tools pay for themselves. The insurance gives me peace of mind.",
-    earnings: "$1,800",
+    earnings: formatCurrency(180000),
     items: "Power tools",
   },
   {
@@ -139,7 +142,7 @@ const testimonials = [
     avatar: null,
     rating: 5,
     quote: "Started with one item, now I have 12 listings. This has become a real side business!",
-    earnings: "$5,500",
+    earnings: formatCurrency(550000),
     items: "Party supplies",
   },
 ];
@@ -147,7 +150,19 @@ const testimonials = [
 export default function BecomeOwnerPage() {
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
+  const navigate = useNavigate();
   const { user } = useAuthStore();
+
+  // Auto-redirect to owner dashboard after successful upgrade
+  useEffect(() => {
+    if (actionData?.success) {
+      const timer = setTimeout(() => {
+        navigate("/dashboard/owner");
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [actionData?.success, navigate]);
+  const { t } = useTranslation();
   const [agreed, setAgreed] = useState(false);
 
   const isSubmitting = navigation.state === "submitting";
@@ -160,19 +175,19 @@ export default function BecomeOwnerPage() {
           <Card>
             <CardContent className="p-12 text-center">
               <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-foreground mb-2">You're Already an Owner!</h1>
+              <h1 className="text-2xl font-bold text-foreground mb-2">{t("pages.becomeOwner.alreadyOwnerTitle")}</h1>
               <p className="text-muted-foreground mb-6">
-                You can start listing your items right away.
+                {t("pages.becomeOwner.alreadyOwnerDesc")}
               </p>
               <div className="flex gap-4 justify-center">
                 <Link to="/listings/new">
                   <UnifiedButton>
                     <Package className="w-4 h-4 mr-2" />
-                    Create Listing
+                    {t("pages.becomeOwner.createListing")}
                   </UnifiedButton>
                 </Link>
                 <Link to="/dashboard/owner">
-                  <UnifiedButton variant="outline">Go to Dashboard</UnifiedButton>
+                  <UnifiedButton variant="outline">{t("pages.becomeOwner.goToDashboard")}</UnifiedButton>
                 </Link>
               </div>
             </CardContent>
@@ -188,24 +203,23 @@ export default function BecomeOwnerPage() {
       <section className="bg-gradient-to-b from-primary/10 to-background py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-            Turn Your Items Into Income
+            {t("pages.becomeOwner.heroTitle")}
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Join thousands of owners earning money by renting out items they already own.
-            It's easy, safe, and profitable.
+            {t("pages.becomeOwner.heroSubtitle")}
           </p>
           <div className="flex items-center justify-center gap-8 text-sm">
             <div className="text-center">
-              <p className="text-3xl font-bold text-primary">$500+</p>
-              <p className="text-muted-foreground">Avg. monthly earnings</p>
+              <p className="text-3xl font-bold text-primary">{formatCurrency(50000)}+</p>
+              <p className="text-muted-foreground">{t("pages.becomeOwner.avgMonthlyEarnings")}</p>
             </div>
             <div className="text-center">
               <p className="text-3xl font-bold text-primary">10,000+</p>
-              <p className="text-muted-foreground">Active owners</p>
+              <p className="text-muted-foreground">{t("pages.becomeOwner.activeOwners")}</p>
             </div>
             <div className="text-center">
               <p className="text-3xl font-bold text-primary">98%</p>
-              <p className="text-muted-foreground">Owner satisfaction</p>
+              <p className="text-muted-foreground">{t("pages.becomeOwner.ownerSatisfaction")}</p>
             </div>
           </div>
         </div>
@@ -215,17 +229,17 @@ export default function BecomeOwnerPage() {
       <section className="py-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-foreground text-center mb-12">
-            Why Become an Owner?
+            {t("pages.becomeOwner.whyBecomeOwner")}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {benefits.map((benefit) => (
-              <Card key={benefit.title}>
+              <Card key={benefit.titleKey}>
                 <CardContent className="p-6 text-center">
                   <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                     <benefit.icon className="w-6 h-6 text-primary" />
                   </div>
-                  <h3 className="font-semibold text-foreground mb-2">{benefit.title}</h3>
-                  <p className="text-sm text-muted-foreground">{benefit.description}</p>
+                  <h3 className="font-semibold text-foreground mb-2">{t(benefit.titleKey)}</h3>
+                  <p className="text-sm text-muted-foreground">{t(benefit.descKey, benefit.descParams)}</p>
                 </CardContent>
               </Card>
             ))}
@@ -237,7 +251,7 @@ export default function BecomeOwnerPage() {
       <section className="py-16 bg-muted/30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-foreground text-center mb-12">
-            How It Works
+            {t("pages.becomeOwner.howItWorks")}
           </h2>
           <div className="space-y-8">
             {steps.map((step, index) => (
@@ -246,8 +260,8 @@ export default function BecomeOwnerPage() {
                   {step.number}
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-foreground text-lg">{step.title}</h3>
-                  <p className="text-muted-foreground">{step.description}</p>
+                  <h3 className="font-semibold text-foreground text-lg">{t(step.titleKey)}</h3>
+                  <p className="text-muted-foreground">{t(step.descKey)}</p>
                 </div>
                 {index < steps.length - 1 && (
                   <ArrowRight className="w-5 h-5 text-muted-foreground mt-2 hidden md:block" />
@@ -262,7 +276,7 @@ export default function BecomeOwnerPage() {
       <section className="py-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-foreground text-center mb-12">
-            What Our Owners Say
+            {t("pages.becomeOwner.whatOwnersSay")}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {testimonials.map((testimonial) => (
@@ -287,7 +301,7 @@ export default function BecomeOwnerPage() {
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-success">{testimonial.earnings}</p>
-                      <p className="text-xs text-muted-foreground">earned</p>
+                      <p className="text-xs text-muted-foreground">{t("pages.becomeOwner.earned")}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -302,21 +316,21 @@ export default function BecomeOwnerPage() {
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
           <Card>
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Ready to Start Earning?</CardTitle>
+              <CardTitle className="text-2xl">{t("pages.becomeOwner.readyToStart")}</CardTitle>
               <CardDescription>
-                Become an owner today and start listing your items
+                {t("pages.becomeOwner.readyToStartDesc")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {actionData?.success ? (
                 <div className="text-center py-8">
                   <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-foreground mb-2">Welcome, Owner!</h3>
+                  <h3 className="text-xl font-bold text-foreground mb-2">{t("pages.becomeOwner.welcomeOwner")}</h3>
                   <p className="text-muted-foreground mb-6">{actionData.message}</p>
                   <Link to="/listings/new">
                     <UnifiedButton size="lg">
                       <Package className="w-5 h-5 mr-2" />
-                      Create Your First Listing
+                      {t("pages.becomeOwner.createFirstListing")}
                     </UnifiedButton>
                   </Link>
                 </div>
@@ -332,22 +346,26 @@ export default function BecomeOwnerPage() {
                   {!user && (
                     <div className="mb-6 p-4 bg-warning/10 border border-warning/30 rounded-lg">
                       <p className="text-sm text-warning">
-                        Please <Link to="/auth/login" className="font-medium underline">log in</Link> or{" "}
-                        <Link to="/auth/signup" className="font-medium underline">create an account</Link>{" "}
-                        first to become an owner.
+                        <Trans
+                          i18nKey="pages.becomeOwner.loginRequired"
+                          components={{
+                            loginLink: <Link to="/auth/login" className="font-medium underline" />,
+                            signupLink: <Link to="/auth/signup" className="font-medium underline" />,
+                          }}
+                        />
                       </p>
                     </div>
                   )}
 
                   <div className="space-y-6">
                     <div className="bg-muted p-4 rounded-lg">
-                      <h4 className="font-semibold text-foreground mb-2">Owner Agreement</h4>
+                      <h4 className="font-semibold text-foreground mb-2">{t("pages.becomeOwner.ownerAgreement")}</h4>
                       <ul className="text-sm text-muted-foreground space-y-2">
-                        <li>• I will accurately describe my items and their condition</li>
-                        <li>• I will respond to booking requests within 24 hours</li>
-                        <li>• I will maintain my items in good working condition</li>
-                        <li>• I understand the platform fee of 10% on successful rentals</li>
-                        <li>• I agree to the Terms of Service and Owner Guidelines</li>
+                        <li>• {t("pages.becomeOwner.agreementItem1")}</li>
+                        <li>• {t("pages.becomeOwner.agreementItem2")}</li>
+                        <li>• {t("pages.becomeOwner.agreementItem3")}</li>
+                        <li>• {t("pages.becomeOwner.agreementItem4")}</li>
+                        <li>• {t("pages.becomeOwner.agreementItem5")}</li>
                       </ul>
                     </div>
 
@@ -362,7 +380,7 @@ export default function BecomeOwnerPage() {
                         disabled={!user}
                       />
                       <span className="text-sm text-foreground">
-                        I have read and agree to the Owner Agreement, Terms of Service, and Privacy Policy.
+                        {t("pages.becomeOwner.agreementConsent")}
                       </span>
                     </label>
 
@@ -375,12 +393,12 @@ export default function BecomeOwnerPage() {
                       {isSubmitting ? (
                         <>
                           <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                          Processing...
+                          {t("pages.becomeOwner.processing")}
                         </>
                       ) : (
                         <>
                           <TrendingUp className="w-5 h-5 mr-2" />
-                          Become an Owner
+                          {t("pages.becomeOwner.becomeOwnerBtn")}
                         </>
                       )}
                     </UnifiedButton>
@@ -396,25 +414,25 @@ export default function BecomeOwnerPage() {
       <section className="py-16">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-foreground text-center mb-12">
-            Frequently Asked Questions
+            {t("pages.becomeOwner.faqTitle")}
           </h2>
           <div className="space-y-4">
             {[
               {
-                q: "How much does it cost to become an owner?",
-                a: "It's completely free to become an owner and list your items. We only charge a 10% service fee when you make a successful rental.",
+                q: t("pages.becomeOwner.faq1Q"),
+                a: t("pages.becomeOwner.faq1A"),
               },
               {
-                q: "What if my item gets damaged?",
-                a: "All rentals are covered by our comprehensive insurance policy. If an item is damaged, you can file a claim and we'll help resolve the issue.",
+                q: t("pages.becomeOwner.faq2Q"),
+                a: t("pages.becomeOwner.faq2A"),
               },
               {
-                q: "How do I receive payments?",
-                a: "Payments are automatically deposited to your connected bank account within 3-5 business days after each rental is completed.",
+                q: t("pages.becomeOwner.faq3Q"),
+                a: t("pages.becomeOwner.faq3A"),
               },
               {
-                q: "Can I choose who rents my items?",
-                a: "Yes! You can review renter profiles, ratings, and previous reviews before accepting or declining any booking request.",
+                q: t("pages.becomeOwner.faq4Q"),
+                a: t("pages.becomeOwner.faq4A"),
               },
             ].map((faq, i) => (
               <Card key={i}>

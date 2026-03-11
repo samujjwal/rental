@@ -1,5 +1,5 @@
 
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useRevalidator, Link, redirect } from "react-router";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
@@ -8,8 +8,14 @@ import { RouteErrorBoundary } from "~/components/ui/error-state";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { OrganizationMember, OrganizationRole } from "~/lib/api/organizations";
 import { getUser } from "~/utils/auth";
+import { APP_LOCALE } from "~/config/locale";
+import { useTranslation } from "react-i18next";
 
 export const ErrorBoundary = RouteErrorBoundary;
+
+export const meta: MetaFunction = () => [
+  { title: "Members | Organization | GharBatai Rentals" },
+];
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isUuid = (value: string | undefined): value is string =>
@@ -20,7 +26,7 @@ const safeMemberJoinDate = (value: unknown): string => {
   if (Number.isNaN(date.getTime())) {
     return "Unknown";
   }
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(APP_LOCALE, {
     month: "long",
     year: "numeric",
   });
@@ -84,6 +90,7 @@ export default function OrganizationMembers() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [removalConfirmation, setRemovalConfirmation] = useState("");
   const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const { t } = useTranslation();
 
   const getUserDisplayName = (member: OrganizationMember) => {
     const lastName = member.user.lastName ? ` ${member.user.lastName}` : "";
@@ -114,7 +121,6 @@ export default function OrganizationMembers() {
       setShowInviteModal(false);
       revalidator.revalidate();
     } catch (error) {
-      console.error("Failed to invite member:", error);
       setErrorMessage("Unable to send invite. Please try again.");
     }
   };
@@ -147,7 +153,6 @@ export default function OrganizationMembers() {
       setSelectedMember(null);
       revalidator.revalidate();
     } catch (error) {
-      console.error("Failed to update member role:", error);
       setErrorMessage("Unable to update role. Please try again.");
     }
   };
@@ -177,7 +182,6 @@ export default function OrganizationMembers() {
       setSelectedMember(null);
       revalidator.revalidate();
     } catch (error) {
-      console.error("Failed to remove member:", error);
       setErrorMessage("Unable to remove member. Please try again.");
     }
   };
@@ -218,16 +222,16 @@ export default function OrganizationMembers() {
               to="/organizations"
               className="text-primary hover:text-primary/80"
             >
-              ← Back to Organizations
+              ← {t("organizations.backToOrgs")}
             </Link>
           </div>
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-foreground">
-                Team Members
+                {t("organizations.teamMembers")}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                {organization.name} • {organization.members.length} members
+                {organization.name} • {organization.members.length} {t("organizations.members").toLowerCase()}
               </p>
             </div>
             {canManageMembers ? (
@@ -235,7 +239,7 @@ export default function OrganizationMembers() {
                 onClick={() => setShowInviteModal(true)}
                 className="px-6 py-3 bg-primary text-primary-foreground text-sm font-medium rounded-md shadow-sm hover:bg-primary/90"
               >
-                Invite Member
+                {t("organizations.inviteMember")}
               </button>
             ) : null}
           </div>
@@ -277,7 +281,7 @@ export default function OrganizationMembers() {
                         {member.user.email}
                       </p>
                       <p className="text-xs text-muted-foreground/70 mt-1">
-                        Joined{" "}
+                        {t("organizations.joined")}{" "}
                         {safeMemberJoinDate(member.joinedAt || member.createdAt)}
                       </p>
                     </div>
@@ -311,7 +315,7 @@ export default function OrganizationMembers() {
                           }}
                           className="px-3 py-1 text-sm text-primary hover:text-primary/80"
                         >
-                          Change Role
+                          {t("organizations.changeRole")}
                         </button>
                         <button
                           onClick={() => {
@@ -321,7 +325,7 @@ export default function OrganizationMembers() {
                           }}
                           className="px-3 py-1 text-sm text-destructive hover:text-destructive/80"
                         >
-                          Remove
+                          {t("organizations.remove")}
                         </button>
                       </div>
                     )}
@@ -350,21 +354,18 @@ export default function OrganizationMembers() {
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-primary">
-                Role Permissions
+                {t("organizations.rolePermissions")}
               </h3>
               <div className="mt-2 text-sm text-primary/80">
                 <ul className="list-disc list-inside space-y-1">
                   <li>
-                    <strong>Owner:</strong> Full control including billing,
-                    settings, and deletion
+                    <strong>{t("organizations.owner")}:</strong> {t("organizations.ownerDesc")}
                   </li>
                   <li>
-                    <strong>Admin:</strong> Manage members, listings, bookings,
-                    and organization settings
+                    <strong>{t("organizations.admin")}:</strong> {t("organizations.adminDesc")}
                   </li>
                   <li>
-                    <strong>Member:</strong> Create and manage their own
-                    listings and bookings
+                    <strong>{t("organizations.member")}:</strong> {t("organizations.memberDesc")}
                   </li>
                 </ul>
               </div>
@@ -378,13 +379,13 @@ export default function OrganizationMembers() {
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-medium text-foreground mb-4">
-              Invite Team Member
+              {t("organizations.inviteTeamMember")}
             </h3>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Email Address
+                  {t("organizations.emailAddress")}
                 </label>
                 <input
                   type="email"
@@ -398,7 +399,7 @@ export default function OrganizationMembers() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Role
+                  {t("organizations.role")}
                 </label>
                 <select
                   value={inviteRole}
@@ -407,8 +408,8 @@ export default function OrganizationMembers() {
                   }
                   className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
                 >
-                  <option value="MEMBER">Member - Create listings</option>
-                  <option value="ADMIN">Admin - Manage team</option>
+                  <option value="MEMBER">{t("organizations.memberCreateListings")}</option>
+                  <option value="ADMIN">{t("organizations.adminManageTeam")}</option>
                 </select>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {getRoleDescription(inviteRole)}
@@ -421,14 +422,14 @@ export default function OrganizationMembers() {
                 onClick={() => setShowInviteModal(false)}
                 className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 onClick={handleInvite}
                 disabled={!inviteEmail.trim()}
                 className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Send Invite
+                {t("organizations.sendInvite")}
               </button>
             </div>
           </div>
@@ -440,7 +441,7 @@ export default function OrganizationMembers() {
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-medium text-foreground mb-4">
-              Change Role for {getUserDisplayName(selectedMember)}
+              {t("organizations.changeRoleFor", { name: getUserDisplayName(selectedMember) })}
             </h3>
 
             <div className="space-y-2">
@@ -468,7 +469,7 @@ export default function OrganizationMembers() {
                 onClick={() => setShowRoleModal(false)}
                 className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -480,16 +481,16 @@ export default function OrganizationMembers() {
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
           <div className="bg-card rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-medium text-foreground mb-2">
-              Remove {getUserDisplayName(selectedMember)}?
+              {t("organizations.removeConfirmTitle", { name: getUserDisplayName(selectedMember) })}
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
-              This will remove their access to the organization. Type <strong>REMOVE</strong> to confirm.
+              {t("organizations.removeAccessDesc")}
             </p>
             <input
               type="text"
               value={removalConfirmation}
               onChange={(e) => setRemovalConfirmation(e.target.value)}
-              placeholder="Type REMOVE"
+              placeholder={t("organizations.typeRemove")}
               maxLength={16}
               className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
             />
@@ -501,14 +502,14 @@ export default function OrganizationMembers() {
                 }}
                 className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 onClick={() => handleRemoveMember(selectedMember.userId)}
                 disabled={removalConfirmation.trim().toUpperCase() !== "REMOVE"}
                 className="px-4 py-2 text-sm font-medium text-destructive-foreground bg-destructive rounded-md hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Remove Member
+                {t("organizations.removeMember")}
               </button>
             </div>
           </div>

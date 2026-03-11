@@ -3,6 +3,7 @@ import type { LatLngBoundsExpression, Map as LeafletMap } from 'leaflet';
 import { BaseMap } from './BaseMap';
 import { MarkerCluster } from './MarkerCluster';
 import type { ListingMarkerData } from './ListingMarker';
+import { APP_MAP_CENTER } from '~/config/locale';
 
 export interface ListingsMapProps {
     listings: ListingMarkerData[];
@@ -77,7 +78,7 @@ export function ListingsMap({
 
     // Calculate center from listings if not provided
     const calculatedCenter = center || (() => {
-        if (listings.length === 0) return [37.7749, -122.4194] as [number, number];
+        if (listings.length === 0) return APP_MAP_CENTER;
 
         const avgLat = listings.reduce((sum, l) => sum + l.location.lat, 0) / listings.length;
         const avgLng = listings.reduce((sum, l) => sum + l.location.lng, 0) / listings.length;

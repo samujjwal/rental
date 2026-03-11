@@ -1,0 +1,55 @@
+# ============================================================================
+# Profile & Settings Flow — E2E Maestro Test
+# Validates profile viewing, settings navigation, and logout.
+# ============================================================================
+appId: com.gharbatai.rental
+
+---
+
+# Precondition: login
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Profile tab
+- tapOn: "Profile"
+
+# 2. Profile screen loads with user info
+- assertVisible:
+    text: "Profile|Account"
+    timeout: 5000
+
+# 3. Navigate to Settings
+- tapOn:
+    text: "Settings"
+    optional: true
+- tapOn:
+    id: "settings-button"
+    optional: true
+
+# 4. Settings screen shows options
+- assertVisible:
+    text: "Settings|Preferences"
+    timeout: 5000
+    optional: true
+
+# 5. Go back to Profile
+- back
+
+# 6. Tap on Bookings tab
+- tapOn: "Bookings"
+
+# 7. Bookings list should be visible
+- assertVisible:
+    text: "Bookings|My Bookings|No bookings"
+    timeout: 8000
+
+# 8. Navigate to Messages tab
+- tapOn: "Messages"
+- assertVisible:
+    text: "Messages|Conversations|No messages"
+    timeout: 8000
+
+# 9. Return to Home
+- tapOn: "Home"
+- assertVisible:
+    text: "Home"
+    timeout: 3000

@@ -6,9 +6,22 @@
  * but enhanced with modern React patterns, TypeScript, and better extensibility.
  */
 
-import type { MRT_ColumnDef } from "material-react-table";
 import type { ReactNode } from "react";
+
+// Stub type for material-react-table column definition.
+// If you add material-react-table as a dependency, replace this with the real
+// import: `import type { MRT_ColumnDef } from "material-react-table";`
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MRT_ColumnDef<T = any> = {
+  accessorKey?: keyof T | string;
+  header?: string;
+  size?: number;
+  Cell?: (props: { cell: { getValue: <V = unknown>() => V }; row: { original: T } }) => ReactNode;
+  [key: string]: unknown;
+};
+
 import { StatusBadge } from "~/components/ui/StatusBadge";
+import { formatDate, formatDateTime } from "~/lib/utils";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -407,12 +420,12 @@ export function createDateColumn<T extends object>(
 
       switch (options?.format) {
         case "datetime":
-          return date.toLocaleString();
+          return formatDateTime(date);
         case "relative":
           return getRelativeTime(date);
         case "date":
         default:
-          return date.toLocaleDateString();
+          return formatDate(date);
       }
     },
   };
@@ -442,7 +455,7 @@ function getRelativeTime(date: Date): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 30) return date.toLocaleDateString();
+  if (days > 30) return formatDate(date);
   if (days > 0) return `${days}d ago`;
   if (hours > 0) return `${hours}h ago`;
   if (minutes > 0) return `${minutes}m ago`;

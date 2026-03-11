@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, Pressable, FlatList } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { Dispute } from "@rental-portal/mobile-sdk";
+import type { Dispute } from '~/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, "Disputes">;
 
-const STATUS_FILTERS = ["ALL", "OPEN", "UNDER_REVIEW", "INVESTIGATING", "RESOLVED", "CLOSED"];
+const STATUS_FILTERS = ["ALL", "OPEN", "UNDER_REVIEW", "INVESTIGATING", "RESOLVED", "CLOSED", "DISMISSED", "WITHDRAWN"];
 
 export function DisputesScreen({ navigation }: Props) {
   const { user } = useAuth();
@@ -16,20 +17,22 @@ export function DisputesScreen({ navigation }: Props) {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      try {
-        const response = await mobileClient.getMyDisputes(
-          statusFilter === "ALL" ? undefined : statusFilter
-        );
-        setDisputes(response.disputes || []);
-      } catch (err) {
-        setStatus("Unable to load disputes.");
-      }
-    };
-    load();
-  }, [user, statusFilter]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      const load = async () => {
+        try {
+          const response = await mobileClient.getMyDisputes(
+            statusFilter === "ALL" ? undefined : statusFilter
+          );
+          setDisputes(response.disputes || []);
+        } catch (err) {
+          setStatus("Unable to load disputes.");
+        }
+      };
+      load();
+    }, [user, statusFilter])
+  );
 
   if (!user) {
     return (

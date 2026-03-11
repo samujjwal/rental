@@ -107,6 +107,7 @@ export class LoggerService implements NestLoggerService {
   logRequest(req: any, context?: string) {
     this.logger.info('HTTP Request', {
       context: context || 'HTTP',
+      requestId: req.requestId,
       method: req.method,
       url: req.url,
       ip: req.ip,
@@ -118,6 +119,7 @@ export class LoggerService implements NestLoggerService {
   logResponse(req: any, res: any, responseTime: number, context?: string) {
     this.logger.info('HTTP Response', {
       context: context || 'HTTP',
+      requestId: req.requestId,
       method: req.method,
       url: req.url,
       statusCode: res.statusCode,

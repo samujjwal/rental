@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { Review, ReviewType } from '@rental-portal/database';
@@ -26,9 +27,9 @@ export interface CreateReviewDto {
   comment?: string;
 }
 
-export interface UpdateReviewDto extends Partial<
+export type UpdateReviewDto = Partial<
   Omit<CreateReviewDto, 'bookingId' | 'reviewType'>
-> {}
+>;
 
 export interface ReviewResponse extends Review {
   reviewer?: {
@@ -72,13 +73,21 @@ export class ReviewsService {
     });
 
     if (!booking) {
-      throw new NotFoundException('Booking not found');
+      throw i18nNotFound('booking.notFound');
     }
 
     // Strict check for completed bookings, but allowing CONFIRMED/SETTLED for broader logic if needed
     // Typically reviews happen after completion.
     if (!['COMPLETED', 'SETTLED'].includes(booking.status)) {
-      throw new BadRequestException('Can only review completed bookings');
+      throw i18nBadRequest('review.completedOnly');
+    }
+
+    // Enforce 30-day review window — reviews after the completion date are no longer meaningful
+    const REVIEW_WINDOW_DAYS = 30;
+    const completedAt = booking.updatedAt; // updatedAt reflects the last status change (completion)
+    const cutoff = new Date(Date.now() - REVIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    if (completedAt < cutoff) {
+      throw i18nBadRequest('review.windowExpired');
     }
 
     let reviewerId: string;
@@ -88,7 +97,7 @@ export class ReviewsService {
 
     if (dto.reviewType === ReviewDirection.RENTER_TO_OWNER) {
       if (booking.renterId !== userId) {
-        throw new ForbiddenException('Only the renter can review the owner');
+        throw i18nForbidden('review.renterOnly');
       }
       reviewerId = booking.renterId;
       revieweeId = booking.listing.ownerId;
@@ -96,14 +105,14 @@ export class ReviewsService {
       dbReviewType = ReviewType.LISTING_REVIEW;
     } else if (dto.reviewType === ReviewDirection.OWNER_TO_RENTER) {
       if (booking.listing.ownerId !== userId) {
-        throw new ForbiddenException('Only the owner can review the renter');
+        throw i18nForbidden('review.ownerOnly');
       }
       reviewerId = booking.listing.ownerId;
       revieweeId = booking.renterId;
       listingId = booking.listingId;
       dbReviewType = ReviewType.RENTER_REVIEW;
     } else {
-      throw new BadRequestException('Invalid review type');
+      throw i18nBadRequest('review.invalidType');
     }
 
     const existingReview = await this.prisma.review.findFirst({
@@ -115,7 +124,7 @@ export class ReviewsService {
     });
 
     if (existingReview) {
-      throw new BadRequestException('Review already exists for this booking');
+      throw i18nBadRequest('review.alreadyReviewed');
     }
 
     // Moderate review content before saving
@@ -139,49 +148,55 @@ export class ReviewsService {
 
     this.validateRatings(dto);
 
-    const review = await this.prisma.review.create({
-      data: {
-        bookingId: dto.bookingId,
-        listingId,
-        reviewerId,
-        revieweeId,
-        type: dbReviewType,
-        rating: dto.overallRating,
-        overallRating: dto.overallRating,
-        accuracyRating: dto.accuracyRating,
-        communicationRating: dto.communicationRating,
-        cleanlinessRating: dto.cleanlinessRating,
-        valueRating: dto.valueRating,
-        comment: dto.comment || '',
-      },
-      include: {
-        reviewer: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            profilePhotoUrl: true,
+    // Use transaction to ensure data consistency
+    const review: ReviewResponse = await (this.prisma.$transaction(async (tx: any): Promise<ReviewResponse> => {
+      const newReview = await tx.review.create({
+        data: {
+          bookingId: dto.bookingId,
+          listingId,
+          reviewerId,
+          revieweeId,
+          type: dbReviewType,
+          rating: dto.overallRating,
+          overallRating: dto.overallRating,
+          accuracyRating: dto.accuracyRating,
+          communicationRating: dto.communicationRating,
+          cleanlinessRating: dto.cleanlinessRating,
+          valueRating: dto.valueRating,
+          comment: dto.comment || '',
+        },
+        include: {
+          reviewer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              profilePhotoUrl: true,
+            },
+          },
+          reviewee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              profilePhotoUrl: true,
+            },
+          },
+          listing: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+            },
           },
         },
-        reviewee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            profilePhotoUrl: true,
-          },
-        },
-        listing: {
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-          },
-        },
-      },
-    });
+      });
 
-    await this.updateAggregatedRatings(revieweeId, listingId);
+      // Update aggregated ratings within the same transaction
+      await this.updateAggregatedRatingsInTransaction(tx, revieweeId, listingId);
+
+      return newReview as ReviewResponse;
+    }) as unknown as Promise<ReviewResponse>);
 
     await this.cacheService.del(`user:${revieweeId}`);
     if (listingId) {
@@ -197,11 +212,11 @@ export class ReviewsService {
     });
 
     if (!review) {
-      throw new NotFoundException('Review not found');
+      throw i18nNotFound('review.notFound');
     }
 
     if (review.reviewerId !== userId) {
-      throw new ForbiddenException('Can only update your own reviews');
+      throw i18nForbidden('review.ownOnly');
     }
 
     const daysSinceCreation = Math.floor(
@@ -209,7 +224,7 @@ export class ReviewsService {
     );
 
     if (daysSinceCreation > 7) {
-      throw new BadRequestException('Reviews can only be edited within 7 days');
+      throw i18nBadRequest('review.editWindow');
     }
 
     if (dto.overallRating !== undefined) {
@@ -281,11 +296,11 @@ export class ReviewsService {
     });
 
     if (!review) {
-      throw new NotFoundException('Review not found');
+      throw i18nNotFound('review.notFound');
     }
 
     if (review.reviewerId !== userId) {
-      throw new ForbiddenException('Can only delete your own reviews');
+      throw i18nForbidden('review.ownOnly');
     }
 
     await this.prisma.review.delete({
@@ -326,7 +341,7 @@ export class ReviewsService {
     });
 
     if (!review) {
-      throw new NotFoundException('Review not found');
+      throw i18nNotFound('review.notFound');
     }
 
     return review;
@@ -414,11 +429,15 @@ export class ReviewsService {
     type: 'received' | 'given',
     page: number = 1,
     limit: number = 20,
+    rating?: number,
   ): Promise<{
     reviews: ReviewResponse[];
     total: number;
   }> {
-    const where = type === 'received' ? { revieweeId: userId } : { reviewerId: userId };
+    const where: any = type === 'received' ? { revieweeId: userId } : { reviewerId: userId };
+    if (rating && rating >= 1 && rating <= 5) {
+      where.rating = rating;
+    }
 
     const [reviews, total] = await Promise.all([
       this.prisma.review.findMany({
@@ -509,7 +528,30 @@ export class ReviewsService {
     };
   }
 
-  async getBookingReviews(bookingId: string): Promise<any> {
+  async getBookingReviews(bookingId: string, userId?: string): Promise<any> {
+    // If userId provided, verify they're a party to this booking
+    if (userId) {
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: { renterId: true, listing: { select: { ownerId: true } } },
+      });
+
+      if (booking) {
+        const isParty = booking.renterId === userId || booking.listing.ownerId === userId;
+        if (!isParty) {
+          // Check admin
+          const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { role: true },
+          });
+          const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'];
+          if (!user?.role || !adminRoles.includes(user.role)) {
+            throw i18nForbidden('review.unauthorized');
+          }
+        }
+      }
+    }
+
     return this.prisma.review.findMany({
       where: { bookingId },
       include: {
@@ -587,7 +629,7 @@ export class ReviewsService {
 
     for (const rating of ratings) {
       if (typeof rating === 'number' && (rating < 1 || rating > 5)) {
-        throw new BadRequestException('Ratings must be between 1 and 5');
+        throw i18nBadRequest('review.invalidRating');
       }
     }
   }
@@ -620,6 +662,51 @@ export class ReviewsService {
       });
 
       await this.prisma.listing.update({
+        where: { id: listingId },
+        data: {
+          averageRating: listingStats._avg.overallRating || 0,
+          totalReviews: listingStats._count,
+        },
+      });
+    }
+  }
+
+  private async updateAggregatedRatingsInTransaction(
+    tx: {
+      review: any;
+      user: any;
+      listing: any;
+    },
+    userId: string,
+    listingId: string | null,
+  ) {
+    // Update user average rating within transaction
+    const userStats = await tx.review.aggregate({
+      where: { revieweeId: userId },
+      _avg: { overallRating: true },
+      _count: true,
+    });
+
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        averageRating: userStats._avg.overallRating || 0,
+        totalReviews: userStats._count,
+      },
+    });
+
+    // Update listing average rating if applicable
+    if (listingId) {
+      const listingStats = await tx.review.aggregate({
+        where: {
+          listingId,
+          type: ReviewType.LISTING_REVIEW,
+        },
+        _avg: { overallRating: true },
+        _count: true,
+      });
+
+      await tx.listing.update({
         where: { id: listingId },
         data: {
           averageRating: listingStats._avg.overallRating || 0,

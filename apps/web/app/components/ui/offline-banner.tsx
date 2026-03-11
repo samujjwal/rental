@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "~/lib/utils";
 
 interface OfflineBannerProps {
@@ -48,6 +49,7 @@ export function useOnlineStatus() {
  * Based on wireframe section 9.4
  */
 export function OfflineBanner({ className }: OfflineBannerProps) {
+  const { t } = useTranslation();
   const { isOnline, wasOffline } = useOnlineStatus();
   const [visible, setVisible] = useState(false);
 
@@ -77,11 +79,11 @@ export function OfflineBanner({ className }: OfflineBannerProps) {
     >
       {isOnline ? (
         <span className="flex items-center justify-center gap-2">
-          ✅ You're back online!
+          ✅ {t("common.backOnline")}
         </span>
       ) : (
         <span className="flex items-center justify-center gap-2">
-          ⚠️ You're offline. Some features may not work.
+          ⚠️ {t("common.youAreOffline")}
         </span>
       )}
     </div>
@@ -98,6 +100,7 @@ export function SlowConnectionBanner({
   visible: boolean;
   className?: string;
 }) {
+  const { t } = useTranslation();
   if (!visible) return null;
 
   return (
@@ -110,7 +113,7 @@ export function SlowConnectionBanner({
       aria-live="polite"
     >
       <span className="flex items-center justify-center gap-2">
-        ⏳ Slow connection detected. Please wait...
+        ⏳ {t("common.slowConnection")}
       </span>
     </div>
   );
@@ -124,6 +127,7 @@ export function ConnectionIndicator({
 }: {
   className?: string;
 }) {
+  const { t } = useTranslation();
   const { isOnline } = useOnlineStatus();
 
   return (
@@ -133,8 +137,8 @@ export function ConnectionIndicator({
         isOnline ? "bg-green-500" : "bg-red-500",
         className
       )}
-      title={isOnline ? "Online" : "Offline"}
-      aria-label={isOnline ? "Online" : "Offline"}
+      title={isOnline ? t("common.online") : t("common.offline")}
+      aria-label={isOnline ? t("common.online") : t("common.offline")}
     />
   );
 }

@@ -37,7 +37,7 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
               styles.input,
               isFocused && styles.inputFocused,
               error && styles.inputError,
-              rightIcon && styles.inputWithIcon,
+              rightIcon ? styles.inputWithIcon : undefined,
               style,
             ]}
             placeholderTextColor={colors.textMuted}

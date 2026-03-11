@@ -1,22 +1,23 @@
 import { z } from "zod";
+import { formatCurrency } from "~/lib/utils";
 
 export const listingSchema = z.object({
   title: z
     .string()
     .min(1, "Title is required")
     .min(10, "Title must be at least 10 characters")
-    .max(100, "Title must be less than 100 characters"),
+    .max(200, "Title must be less than 200 characters"),
   description: z
     .string()
     .min(1, "Description is required")
     .min(50, "Description must be at least 50 characters")
-    .max(2000, "Description must be less than 2000 characters"),
+    .max(5000, "Description must be less than 5000 characters"),
   category: z.string().min(1, "Category is required"),
   subcategory: z.string().optional(),
   basePrice: z
     .number()
-    .min(1, "Price per day must be at least $1")
-    .max(10000, "Price per day must be less than $10,000"),
+    .min(0, `Price per day must be at least ${formatCurrency(0)}`)
+    .max(10000, `Price per day must be less than ${formatCurrency(10000)}`),
   pricePerWeek: z
     .number()
     .min(1)
@@ -43,7 +44,7 @@ export const listingSchema = z.object({
       lng: z.number().min(-180).max(180),
     }),
   }),
-  images: z
+  photos: z
     .array(z.string().url())
     .min(1, "At least one image is required")
     .max(10, "Maximum 10 images allowed"),
@@ -69,8 +70,8 @@ export const listingSchema = z.object({
     .transform((val) => (val === 0 ? undefined : val)),
   securityDeposit: z
     .number()
-    .min(0, "Security deposit must be at least $0")
-    .max(5000, "Security deposit must be less than $5,000"),
+    .min(0, `Security deposit must be at least ${formatCurrency(0)}`)
+    .max(5000, `Security deposit must be less than ${formatCurrency(5000)}`),
   minimumRentalPeriod: z
     .number()
     .min(1, "Minimum rental period must be at least 1 day")

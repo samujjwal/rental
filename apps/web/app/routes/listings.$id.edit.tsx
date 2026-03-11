@@ -13,7 +13,7 @@ import {
   X,
   Check,
   MapPin,
-  DollarSign,
+  Banknote,
   FileText,
   Image as ImageIcon,
   Trash2,
@@ -21,14 +21,18 @@ import {
 } from "lucide-react";
 import { listingSchema, type ListingInput } from "~/lib/validation/listing";
 import type { z } from "zod";
+
+type ListingFormValues = z.input<typeof listingSchema>;
 import { listingsApi } from "~/lib/api/listings";
 import { uploadApi } from "~/lib/api/upload";
 import { aiApi } from "~/lib/api/ai";
 import { redirect } from "react-router";
 import { toast } from "~/lib/toast";
 import type { Listing, UpdateListingRequest } from "~/types/listing";
+import { normalizeCondition } from "@rental-portal/shared-types";
 import { getUser } from "~/utils/auth";
 import { RouteErrorBoundary, Dialog, DialogFooter } from "~/components/ui";
+import { useTranslation } from "react-i18next";
 import { VoiceListingAssistant } from "~/components/listings/VoiceListingAssistant";
 import { CategorySpecificFields } from "~/components/listings/CategorySpecificFields";
 import { getCategoryFields } from "~/lib/category-fields";
@@ -61,7 +65,6 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     }
     return { listing };
   } catch (error) {
-    console.error("Failed to load listing:", error);
     throw redirect("/dashboard");
   }
 }
@@ -153,7 +156,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
         : undefined,
       condition: formData.get("condition") as ListingInput["condition"],
       location,
-      images,
+      photos: images,
       instantBooking: formData.get("instantBooking") === "true",
       deliveryOptions,
       deliveryRadius: formData.get("deliveryRadius")
@@ -267,6 +270,7 @@ export default function EditListing() {
   const [categoriesError, setCategoriesError] = useState("");
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const { t } = useTranslation();
 
   const {
     register,
@@ -275,7 +279,7 @@ export default function EditListing() {
     setValue,
     getValues,
     formState: { errors },
-  } = useForm<z.input<typeof listingSchema>>({
+  } = useForm<ListingFormValues>({
     resolver: zodResolver(listingSchema),
     defaultValues: {
       title: listing.title,
@@ -288,9 +292,9 @@ export default function EditListing() {
       basePrice: listing.basePrice,
       pricePerWeek: listing.pricePerWeek || undefined,
       pricePerMonth: listing.pricePerMonth || undefined,
-      condition: listing.condition,
+      condition: normalizeCondition(listing.condition),
       location: listing.location,
-      images: (listing.photos && listing.photos.length > 0 ? listing.photos : listing.images) || [],
+      photos: (listing.photos && listing.photos.length > 0 ? listing.photos : listing.images) || [],
       instantBooking: listing.instantBooking,
       deliveryOptions: listing.deliveryOptions,
       deliveryRadius: listing.deliveryRadius || undefined,
@@ -414,7 +418,7 @@ export default function EditListing() {
     });
   };
 
-  const onSubmit = async (data: z.input<typeof listingSchema>) => {
+  const onSubmit = async (data: ListingFormValues) => {
     try {
       const parsed = listingSchema.parse(data) as ListingInput;
       let finalImages = imageItems.map((item) => item.url);
@@ -466,8 +470,9 @@ export default function EditListing() {
       });
       document.body.appendChild(form);
       form.submit();
+      // Clean up the detached form node
+      setTimeout(() => document.body.removeChild(form), 0);
     } catch (error) {
-      console.error("Failed to update listing:", error);
       toast.error("Failed to update listing. Please try again.");
     }
   };
@@ -496,10 +501,12 @@ export default function EditListing() {
     });
     document.body.appendChild(form);
     form.submit();
+    // Clean up the detached form node
+    setTimeout(() => document.body.removeChild(form), 0);
   };
 
   const applyVoiceField = (field: string, value: unknown) => {
-    setValue(field as keyof z.input<typeof listingSchema>, value as never, {
+    setValue(field as keyof ListingFormValues, value as never, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -507,34 +514,29 @@ export default function EditListing() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate(`/listings/${listing.id}`)}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Listing</span>
-            </button>
-            <h1 className="text-xl font-bold text-gray-900">Edit Listing</h1>
-            <button
-              onClick={() => {
-                setDeleteConfirmation("");
-                setShowDeleteModal(true);
-              }}
-              className="flex items-center gap-2 text-destructive hover:text-destructive/80"
-            >
-              <Trash2 className="w-5 h-5" />
-              <span>Delete</span>
-            </button>
-          </div>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => navigate(`/listings/${listing.id}`)}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {t("listings.create.backToListing")}
+          </button>
+          <h1 className="text-xl font-bold text-foreground">{t("listings.create.editTitle")}</h1>
+          <button
+            onClick={() => {
+              setDeleteConfirmation("");
+              setShowDeleteModal(true);
+            }}
+            className="inline-flex items-center gap-1 text-sm text-destructive hover:text-destructive/80 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            {t("common.delete")}
+          </button>
         </div>
-      </header>
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Progress Indicator */}
         <div className="mb-8" data-testid="step-indicator">
           <div className="flex items-center justify-between mb-2">
@@ -604,13 +606,13 @@ export default function EditListing() {
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="w-6 h-6 text-primary-600" />
                 <h2 className="text-2xl font-bold text-gray-900">
-                  Basic Information
+                  {t("listings.create.basicInfo")}
                 </h2>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Title *
+                  {t("listings.create.titleLabel")} *
                 </label>
                 <input
                   type="text"
@@ -629,7 +631,7 @@ export default function EditListing() {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium text-gray-700">
-                    Description *
+                    {t("listings.create.descriptionLabel")} *
                   </label>
                   <button
                     type="button"
@@ -661,7 +663,7 @@ export default function EditListing() {
                     className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
                   >
                     <Sparkles className={`w-3.5 h-3.5 ${isGeneratingDescription ? "animate-spin" : ""}`} />
-                    {isGeneratingDescription ? "Generating\u2026" : "Generate with AI"}
+                    {isGeneratingDescription ? t("listings.create.generating") : t("listings.create.generateWithAI")}
                   </button>
                 </div>
                 <textarea
@@ -681,7 +683,7 @@ export default function EditListing() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category *
+                    {t("listings.create.categoryLabel")} *
                   </label>
                   <select
                     {...register("category")}
@@ -689,7 +691,7 @@ export default function EditListing() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   >
                     <option value="">
-                      {loadingCategories ? "Loading categories..." : "Select category"}
+                      {loadingCategories ? t("listings.create.loadingCategories") : t("listings.create.selectCategory")}
                     </option>
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
@@ -711,7 +713,7 @@ export default function EditListing() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Subcategory
+                    {t("listings.create.subcategory")}
                   </label>
                   <input
                     type="text"
@@ -736,16 +738,16 @@ export default function EditListing() {
           {currentStep === 2 && (
             <div className="space-y-6">
               <div className="flex items-center gap-2 mb-4">
-                <DollarSign className="w-6 h-6 text-primary-600" />
+                <Banknote className="w-6 h-6 text-primary-600" />
                 <h2 className="text-2xl font-bold text-gray-900">
-                  Pricing & Condition
+                  {t("listings.create.pricingAndCondition")}
                 </h2>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Price per Day *
+                    {t("listings.create.pricePerDay")} *
                   </label>
                   <input
                     type="number"
@@ -762,7 +764,7 @@ export default function EditListing() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Price per Week
+                    {t("listings.create.pricePerWeek")}
                   </label>
                   <input
                     type="number"
@@ -774,7 +776,7 @@ export default function EditListing() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Price per Month
+                    {t("listings.create.pricePerMonth")}
                   </label>
                   <input
                     type="number"
@@ -788,7 +790,7 @@ export default function EditListing() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Security Deposit *
+                    {t("listings.create.securityDeposit")} *
                   </label>
                   <input
                     type="number"
@@ -805,13 +807,13 @@ export default function EditListing() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Condition *
+                    {t("listings.create.conditionLabel")} *
                   </label>
                   <select
                     {...register("condition")}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   >
-                    <option value="">Select condition</option>
+                    <option value="">{t("listings.create.selectCondition")}</option>
                     {CONDITIONS.map((cond) => (
                       <option key={cond.value} value={cond.value}>
                         {cond.label}
@@ -833,12 +835,12 @@ export default function EditListing() {
             <div className="space-y-6">
               <div className="flex items-center gap-2 mb-4">
                 <MapPin className="w-6 h-6 text-primary-600" />
-                <h2 className="text-2xl font-bold text-gray-900">Location</h2>
+                <h2 className="text-2xl font-bold text-gray-900">{t("listings.create.locationSection")}</h2>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Street Address *
+                  {t("listings.create.streetAddress")} *
                 </label>
                 <input
                   type="text"
@@ -856,7 +858,7 @@ export default function EditListing() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City *
+                    {t("listings.create.city")} *
                   </label>
                   <input
                     type="text"
@@ -873,7 +875,7 @@ export default function EditListing() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State *
+                    {t("listings.create.state")} *
                   </label>
                   <input
                     type="text"
@@ -892,7 +894,7 @@ export default function EditListing() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Country *
+                    {t("listings.create.country")} *
                   </label>
                   <input
                     type="text"
@@ -909,7 +911,7 @@ export default function EditListing() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Postal Code *
+                    {t("listings.create.zipCode")} *
                   </label>
                   <input
                     type="text"
@@ -928,7 +930,7 @@ export default function EditListing() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Latitude *
+                    {t("listings.create.latitude")} *
                   </label>
                   <input
                     type="number"
@@ -947,7 +949,7 @@ export default function EditListing() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Longitude *
+                    {t("listings.create.longitude")} *
                   </label>
                   <input
                     type="number"
@@ -971,12 +973,12 @@ export default function EditListing() {
           {currentStep === 4 && (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                Rental Details
+                {t("listings.create.rentalDetails")}
               </h2>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Delivery Options
+                  {t("listings.create.deliveryOptions")}
                 </label>
                 <div className="space-y-2">
                   <label className="flex items-center">
@@ -985,7 +987,7 @@ export default function EditListing() {
                       {...register("deliveryOptions.pickup")}
                       className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                     />
-                    <span className="ml-2 text-gray-700">Pickup available</span>
+                    <span className="ml-2 text-gray-700">{t("listings.create.pickupAvailable")}</span>
                   </label>
                   <label className="flex items-center">
                     <input
@@ -994,7 +996,7 @@ export default function EditListing() {
                       className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                     />
                     <span className="ml-2 text-gray-700">
-                      Delivery available
+                      {t("listings.create.deliveryAvailable")}
                     </span>
                   </label>
                   <label className="flex items-center">
@@ -1004,7 +1006,7 @@ export default function EditListing() {
                       className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                     />
                     <span className="ml-2 text-gray-700">
-                      Shipping available
+                      {t("listings.create.shippingAvailable")}
                     </span>
                   </label>
                 </div>
@@ -1014,7 +1016,7 @@ export default function EditListing() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Delivery Radius (miles)
+                      {t("listings.create.deliveryRadius")}
                     </label>
                     <input
                       type="number"
@@ -1024,7 +1026,7 @@ export default function EditListing() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Delivery Fee
+                      {t("listings.create.deliveryFee")}
                     </label>
                     <input
                       type="number"
@@ -1038,7 +1040,7 @@ export default function EditListing() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Minimum Rental Period (days) *
+                    {t("listings.create.minRentalPeriod")} *
                   </label>
                   <input
                     type="number"
@@ -1056,7 +1058,7 @@ export default function EditListing() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Maximum Rental Period (days)
+                    {t("listings.create.maxRentalPeriod")}
                   </label>
                   <input
                     type="number"
@@ -1070,13 +1072,13 @@ export default function EditListing() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cancellation Policy *
+                  {t("listings.create.cancellationPolicy")} *
                 </label>
                 <select
                   {...register("cancellationPolicy")}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
-                  <option value="">Select policy</option>
+                  <option value="">{t("listings.create.selectPolicy")}</option>
                   {CANCELLATION_POLICIES.map((policy) => (
                     <option key={policy.value} value={policy.value}>
                       {policy.label}
@@ -1092,14 +1094,14 @@ export default function EditListing() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rental Rules
+                  {t("listings.create.rentalRules")}
                 </label>
                 <textarea
                   {...register("rules")}
                   rows={4}
                   maxLength={1000}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="List any rules or requirements..."
+                  placeholder={t("listings.create.rulesPlaceholder")}
                 />
               </div>
 
@@ -1111,7 +1113,7 @@ export default function EditListing() {
                     className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
                   <span className="ml-2 text-gray-700">
-                    Enable instant booking
+                    {t("listings.create.instantBooking")}
                   </span>
                 </label>
               </div>
@@ -1123,12 +1125,12 @@ export default function EditListing() {
             <div className="space-y-6">
               <div className="flex items-center gap-2 mb-4">
                 <ImageIcon className="w-6 h-6 text-primary-600" />
-                <h2 className="text-2xl font-bold text-gray-900">Images</h2>
+                <h2 className="text-2xl font-bold text-gray-900">{t("listings.create.images")}</h2>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Upload Images (max 10)
+                  {t("listings.create.uploadImagesMax")}
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                   <input
@@ -1145,10 +1147,10 @@ export default function EditListing() {
                   >
                     <Upload className="w-12 h-12 text-gray-400 mb-2" />
                     <span className="text-gray-600">
-                      Click to upload images
+                      {t("listings.create.clickToUpload")}
                     </span>
                     <span className="text-sm text-gray-500 mt-1">
-                      {imageItems.length}/10 images uploaded
+                      {t("listings.create.imagesUploaded", { current: imageItems.length })}
                     </span>
                   </label>
                 </div>
@@ -1190,7 +1192,7 @@ export default function EditListing() {
                 onClick={prevStep}
                 className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
               >
-                Previous
+                {t("listings.create.previous")}
               </button>
             ) : (
               <div />
@@ -1202,14 +1204,14 @@ export default function EditListing() {
                 onClick={nextStep}
                 className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
               >
-                Next
+                {t("common.next")}
               </button>
             ) : (
               <button
                 type="submit"
                 className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
               >
-                Update Listing
+                {t("listings.create.updateListing")}
               </button>
             )}
           </div>
@@ -1223,13 +1225,13 @@ export default function EditListing() {
           setDeleteConfirmation("");
           setShowDeleteModal(false);
         }}
-        title="Delete Listing"
-        description="Are you sure you want to delete this listing? This action cannot be undone."
+        title={t("listings.create.deleteListing")}
+        description={t("listings.create.deleteConfirmDesc")}
         size="md"
       >
         <div className="mb-6">
           <label className="block text-sm font-medium text-foreground mb-2">
-            Type DELETE to confirm
+            {t("listings.create.typeDeleteToConfirm")}
           </label>
           <input
             type="text"
@@ -1248,14 +1250,14 @@ export default function EditListing() {
             }}
             className="px-4 py-2 border border-border text-muted-foreground rounded-lg hover:bg-muted"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={handleDelete}
             disabled={deleteConfirmation.trim().toUpperCase() !== "DELETE"}
             className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 disabled:opacity-50"
           >
-            Delete
+            {t("common.delete")}
           </button>
         </DialogFooter>
       </Dialog>

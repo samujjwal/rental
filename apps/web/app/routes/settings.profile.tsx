@@ -1,9 +1,11 @@
 import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, Link, redirect, useLoaderData, useActionData } from "react-router";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useAuthStore } from "~/lib/store/auth";
 import {
   User,
   Mail,
@@ -13,6 +15,7 @@ import {
   Key,
   Save,
   Camera,
+  CreditCard,
 } from "lucide-react";
 import { usersApi } from "~/lib/api/users";
 import { authApi } from "~/lib/api/auth";
@@ -28,7 +31,7 @@ import {
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Profile Settings - Universal Rental Portal" },
+    { title: "Profile Settings | GharBatai Rentals" },
     { name: "description", content: "Manage your account settings" },
   ];
 };
@@ -79,7 +82,6 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       },
     };
   } catch (error) {
-    console.error("[settings.profile] loader failed:", error);
     return redirect("/auth/login");
   }
 }
@@ -205,6 +207,7 @@ interface User {
 }
 
 export default function ProfileSettings() {
+  const { t } = useTranslation();
   const { user: loaderUser } = useLoaderData<{ user: User }>();
   const actionData = useActionData<typeof clientAction>();
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(
@@ -217,6 +220,14 @@ export default function ProfileSettings() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { updateUser } = useAuthStore();
+
+  // Sync auth store when profile is successfully updated
+  useEffect(() => {
+    if (actionData?.success && actionData?.user) {
+      updateUser(actionData.user as any);
+    }
+  }, [actionData, updateUser]);
 
   const {
     register,
@@ -232,7 +243,7 @@ export default function ProfileSettings() {
   });
 
   if (!loaderUser) {
-    return <div>Loading...</div>;
+    return <div>{t("common.loading")}</div>;
   }
 
   const handlePhotoSelect = async (file?: File) => {
@@ -270,16 +281,8 @@ export default function ProfileSettings() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">
-            Profile Settings
-          </h1>
-        </div>
-      </header>
-
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 className="text-2xl font-bold text-foreground mb-6">{t("settings.profileSettings.title")}</h1>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {/* Sidebar Navigation */}
           <aside className="md:col-span-1">
@@ -289,14 +292,28 @@ export default function ProfileSettings() {
                 className="w-full flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-lg font-medium"
               >
                 <User className="w-5 h-5" />
-                Profile
+                {t("settings.profile")}
               </Link>
               <Link
                 to="/settings/notifications"
                 className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors"
               >
                 <Bell className="w-5 h-5" />
-                Notifications
+                {t("settings.notifications")}
+              </Link>
+              <Link
+                to="/settings/security"
+                className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors"
+              >
+                <Shield className="w-5 h-5" />
+                {t("settings.security", "Security")}
+              </Link>
+              <Link
+                to="/settings/billing"
+                className="w-full flex items-center gap-3 px-4 py-3 text-foreground hover:bg-muted rounded-lg transition-colors"
+              >
+                <CreditCard className="w-5 h-5" />
+                {t("settings.billing", "Billing")}
               </Link>
             </nav>
           </aside>
@@ -331,7 +348,7 @@ export default function ProfileSettings() {
             {/* Profile Photo */}
             <Card>
               <CardHeader>
-                <CardTitle>Profile Photo</CardTitle>
+                <CardTitle>{t("settings.profileSettings.avatar")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-6">
@@ -363,7 +380,7 @@ export default function ProfileSettings() {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingPhoto}
                     >
-                      {uploadingPhoto ? "Uploading..." : "Change Photo"}
+                      {uploadingPhoto ? t("settings.profileSettings.uploading") : t("settings.profileSettings.changePhoto")}
                     </UnifiedButton>
                     <input
                       ref={fileInputRef}
@@ -379,7 +396,7 @@ export default function ProfileSettings() {
                       }}
                     />
                     <p className="text-sm text-muted-foreground mt-2">
-                      JPG, PNG or GIF. Max size 5MB
+                      {t("settings.profileSettings.photoInfo")}
                     </p>
                   </div>
                 </div>
@@ -391,14 +408,14 @@ export default function ProfileSettings() {
               <input type="hidden" name="intent" value="update-profile" />
               <Card>
                 <CardHeader>
-                  <CardTitle>Personal Information</CardTitle>
+                  <CardTitle>{t("settings.profileSettings.personalInfo")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-foreground mb-2">
-                          First Name
+                          {t("settings.profileSettings.firstName")}
                         </label>
                         <input
                           {...register("firstName")}
@@ -416,7 +433,7 @@ export default function ProfileSettings() {
 
                       <div>
                         <label className="block text-sm font-medium text-foreground mb-2">
-                          Last Name
+                          {t("settings.profileSettings.lastName")}
                         </label>
                         <input
                           {...register("lastName")}
@@ -430,7 +447,7 @@ export default function ProfileSettings() {
 
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
-                        Email Address
+                        {t("settings.profileSettings.emailAddress")}
                       </label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -450,14 +467,14 @@ export default function ProfileSettings() {
                       {loaderUser.emailVerified && (
                         <p className="mt-1 text-sm text-success flex items-center gap-1">
                           <Shield className="w-4 h-4" />
-                          Verified
+                          {t("settings.profileSettings.verified")}
                         </p>
                       )}
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
-                        Phone Number
+                        {t("settings.profileSettings.phoneNumber")}
                       </label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -479,7 +496,7 @@ export default function ProfileSettings() {
                     <div className="flex items-center justify-end pt-4 border-t border-border">
                       <UnifiedButton type="submit" className="flex items-center gap-2">
                         <Save className="w-5 h-5" />
-                        Save Changes
+                        {t("settings.profileSettings.save")}
                       </UnifiedButton>
                     </div>
                   </div>
@@ -490,7 +507,7 @@ export default function ProfileSettings() {
             {/* Account Stats */}
             <Card>
               <CardHeader>
-                <CardTitle>Account Statistics</CardTitle>
+                <CardTitle>{t("settings.profileSettings.accountStats")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-4">
@@ -499,7 +516,7 @@ export default function ProfileSettings() {
                       {loaderUser.totalBookings || 0}
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      Bookings
+                      {t("settings.profileSettings.bookings")}
                     </div>
                   </div>
                   <div className="text-center p-4 bg-muted rounded-lg">
@@ -507,7 +524,7 @@ export default function ProfileSettings() {
                       {loaderUser.totalListings || 0}
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      Listings
+                      {t("settings.profileSettings.listings")}
                     </div>
                   </div>
                   <div className="text-center p-4 bg-muted rounded-lg">
@@ -517,7 +534,7 @@ export default function ProfileSettings() {
                         : "N/A"}
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      Rating
+                      {t("settings.profileSettings.rating")}
                     </div>
                   </div>
                 </div>
@@ -527,7 +544,7 @@ export default function ProfileSettings() {
             {/* Change Password */}
             <Card>
               <CardHeader>
-                <CardTitle>Change Password</CardTitle>
+                <CardTitle>{t("settings.profileSettings.changePassword")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <Form method="post">
@@ -535,7 +552,7 @@ export default function ProfileSettings() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
-                        Current Password
+                        {t("settings.profileSettings.currentPassword")}
                       </label>
                       <input
                         type="password"
@@ -546,7 +563,7 @@ export default function ProfileSettings() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
-                        New Password
+                        {t("settings.profileSettings.newPassword")}
                       </label>
                       <input
                         type="password"
@@ -557,7 +574,7 @@ export default function ProfileSettings() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
-                        Confirm New Password
+                        {t("settings.profileSettings.confirmPassword")}
                       </label>
                       <input
                         type="password"
@@ -572,7 +589,7 @@ export default function ProfileSettings() {
                         variant="primary"
                         leftIcon={<Key className="w-5 h-5" />}
                       >
-                        Update Password
+                        {t("settings.profileSettings.updatePassword")}
                       </UnifiedButton>
                     </div>
                   </div>
@@ -583,18 +600,17 @@ export default function ProfileSettings() {
             {/* Danger Zone */}
             <Card className="border-destructive/50">
               <CardHeader>
-                <CardTitle className="text-destructive">Danger Zone</CardTitle>
+                <CardTitle className="text-destructive">{t("settings.profileSettings.dangerZone")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Once you delete your account, there is no going back. Please
-                  be certain.
+                  {t("settings.profileSettings.deleteWarning")}
                 </p>
                 <Form method="post">
                   <input type="hidden" name="intent" value="delete-account" />
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Type DELETE to confirm
+                      {t("settings.profileSettings.typeDeleteToConfirm")}
                     </label>
                     <input
                       type="text"
@@ -611,7 +627,7 @@ export default function ProfileSettings() {
                     type="submit"
                     disabled={deleteConfirmation.trim().toUpperCase() !== "DELETE"}
                   >
-                    Delete Account
+                    {t("settings.profileSettings.deleteAccount")}
                   </UnifiedButton>
                 </Form>
               </CardContent>

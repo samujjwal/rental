@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { LedgerService, TransactionType, AccountType } from './ledger.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 import { LedgerSide, LedgerEntryStatus } from '@rental-portal/database';
 
 describe('LedgerService', () => {
@@ -19,7 +20,16 @@ describe('LedgerService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [LedgerService, { provide: PrismaService, useValue: mockPrismaService }],
+      providers: [
+        LedgerService,
+        { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, defaultValue?: any) => defaultValue ?? 'USD'),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<LedgerService>(LedgerService);

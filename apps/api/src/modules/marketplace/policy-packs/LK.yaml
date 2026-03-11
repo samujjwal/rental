@@ -1,0 +1,140 @@
+# Sri Lanka Country Policy Pack
+# ISO 3166-1 Alpha-2: LK
+
+general:
+  country_code: "LK"
+  country_name: "Sri Lanka"
+  currency:
+    code: "LKR"
+    name: "Sri Lankan Rupee"
+    precision: 2
+    symbol: "Rs"
+    allow_fractional: true
+  locale: "si-LK"
+  fallback_locale: "en-LK"
+  timezone: "Asia/Colombo"
+  utc_offset: "+05:30"
+  languages:
+    - "si"
+    - "ta"
+    - "en"
+  date_format: "YYYY-MM-DD"
+  phone_prefix: "+94"
+  address_format:
+    structure: "Province/District/City"
+    requires_zip: true
+    requires_state: false
+    zip_regex: "^[0-9]{5}$"
+    fields:
+      - { name: "province", required: true }
+      - { name: "district", required: true }
+      - { name: "city", required: true }
+      - { name: "postal_code", required: true }
+      - { name: "address_line_1", required: true }
+      - { name: "address_line_2", required: false }
+
+identity:
+  host_verification:
+    required_documents:
+      - type: "NIC"
+        label: "National Identity Card"
+        mandatory: true
+        api_integration: null
+      - type: "TIN"
+        label: "Tax Identification Number"
+        mandatory: true
+        required_for: "TAX_COMPLIANCE"
+    minimum_age: 18
+    allow_foreign_hosts: true
+    foreign_host_documents:
+      - "PASSPORT"
+      - "VISA"
+  renter_verification:
+    require_phone_verification: true
+    require_email_verification: true
+    require_document_for_high_value: true
+    high_value_threshold: 500000  # LKR
+  kyc_provider: null
+  aml_screening: true
+
+tax:
+  platform_level:
+    - type: "VAT"
+      name: "Value Added Tax"
+      rate: 0.18
+      applied_to: ["SERVICE_FEE"]
+      remitted_by: "PLATFORM"
+      effective_from: "2024-01-01"
+    - type: "SSCL"
+      name: "Social Security Contribution Levy"
+      rate: 0.025
+      applied_to: ["SERVICE_FEE"]
+      remitted_by: "PLATFORM"
+      effective_from: "2022-10-01"
+  host_level:
+    - type: "WHT"
+      name: "Withholding Tax"
+      rate: 0.05
+      applied_to: ["HOST_INCOME"]
+      remitted_by: "PLATFORM"
+      threshold: 0
+  withholding_tax:
+    enabled: true
+    rate: 0.05
+    threshold: 0
+    remitted_by: "PLATFORM"
+  tourism_levy:
+    enabled: true
+    rate: 0.01
+    applied_to: ["BASE_PRICE"]
+    condition: "listing_type == 'SHORT_TERM' AND renter_nationality != 'LK'"
+
+payments:
+  supported_methods:
+    - "BANK_TRANSFER"
+    - "CREDIT_CARD"
+    - "DEBIT_CARD"
+    - "FRIMI"
+    - "GENIE"
+  default_method: "BANK_TRANSFER"
+  payout_methods:
+    - "BANK_TRANSFER"
+  payout_frequency: "BI_WEEKLY"
+  payout_minimum: 5000  # LKR
+  escrow_hold_days: 3
+  max_foreign_currency_withdrawal:
+    enabled: true
+    limit_usd_per_year: 15000
+    requires_cbsl_approval_above: 15000
+
+booking:
+  min_duration_hours: 1
+  max_duration_days: 365
+  advance_booking_max_days: 180
+  cancellation_minimum_hours: 48
+  instant_book_enabled: true
+  allow_hourly: true
+  require_guest_count: true
+  max_guests_default: 15
+
+compliance:
+  short_term_rental_cap:
+    enabled: false
+  business_registration_required: false
+  safety_requirements:
+    fire_extinguisher: true
+    smoke_detector: false
+    first_aid_kit: false
+  insurance_required: false
+  data_retention_days: 1825  # 5 years
+  tourism_board_registration:
+    required_for_short_term: true
+    authority: "Sri Lanka Tourism Development Authority"
+    renewal_period_years: 1
+  foreign_currency_rules:
+    require_settlement_in_lkr: true
+    exception_for_foreign_tourists: true
+  w9_equivalent:
+    required: true
+    form: "TIN_CERTIFICATE"
+    threshold: 0

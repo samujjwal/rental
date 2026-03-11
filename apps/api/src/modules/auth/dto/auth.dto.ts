@@ -5,9 +5,11 @@ import {
   MaxLength,
   IsOptional,
   IsDateString,
+  IsEnum,
   Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserRole } from '@rental-portal/database';
 
 export class RegisterDto {
   @ApiProperty({ example: 'john.doe@example.com' })
@@ -17,6 +19,7 @@ export class RegisterDto {
   @ApiProperty({ example: 'SecurePass123!', minLength: 8 })
   @IsString()
   @MinLength(8)
+  @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
     message: 'Password must contain uppercase, lowercase, number and special character',
   })
@@ -28,16 +31,22 @@ export class RegisterDto {
   @MaxLength(50)
   firstName: string;
 
-  @ApiProperty({ example: 'Doe' })
+  @ApiProperty({ example: 'Doe', required: false })
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(50)
-  lastName: string;
+  lastName?: string;
 
-  @ApiProperty({ example: '+1234567890', required: false })
+  @ApiProperty({ example: '+12025551234', required: false })
   @IsOptional()
   @IsString()
   phoneNumber?: string;
+
+  @ApiProperty({ example: '+12025551234', required: false })
+  @IsOptional()
+  @IsString()
+  phone?: string;
 
   @ApiProperty({ example: '1990-01-01', required: false })
   @IsOptional()
@@ -63,9 +72,10 @@ export class LoginDto {
 }
 
 export class RefreshTokenDto {
-  @ApiProperty()
+  @ApiProperty({ required: false, description: 'Required for mobile clients; web clients use httpOnly cookie' })
+  @IsOptional()
   @IsString()
-  refreshToken: string;
+  refreshToken?: string;
 }
 
 export class PasswordResetRequestDto {
@@ -82,6 +92,7 @@ export class PasswordResetDto {
   @ApiProperty({ minLength: 8 })
   @IsString()
   @MinLength(8)
+  @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
     message: 'Password must contain uppercase, lowercase, number and special character',
   })
@@ -96,6 +107,7 @@ export class ChangePasswordDto {
   @ApiProperty({ minLength: 8 })
   @IsString()
   @MinLength(8)
+  @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
     message: 'Password must contain uppercase, lowercase, number and special character',
   })
@@ -160,6 +172,13 @@ export class OtpVerifyDto {
   @MinLength(6)
   @MaxLength(6)
   code: string;
+
+  @ApiProperty({ example: '654321', required: false, description: 'TOTP code if MFA is enabled' })
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  @MaxLength(8)
+  mfaCode?: string;
 }
 
 // Phone verification DTO (6.3)
@@ -169,4 +188,21 @@ export class PhoneVerifyDto {
   @MinLength(6)
   @MaxLength(6)
   code: string;
+}
+
+export class DevLoginDto {
+  @ApiProperty({ example: 'admin@gharbatai.com', required: false })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiProperty({ description: 'User role for dev login', enum: UserRole, required: false })
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @ApiProperty({ description: 'Dev login secret (required when DEV_LOGIN_SECRET is set)', required: false })
+  @IsOptional()
+  @IsString()
+  secret?: string;
 }

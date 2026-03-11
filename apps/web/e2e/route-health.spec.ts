@@ -88,7 +88,7 @@ test.describe("Route Health (Desktop + Mobile)", () => {
         expect(response.status()).toBeLessThan(500);
       }
 
-      await page.waitForTimeout(300);
+      await page.waitForLoadState('domcontentloaded');
 
       const url = page.url();
       const onLogin = /\/auth\/login/.test(url);

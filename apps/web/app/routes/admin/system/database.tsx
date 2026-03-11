@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import {
   Database,
@@ -17,6 +18,7 @@ import {
 import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { APP_LOCALE } from "~/config/locale";
 
 export const meta: MetaFunction = () => {
   return [
@@ -142,6 +144,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function DatabasePage() {
+  const { t } = useTranslation();
   const { health, dbInfo, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -158,7 +161,7 @@ export default function DatabasePage() {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold mb-2">Error Loading Database Info</h3>
+          <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingDbInfo")}</h3>
           <p className="text-red-600">{error}</p>
         </div>
       </div>
@@ -176,11 +179,11 @@ export default function DatabasePage() {
           to="/admin/system"
           className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
         >
-          ← Back to System Settings
+          {t("admin.backToSystemSettings")}
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900">Database Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("admin.databaseManagement")}</h1>
         <p className="text-gray-600 mt-1">
-          Monitor database health and perform maintenance operations
+          {t("admin.monitorDbHealth")}
         </p>
       </div>
 
@@ -206,7 +209,7 @@ export default function DatabasePage() {
               <Database className={`w-5 h-5 ${dbStatus === "healthy" ? "text-green-600" : "text-red-600"}`} />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Status</p>
+              <p className="text-sm text-gray-500">{t("admin.status")}</p>
               <p className={`font-semibold ${dbStatus === "healthy" ? "text-green-600" : "text-red-600"}`}>
                 {humanizeWord(dbStatus)}
               </p>
@@ -220,7 +223,7 @@ export default function DatabasePage() {
               <Activity className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Response Time</p>
+              <p className="text-sm text-gray-500">{t("admin.responseTime")}</p>
               <p className="font-semibold text-gray-900">{dbResponseTime}ms</p>
             </div>
           </div>
@@ -255,20 +258,20 @@ export default function DatabasePage() {
       {dbInfo?.tables && dbInfo.tables.length > 0 && (
         <div className="bg-white rounded-lg shadow border border-gray-200 mb-6 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Table Statistics</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.tableStatistics")}</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Table Name
+                    {t("admin.tableName")}
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Rows
+                    {t("admin.rows")}
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Size
+                    {t("admin.size")}
                   </th>
                 </tr>
               </thead>
@@ -279,7 +282,7 @@ export default function DatabasePage() {
                       {table.name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                      {safeNumber(table.rows).toLocaleString()}
+                      {safeNumber(table.rows).toLocaleString(APP_LOCALE)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                       {formatBytes(safeNumber(table.size))}
@@ -294,16 +297,15 @@ export default function DatabasePage() {
 
       {/* Maintenance Operations */}
       <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Maintenance Operations</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">{t("admin.maintenanceOperations")}</h2>
         
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <div className="flex items-start">
             <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" />
             <div>
-              <h3 className="text-sm font-medium text-yellow-800">Caution</h3>
+              <h3 className="text-sm font-medium text-yellow-800">{t("admin.caution")}</h3>
               <p className="text-sm text-yellow-700 mt-1">
-                These operations may temporarily affect database performance. 
-                It's recommended to run them during low-traffic periods.
+                {t("admin.maintenanceCaution")}
               </p>
             </div>
           </div>
@@ -314,10 +316,10 @@ export default function DatabasePage() {
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-5 h-5 text-blue-500" />
-              <h3 className="font-semibold text-gray-900">Vacuum Database</h3>
+              <h3 className="font-semibold text-gray-900">{t("admin.vacuumDatabase")}</h3>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Reclaim storage space and optimize database performance by removing dead tuples.
+              {t("admin.vacuumDesc")}
             </p>
             {showConfirm === "vacuum" ? (
               <div className="flex items-center gap-2">
@@ -333,7 +335,7 @@ export default function DatabasePage() {
                     {isSubmitting && formIntent === "vacuum" ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      "Confirm"
+                      t("admin.confirm")
                     )}
                   </UnifiedButton>
                 </Form>
@@ -342,7 +344,7 @@ export default function DatabasePage() {
                   size="sm"
                   onClick={() => setShowConfirm(null)}
                 >
-                  Cancel
+                  {t("admin.cancel")}
                 </UnifiedButton>
               </div>
             ) : (
@@ -352,7 +354,7 @@ export default function DatabasePage() {
                 className="w-full"
               >
                 <Zap className="w-4 h-4 mr-2" />
-                Run Vacuum
+                {t("admin.runVacuum")}
               </UnifiedButton>
             )}
           </div>
@@ -361,10 +363,10 @@ export default function DatabasePage() {
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <RefreshCw className="w-5 h-5 text-green-500" />
-              <h3 className="font-semibold text-gray-900">Analyze Tables</h3>
+              <h3 className="font-semibold text-gray-900">{t("admin.analyzeTables")}</h3>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Update statistics used by the query planner for better query performance.
+              {t("admin.analyzeDesc")}
             </p>
             {showConfirm === "analyze" ? (
               <div className="flex items-center gap-2">
@@ -380,7 +382,7 @@ export default function DatabasePage() {
                     {isSubmitting && formIntent === "analyze" ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      "Confirm"
+                      t("admin.confirm")
                     )}
                   </UnifiedButton>
                 </Form>
@@ -389,7 +391,7 @@ export default function DatabasePage() {
                   size="sm"
                   onClick={() => setShowConfirm(null)}
                 >
-                  Cancel
+                  {t("admin.cancel")}
                 </UnifiedButton>
               </div>
             ) : (
@@ -399,7 +401,7 @@ export default function DatabasePage() {
                 className="w-full"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Run Analyze
+                {t("admin.runAnalyze")}
               </UnifiedButton>
             )}
           </div>
@@ -408,10 +410,10 @@ export default function DatabasePage() {
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <Trash2 className="w-5 h-5 text-red-500" />
-              <h3 className="font-semibold text-gray-900">Clear Cache</h3>
+              <h3 className="font-semibold text-gray-900">{t("admin.clearCacheLabel")}</h3>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Clear the database query cache. Use this if you notice stale data.
+              {t("admin.clearCacheDesc")}
             </p>
             {showConfirm === "clearCache" ? (
               <div className="flex items-center gap-2">
@@ -427,7 +429,7 @@ export default function DatabasePage() {
                     {isSubmitting && formIntent === "clearCache" ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      "Confirm"
+                      t("admin.confirm")
                     )}
                   </UnifiedButton>
                 </Form>
@@ -436,7 +438,7 @@ export default function DatabasePage() {
                   size="sm"
                   onClick={() => setShowConfirm(null)}
                 >
-                  Cancel
+                  {t("admin.cancel")}
                 </UnifiedButton>
               </div>
             ) : (
@@ -446,7 +448,7 @@ export default function DatabasePage() {
                 className="w-full"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Clear Cache
+                {t("admin.clearCacheLabel")}
               </UnifiedButton>
             )}
           </div>
@@ -456,26 +458,26 @@ export default function DatabasePage() {
       {/* Connection Info */}
       {dbInfo && (
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Connection Information</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">{t("admin.connectionInfo")}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">Database Size</p>
+              <p className="text-sm text-gray-500">{t("admin.databaseSize")}</p>
               <p className="font-mono text-gray-900">{formatBytes(safeNumber(dbInfo.size))}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">Active Connections</p>
+              <p className="text-sm text-gray-500">{t("admin.activeConnections")}</p>
               <p className="font-mono text-gray-900">{safeNumber(dbInfo.connections)}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">Total Tables</p>
+              <p className="text-sm text-gray-500">{t("admin.totalTables")}</p>
               <p className="font-mono text-gray-900">{dbInfo.tables?.length || "N/A"}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">Total Rows</p>
+              <p className="text-sm text-gray-500">{t("admin.totalRows")}</p>
               <p className="font-mono text-gray-900">
                 {safeNumber(
                   dbInfo.tables?.reduce((sum, t) => sum + safeNumber(t.rows), 0)
-                ).toLocaleString()}
+                ).toLocaleString(APP_LOCALE)}
               </p>
             </div>
           </div>

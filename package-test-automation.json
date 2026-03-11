@@ -1,0 +1,31 @@
+{
+  "name": "rental-portal-automation",
+  "version": "1.0.0",
+  "description": "Automated testing suite for GharBatai Nepal Rental Portal",
+  "scripts": {
+    "test:api": "./automated-test-suite.sh",
+    "test:frontend": "node automated-frontend-tests.js",
+    "test:integration": "node automated-integration-tests.js",
+    "test:all": "./master-test-suite.sh",
+    "test:quick": "echo 'Running quick tests...' && ./automated-test-suite.sh && echo '✅ Quick tests passed!'",
+    "test:ci": "echo 'Running CI tests...' && ./automated-test-suite.sh && echo '✅ CI tests passed!'",
+    "test:watch": "echo 'Watch mode not implemented yet'",
+    "test:coverage": "echo 'Coverage reports not implemented yet'",
+    "test:report": "echo 'Latest test reports:' && ls -la ./test-results/ | head -10"
+  },
+  "devDependencies": {
+    "puppeteer": "^21.0.0",
+    "@elastic/elasticsearch": "^8.0.0",
+    "redis": "^4.0.0",
+    "sharp": "^0.32.0"
+  },
+  "keywords": [
+    "automation",
+    "testing",
+    "rental-portal",
+    "gharbatai",
+    "nepal"
+  ],
+  "author": "GharBatai Development Team",
+  "license": "MIT"
+}

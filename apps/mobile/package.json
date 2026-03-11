@@ -2,6 +2,7 @@
   "name": "rental-portal-mobile",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "main": "App.tsx",
   "scripts": {
     "start": "expo start",
@@ -9,15 +10,20 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:e2e": "maestro test .maestro/",
+    "test:e2e:login": "maestro test .maestro/auth-login.yaml",
+    "test:e2e:booking": "maestro test .maestro/booking-flow.yaml"
   },
   "dependencies": {
     "@react-native-community/datetimepicker": "^8.0.0",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.0",
     "@react-navigation/native-stack": "^7.2.0",
-    "@rental-portal/mobile-sdk": "workspace:*",
     "@rental-portal/shared-types": "workspace:*",
+    "@expo/vector-icons": "^14.0.0",
     "@stripe/stripe-react-native": "^0.39.0",
     "expo": "~52.0.0",
     "expo-image": "~2.0.0",
@@ -32,12 +38,24 @@
     "react-native-safe-area-context": "4.12.0",
     "react-native-screens": "~4.4.0",
     "react-native-toast-message": "^2.2.1",
-    "socket.io-client": "^4.8.0"
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
+    "@eslint/js": "^9.39.2",
+    "@testing-library/react-native": "^13.0.1",
+    "@types/jest": "^29.5.0",
     "@types/react": "~18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "babel-preset-expo": "~12.0.0",
-    "typescript": "~5.6.0"
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "jest": "^29.7.0",
+    "jest-expo": "~52.0.0",
+    "prettier": "^3.8.1",
+    "react-test-renderer": "18.3.1",
+    "typescript": "^5.9.3"
   }
 }

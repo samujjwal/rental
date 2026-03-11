@@ -27,7 +27,7 @@ export class TokenService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: this.configService.get('jwt.accessTokenExpiry'),
+      expiresIn: this.configService.get('jwt.accessTokenExpiry', '15m'),
       jwtid: randomBytes(8).toString('hex'),
     });
 
@@ -41,11 +41,14 @@ export class TokenService {
     refreshToken: string,
     accessToken: string,
     metadata: { ipAddress?: string; userAgent?: string },
+    tx?: any,
   ): Promise<void> {
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+    const refreshTokenDays = this.configService.get<number>('jwt.refreshTokenDays', 7);
+    expiresAt.setDate(expiresAt.getDate() + refreshTokenDays);
 
-    await this.prisma.session.create({
+    const client = tx || this.prisma;
+    await client.session.create({
       data: {
         userId,
         token: accessToken,

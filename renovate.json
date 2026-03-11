@@ -32,10 +32,6 @@
       "groupName": "TanStack packages"
     },
     {
-      "matchPackagePatterns": ["^@mui/", "^@emotion/"],
-      "groupName": "Material-UI packages"
-    },
-    {
       "matchPackagePatterns": ["^@prisma/", "^prisma$"],
       "groupName": "Prisma packages"
     }

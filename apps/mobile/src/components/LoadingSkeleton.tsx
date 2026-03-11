@@ -18,6 +18,10 @@ function Skeleton({
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
+    if (process.env.NODE_ENV === 'test') {
+      opacity.setValue(0.5);
+      return;
+    }
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {

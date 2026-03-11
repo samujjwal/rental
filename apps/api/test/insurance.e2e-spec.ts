@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { BookingMode, PropertyStatus, UserRole } from '@rental-portal/database';
-import { createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, createUserWithRole } from './e2e-helpers';
 
 describe('Insurance (e2e)', () => {
   let app: INestApplication;
@@ -13,6 +13,9 @@ describe('Insurance (e2e)', () => {
   let adminToken: string;
   let ownerId: string;
   let listingId: string;
+
+  const ownerEmail = buildTestEmail('insurance-owner');
+  const adminEmail = buildTestEmail('insurance-admin');
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -28,32 +31,32 @@ describe('Insurance (e2e)', () => {
 
   afterAll(async () => {
     await prisma.insurancePolicy.deleteMany({
-      where: { user: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } } },
+      where: { user: { email: { in: [ownerEmail, adminEmail] } } },
     });
     await prisma.listing.deleteMany({
-      where: { owner: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } } },
+      where: { owner: { email: { in: [ownerEmail, adminEmail] } } },
     });
     await prisma.user.deleteMany({
-      where: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } },
+      where: { email: { in: [ownerEmail, adminEmail] } },
     });
     await app.close();
   });
 
   beforeEach(async () => {
     await prisma.insurancePolicy.deleteMany({
-      where: { user: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } } },
+      where: { user: { email: { in: [ownerEmail, adminEmail] } } },
     });
     await prisma.listing.deleteMany({
-      where: { owner: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } } },
+      where: { owner: { email: { in: [ownerEmail, adminEmail] } } },
     });
     await prisma.user.deleteMany({
-      where: { email: { in: ['insurance-owner@test.com', 'insurance-admin@test.com'] } },
+      where: { email: { in: [ownerEmail, adminEmail] } },
     });
 
     const owner = await createUserWithRole({
       app,
       prisma,
-      email: 'insurance-owner@test.com',
+      email: ownerEmail,
       password: 'TestPass123!',
       firstName: 'Insurance',
       lastName: 'Owner',
@@ -65,7 +68,7 @@ describe('Insurance (e2e)', () => {
     const admin = await createUserWithRole({
       app,
       prisma,
-      email: 'insurance-admin@test.com',
+      email: adminEmail,
       password: 'TestPass123!',
       firstName: 'Insurance',
       lastName: 'Admin',

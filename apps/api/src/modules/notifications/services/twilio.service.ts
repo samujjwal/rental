@@ -118,7 +118,7 @@ export class SmsService {
   ): Promise<void> {
     await this.sendSms({
       to: phone,
-      body: `Booking confirmed! ${booking.listingTitle} from ${booking.startDate.toLocaleDateString()} to ${booking.endDate.toLocaleDateString()}. Total: ${booking.currency} ${booking.totalPrice}. Booking ID: ${booking.id}`,
+      body: `Booking confirmed! ${booking.listingTitle} from ${booking.startDate.toLocaleDateString(undefined)} to ${booking.endDate.toLocaleDateString(undefined)}. Total: ${booking.currency} ${booking.totalPrice}. Booking ID: ${booking.id}`,
     });
   }
 
@@ -192,7 +192,7 @@ export class SmsService {
 
       await this.sendSms({
         to: testPhone,
-        body: 'Rental Portal - SMS Configuration Test\nThis is a test message to verify that the Twilio integration is working correctly.',
+        body: `${this.config.get('brand.name', 'Rental Portal')} - SMS Configuration Test\nThis is a test message to verify that the Twilio integration is working correctly.`,
       });
 
       return { success: true, message: 'Test SMS sent successfully' };

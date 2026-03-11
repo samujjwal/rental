@@ -8,8 +8,7 @@ test.describe("Disputes Navigation Debug", () => {
     // Try direct navigation
     await page.goto("/admin/disputes");
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-    
+
     console.log("Current URL:", page.url());
     console.log("Page title:", await page.title());
     
@@ -35,9 +34,7 @@ test.describe("Disputes Navigation Debug", () => {
     await loginAsAdmin(page);
     await page.goto("/admin");
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-    
-    console.log("On admin page, URL:", page.url());
+
     
     // Check if sidebar link exists
     const disputeLink = page.locator('a[href="/admin/disputes"]').first();
@@ -48,8 +45,7 @@ test.describe("Disputes Navigation Debug", () => {
       console.log("Link text:", await disputeLink.textContent());
       await disputeLink.click();
       await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(3000);
-      
+
       console.log("After click, URL:", page.url());
       await page.screenshot({ path: 'dispute-debug-sidebar.png', fullPage: true });
       

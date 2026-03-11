@@ -1,7 +1,7 @@
 // ==========================================================================
 // AUTO-GENERATED — DO NOT EDIT
 // Source: packages/database/prisma/schema.prisma
-// Generated: 2026-02-21T02:39:21.511Z
+// Generated: 2026-03-11T00:58:02.038Z
 // Run: pnpm --filter shared-types generate
 // ==========================================================================
 
@@ -53,6 +53,14 @@ export enum PropertyStatus {
 }
 
 export const PropertyStatusValues = ['AVAILABLE', 'RENTED', 'MAINTENANCE', 'UNAVAILABLE', 'DRAFT', 'SUSPENDED', 'ARCHIVED'] as const;
+
+export enum AvailabilityStatus {
+  AVAILABLE = 'AVAILABLE',
+  BOOKED = 'BOOKED',
+  BLOCKED = 'BLOCKED',
+}
+
+export const AvailabilityStatusValues = ['AVAILABLE', 'BOOKED', 'BLOCKED'] as const;
 
 export enum PropertyCondition {
   EXCELLENT = 'EXCELLENT',
@@ -249,10 +257,13 @@ export enum NotificationType {
   PAYOUT_PROCESSED = 'PAYOUT_PROCESSED',
   VERIFICATION_COMPLETE = 'VERIFICATION_COMPLETE',
   DISPUTE_OPENED = 'DISPUTE_OPENED',
+  DISPUTE_UPDATED = 'DISPUTE_UPDATED',
+  NEW_MESSAGE = 'NEW_MESSAGE',
   LISTING_APPROVED = 'LISTING_APPROVED',
+  PAYMENT_REFUNDED = 'PAYMENT_REFUNDED',
 }
 
-export const NotificationTypeValues = ['BOOKING_REQUEST', 'BOOKING_CONFIRMED', 'BOOKING_CANCELLED', 'BOOKING_REMINDER', 'PAYMENT_RECEIVED', 'REVIEW_RECEIVED', 'MESSAGE_RECEIVED', 'SYSTEM_UPDATE', 'SYSTEM_ANNOUNCEMENT', 'MARKETING', 'PAYOUT_PROCESSED', 'VERIFICATION_COMPLETE', 'DISPUTE_OPENED', 'LISTING_APPROVED'] as const;
+export const NotificationTypeValues = ['BOOKING_REQUEST', 'BOOKING_CONFIRMED', 'BOOKING_CANCELLED', 'BOOKING_REMINDER', 'PAYMENT_RECEIVED', 'REVIEW_RECEIVED', 'MESSAGE_RECEIVED', 'SYSTEM_UPDATE', 'SYSTEM_ANNOUNCEMENT', 'MARKETING', 'PAYOUT_PROCESSED', 'VERIFICATION_COMPLETE', 'DISPUTE_OPENED', 'DISPUTE_UPDATED', 'NEW_MESSAGE', 'LISTING_APPROVED', 'PAYMENT_REFUNDED'] as const;
 
 export enum OrganizationStatus {
   ACTIVE = 'ACTIVE',
@@ -398,6 +409,244 @@ export enum IdentityDocumentType {
 }
 
 export const IdentityDocumentTypeValues = ['DRIVERS_LICENSE', 'PASSPORT', 'NATIONAL_ID', 'OTHER'] as const;
+
+export enum AvailabilityMode {
+  DATE_RANGE = 'DATE_RANGE',
+  TIME_SLOT = 'TIME_SLOT',
+  CALENDAR = 'CALENDAR',
+}
+
+export const AvailabilityModeValues = ['DATE_RANGE', 'TIME_SLOT', 'CALENDAR'] as const;
+
+export enum AvailabilitySlotStatus {
+  AVAILABLE = 'AVAILABLE',
+  RESERVED = 'RESERVED',
+  BOOKED = 'BOOKED',
+  BLOCKED = 'BLOCKED',
+  MAINTENANCE = 'MAINTENANCE',
+}
+
+export const AvailabilitySlotStatusValues = ['AVAILABLE', 'RESERVED', 'BOOKED', 'BLOCKED', 'MAINTENANCE'] as const;
+
+export enum PriceLineType {
+  BASE_RATE = 'BASE_RATE',
+  DURATION_DISCOUNT = 'DURATION_DISCOUNT',
+  CLEANING_FEE = 'CLEANING_FEE',
+  SERVICE_FEE = 'SERVICE_FEE',
+  PLATFORM_FEE = 'PLATFORM_FEE',
+  SECURITY_DEPOSIT = 'SECURITY_DEPOSIT',
+  INSURANCE = 'INSURANCE',
+  TAX = 'TAX',
+  DELIVERY_FEE = 'DELIVERY_FEE',
+  LATE_FEE = 'LATE_FEE',
+  DAMAGE_FEE = 'DAMAGE_FEE',
+  CUSTOM = 'CUSTOM',
+}
+
+export const PriceLineTypeValues = ['BASE_RATE', 'DURATION_DISCOUNT', 'CLEANING_FEE', 'SERVICE_FEE', 'PLATFORM_FEE', 'SECURITY_DEPOSIT', 'INSURANCE', 'TAX', 'DELIVERY_FEE', 'LATE_FEE', 'DAMAGE_FEE', 'CUSTOM'] as const;
+
+export enum PolicyType {
+  TAX = 'TAX',
+  FEE = 'FEE',
+  PRICING = 'PRICING',
+  CANCELLATION = 'CANCELLATION',
+  BOOKING_CONSTRAINT = 'BOOKING_CONSTRAINT',
+  COMPLIANCE = 'COMPLIANCE',
+  CURRENCY = 'CURRENCY',
+  IDENTITY = 'IDENTITY',
+}
+
+export const PolicyTypeValues = ['TAX', 'FEE', 'PRICING', 'CANCELLATION', 'BOOKING_CONSTRAINT', 'COMPLIANCE', 'CURRENCY', 'IDENTITY'] as const;
+
+export enum PolicyStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export const PolicyStatusValues = ['DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'SUSPENDED', 'ARCHIVED'] as const;
+
+export enum PricingRuleType {
+  DYNAMIC = 'DYNAMIC',
+  SEASONAL = 'SEASONAL',
+  OCCUPANCY = 'OCCUPANCY',
+  LAST_MINUTE = 'LAST_MINUTE',
+  EARLY_BIRD = 'EARLY_BIRD',
+  COMPETITOR = 'COMPETITOR',
+  SURGE = 'SURGE',
+  LOYALTY = 'LOYALTY',
+}
+
+export const PricingRuleTypeValues = ['DYNAMIC', 'SEASONAL', 'OCCUPANCY', 'LAST_MINUTE', 'EARLY_BIRD', 'COMPETITOR', 'SURGE', 'LOYALTY'] as const;
+
+export enum PricingStrategy {
+  MULTIPLIER = 'MULTIPLIER',
+  FIXED_OFFSET = 'FIXED_OFFSET',
+  PERCENTAGE = 'PERCENTAGE',
+  FLOOR_CEILING = 'FLOOR_CEILING',
+  TIERED = 'TIERED',
+}
+
+export const PricingStrategyValues = ['MULTIPLIER', 'FIXED_OFFSET', 'PERCENTAGE', 'FLOOR_CEILING', 'TIERED'] as const;
+
+export enum TrustScoreType {
+  HOST_RELIABILITY = 'HOST_RELIABILITY',
+  RENTER_RELIABILITY = 'RENTER_RELIABILITY',
+  PAYMENT_RELIABILITY = 'PAYMENT_RELIABILITY',
+  COMMUNICATION = 'COMMUNICATION',
+  OVERALL = 'OVERALL',
+}
+
+export const TrustScoreTypeValues = ['HOST_RELIABILITY', 'RENTER_RELIABILITY', 'PAYMENT_RELIABILITY', 'COMMUNICATION', 'OVERALL'] as const;
+
+export enum TrustTier {
+  NEW = 'NEW',
+  BASIC = 'BASIC',
+  ESTABLISHED = 'ESTABLISHED',
+  TRUSTED = 'TRUSTED',
+  SUPERHOST = 'SUPERHOST',
+}
+
+export const TrustTierValues = ['NEW', 'BASIC', 'ESTABLISHED', 'TRUSTED', 'SUPERHOST'] as const;
+
+export enum ComplianceCheckType {
+  IDENTITY_VERIFICATION = 'IDENTITY_VERIFICATION',
+  TAX_REGISTRATION = 'TAX_REGISTRATION',
+  BUSINESS_LICENSE = 'BUSINESS_LICENSE',
+  INSURANCE_COVERAGE = 'INSURANCE_COVERAGE',
+  PROPERTY_PERMIT = 'PROPERTY_PERMIT',
+  SAFETY_INSPECTION = 'SAFETY_INSPECTION',
+  DATA_PRIVACY = 'DATA_PRIVACY',
+  AML_CHECK = 'AML_CHECK',
+  SANCTIONS_CHECK = 'SANCTIONS_CHECK',
+  AGE_VERIFICATION = 'AGE_VERIFICATION',
+}
+
+export const ComplianceCheckTypeValues = ['IDENTITY_VERIFICATION', 'TAX_REGISTRATION', 'BUSINESS_LICENSE', 'INSURANCE_COVERAGE', 'PROPERTY_PERMIT', 'SAFETY_INSPECTION', 'DATA_PRIVACY', 'AML_CHECK', 'SANCTIONS_CHECK', 'AGE_VERIFICATION'] as const;
+
+export enum ComplianceStatus {
+  PENDING = 'PENDING',
+  PASSED = 'PASSED',
+  FAILED = 'FAILED',
+  EXPIRED = 'EXPIRED',
+  WAIVED = 'WAIVED',
+  IN_REVIEW = 'IN_REVIEW',
+}
+
+export const ComplianceStatusValues = ['PENDING', 'PASSED', 'FAILED', 'EXPIRED', 'WAIVED', 'IN_REVIEW'] as const;
+
+export enum EscrowStatus {
+  PENDING = 'PENDING',
+  FUNDED = 'FUNDED',
+  PARTIALLY_RELEASED = 'PARTIALLY_RELEASED',
+  RELEASED = 'RELEASED',
+  DISPUTED = 'DISPUTED',
+  REFUNDED = 'REFUNDED',
+  FAILED = 'FAILED',
+}
+
+export const EscrowStatusValues = ['PENDING', 'FUNDED', 'PARTIALLY_RELEASED', 'RELEASED', 'DISPUTED', 'REFUNDED', 'FAILED'] as const;
+
+export enum EscalationLevel {
+  PEER = 'PEER',
+  SUPPORT = 'SUPPORT',
+  MEDIATOR = 'MEDIATOR',
+  SENIOR_MEDIATOR = 'SENIOR_MEDIATOR',
+  LEGAL = 'LEGAL',
+  EXECUTIVE = 'EXECUTIVE',
+}
+
+export const EscalationLevelValues = ['PEER', 'SUPPORT', 'MEDIATOR', 'SENIOR_MEDIATOR', 'LEGAL', 'EXECUTIVE'] as const;
+
+export enum CampaignStatus {
+  DRAFT = 'DRAFT',
+  ACTIVE = 'ACTIVE',
+  PAUSED = 'PAUSED',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
+export const CampaignStatusValues = ['DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'] as const;
+
+export enum AgentType {
+  GENERAL = 'GENERAL',
+  BOOKING_ASSISTANT = 'BOOKING_ASSISTANT',
+  HOST_ADVISOR = 'HOST_ADVISOR',
+  DISPUTE_GUIDE = 'DISPUTE_GUIDE',
+  CONCIERGE = 'CONCIERGE',
+}
+
+export const AgentTypeValues = ['GENERAL', 'BOOKING_ASSISTANT', 'HOST_ADVISOR', 'DISPUTE_GUIDE', 'CONCIERGE'] as const;
+
+export enum AiConversationStatus {
+  ACTIVE = 'ACTIVE',
+  RESOLVED = 'RESOLVED',
+  ESCALATED = 'ESCALATED',
+  ABANDONED = 'ABANDONED',
+}
+
+export const AiConversationStatusValues = ['ACTIVE', 'RESOLVED', 'ESCALATED', 'ABANDONED'] as const;
+
+export enum ExpansionStatus {
+  EVALUATED = 'EVALUATED',
+  APPROVED = 'APPROVED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  LAUNCHED = 'LAUNCHED',
+  REJECTED = 'REJECTED',
+}
+
+export const ExpansionStatusValues = ['EVALUATED', 'APPROVED', 'IN_PROGRESS', 'LAUNCHED', 'REJECTED'] as const;
+
+export enum SearchType {
+  TEXT = 'TEXT',
+  MAP = 'MAP',
+  IMAGE = 'IMAGE',
+  SEMANTIC = 'SEMANTIC',
+  VOICE = 'VOICE',
+}
+
+export const SearchTypeValues = ['TEXT', 'MAP', 'IMAGE', 'SEMANTIC', 'VOICE'] as const;
+
+export enum ReputationTier {
+  NEW = 'NEW',
+  BRONZE = 'BRONZE',
+  SILVER = 'SILVER',
+  GOLD = 'GOLD',
+  PLATINUM = 'PLATINUM',
+  SUPERHOST = 'SUPERHOST',
+}
+
+export const ReputationTierValues = ['NEW', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'SUPERHOST'] as const;
+
+export enum ModerationStatus {
+  PENDING = 'PENDING',
+  IN_REVIEW = 'IN_REVIEW',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  ESCALATED = 'ESCALATED',
+}
+
+export const ModerationStatusValues = ['PENDING', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'ESCALATED'] as const;
+
+export enum HealthStatus {
+  HEALTHY = 'HEALTHY',
+  DEGRADED = 'DEGRADED',
+  UNHEALTHY = 'UNHEALTHY',
+  UNKNOWN = 'UNKNOWN',
+}
+
+export const HealthStatusValues = ['HEALTHY', 'DEGRADED', 'UNHEALTHY', 'UNKNOWN'] as const;
+
+export enum AnomalySeverity {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+export const AnomalySeverityValues = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 
 // Utility type: extract union from enum
 export type EnumValues<T extends Record<string, string>> = T[keyof T];

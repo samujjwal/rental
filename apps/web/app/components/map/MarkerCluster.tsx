@@ -5,6 +5,16 @@ import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import type { ListingMarkerData } from './ListingMarker';
+import { APP_LOCALE } from '~/config/locale';
+
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 export interface MarkerClusterProps {
     listings: ListingMarkerData[];
@@ -59,7 +69,7 @@ export function MarkerCluster({
         // Add markers for each listing
         listings.forEach((listing) => {
             const isHighlighted = listing.id === highlightedListingId;
-            const priceText = new Intl.NumberFormat('en-US', {
+            const priceText = new Intl.NumberFormat(APP_LOCALE, {
                 style: 'currency',
                 currency: listing.currency,
                 minimumFractionDigits: 0,
@@ -91,14 +101,14 @@ export function MarkerCluster({
             const popupContent = `
         <div class="w-64">
           ${listing.imageUrl
-                    ? `<img src="${listing.imageUrl}" alt="${listing.title}" class="w-full h-40 object-cover rounded-t-lg mb-2" />`
+                    ? `<img src="${escapeHtml(listing.imageUrl)}" alt="${escapeHtml(listing.title)}" class="w-full h-40 object-cover rounded-t-lg mb-2" />`
                     : ''
                 }
           <div class="p-2">
-            <h3 class="font-semibold text-base mb-1 line-clamp-2">${listing.title}</h3>
-            ${listing.category ? `<p class="text-sm text-gray-600 mb-2">${listing.category}</p>` : ''}
+            <h3 class="font-semibold text-base mb-1 line-clamp-2">${escapeHtml(listing.title)}</h3>
+            ${listing.category ? `<p class="text-sm text-gray-600 mb-2">${escapeHtml(listing.category)}</p>` : ''}
             <p class="text-lg font-bold text-blue-600">
-              ${new Intl.NumberFormat('en-US', {
+              ${new Intl.NumberFormat(APP_LOCALE, {
                     style: 'currency',
                     currency: listing.currency,
                 }).format(listing.price)}

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from "react-na
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { mobileClient } from "../api/client";
-import type { OrganizationMember, OrganizationRole } from "@rental-portal/mobile-sdk";
+import type { OrganizationMember, OrganizationRole } from '~/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, "OrganizationMembers">;
 
@@ -28,7 +28,6 @@ export function OrganizationMembersScreen({ route }: Props) {
 
   useEffect(() => {
     loadMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
   const handleInvite = async () => {

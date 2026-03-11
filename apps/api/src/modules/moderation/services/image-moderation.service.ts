@@ -97,6 +97,7 @@ export class ImageModerationService {
       const response = await fetch(imageUrl, { method: 'HEAD' });
       return response.ok;
     } catch (error) {
+      this.logger.debug(`Image accessibility check failed for ${imageUrl}: ${error instanceof Error ? error.message : error}`);
       return false;
     }
   }

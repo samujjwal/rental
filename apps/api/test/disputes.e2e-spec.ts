@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { BookingMode, BookingStatus, DisputeStatus, PropertyStatus, UserRole } from '@rental-portal/database';
-import { cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
 
 describe('Disputes (e2e)', () => {
   let app: INestApplication;
@@ -21,10 +21,10 @@ describe('Disputes (e2e)', () => {
   let listingId: string;
   let bookingId: string;
 
-  const renterEmail = 'dispute-renter@test.com';
-  const ownerEmail = 'dispute-owner@test.com';
-  const adminEmail = 'dispute-admin@test.com';
-  const outsiderEmail = 'dispute-outsider@test.com';
+  const renterEmail = buildTestEmail('dispute-renter');
+  const ownerEmail = buildTestEmail('dispute-owner');
+  const adminEmail = buildTestEmail('dispute-admin');
+  const outsiderEmail = buildTestEmail('dispute-outsider');
 
   const createDisputePayload = () => ({
     bookingId,

@@ -1,6 +1,7 @@
 /**
  * Development Auto-Login Utility
  * Automatically logs in test users in development mode
+ * Tree-shaken from production builds via import.meta.env.DEV
  */
 
 import { sessionStorage } from "./auth.server";
@@ -8,14 +9,14 @@ import { serverApi } from "~/lib/api-client.server";
 import type { AuthResponse } from "~/types/auth";
 
 export async function createDevSession(email: string, request: Request) {
-  if (process.env.NODE_ENV !== "development") {
+  if (!import.meta.env.DEV) {
     return null;
   }
 
   try {
     const data = await serverApi.post<AuthResponse>("/auth/login", {
       email,
-      password: "password123",
+      password: import.meta.env.DEV ? "password123" : "",
     });
     const session = await sessionStorage.getSession(
       request.headers.get("Cookie")
@@ -33,11 +34,13 @@ export async function createDevSession(email: string, request: Request) {
   }
 }
 
-export const DEV_USERS = {
-  admin: "admin@rental-portal.com",
-  support: "support@rental.local",
-  owner1: "john.owner@rental.local",
-  owner2: "emily.tools@rental.local",
-  customer1: "mike.customer@rental.local",
-  customer2: "lisa.renter@rental.local",
-} as const;
+export const DEV_USERS = import.meta.env.DEV
+  ? {
+      admin: "admin@rental-portal.com",
+      support: "support@rental.local",
+      owner1: "john.owner@rental.local",
+      owner2: "emily.tools@rental.local",
+      customer1: "mike.customer@rental.local",
+      customer2: "lisa.renter@rental.local",
+    } as const
+  : ({} as Record<string, string>);

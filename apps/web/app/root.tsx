@@ -20,20 +20,26 @@ import { ToastManager } from "~/components/ui/toast-manager";
 import { SkipLink } from "~/components/accessibility/SkipLink";
 import { PageTransition } from "~/components/animations/PageTransition";
 import type { User as AuthUser } from "~/types/auth";
+import { APP_LANG } from "~/config/locale";
+import "~/i18n"; // Initialize i18next
 
 import type { LinksFunction } from "react-router";
 import stylesheet from "./tailwind.css?url";
 import mapStyles from "./styles/map.css?url";
 
-// Create React Query client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      refetchOnWindowFocus: false,
+// QueryClient factory — must NOT be module-level in SSR to avoid cross-request data leaks
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnWindowFocus: false,
+      },
     },
-  },
-});
+  });
+}
+
+let browserQueryClient: QueryClient | undefined;
 
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -68,7 +74,7 @@ export async function clientLoader({ request }: { request: Request }) {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={APP_LANG} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -77,7 +83,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Inline theme init to prevent FOUC */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme-preference');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.classList.toggle('light',!d)}catch(e){}})()`
+            __html: `(function(){try{var t=localStorage.getItem('theme-preference');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.classList.toggle('light',!d);var l=localStorage.getItem('language-preference');if(l)document.documentElement.lang=l}catch(e){}})()`
           }}
         />
       </head>
@@ -91,6 +97,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 function RootContent() {
+  // SSR-safe QueryClient: on the server, create a new one per request;
+  // on the browser, reuse a singleton so React Query cache persists.
+  const queryClient = (() => {
+    if (typeof window === 'undefined') return makeQueryClient();
+    if (!browserQueryClient) browserQueryClient = makeQueryClient();
+    return browserQueryClient;
+  })();
+
   const loaderData = useLoaderData<typeof clientLoader>();
   const isInitialized = useAuthStore((state) => state.isInitialized);
   const isLoading = useAuthStore((state) => state.isLoading);
@@ -132,8 +146,7 @@ function RootContent() {
   useEffect(() => {
     if (
       loaderData?.user &&
-      loaderData?.accessToken &&
-      loaderData?.refreshToken
+      loaderData?.accessToken
     ) {
       const currentStore = useAuthStore.getState();
       if (
@@ -142,8 +155,7 @@ function RootContent() {
       ) {
         setAuth(
           loaderData.user as unknown as AuthUser,
-          loaderData.accessToken,
-          loaderData.refreshToken
+          loaderData.accessToken
         );
 
         // New tokens should invalidate any stale loaders.

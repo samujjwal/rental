@@ -151,7 +151,7 @@ test.describe('Favorites / Wishlist', () => {
       if (await favoriteButton.isVisible()) {
         // Add to favorites
         await favoriteButton.click();
-        await page.waitForTimeout(500);
+        await page.waitForLoadState('networkidle');
 
         // Should be marked as favorite
         await expect(favoriteButton.locator('[data-favorite="true"], .favorited, [aria-pressed="true"]')).toBeVisible();

@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { i18nNotFound,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
+import { FieldEncryptionService } from '../../../common/encryption/field-encryption.service';
+import { ConfigCascadeService } from '@/common/config/config-cascade.service';
 import { User, UserRole, UserStatus, VerificationStatus } from '@rental-portal/database';
 import { UpdateProfileDto } from '../dto/update-profile.dto';
 
@@ -9,7 +12,28 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly fieldEncryption: FieldEncryptionService,
+    private readonly configCascade: ConfigCascadeService,
   ) {}
+
+  // Fields that should NEVER be cached or leaked
+  private static readonly SENSITIVE_FIELDS = [
+    'passwordHash',
+    'mfaSecret',
+    'mfaBackupCodes',
+    'passwordResetToken',
+    'passwordResetExpiry',
+    'emailVerificationToken',
+    'governmentIdNumber',
+  ] as const;
+
+  private stripSensitiveFields<T extends Record<string, any>>(user: T): T {
+    const stripped = { ...user };
+    for (const field of UsersService.SENSITIVE_FIELDS) {
+      delete stripped[field];
+    }
+    return stripped;
+  }
 
   async findById(id: string): Promise<User | null> {
     // Check cache first
@@ -21,7 +45,9 @@ export class UsersService {
     });
 
     if (user) {
-      await this.cacheService.set(`user:${id}`, user, 900); // 15 minutes
+      const safe = this.stripSensitiveFields(user);
+      await this.cacheService.set(`user:${id}`, safe, 900); // 15 minutes
+      return safe;
     }
 
     return user;
@@ -37,7 +63,7 @@ export class UsersService {
     const allowedFields: Array<keyof UpdateProfileDto> = [
       'firstName',
       'lastName',
-      'phoneNumber',
+      'phoneNumber', // maps to 'phone' in DB — see below
       'bio',
       'profilePhotoUrl',
       'addressLine1',
@@ -46,19 +72,21 @@ export class UsersService {
       'state',
       'postalCode',
       'country',
-      'timezone',
-      'preferredLanguage',
-      'preferredCurrency',
     ];
 
     const updateData = Object.fromEntries(
       Object.entries(dto || {}).filter(
         ([key, value]) => allowedFields.includes(key as keyof UpdateProfileDto) && value !== undefined,
       ),
-    ) as UpdateProfileDto;
+    ) as UpdateProfileDto & { phone?: string };
 
-    if (updateData.phoneNumber && !/^\+?[1-9]\d{7,14}$/.test(updateData.phoneNumber)) {
-      throw new BadRequestException('Invalid phone number format');
+    // Map DTO 'phoneNumber' → DB 'phone' (phoneNumber column was removed)
+    if (updateData.phoneNumber !== undefined) {
+      if (!/^\+?[1-9]\d{7,14}$/.test(updateData.phoneNumber)) {
+        throw i18nBadRequest('validation.invalidPhoneFormat');
+      }
+      (updateData as any).phone = updateData.phoneNumber;
+      delete (updateData as any).phoneNumber;
     }
 
     if (typeof updateData.bio === 'string') {
@@ -68,7 +96,7 @@ export class UsersService {
     if (Object.keys(updateData).length === 0) {
       const existing = await this.findById(userId);
       if (!existing) {
-        throw new NotFoundException('User not found');
+        throw i18nNotFound('auth.userNotFound');
       }
       return existing;
     }
@@ -77,6 +105,21 @@ export class UsersService {
       where: { id: userId },
       data: updateData,
     });
+
+    // Persist locale/currency/timezone to UserPreferences (cascade source)
+    const prefUpdates: Record<string, string> = {};
+    if (dto.preferredLanguage) prefUpdates.language = dto.preferredLanguage;
+    if (dto.preferredCurrency) prefUpdates.currency = dto.preferredCurrency;
+    if (dto.timezone) prefUpdates.timezone = dto.timezone;
+
+    if (Object.keys(prefUpdates).length > 0) {
+      await this.prisma.userPreferences.upsert({
+        where: { userId },
+        create: { userId, ...prefUpdates },
+        update: prefUpdates,
+      });
+      await this.configCascade.invalidate(userId);
+    }
 
     // Invalidate cache
     await this.cacheService.del(`user:${userId}`);
@@ -116,7 +159,7 @@ export class UsersService {
   async getUserStats(userId: string) {
     const user = await this.findById(userId);
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw i18nNotFound('auth.userNotFound');
     }
 
     const [listingsCount, bookingsCount, taskBookingsAsOwner, reviewsGiven, reviewsReceived] =
@@ -191,11 +234,16 @@ export class UsersService {
       data: {
         status: UserStatus.DELETED,
         deletedAt: new Date(),
-        email: `deleted_${userId}@deleted.com`, // Anonymize
+        email: `deleted_${userId}@gharbatai.deleted`, // Anonymize
       },
     });
 
+    // Invalidate all sessions for deleted user
+    await this.prisma.session.deleteMany({ where: { userId } });
+
+    // Clear all cached data
     await this.cacheService.del(`user:${userId}`);
+    await this.cacheService.del(`sessions:${userId}`);
   }
 
   async upgradeToOwner(userId: string): Promise<User> {

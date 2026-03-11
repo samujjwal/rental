@@ -7,8 +7,11 @@ import {
   Min,
   Max,
   MaxLength,
+  IsNotEmpty,
+  IsUUID,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export enum DeliveryMethod {
   PICKUP = 'pickup',
@@ -18,16 +21,16 @@ export enum DeliveryMethod {
 
 export class CreateBookingDto {
   @ApiProperty({ description: 'Listing ID to book' })
-  @IsString()
+  @IsUUID('4')
   listingId: string;
 
   @ApiProperty({ description: 'Start date of booking', example: '2025-03-01T00:00:00Z' })
   @IsDateString()
-  startDate: Date;
+  startDate: string;
 
   @ApiProperty({ description: 'End date of booking', example: '2025-03-05T00:00:00Z' })
   @IsDateString()
-  endDate: Date;
+  endDate: string;
 
   @ApiProperty({ description: 'Number of guests', required: false, minimum: 1 })
   @IsOptional()
@@ -36,9 +39,10 @@ export class CreateBookingDto {
   @Max(100)
   guestCount?: number;
 
-  @ApiProperty({ description: 'Delivery method', enum: DeliveryMethod })
+  @ApiProperty({ description: 'Delivery method', enum: DeliveryMethod, required: false })
+  @IsOptional()
   @IsEnum(DeliveryMethod)
-  deliveryMethod: DeliveryMethod;
+  deliveryMethod?: DeliveryMethod;
 
   @ApiProperty({ description: 'Delivery address (required when delivery method is delivery)', required: false })
   @IsOptional()
@@ -46,7 +50,13 @@ export class CreateBookingDto {
   @MaxLength(500)
   deliveryAddress?: string;
 
-  @ApiProperty({ description: 'Special requests or notes to the owner', required: false })
+  @ApiProperty({ description: 'Message or special requests to the owner', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  message?: string;
+
+  @ApiProperty({ description: 'Special requests from the renter', required: false })
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -63,12 +73,12 @@ export class UpdateBookingDto {
   @ApiProperty({ description: 'Updated start date', required: false })
   @IsOptional()
   @IsDateString()
-  startDate?: Date;
+  startDate?: string;
 
   @ApiProperty({ description: 'Updated end date', required: false })
   @IsOptional()
   @IsDateString()
-  endDate?: Date;
+  endDate?: string;
 
   @ApiProperty({ description: 'Updated guest count', required: false })
   @IsOptional()
@@ -103,6 +113,7 @@ export class CancelBookingDto {
 export class InitiateDisputeDto {
   @ApiProperty({ description: 'Reason for the dispute' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(2000)
   reason: string;
 }
@@ -110,6 +121,7 @@ export class InitiateDisputeDto {
 export class RejectReturnDto {
   @ApiProperty({ description: 'Reason for rejecting the return (e.g., damage found)' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(2000)
   reason: string;
 }
@@ -126,4 +138,22 @@ export class CalculatePriceDto {
   @ApiProperty({ description: 'End date', example: '2025-03-05T00:00:00Z' })
   @IsDateString()
   endDate: string;
+
+  @ApiProperty({ description: 'Delivery method', enum: DeliveryMethod, required: false })
+  @IsOptional()
+  @IsEnum(DeliveryMethod)
+  deliveryMethod?: DeliveryMethod;
+
+  @ApiProperty({ description: 'Number of guests / quantity', required: false, minimum: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  guestCount?: number;
+
+  @ApiProperty({ description: 'Promo code', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  promoCode?: string;
 }

@@ -37,11 +37,11 @@ export const linkingConfig: LinkingOptions<RootStackParamList> = {
       Main: {
         path: '',
         screens: {
-          Home: 'home',
-          Search: 'search',
-          Bookings: 'bookings',
-          Messages: 'messages',
-          Profile: 'profile',
+          HomeTab: 'home',
+          SearchTab: 'search',
+          BookingsTab: 'my-bookings',
+          MessagesTab: 'inbox',
+          ProfileTab: 'me',
         },
       },
 
@@ -55,8 +55,8 @@ export const linkingConfig: LinkingOptions<RootStackParamList> = {
       Reviews: 'reviews',
       Favorites: 'favorites',
 
-      // Listing management
-      CreateListing: 'listings/new',
+      // Listing management (create route before parameterized route)
+      CreateListing: 'listing/create',
       EditListing: 'listings/:listingId/edit',
 
       // Owner screens

@@ -1,6 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
 import { useLoaderData, Link, redirect } from "react-router";
+import { useTranslation } from "react-i18next";
 import {
   Package,
   Calendar,
@@ -12,11 +13,13 @@ import {
   MapPin,
   Search,
   TrendingUp,
+  ArrowRight,
 } from "lucide-react";
 import { requireUser } from "~/utils/auth";
 import { bookingsApi } from "~/lib/api/bookings";
 import { getFavorites } from "~/lib/api/favorites";
 import { listingsApi } from "~/lib/api/listings";
+import { CompactFavoriteButton } from "~/components/favorites";
 import type { Booking } from "~/types/booking";
 import type { Listing } from "~/types/listing";
 import { format } from "date-fns";
@@ -28,10 +31,9 @@ import {
   Badge,
   RouteErrorBoundary,
 } from "~/components/ui";
-import { PageContainer, PageHeader, DashboardSidebar } from "~/components/layout";
-import type { SidebarSection } from "~/components/layout";
+import { PortalPageLayout } from "~/components/layout";
 import { cn } from "~/lib/utils";
-import { PageSkeleton } from "~/components/ui/skeleton";
+import { formatCurrency } from "~/lib/utils";
 import { renterNavSections } from "~/config/navigation";
 import { notificationsApi } from "~/lib/api/notifications";
 import { messagingApi } from "~/lib/api/messaging";
@@ -60,7 +62,9 @@ const safeLocationLabel = (location: unknown): string => {
 };
 const safeDateLabel = (value: unknown, pattern: string): string => {
   const date = new Date(String(value || ""));
-  return Number.isNaN(date.getTime()) ? "Date unavailable" : format(date, pattern);
+  return Number.isNaN(date.getTime())
+    ? "Date unavailable"
+    : format(date, pattern);
 };
 const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
@@ -86,16 +90,28 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     ]);
 
     const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
-      r.status === 'fulfilled' ? r.value : fallback;
+      r.status === "fulfilled" ? r.value : fallback;
 
     const bookingsResponse = settled(results[0], []);
     const favoritesResponse = settled(results[1], { favorites: [] } as any);
-    const recommendationsResponse = settled(results[2], { listings: [] } as any);
+    const recommendationsResponse = settled(results[2], {
+      listings: [],
+    } as any);
     const unreadNotifs = settled(results[3], { count: 0 });
     const unreadMsgs = settled(results[4], { count: 0 });
 
     const failedSections = results
-      .map((r, i) => r.status === 'rejected' ? ['bookings', 'favorites', 'recommendations', 'notifications', 'messages'][i] : null)
+      .map((r, i) =>
+        r.status === "rejected"
+          ? [
+              "bookings",
+              "favorites",
+              "recommendations",
+              "notifications",
+              "messages",
+            ][i]
+          : null
+      )
       .filter(Boolean) as string[];
 
     const bookings = Array.isArray(bookingsResponse) ? bookingsResponse : [];
@@ -106,22 +122,38 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       ? recommendationsResponse.listings
       : [];
 
-    const favorites = favoritesRaw.map((favorite) => ({
-      ...favorite.listing,
-      savedAt: favorite.createdAt,
-    }));
-    const recommendations = recommendationsRaw;
-
     const normalizeStatus = (status: unknown) => safeStatusKey(status);
+
+    // Detect bookings that urgently need payment action
+    const urgentBookings = bookings.filter((b) => {
+      const status = normalizeStatus(b.status);
+      return status === "PENDING_PAYMENT" || status === "PAYMENT_FAILED";
+    });
+    const urgentPaymentBookingId: string | null = urgentBookings.length > 0
+      ? String(urgentBookings[0].id || "")
+      : null;
+
+    const favorites: Array<Listing & { savedAt: string }> = favoritesRaw.map(
+      (favorite: { listing: Listing; createdAt: string }) => ({
+        ...favorite.listing,
+        savedAt: favorite.createdAt,
+      })
+    );
+    const recommendations: Listing[] = recommendationsRaw as Listing[];
 
     // Calculate statistics
     const upcomingBookings = bookings.filter((b) => {
       const status = normalizeStatus(b.status);
-      return status === "CONFIRMED" && new Date(String(b.startDate || "")).getTime() > Date.now();
+      return (
+        status === "CONFIRMED" &&
+        new Date(String(b.startDate || "")).getTime() > Date.now()
+      );
     }).length;
     const activeBookings = bookings.filter((b) => {
       const status = normalizeStatus(b.status);
-      return status === "IN_PROGRESS" || status === "AWAITING_RETURN_INSPECTION";
+      return (
+        status === "IN_PROGRESS" || status === "AWAITING_RETURN_INSPECTION"
+      );
     }).length;
     const completedBookings = bookings.filter((b) => {
       const status = normalizeStatus(b.status);
@@ -155,12 +187,14 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       recentBookings,
       favorites: favorites.slice(0, 3),
       recommendations: recommendations.slice(0, 4),
-      unreadNotifications: typeof unreadNotifs?.count === "number" ? unreadNotifs.count : 0,
-      unreadMessages: typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
+      unreadNotifications:
+        typeof unreadNotifs?.count === "number" ? unreadNotifs.count : 0,
+      unreadMessages:
+        typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
+      urgentPaymentBookingId,
       failedSections,
     };
   } catch (error) {
-    console.error("Failed to load renter dashboard:", error);
     return {
       stats: {
         upcomingBookings: 0,
@@ -174,6 +208,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       recommendations: [],
       unreadNotifications: 0,
       unreadMessages: 0,
+      urgentPaymentBookingId: null,
       error: "Failed to load renter dashboard data",
     };
   }
@@ -215,14 +250,26 @@ function StatCard({
 function BookingCard({ booking }: { booking: Booking }) {
   const statusConfig = {
     PENDING: { variant: "warning" as const, icon: Clock, label: "Pending" },
-    PENDING_PAYMENT: { variant: "warning" as const, icon: Clock, label: "Pending Payment" },
-    PENDING_OWNER_APPROVAL: { variant: "warning" as const, icon: Clock, label: "Pending Approval" },
+    PENDING_PAYMENT: {
+      variant: "warning" as const,
+      icon: Clock,
+      label: "Pending Payment",
+    },
+    PENDING_OWNER_APPROVAL: {
+      variant: "warning" as const,
+      icon: Clock,
+      label: "Pending Approval",
+    },
     CONFIRMED: {
       variant: "success" as const,
       icon: CheckCircle,
       label: "Confirmed",
     },
-    IN_PROGRESS: { variant: "default" as const, icon: Package, label: "In Progress" },
+    IN_PROGRESS: {
+      variant: "default" as const,
+      icon: Package,
+      label: "In Progress",
+    },
     COMPLETED: {
       variant: "success" as const,
       icon: CheckCircle,
@@ -248,20 +295,29 @@ function BookingCard({ booking }: { booking: Booking }) {
       icon: XCircle,
       label: "Payment Failed",
     },
-    SETTLED: { variant: "success" as const, icon: CheckCircle, label: "Settled" },
+    SETTLED: {
+      variant: "success" as const,
+      icon: CheckCircle,
+      label: "Settled",
+    },
   };
 
   const normalizedStatus = safeStatusKey(booking.status);
   const config =
-    statusConfig[normalizedStatus as keyof typeof statusConfig] || statusConfig.PENDING;
+    statusConfig[normalizedStatus as keyof typeof statusConfig] ||
+    statusConfig.PENDING;
   const StateIcon = config.icon;
   const bookingStartAt = new Date(String(booking.startDate || "")).getTime();
-  const isUpcoming = Number.isFinite(bookingStartAt) && bookingStartAt > Date.now();
+  const isUpcoming =
+    Number.isFinite(bookingStartAt) && bookingStartAt > Date.now();
   const isActive = normalizedStatus === "IN_PROGRESS";
 
   const locationStr = safeLocationLabel(booking.listing?.location);
   const listingTitle = safeText(booking.listing?.title, "Listing");
   const bookingId = safeText(booking.id);
+  const listingImage =
+    booking.listing?.images?.[0] ??
+    (booking.listing as { photos?: string[] } | undefined)?.photos?.[0];
 
   return (
     <Link
@@ -271,9 +327,9 @@ function BookingCard({ booking }: { booking: Booking }) {
       <div className="flex gap-4">
         {/* Image */}
         <div className="w-20 h-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-          {booking.listing?.photos?.[0] ? (
+          {listingImage ? (
             <img
-              src={booking.listing.photos[0]}
+              src={listingImage}
               alt={listingTitle}
               className="w-full h-full object-cover"
             />
@@ -310,7 +366,9 @@ function BookingCard({ booking }: { booking: Booking }) {
 
           <div className="mt-2 flex items-center justify-between">
             <span className="font-semibold text-primary">
-              ${safeNumber(booking.totalAmount ?? booking.totalPrice).toFixed(2)}
+              {formatCurrency(
+                safeNumber(booking.totalAmount ?? booking.totalPrice)
+              )}
             </span>
             {isActive && (
               <span className="text-xs text-primary font-medium">
@@ -344,9 +402,9 @@ function ListingCard({
       className="bg-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow block"
     >
       <div className="aspect-video bg-muted relative">
-        {listing.photos?.[0] ? (
+        {listing.images?.[0] ? (
           <img
-            src={listing.photos[0]}
+            src={listing.images[0]}
             alt={listingTitle}
             className="w-full h-full object-cover"
           />
@@ -356,8 +414,8 @@ function ListingCard({
           </div>
         )}
         {showFavorite && (
-          <div className="absolute top-2 right-2 p-2 bg-card rounded-full">
-            <Heart className="w-5 h-5 text-destructive fill-current" />
+          <div className="absolute top-2 right-2">
+            <CompactFavoriteButton listingId={listing.id} />
           </div>
         )}
       </div>
@@ -371,7 +429,7 @@ function ListingCard({
         </p>
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-primary">
-            ${listing.basePrice}/day
+            {formatCurrency(listing.basePrice)}/day
           </span>
           {listing.rating && listing.rating > 0 && (
             <div className="flex items-center">
@@ -388,9 +446,36 @@ function ListingCard({
 }
 
 export default function RenterDashboardRoute() {
-  const { stats, recentBookings, favorites, recommendations, unreadNotifications, unreadMessages, error, failedSections } =
-    useLoaderData<typeof clientLoader>();
+  const { t } = useTranslation();
+  const {
+    stats,
+    recentBookings,
+    favorites,
+    recommendations,
+    unreadNotifications,
+    unreadMessages,
+    urgentPaymentBookingId,
+    error,
+    failedSections,
+  } = useLoaderData<typeof clientLoader>();
   const totalSpent = safeNumber(stats.totalSpent);
+  const banner = error ? (
+    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
+      {error}
+    </div>
+  ) : failedSections && failedSections.length > 0 ? (
+    <div className="bg-warning/10 border border-warning/20 rounded-lg p-4">
+      <p className="text-sm text-warning-foreground">
+        Some sections failed to load: {failedSections.join(", ")}.{" "}
+        <button
+          onClick={() => window.location.reload()}
+          className="underline font-medium"
+        >
+          Retry
+        </button>
+      </p>
+    </div>
+  ) : null;
 
   // Enrich nav items with unread badges
   const navWithBadges = renterNavSections.map((section) => ({
@@ -407,245 +492,287 @@ export default function RenterDashboardRoute() {
   }));
 
   return (
-    <div className="min-h-screen bg-background py-8">
-      <PageContainer>
-        {error ? (
-          <div className="mb-6 bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-            {error}
-          </div>
-        ) : null}
-        {failedSections && failedSections.length > 0 && !error ? (
-          <div className="mb-6 bg-warning/10 border border-warning/20 rounded-lg p-4">
-            <p className="text-sm text-warning-foreground">
-              Some sections failed to load: {failedSections.join(', ')}.{' '}
-              <button onClick={() => window.location.reload()} className="underline font-medium">
-                Retry
-              </button>
+    <PortalPageLayout
+      title={t("dashboard.renterPortal", "Renter Portal")}
+      description="Track your bookings, favorites, and messages in one place"
+      sidebarSections={navWithBadges}
+      banner={banner}
+      contentClassName="space-y-8"
+      actions={
+        <Link
+          to="/search"
+          className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          <Search className="mr-2 h-4 w-4" />
+          {t("nav.browseRentals", "Browse Rentals")}
+        </Link>
+      }
+    >
+      {/* Urgent payment alert */}
+      {urgentPaymentBookingId && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-4">
+          <TrendingUp className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-destructive">
+              {t("dashboard.paymentRequired", "Payment Required")}
+            </p>
+            <p className="text-sm text-destructive/80 mt-0.5">
+              {t("dashboard.paymentRequiredDesc", "A booking is waiting for payment. Complete payment to confirm your reservation.")}
             </p>
           </div>
-        ) : null}
-        {/* Header */}
-        <PageHeader
-          title="Renter Dashboard"
-          description="Track your bookings and discover new items"
-          className="mb-8"
+          <Link
+            to={`/checkout/${urgentPaymentBookingId}`}
+            className="shrink-0 px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
+          >
+            {t("bookings.details.payNow", "Pay Now")}
+          </Link>
+        </div>
+      )}
+      {/* Statistics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          icon={Calendar}
+          label={t("bookings.upcoming", "Upcoming Bookings")}
+          value={stats.upcomingBookings}
+          variant="info"
         />
+        <StatCard
+          icon={Package}
+          label={t("dashboard.stats.activeBookings")}
+          value={stats.activeBookings}
+        />
+        <StatCard
+          icon={CheckCircle}
+          label={t("dashboard.stats.completedBookings", "Completed Bookings")}
+          value={stats.completedBookings}
+          variant="success"
+        />
+        <StatCard
+          icon={Heart}
+          label={t("dashboard.stats.favorites", "Favorites")}
+          value={stats.favoriteCount}
+          variant="warning"
+        />
+      </div>
 
-        <div className="flex gap-8">
-          {/* Sidebar Navigation */}
-          <DashboardSidebar sections={navWithBadges} />
-
-          {/* Main Content */}
-          <div className="flex-1 space-y-8">
-            {/* Statistics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard
-                icon={Calendar}
-                label="Upcoming Bookings"
-                value={stats.upcomingBookings}
-                variant="info"
-              />
-              <StatCard
-                icon={Package}
-                label="Active Rentals"
-                value={stats.activeBookings}
-              />
-              <StatCard
-                icon={CheckCircle}
-                label="Completed Bookings"
-                value={stats.completedBookings}
-                variant="success"
-              />
-              <StatCard
-                icon={Heart}
-                label="Favorites"
-                value={stats.favoriteCount}
-                variant="warning"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Main Content */}
-              <div className="lg:col-span-2 space-y-8">
-                {/* My Bookings */}
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>My Bookings</CardTitle>
-                    <Link
-                      to="/bookings"
-                      className="text-sm text-primary hover:text-primary/90 font-medium"
-                    >
-                      View All →
-                    </Link>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {recentBookings.length > 0 ? (
-                        recentBookings.map((booking) => (
-                          <BookingCard key={booking.id} booking={booking} />
-                        ))
-                      ) : (
-                        <div className="text-center py-12">
-                          <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                          <p className="text-muted-foreground mb-4">
-                            No bookings yet
-                          </p>
-                          <Link
-                            to="/search"
-                            className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                          >
-                            <Search className="w-5 h-5 mr-2" />
-                            Start Browsing
-                          </Link>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Recommended for You */}
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="flex items-center">
-                      <TrendingUp className="w-5 h-5 mr-2 text-primary" />
-                      Recommended for You
-                    </CardTitle>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* My Bookings */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>{t("dashboard.myBookings")}</CardTitle>
+              <Link
+                to="/bookings"
+                className="text-sm text-primary hover:text-primary/90 font-medium"
+              >
+                {t("common.viewAll")} →
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {recentBookings.length > 0 ? (
+                  recentBookings.map((booking) => (
+                    <BookingCard key={booking.id} booking={booking} />
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-4">
+                      {t("bookings.empty")}
+                    </p>
                     <Link
                       to="/search"
-                      className="text-sm text-primary hover:text-primary/90 font-medium"
+                      className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
                     >
-                      Explore More →
+                      <Search className="w-5 h-5 mr-2" />
+                      {t("nav.browseRentals", "Browse Rentals")}
                     </Link>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {recommendations.length > 0 ? (
-                        recommendations.map((listing) => (
-                          <ListingCard key={listing.id} listing={listing} />
-                        ))
-                      ) : (
-                        <div className="col-span-2 text-center py-8">
-                          <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                          <p className="text-muted-foreground">
-                            No recommendations available
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                )}
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Sidebar Content */}
-              <div className="space-y-6">
-                {/* Spending Summary */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Spending Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center pb-3 border-b">
-                        <span className="text-muted-foreground">Total Spent</span>
-                        <span className="text-xl font-bold text-primary">
-                          ${totalSpent.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center pb-3 border-b">
-                        <span className="text-muted-foreground">
-                          Completed Rentals
-                        </span>
-                        <span className="font-semibold text-foreground">
-                          {stats.completedBookings}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">
-                          Active Bookings
-                        </span>
-                        <span className="font-semibold text-foreground">
-                          {stats.activeBookings}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* My Favorites */}
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>My Favorites</CardTitle>
-                    <Link
-                      to="/favorites"
-                      className="text-sm text-primary hover:text-primary/90 font-medium"
-                    >
-                      View All →
-                    </Link>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {favorites.length > 0 ? (
-                        favorites.map((listing) => (
-                          (() => {
-                            const listingId = safeText(listing.id);
-                            const listingTitle = safeText(listing.title, "Listing");
-                            return (
-                              <Link
-                                key={listing.id}
-                                to={listingId ? `/listings/${listingId}` : "/listings"}
-                                className="flex gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
-                              >
-                                <div className="w-16 h-16 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-                                  {listing.photos?.[0] ? (
-                                    <img
-                                      src={listing.photos[0]}
-                                      alt={listingTitle}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                      <Package className="w-6 h-6 text-muted-foreground" />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-medium text-foreground line-clamp-1 text-sm">
-                                    {listingTitle}
-                                  </h4>
-                                  <p className="text-sm text-muted-foreground">
-                                    $
-                                    {safeNumber(
-                                      (listing as { pricePerDay?: unknown; basePrice?: unknown })
-                                        .basePrice ??
-                                        (listing as { basePrice?: unknown }).basePrice
-                                    )}
-                                    /day
-                                  </p>
-                                </div>
-                              </Link>
-                            );
-                          })()
-                        ))
-                      ) : (
-                        <div className="text-center py-6">
-                          <Heart className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">
-                            No favorites yet
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+          {/* Recommended for You */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2 text-primary" />
+                {t("dashboard.recommendedForYou", "Recommended for You")}
+              </CardTitle>
+              <Link
+                to="/search"
+                className="text-sm text-primary hover:text-primary/90 font-medium"
+              >
+                {t("dashboard.exploreMore", "Explore More")} →
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {recommendations.length > 0 ? (
+                  recommendations.map((listing) => (
+                    <ListingCard key={listing.id} listing={listing} />
+                  ))
+                ) : (
+                  <div className="col-span-2 text-center py-8">
+                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">
+                      No recommendations available
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-      </PageContainer>
-    </div>
+
+        {/* Sidebar Content */}
+        <div className="space-y-6">
+          {/* Spending Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {t("dashboard.spendingSummary", "Spending Summary")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center pb-3 border-b">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.totalSpent", "Total Spent")}
+                  </span>
+                  <span className="text-xl font-bold text-primary">
+                    {formatCurrency(totalSpent)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pb-3 border-b">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.completedRentals", "Completed Rentals")}
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {stats.completedBookings}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.activeBookings")}
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {stats.activeBookings}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* My Favorites */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                {t("dashboard.myFavorites", "My Favorites")}
+              </CardTitle>
+              <Link
+                to="/favorites"
+                className="text-sm text-primary hover:text-primary/90 font-medium"
+              >
+                {t("common.viewAll")} →
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {favorites.length > 0 ? (
+                  favorites.map((listing) =>
+                    (() => {
+                      const listingId = safeText(listing.id);
+                      const listingTitle = safeText(listing.title, "Listing");
+                      const listingImage =
+                        listing.images?.[0] ??
+                        (listing as { photos?: string[] }).photos?.[0];
+                      return (
+                        <Link
+                          key={listing.id}
+                          to={
+                            listingId ? `/listings/${listingId}` : "/listings"
+                          }
+                          className="flex gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
+                        >
+                          <div className="w-16 h-16 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+                            {listingImage ? (
+                              <img
+                                src={listingImage}
+                                alt={listingTitle}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package className="w-6 h-6 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-foreground line-clamp-1 text-sm">
+                              {listingTitle}
+                            </h4>
+                            <p className="text-sm text-muted-foreground">
+                              $
+                              {safeNumber(
+                                (
+                                  listing as {
+                                    pricePerDay?: unknown;
+                                    basePrice?: unknown;
+                                  }
+                                ).basePrice ??
+                                  (listing as { basePrice?: unknown }).basePrice
+                              )}
+                              /day
+                            </p>
+                          </div>
+                        </Link>
+                      );
+                    })()
+                  )
+                ) : (
+                  <div className="text-center py-6">
+                    <Heart className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      {t("dashboard.noFavoritesYet", "No favorites yet")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          {/* Become an Owner CTA */}
+          <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="p-2 rounded-full bg-primary/15 flex-shrink-0">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground text-sm">
+                    {t("dashboard.becomeOwner.title", "Turn your stuff into income")}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("dashboard.becomeOwner.desc", "List items you own and earn money from rentals.")}
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/listings/new"
+                className="flex items-center justify-center gap-2 w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                {t("dashboard.becomeOwner.cta", "Start Listing")}
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </PortalPageLayout>
   );
 }
 
 // Error boundary for route errors
 export { RouteErrorBoundary as ErrorBoundary };
-

@@ -9,14 +9,12 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  NotFoundException,
-  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
+import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@/common/auth';
 import { OrganizationsService } from '../services/organizations.service';
-import { PrismaService } from '@/common/prisma/prisma.service';
 import {
   CreateOrganizationDto,
   UpdateOrganizationDto,
@@ -30,7 +28,6 @@ import {
 export class OrganizationsController {
   constructor(
     private readonly organizationsService: OrganizationsService,
-    private readonly prisma: PrismaService,
   ) {}
 
   @Post()
@@ -98,6 +95,10 @@ export class OrganizationsController {
     @Param('userId') memberUserId: string,
     @Body('role') role: string,
   ) {
+    const validRoles = ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'];
+    if (!validRoles.includes(role)) {
+      throw new BadRequestException(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
+    }
     return this.organizationsService.updateMemberRole(orgId, userId, memberUserId, role as any);
   }
 
@@ -112,19 +113,7 @@ export class OrganizationsController {
   @ApiOperation({ summary: 'Get organization members' })
   @ApiResponse({ status: 200, description: 'Members retrieved' })
   async getMembers(@Param('id') orgId: string, @CurrentUser('id') userId: string) {
-    // Verify the requester is a member
-    const member = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: orgId, userId } },
-    });
-    if (!member) {
-      throw new ForbiddenException('You are not a member of this organization');
-    }
-    const members = await this.prisma.organizationMember.findMany({
-      where: { organizationId: orgId },
-      include: { user: { select: { id: true, firstName: true, lastName: true, email: true, profilePhotoUrl: true } } },
-      orderBy: { joinedAt: 'asc' },
-    });
-    return { members, total: members.length };
+    return this.organizationsService.getMembers(orgId, userId);
   }
 
   @Delete(':id')
@@ -132,13 +121,7 @@ export class OrganizationsController {
   @ApiOperation({ summary: 'Deactivate (soft-delete) an organization' })
   @ApiResponse({ status: 204, description: 'Organization deactivated' })
   async deactivateOrganization(@Param('id') orgId: string, @CurrentUser('id') userId: string) {
-    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
-    if (!org) throw new NotFoundException('Organization not found');
-    if (org.ownerId !== userId) throw new ForbiddenException('Only the organization owner can deactivate it');
-    await this.prisma.organization.update({
-      where: { id: orgId },
-      data: { status: 'SUSPENDED' },
-    });
+    await this.organizationsService.deactivateOrganization(orgId, userId);
   }
 
   @Post('invitations/accept')
@@ -148,16 +131,11 @@ export class OrganizationsController {
     @CurrentUser('id') userId: string,
     @Body() body: { organizationId?: string; token?: string },
   ) {
-    // Frontend sends { token } where token is the organizationId
-    const orgId = body.organizationId || body.token;
-    if (!orgId) throw new NotFoundException('Organization ID or token is required');
-    // Verify the user has a pending membership (invited but not yet active)
-    const membership = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: orgId, userId } },
-    });
-    if (!membership) throw new NotFoundException('No invitation found');
-    // For now, membership existence == accepted (future: add status field)
-    return { accepted: true, organizationId: orgId };
+    const orgId = body.organizationId;
+    if (!orgId) {
+      throw i18nBadRequest('validation.organizationIdRequired');
+    }
+    return this.organizationsService.acceptInvitation(userId, orgId);
   }
 
   @Post('invitations/decline')
@@ -167,12 +145,10 @@ export class OrganizationsController {
     @CurrentUser('id') userId: string,
     @Body() body: { organizationId?: string; token?: string },
   ) {
-    // Frontend sends { token } where token is the organizationId
-    const orgId = body.organizationId || body.token;
-    if (!orgId) throw new NotFoundException('Organization ID or token is required');
-    await this.prisma.organizationMember.deleteMany({
-      where: { organizationId: orgId, userId },
-    });
-    return { declined: true, organizationId: orgId };
+    const orgId = body.organizationId;
+    if (!orgId) {
+      throw i18nBadRequest('validation.organizationIdRequired');
+    }
+    return this.organizationsService.declineInvitation(userId, orgId);
   }
 }

@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { i18nUnauthorized } from '@/common/errors/i18n-exceptions';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-local';
 import { AuthService } from '../services/auth.service';
@@ -17,7 +18,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     const result = await this.authService.login({ email, password });
 
     if (!result) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw i18nUnauthorized('auth.invalidCredentials');
     }
 
     return result.user as User;

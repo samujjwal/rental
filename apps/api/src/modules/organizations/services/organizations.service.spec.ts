@@ -37,6 +37,7 @@ describe('OrganizationsService', () => {
       },
       listing: { count: jest.fn() },
       booking: { count: jest.fn(), aggregate: jest.fn() },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
     };
 
     const module: TestingModule = await Test.createTestingModule({

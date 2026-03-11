@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { BookingMode, BookingStatus, PropertyStatus, ReviewType, UserRole } from '@rental-portal/database';
-import { cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
 
 describe('Reviews (e2e)', () => {
   let app: INestApplication;
@@ -16,6 +16,9 @@ describe('Reviews (e2e)', () => {
   let listingId: string;
   let bookingId: string;
   let reviewId: string;
+
+  const ownerEmail = buildTestEmail('review-owner');
+  const renterEmail = buildTestEmail('review-renter');
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -38,10 +41,10 @@ describe('Reviews (e2e)', () => {
   afterAll(async () => {
     await cleanupCoreRelationalData(prisma);
     await prisma.listing.deleteMany({
-      where: { owner: { email: { in: ['owner@reviewtest.com', 'renter@reviewtest.com'] } } },
+      where: { owner: { email: { in: [ownerEmail, renterEmail] } } },
     });
     await prisma.user.deleteMany({
-      where: { email: { in: ['owner@reviewtest.com', 'renter@reviewtest.com'] } },
+      where: { email: { in: [ownerEmail, renterEmail] } },
     });
     await app.close();
   });
@@ -49,16 +52,16 @@ describe('Reviews (e2e)', () => {
   beforeEach(async () => {
     await cleanupCoreRelationalData(prisma);
     await prisma.listing.deleteMany({
-      where: { owner: { email: { in: ['owner@reviewtest.com', 'renter@reviewtest.com'] } } },
+      where: { owner: { email: { in: [ownerEmail, renterEmail] } } },
     });
     await prisma.user.deleteMany({
-      where: { email: { in: ['owner@reviewtest.com', 'renter@reviewtest.com'] } },
+      where: { email: { in: [ownerEmail, renterEmail] } },
     });
 
     const owner = await createUserWithRole({
       app,
       prisma,
-      email: 'owner@reviewtest.com',
+      email: ownerEmail,
       firstName: 'Test',
       lastName: 'Owner',
       role: UserRole.HOST,
@@ -69,7 +72,7 @@ describe('Reviews (e2e)', () => {
     const renter = await createUserWithRole({
       app,
       prisma,
-      email: 'renter@reviewtest.com',
+      email: renterEmail,
       firstName: 'Test',
       lastName: 'Renter',
       role: UserRole.USER,

@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { i18nNotFound, i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { IdentityDocumentType, VerificationStatus } from '@rental-portal/database';
 
@@ -54,6 +55,16 @@ export class KycService {
       },
     });
 
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'KYC_DOCUMENT_SUBMITTED',
+        entityType: 'IdentityDocument',
+        entityId: doc.id,
+        newValues: JSON.stringify({ documentType: dto.documentType, status: VerificationStatus.PENDING }),
+      },
+    });
+
     this.logger.log(`Document uploaded for user ${userId}: ${dto.documentType}`);
     return doc;
   }
@@ -77,11 +88,11 @@ export class KycService {
     });
 
     if (!doc) {
-      throw new NotFoundException('Document not found');
+      throw i18nNotFound('kyc.documentNotFound');
     }
 
     if (doc.status !== VerificationStatus.PENDING) {
-      throw new BadRequestException('Document has already been reviewed');
+      throw i18nBadRequest('kyc.alreadyReviewed');
     }
 
     const status =
@@ -104,6 +115,21 @@ export class KycService {
         data: { idVerificationStatus: 'VERIFIED' },
       });
     }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: dto.status === 'APPROVED' ? 'KYC_DOCUMENT_APPROVED' : 'KYC_DOCUMENT_REJECTED',
+        entityType: 'IdentityDocument',
+        entityId: documentId,
+        oldValues: JSON.stringify({ status: VerificationStatus.PENDING }),
+        newValues: JSON.stringify({
+          status,
+          rejectionReason: dto.rejectionReason ?? null,
+          verifiedBy: adminId,
+        }),
+      },
+    });
 
     this.logger.log(`Document ${documentId} ${dto.status} by admin ${adminId}`);
     return updated;
@@ -140,14 +166,39 @@ export class KycService {
   }
 
   /**
+   * Get KYC document status history for a user from AuditLog.
+   */
+  async getDocumentHistory(userId: string) {
+    const events = await this.prisma.auditLog.findMany({
+      where: {
+        entityType: 'IdentityDocument',
+        action: {
+          in: ['KYC_DOCUMENT_SUBMITTED', 'KYC_DOCUMENT_APPROVED', 'KYC_DOCUMENT_REJECTED'],
+        },
+        userId,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return events.map((e) => ({
+      id: e.id,
+      action: e.action,
+      documentId: e.entityId,
+      timestamp: e.createdAt,
+      detail: e.newValues ? JSON.parse(e.newValues as string) : null,
+    }));
+  }
+
+  /**
    * Check if user has a verified identity document of a given type.
    */
   async hasVerifiedDocument(userId: string, type?: IdentityDocumentType): Promise<boolean> {
-    const where: any = {
+    const where = {
       userId,
       status: VerificationStatus.APPROVED,
-    };
-    if (type) where.documentType = type;
+      ...(type ? { documentType: type } : {}),
+    } as const;
 
     const count = await this.prisma.identityDocument.count({ where });
     return count > 0;

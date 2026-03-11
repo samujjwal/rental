@@ -32,7 +32,7 @@ export class RequestPayoutDto {
   @ApiProperty({ description: 'Payout amount (optional, defaults to full balance)', required: false })
   @IsOptional()
   @IsNumber()
-  @Min(0)
+  @Min(1)
   amount?: number;
 }
 

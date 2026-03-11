@@ -3,6 +3,7 @@ import { PayoutsService } from './payouts.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { StripeService } from './stripe.service';
 import { LedgerService } from './ledger.service';
+import { ConfigService } from '@nestjs/config';
 import { PayoutStatus } from '@rental-portal/database';
 
 describe('PayoutsService', () => {
@@ -26,6 +27,9 @@ describe('PayoutsService', () => {
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    userPreferences: {
+      findUnique: jest.fn(),
+    },
   };
 
   const mockStripeService = {
@@ -44,6 +48,7 @@ describe('PayoutsService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: StripeService, useValue: mockStripeService },
         { provide: LedgerService, useValue: mockLedgerService },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(5000) } },
       ],
     }).compile();
 
@@ -61,8 +66,9 @@ describe('PayoutsService', () => {
     expect(service).toBeDefined();
   });
 
+  const ownerId = 'owner-1';
+
   describe('createPayout', () => {
-    const ownerId = 'owner-1';
 
     it('should create a payout successfully', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue({
@@ -74,6 +80,7 @@ describe('PayoutsService', () => {
       // Mock pending earnings
       mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 200 } });
       mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 50 } }); // Net 150
+      mockPrismaService.userPreferences.findUnique.mockResolvedValue(null); // Default NPR
 
       mockStripeService.createPayout.mockResolvedValue('tr_123');
       mockPrismaService.payout.create.mockResolvedValue({
@@ -86,7 +93,7 @@ describe('PayoutsService', () => {
 
       const result = await service.createPayout(ownerId, 100);
 
-      expect(stripe.createPayout).toHaveBeenCalledWith('acct_123', 100, 'USD');
+      expect(stripe.createPayout).toHaveBeenCalledWith('acct_123', 100, 'NPR');
       expect(prisma.payout.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -99,10 +106,10 @@ describe('PayoutsService', () => {
         'b-last',
         ownerId,
         100,
-        'USD',
+        'NPR',
         'po_1',
       );
-      expect(result).toEqual({ payoutId: 'po_1', amount: 100, currency: 'USD' });
+      expect(result).toEqual({ payoutId: 'po_1', amount: 100, currency: 'NPR' });
     });
 
     it('should fail if owner not verified', async () => {
@@ -123,8 +130,53 @@ describe('PayoutsService', () => {
       // 100 total - 90 paid = 10 available
       mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 100 } });
       mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 90 } });
+      mockPrismaService.userPreferences.findUnique.mockResolvedValue(null);
 
       await expect(service.createPayout(ownerId, 20)).rejects.toThrow('Insufficient funds');
+    });
+  });
+
+  describe('getPendingEarnings', () => {
+    it('should use user preferred currency from UserPreferences', async () => {
+      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 500 } });
+      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 100 } });
+      mockPrismaService.userPreferences.findUnique.mockResolvedValue({ currency: 'EUR' });
+
+      const result = await service.getPendingEarnings(ownerId);
+
+      expect(result.currency).toBe('EUR');
+      expect(result.amount).toBe(400);
+    });
+
+    it('should fall back to NPR when no user preferences exist', async () => {
+      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 200 } });
+      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 50 } });
+      mockPrismaService.userPreferences.findUnique.mockResolvedValue(null);
+
+      const result = await service.getPendingEarnings(ownerId);
+
+      expect(result.currency).toBe('NPR');
+      expect(result.amount).toBe(150);
+    });
+
+    it('should fall back to NPR when user has no currency preference', async () => {
+      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 100 } });
+      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
+      mockPrismaService.userPreferences.findUnique.mockResolvedValue({ currency: null });
+
+      const result = await service.getPendingEarnings(ownerId);
+
+      expect(result.currency).toBe('NPR');
+    });
+
+    it('should handle zero earnings', async () => {
+      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: null } });
+      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: null } });
+      mockPrismaService.userPreferences.findUnique.mockResolvedValue(null);
+
+      const result = await service.getPendingEarnings(ownerId);
+
+      expect(result.amount).toBe(0);
     });
   });
 });

@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
-import { AdminService } from './admin.service';
-import { FilterBuilderService } from './filter-builder.service';
+import { AdminAnalyticsService } from './admin-analytics.service';
+import { AdminUsersService } from './admin-users.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { UserRole, UserStatus, PropertyStatus } from '@rental-portal/database';
 
-describe('AdminService', () => {
-  let service: AdminService;
+describe('AdminAnalyticsService', () => {
+  let service: AdminAnalyticsService;
   let prisma: any;
   const originalNodeEnv = process.env.NODE_ENV;
 
@@ -14,7 +14,6 @@ describe('AdminService', () => {
   const userId = 'user-1';
 
   beforeEach(async () => {
-    // Force production mode so admin checks actually run
     process.env.NODE_ENV = 'production';
 
     prisma = {
@@ -22,17 +21,14 @@ describe('AdminService', () => {
         count: jest.fn(),
         findUnique: jest.fn(),
         findMany: jest.fn(),
-        update: jest.fn(),
       },
       listing: {
         count: jest.fn(),
         findMany: jest.fn(),
-        updateMany: jest.fn(),
         groupBy: jest.fn(),
       },
       booking: {
         count: jest.fn(),
-        findMany: jest.fn(),
       },
       payment: {
         aggregate: jest.fn(),
@@ -47,13 +43,12 @@ describe('AdminService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        AdminService,
-        FilterBuilderService,
+        AdminAnalyticsService,
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
 
-    service = module.get<AdminService>(AdminService);
+    service = module.get<AdminAnalyticsService>(AdminAnalyticsService);
   });
 
   afterEach(() => {
@@ -100,6 +95,55 @@ describe('AdminService', () => {
 
       expect(result).toBeDefined();
     });
+
+    it('should allow OPERATIONS_ADMIN role', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: adminId, role: UserRole.OPERATIONS_ADMIN });
+      prisma.user.count.mockResolvedValue(0);
+      prisma.listing.count.mockResolvedValue(0);
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: null } });
+      prisma.dispute.count.mockResolvedValue(0);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      const result = await service.getDashboardStats(adminId);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should allow FINANCE_ADMIN role', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: adminId, role: UserRole.FINANCE_ADMIN });
+      prisma.user.count.mockResolvedValue(0);
+      prisma.listing.count.mockResolvedValue(0);
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: null } });
+      prisma.dispute.count.mockResolvedValue(0);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      const result = await service.getDashboardStats(adminId);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should allow SUPPORT_ADMIN role', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: adminId, role: UserRole.SUPPORT_ADMIN });
+      prisma.user.count.mockResolvedValue(0);
+      prisma.listing.count.mockResolvedValue(0);
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: null } });
+      prisma.dispute.count.mockResolvedValue(0);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      const result = await service.getDashboardStats(adminId);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should reject non-admin roles regardless of NODE_ENV', async () => {
+      process.env.NODE_ENV = 'development';
+      prisma.user.findUnique.mockResolvedValue({ id: adminId, role: UserRole.USER });
+
+      await expect(service.getDashboardStats(adminId)).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('getDashboardStats', () => {
@@ -144,6 +188,84 @@ describe('AdminService', () => {
 
       expect(result.revenue.total).toBe(0);
     });
+  });
+
+  describe('getAnalytics', () => {
+    beforeEach(() => {
+      prisma.user.findUnique.mockResolvedValue({ id: adminId, role: UserRole.ADMIN });
+    });
+
+    it('should return analytics for month period', async () => {
+      prisma.user.count.mockResolvedValue(10);
+      prisma.listing.count.mockResolvedValue(5);
+      prisma.booking.count.mockResolvedValueOnce(20).mockResolvedValueOnce(15);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: 5000 } });
+      prisma.listing.groupBy.mockResolvedValue([]);
+      prisma.listing.findMany.mockResolvedValue([]);
+      prisma.category.findMany.mockResolvedValue([]);
+
+      const result = await service.getAnalytics(adminId, 'month');
+
+      expect(result.period).toBe('month');
+      expect(result.growth.newUsers).toBe(10);
+      expect(result.revenue.total).toBe(5000);
+    });
+
+    it('should support different period values', async () => {
+      prisma.user.count.mockResolvedValue(3);
+      prisma.listing.count.mockResolvedValue(1);
+      prisma.booking.count.mockResolvedValue(2);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: null } });
+      prisma.listing.groupBy.mockResolvedValue([]);
+      prisma.listing.findMany.mockResolvedValue([]);
+      prisma.category.findMany.mockResolvedValue([]);
+
+      const result = await service.getAnalytics(adminId, 'week');
+
+      expect(result.period).toBe('week');
+      expect(result.revenue.total).toBe(0);
+    });
+  });
+});
+
+describe('AdminUsersService', () => {
+  let service: AdminUsersService;
+  let prisma: any;
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  const adminId = 'admin-1';
+  const userId = 'user-1';
+
+  beforeEach(async () => {
+    process.env.NODE_ENV = 'production';
+
+    prisma = {
+      user: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        update: jest.fn(),
+      },
+      listing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      auditLog: {
+        create: jest.fn().mockResolvedValue({ id: 'audit-1' }),
+      },
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AdminUsersService,
+        { provide: PrismaService, useValue: prisma },
+      ],
+    }).compile();
+
+    service = module.get<AdminUsersService>(AdminUsersService);
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   describe('getAllUsers', () => {
@@ -247,43 +369,6 @@ describe('AdminService', () => {
       await expect(service.toggleUserStatus(adminId, 'missing', true)).rejects.toThrow(
         'User not found',
       );
-    });
-  });
-
-  describe('getAnalytics', () => {
-    beforeEach(() => {
-      prisma.user.findUnique.mockResolvedValue({ id: adminId, role: UserRole.ADMIN });
-    });
-
-    it('should return analytics for month period', async () => {
-      prisma.user.count.mockResolvedValue(10);
-      prisma.listing.count.mockResolvedValue(5);
-      prisma.booking.count.mockResolvedValueOnce(20).mockResolvedValueOnce(15);
-      prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: 5000 } });
-      prisma.listing.groupBy.mockResolvedValue([]);
-      prisma.listing.findMany.mockResolvedValue([]);
-      prisma.category.findMany.mockResolvedValue([]);
-
-      const result = await service.getAnalytics(adminId, 'month');
-
-      expect(result.period).toBe('month');
-      expect(result.growth.newUsers).toBe(10);
-      expect(result.revenue.total).toBe(5000);
-    });
-
-    it('should support different period values', async () => {
-      prisma.user.count.mockResolvedValue(3);
-      prisma.listing.count.mockResolvedValue(1);
-      prisma.booking.count.mockResolvedValue(2);
-      prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: null } });
-      prisma.listing.groupBy.mockResolvedValue([]);
-      prisma.listing.findMany.mockResolvedValue([]);
-      prisma.category.findMany.mockResolvedValue([]);
-
-      const result = await service.getAnalytics(adminId, 'week');
-
-      expect(result.period).toBe('week');
-      expect(result.revenue.total).toBe(0);
     });
   });
 });

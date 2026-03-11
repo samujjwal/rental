@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { BookingMode, PropertyStatus, UserRole } from '@rental-portal/database';
-import { cleanupCoreRelationalData, createUserWithRole } from './e2e-helpers';
+import { cleanupCoreRelationalData, createUserWithRole, buildTestEmail } from './e2e-helpers';
 
 describe('Renter & Owner Dashboard Flows (e2e)', () => {
   let app: INestApplication;
@@ -15,6 +15,8 @@ describe('Renter & Owner Dashboard Flows (e2e)', () => {
   let renterId: string;
   let listingId: string;
   let bookingId: string;
+  let ownerEmail: string;
+  let renterEmail: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -37,27 +39,24 @@ describe('Renter & Owner Dashboard Flows (e2e)', () => {
   afterAll(async () => {
     await cleanupCoreRelationalData(prisma);
     await prisma.listing.deleteMany({
-      where: { owner: { email: { in: ['owner@dashtest.com', 'renter@dashtest.com'] } } },
+      where: { owner: { email: { in: [ownerEmail, renterEmail] } } },
     });
     await prisma.user.deleteMany({
-      where: { email: { in: ['owner@dashtest.com', 'renter@dashtest.com'] } },
+      where: { email: { in: [ownerEmail, renterEmail] } },
     });
     await app.close();
   });
 
   beforeEach(async () => {
+    ownerEmail = buildTestEmail('dash-owner');
+    renterEmail = buildTestEmail('dash-renter');
+
     await cleanupCoreRelationalData(prisma);
-    await prisma.listing.deleteMany({
-      where: { owner: { email: { in: ['owner@dashtest.com', 'renter@dashtest.com'] } } },
-    });
-    await prisma.user.deleteMany({
-      where: { email: { in: ['owner@dashtest.com', 'renter@dashtest.com'] } },
-    });
 
     const owner = await createUserWithRole({
       app,
       prisma,
-      email: 'owner@dashtest.com',
+      email: ownerEmail,
       password: 'SecurePass123!',
       firstName: 'Dashboard',
       lastName: 'Owner',
@@ -69,7 +68,7 @@ describe('Renter & Owner Dashboard Flows (e2e)', () => {
     const renter = await createUserWithRole({
       app,
       prisma,
-      email: 'renter@dashtest.com',
+      email: renterEmail,
       password: 'SecurePass123!',
       firstName: 'Dashboard',
       lastName: 'Renter',
@@ -132,7 +131,7 @@ describe('Renter & Owner Dashboard Flows (e2e)', () => {
         .expect(200);
 
       expect(response.body.id).toBe(renterId);
-      expect(response.body.email).toBe('renter@dashtest.com');
+      expect(response.body.email).toBe(renterEmail);
     });
 
     it('should update current user profile', async () => {
@@ -209,6 +208,59 @@ describe('Renter & Owner Dashboard Flows (e2e)', () => {
         .expect(201);
 
       expect(response.body.role).toBe(UserRole.HOST);
+    });
+  });
+
+  /* ─── Negative / auth cases ─── */
+  describe('Negative cases', () => {
+    it('should 401 for GET /users/me without auth', async () => {
+      await request(app.getHttpServer())
+        .get('/users/me')
+        .expect(401);
+    });
+
+    it('should 401 for PATCH /users/me without auth', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/me')
+        .send({ firstName: 'Hacker' })
+        .expect(401);
+    });
+
+    it('should 401 for GET /bookings/my-bookings without auth', async () => {
+      await request(app.getHttpServer())
+        .get('/bookings/my-bookings')
+        .expect(401);
+    });
+
+    it('should 401 for GET /bookings/host-bookings without auth', async () => {
+      await request(app.getHttpServer())
+        .get('/bookings/host-bookings')
+        .expect(401);
+    });
+
+    it('should 401 for GET /listings/my-listings without auth', async () => {
+      await request(app.getHttpServer())
+        .get('/listings/my-listings')
+        .expect(401);
+    });
+
+    it('should 401 for GET /favorites without auth', async () => {
+      await request(app.getHttpServer())
+        .get('/favorites')
+        .expect(401);
+    });
+
+    it('should 401 for POST /favorites without auth', async () => {
+      await request(app.getHttpServer())
+        .post('/favorites')
+        .send({ listingId: 'fake-id' })
+        .expect(401);
+    });
+
+    it('should 401 for POST /users/upgrade-to-owner without auth', async () => {
+      await request(app.getHttpServer())
+        .post('/users/upgrade-to-owner')
+        .expect(401);
     });
   });
 });

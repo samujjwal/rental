@@ -24,12 +24,12 @@ export class UpdateProfileDto {
   @ApiProperty({
     description: 'Phone number in E.164 format',
     required: false,
-    example: '+14155552671',
+    example: '+12025551234',
   })
   @IsOptional()
   @IsString()
   @Matches(/^\+?[1-9]\d{7,14}$/, {
-    message: 'Phone number must be in E.164 format (e.g. +14155552671)',
+    message: 'Phone number must be in E.164 format (e.g. +12025551234)',
   })
   phoneNumber?: string;
 
@@ -85,7 +85,7 @@ export class UpdateProfileDto {
   @MaxLength(100)
   country?: string;
 
-  @ApiProperty({ description: 'Timezone (IANA)', required: false, example: 'America/New_York' })
+  @ApiProperty({ description: 'Timezone (IANA)', required: false, example: 'UTC' })
   @IsOptional()
   @IsString()
   @MaxLength(50)
@@ -97,7 +97,7 @@ export class UpdateProfileDto {
   @MaxLength(10)
   preferredLanguage?: string;
 
-  @ApiProperty({ description: 'Preferred currency', required: false, example: 'USD' })
+  @ApiProperty({ description: 'Preferred currency (ISO 4217)', required: false, example: 'USD' })
   @IsOptional()
   @IsString()
   @MaxLength(3)

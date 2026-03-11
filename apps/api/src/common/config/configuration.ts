@@ -4,6 +4,16 @@ export default () => ({
   port: parseInt(process.env.PORT || '3400', 10),
   apiPrefix: process.env.API_PREFIX || 'api',
 
+  // Platform locale / i18n
+  platform: {
+    country: process.env.PLATFORM_COUNTRY || 'NP',
+    defaultLocale: process.env.DEFAULT_LOCALE || 'en',
+    supportedLocales: (process.env.SUPPORTED_LOCALES || 'en').split(','),
+    defaultCurrency: process.env.DEFAULT_CURRENCY || 'NPR',
+    supportedCurrencies: (process.env.SUPPORTED_CURRENCIES || 'NPR').split(','),
+    defaultTimezone: process.env.DEFAULT_TIMEZONE || 'Asia/Kathmandu',
+  },
+
   // Database
   databaseUrl: process.env.DATABASE_URL,
 
@@ -37,13 +47,6 @@ export default () => ({
     secretKey: process.env.STRIPE_SECRET_KEY,
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-  },
-
-  // Elasticsearch
-  elasticsearch: {
-    node: process.env.ELASTICSEARCH_NODE,
-    username: process.env.ELASTICSEARCH_USERNAME,
-    password: process.env.ELASTICSEARCH_PASSWORD,
   },
 
   // Email (supports both SMTP and Resend)

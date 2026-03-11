@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { escapeHtml } from '@/common/utils/sanitize';
+import { formatCurrency } from '@rental-portal/shared-types';
 
 export interface EmailOptions {
   to: string | string[];
@@ -39,11 +41,13 @@ export interface EmailDeliveryEvent {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private resend: Resend;
+  private readonly brandName: string;
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
+    this.brandName = this.config.get('brand.name', 'Rental Portal');
     const apiKey = this.config.get<string>('RESEND_API_KEY');
     if (!apiKey) {
       this.logger.warn('Resend API key not configured');
@@ -59,7 +63,7 @@ export class EmailService {
   async sendEmail(options: EmailOptions): Promise<{ messageId: string; status: string }> {
     try {
       const from = this.config.get('EMAIL_FROM') || 'noreply@rentalportal.com';
-      const fromName = this.config.get('EMAIL_FROM_NAME') || 'Rental Portal';
+      const fromName = this.config.get('EMAIL_FROM_NAME') || this.config.get('brand.name', 'Rental Portal');
       const fromAddress = `${fromName} <${from}>`;
 
       const emailData: any = {
@@ -78,7 +82,7 @@ export class EmailService {
         emailData.attachments = options.attachments;
       }
 
-      const response = await this.resend.emails.send(emailData);
+      const response = await this.sendWithRetry(emailData);
 
       // Log delivery event
       await this.logDeliveryEvent({
@@ -102,6 +106,32 @@ export class EmailService {
   }
 
   /**
+   * Retry wrapper for Resend API calls with exponential back-off.
+   * Retries up to {@link maxRetries} times on transient / rate-limit errors.
+   */
+  private async sendWithRetry(
+    emailData: Parameters<Resend['emails']['send']>[0],
+    maxRetries = 3,
+  ): ReturnType<Resend['emails']['send']> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.resend.emails.send(emailData);
+      } catch (err: any) {
+        lastError = err;
+        const status = err?.statusCode ?? err?.status;
+        // Only retry on 429 (rate-limit) or 5xx server errors
+        const retryable = status === 429 || (status >= 500 && status < 600);
+        if (!retryable || attempt === maxRetries) throw err;
+        const delay = Math.min(1000 * 2 ** attempt, 8000);
+        this.logger.warn(`Resend attempt ${attempt + 1} failed (${status}), retrying in ${delay}ms`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    throw lastError;
+  }
+
+  /**
    * Send welcome email
    */
   async sendWelcomeEmail(user: {
@@ -111,9 +141,9 @@ export class EmailService {
   }): Promise<void> {
     await this.sendEmail({
       to: user.email,
-      subject: 'Welcome to Rental Portal!',
+      subject: `Welcome to ${this.brandName}!`,
       html: `
-        <h2>Welcome to Rental Portal, ${user.firstName}!</h2>
+        <h2>Welcome to ${this.brandName}, ${escapeHtml(user.firstName)}!</h2>
         <p>We're excited to have you join our community of renters and owners.</p>
         <p>Get started by exploring our listings or posting your first item for rent.</p>
         <p>
@@ -121,7 +151,7 @@ export class EmailService {
             Get Started
           </a>
         </p>
-        <p>Best regards,<br>The Rental Portal Team</p>
+        <p>Best regards,<br>The ${this.brandName} Team</p>
       `,
     });
   }
@@ -140,7 +170,7 @@ export class EmailService {
       subject: 'Reset Your Password',
       html: `
         <h2>Password Reset Request</h2>
-        <p>Hi ${user.firstName},</p>
+        <p>Hi ${escapeHtml(user.firstName)},</p>
         <p>You requested to reset your password. Click the link below to reset it:</p>
         <p>
           <a href="${resetUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
@@ -149,7 +179,7 @@ export class EmailService {
         </p>
         <p>This link will expire in 10 minutes for security reasons.</p>
         <p>If you didn't request this, please ignore this email.</p>
-        <p>Best regards,<br>The Rental Portal Team</p>
+        <p>Best regards,<br>The ${this.brandName} Team</p>
       `,
     });
   }
@@ -173,21 +203,21 @@ export class EmailService {
       subject: 'Booking Confirmed!',
       html: `
         <h2>Booking Confirmed!</h2>
-        <p>Hi ${user.firstName},</p>
+        <p>Hi ${escapeHtml(user.firstName)},</p>
         <p>Your booking has been confirmed. Here are the details:</p>
         <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0;">
-          <h3>${booking.listingTitle}</h3>
-          <p><strong>Booking ID:</strong> ${booking.id}</p>
-          <p><strong>Start Date:</strong> ${booking.startDate.toLocaleDateString()}</p>
-          <p><strong>End Date:</strong> ${booking.endDate.toLocaleDateString()}</p>
-          <p><strong>Total Price:</strong> ${booking.currency} ${booking.totalPrice}</p>
+          <h3>${escapeHtml(booking.listingTitle)}</h3>
+          <p><strong>Booking ID:</strong> ${escapeHtml(booking.id)}</p>
+          <p><strong>Start Date:</strong> ${booking.startDate.toLocaleDateString(undefined)}</p>
+          <p><strong>End Date:</strong> ${booking.endDate.toLocaleDateString(undefined)}</p>
+          <p><strong>Total Price:</strong> ${formatCurrency(booking.totalPrice, booking.currency)}</p>
         </div>
         <p>
           <a href="${this.config.get('FRONTEND_URL')}/bookings/${booking.id}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
             View Booking Details
           </a>
         </p>
-        <p>Best regards,<br>The Rental Portal Team</p>
+        <p>Best regards,<br>The ${this.brandName} Team</p>
       `,
     });
   }
@@ -213,22 +243,22 @@ export class EmailService {
       subject: 'New Booking Request!',
       html: `
         <h2>New Booking Request</h2>
-        <p>Hi ${owner.firstName},</p>
+        <p>Hi ${escapeHtml(owner.firstName)},</p>
         <p>You have received a new booking request for your listing:</p>
         <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0;">
-          <h3>${booking.listingTitle}</h3>
-          <p><strong>Renter:</strong> ${booking.renterName}</p>
-          <p><strong>Start Date:</strong> ${booking.startDate.toLocaleDateString()}</p>
-          <p><strong>End Date:</strong> ${booking.endDate.toLocaleDateString()}</p>
-          <p><strong>Total Price:</strong> ${booking.currency} ${booking.totalPrice}</p>
-          ${booking.message ? `<p><strong>Message:</strong> ${booking.message}</p>` : ''}
+          <h3>${escapeHtml(booking.listingTitle)}</h3>
+          <p><strong>Renter:</strong> ${escapeHtml(booking.renterName)}</p>
+          <p><strong>Start Date:</strong> ${booking.startDate.toLocaleDateString(undefined)}</p>
+          <p><strong>End Date:</strong> ${booking.endDate.toLocaleDateString(undefined)}</p>
+          <p><strong>Total Price:</strong> ${formatCurrency(booking.totalPrice, booking.currency)}</p>
+          ${booking.message ? `<p><strong>Message:</strong> ${escapeHtml(booking.message)}</p>` : ''}
         </div>
         <p>
           <a href="${this.config.get('FRONTEND_URL')}/dashboard/bookings" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
             Manage Booking
           </a>
         </p>
-        <p>Best regards,<br>The Rental Portal Team</p>
+        <p>Best regards,<br>The ${this.brandName} Team</p>
       `,
     });
   }
@@ -250,19 +280,19 @@ export class EmailService {
       subject: 'Payment Confirmed',
       html: `
         <h2>Payment Confirmed</h2>
-        <p>Hi ${user.firstName},</p>
+        <p>Hi ${escapeHtml(user.firstName)},</p>
         <p>Your payment has been processed successfully:</p>
         <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0;">
-          <p><strong>Booking ID:</strong> ${payment.bookingId}</p>
-          <p><strong>Amount:</strong> ${payment.currency} ${payment.amount}</p>
-          <p><strong>Payment Method:</strong> ${payment.paymentMethod}</p>
+          <p><strong>Booking ID:</strong> ${escapeHtml(payment.bookingId)}</p>
+          <p><strong>Amount:</strong> ${formatCurrency(payment.amount, payment.currency)}</p>
+          <p><strong>Payment Method:</strong> ${escapeHtml(payment.paymentMethod)}</p>
         </div>
         <p>
           <a href="${this.config.get('FRONTEND_URL')}/bookings/${payment.bookingId}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
             View Booking Details
           </a>
         </p>
-        <p>Best regards,<br>The Rental Portal Team</p>
+        <p>Best regards,<br>The ${this.brandName} Team</p>
       `,
     });
   }
@@ -284,19 +314,19 @@ export class EmailService {
       subject: 'Leave a Review',
       html: `
         <h2>Share Your Experience</h2>
-        <p>Hi ${user.firstName},</p>
+        <p>Hi ${escapeHtml(user.firstName)},</p>
         <p>Your recent rental has been completed. Please share your experience:</p>
         <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0;">
-          <h3>${booking.listingTitle}</h3>
-          <p><strong>Owner:</strong> ${booking.ownerName}</p>
-          <p><strong>Completed:</strong> ${booking.completedDate.toLocaleDateString()}</p>
+          <h3>${escapeHtml(booking.listingTitle)}</h3>
+          <p><strong>Owner:</strong> ${escapeHtml(booking.ownerName)}</p>
+          <p><strong>Completed:</strong> ${booking.completedDate.toLocaleDateString(undefined)}</p>
         </div>
         <p>
           <a href="${this.config.get('FRONTEND_URL')}/reviews/new?bookingId=${booking.id}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
             Leave a Review
           </a>
         </p>
-        <p>Best regards,<br>The Rental Portal Team</p>
+        <p>Best regards,<br>The ${this.brandName} Team</p>
       `,
     });
   }
@@ -316,15 +346,15 @@ export class EmailService {
       subject: `Invitation to join ${organization.name}`,
       html: `
         <h2>Organization Invitation</h2>
-        <p>You've been invited to join <strong>${organization.name}</strong> on Rental Portal.</p>
-        <p><strong>Invited by:</strong> ${organization.inviterName}</p>
+        <p>You've been invited to join <strong>${escapeHtml(organization.name)}</strong> on ${this.brandName}.</p>
+        <p><strong>Invited by:</strong> ${escapeHtml(organization.inviterName)}</p>
         <p>
           <a href="${invitationUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
             Accept Invitation
           </a>
         </p>
         <p>This invitation will expire in 7 days.</p>
-        <p>Best regards,<br>The Rental Portal Team</p>
+        <p>Best regards,<br>The ${this.brandName} Team</p>
       `,
     });
   }
@@ -341,7 +371,7 @@ export class EmailService {
 
       await this.sendEmail({
         to: testEmail,
-        subject: 'Rental Portal - Email Configuration Test',
+        subject: `${this.brandName} - Email Configuration Test`,
         html: `
           <h2>Email Configuration Test</h2>
           <p>This is a test email to verify that the Resend integration is working correctly.</p>

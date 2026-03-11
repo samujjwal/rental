@@ -1,6 +1,7 @@
 import type { EntityConfig } from "../entity-framework";
 import type { AdminUser } from "~/lib/api/admin";
 import { StatusBadge } from "~/components/ui/StatusBadge";
+import { formatDate } from "~/lib/utils";
 
 export const usersConfig: EntityConfig<AdminUser> = {
   name: "User",
@@ -61,7 +62,7 @@ export const usersConfig: EntityConfig<AdminUser> = {
     {
       accessorKey: "createdAt",
       header: "Joined",
-      Cell: ({ cell }) => new Date(cell.getValue<string>()).toLocaleDateString(),
+      Cell: ({ cell }) => formatDate(cell.getValue<string>()),
     },
   ],
 

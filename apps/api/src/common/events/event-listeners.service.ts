@@ -6,6 +6,7 @@ import {
   BookingCreatedEvent,
   BookingStatusChangedEvent,
   PaymentProcessedEvent,
+  PaymentRefundedEvent,
   ListingCreatedEvent,
   ListingUpdatedEvent,
   ReviewCreatedEvent,
@@ -14,6 +15,7 @@ import {
   UserRegisteredEvent,
 } from './events.service';
 import { NotificationType } from '@rental-portal/database';
+import { getCurrencySymbol, formatCurrency } from '@rental-portal/shared-types';
 
 /**
  * Event listeners that handle cross-module communication
@@ -41,7 +43,7 @@ export class EventListeners {
       type: NotificationType.BOOKING_REQUEST,
       title: 'New Booking Request',
       message: `You have a new booking request for your listing.`,
-      data: { bookingId: payload.bookingId },
+      data: { bookingId: payload.bookingId, notificationType: 'booking_request' },
       channels: ['EMAIL', 'PUSH', 'IN_APP'],
     });
 
@@ -68,7 +70,7 @@ export class EventListeners {
       type: NotificationType.BOOKING_CONFIRMED,
       title: 'Booking Confirmed',
       message: 'Your booking has been confirmed!',
-      data: { bookingId: payload.bookingId },
+      data: { bookingId: payload.bookingId, notificationType: 'booking_confirmed' },
       channels: ['EMAIL', 'PUSH', 'IN_APP'],
       priority: 'HIGH',
     });
@@ -111,6 +113,7 @@ export class EventListeners {
         data: {
           bookingId: payload.bookingId,
           reason: payload.reason,
+          notificationType: 'booking_cancelled',
         },
         channels: ['EMAIL', 'IN_APP'],
       });
@@ -139,7 +142,7 @@ export class EventListeners {
         type: NotificationType.REVIEW_RECEIVED,
         title: 'Review Request',
         message: prompt.message,
-        data: { bookingId: payload.bookingId },
+        data: { bookingId: payload.bookingId, notificationType: 'review_request' },
         channels: ['EMAIL', 'IN_APP'],
       });
     }
@@ -158,16 +161,16 @@ export class EventListeners {
           userId: payload.renterId,
           type: NotificationType.PAYOUT_PROCESSED,
           title: 'Payment Successful',
-          message: `Your payment of $${payload.amount} has been processed.`,
-          data: { paymentId: payload.paymentId },
+          message: `Your payment of ${getCurrencySymbol(payload.currency)}${payload.amount} has been processed.`,
+          data: { paymentId: payload.paymentId, bookingId: payload.bookingId, notificationType: 'payment_success' },
           channels: ['EMAIL', 'IN_APP'],
         },
         {
           userId: payload.ownerId,
           type: NotificationType.PAYOUT_PROCESSED,
           title: 'Payment Received',
-          message: `You received a payment of $${payload.amount}.`,
-          data: { paymentId: payload.paymentId },
+          message: `You received a payment of ${getCurrencySymbol(payload.currency)}${payload.amount}.`,
+          data: { paymentId: payload.paymentId, bookingId: payload.bookingId, notificationType: 'payment_received' },
           channels: ['EMAIL', 'IN_APP'],
         },
       ],
@@ -180,12 +183,13 @@ export class EventListeners {
 
     await this.notificationsQueue.add('send', {
       userId: payload.renterId,
-      type: NotificationType.BOOKING_CANCELLED,
+      type: NotificationType.PAYMENT_RECEIVED,
       title: 'Payment Failed',
       message: 'Your payment could not be processed. Please update your payment method.',
       data: {
         paymentId: payload.paymentId,
         bookingId: payload.bookingId,
+        notificationType: 'payment_failed',
       },
       channels: ['EMAIL', 'PUSH', 'IN_APP'],
       priority: 'HIGH',
@@ -193,15 +197,22 @@ export class EventListeners {
   }
 
   @OnEvent('payment.refunded')
-  async handlePaymentRefunded(payload: PaymentProcessedEvent) {
-    this.logger.log(`Payment refunded: ${payload.paymentId}`);
+  async handlePaymentRefunded(payload: PaymentRefundedEvent) {
+    this.logger.log(`Payment refunded: ${payload.paymentId ?? payload.transactionId}`);
+
+    // Only send notification when user context is available (not all refund paths have it)
+    if (!payload.renterId) return;
 
     await this.notificationsQueue.add('send', {
       userId: payload.renterId,
-      type: NotificationType.PAYOUT_PROCESSED,
+      type: NotificationType.PAYMENT_REFUNDED,
       title: 'Refund Processed',
-      message: `A refund of $${payload.amount} has been issued to your account.`,
-      data: { paymentId: payload.paymentId },
+      message: `A refund of ${getCurrencySymbol(payload.currency)}${payload.amount} has been issued to your account.`,
+      data: {
+        paymentId: payload.paymentId ?? payload.transactionId,
+        bookingId: payload.bookingId,
+        notificationType: 'refund_processed',
+      },
       channels: ['EMAIL', 'IN_APP'],
     });
   }
@@ -260,7 +271,7 @@ export class EventListeners {
       type: NotificationType.LISTING_APPROVED,
       title: 'Listing Approved',
       message: 'Your listing is now live and visible to renters!',
-      data: { listingId: payload.listingId },
+      data: { listingId: payload.listingId, notificationType: 'listing_update' },
       channels: ['EMAIL', 'PUSH', 'IN_APP'],
     });
   }
@@ -280,6 +291,8 @@ export class EventListeners {
       data: {
         reviewId: payload.reviewId,
         bookingId: payload.bookingId,
+        listingId: payload.listingId,
+        notificationType: 'new_review',
       },
       channels: ['EMAIL', 'IN_APP'],
     });
@@ -299,15 +312,16 @@ export class EventListeners {
   async handleDisputeCreated(payload: DisputeCreatedEvent) {
     this.logger.log(`Dispute created: ${payload.disputeId}`);
 
-    // Notify admin team
+    // Notify the dispute opener — the disputes service notifies the other party directly
     await this.notificationsQueue.add('send', {
-      userId: 'admin', // Would need to fetch admin users
+      userId: payload.reportedBy,
       type: NotificationType.DISPUTE_OPENED,
-      title: 'New Dispute',
-      message: `A new ${payload.type} dispute has been created.`,
+      title: 'Dispute Opened',
+      message: `Your dispute has been submitted. Our team will review it within 2–3 business days.`,
       data: {
         disputeId: payload.disputeId,
         bookingId: payload.bookingId,
+        notificationType: 'dispute_opened',
       },
       channels: ['EMAIL', 'IN_APP'],
       priority: 'HIGH',
@@ -328,6 +342,7 @@ export class EventListeners {
         data: {
           messageId: payload.messageId,
           conversationId: payload.conversationId,
+          notificationType: 'new_message',
         },
         channels: ['PUSH'],
       });
@@ -344,7 +359,7 @@ export class EventListeners {
     await this.notificationsQueue.add('send', {
       userId: payload.userId,
       type: NotificationType.SYSTEM_ANNOUNCEMENT,
-      title: 'Welcome to Rental Portal!',
+      title: 'Welcome to GharBatai Rentals!',
       message: 'Thank you for joining our community.',
       data: {},
       channels: ['EMAIL'],

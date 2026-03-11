@@ -115,6 +115,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
           className={`${inputPadding} pl-9 pr-9 w-full rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
           placeholder={placeholder}
           value={inputValue}
+          aria-label="Search"
           onChange={(e) => {
             setInputValue(e.target.value);
             onChange(e.target.value);

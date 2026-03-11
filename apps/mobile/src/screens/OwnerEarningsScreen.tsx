@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useCallback } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, FlatList } from "react-native";
+import { useFocusEffect } from '@react-navigation/native';
 import { mobileClient } from "../api/client";
 import { useAuth } from "../api/authContext";
-import type { PaymentBalance, PaymentTransaction } from "@rental-portal/mobile-sdk";
+import type { PaymentBalance, PaymentTransaction } from '~/types';
+import { formatCurrency } from '../utils/currency';
 
 export function OwnerEarningsScreen() {
   const { user } = useAuth();
@@ -12,29 +14,31 @@ export function OwnerEarningsScreen() {
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      if (!user) return;
-      setLoading(true);
-      setStatus("");
-      try {
-        const [balanceRes, earningsRes, txRes] = await Promise.all([
-          mobileClient.getPaymentBalance(),
-          mobileClient.getPaymentEarnings(),
-          mobileClient.getPaymentTransactions(1, 10),
-        ]);
-        setBalance(balanceRes);
-        setEarnings(earningsRes);
-        setTransactions(txRes.transactions || []);
-      } catch (err) {
-        setStatus("Unable to load earnings data.");
-      } finally {
-        setLoading(false);
-      }
-    };
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        if (!user) return;
+        setLoading(true);
+        setStatus("");
+        try {
+          const [balanceRes, earningsRes, txRes] = await Promise.all([
+            mobileClient.getPaymentBalance(),
+            mobileClient.getPaymentEarnings(),
+            mobileClient.getPaymentTransactions(1, 10),
+          ]);
+          setBalance(balanceRes);
+          setEarnings(earningsRes);
+          setTransactions(txRes.transactions || []);
+        } catch (err) {
+          setStatus("Unable to load earnings data.");
+        } finally {
+          setLoading(false);
+        }
+      };
 
-    load();
-  }, [user]);
+      load();
+    }, [user])
+  );
 
   return (
     <View style={styles.container}>
@@ -50,11 +54,11 @@ export function OwnerEarningsScreen() {
             <View style={styles.card}>
               <Text style={styles.label}>Available for Payout</Text>
               <Text style={styles.value}>
-                {earnings.currency} {earnings.amount.toFixed(2)}
+                {formatCurrency(earnings.amount, earnings.currency)}
               </Text>
               <Text style={styles.label}>Total Balance</Text>
               <Text style={styles.value}>
-                {balance.currency} {balance.balance.toFixed(2)}
+                {formatCurrency(balance.balance, balance.currency)}
               </Text>
             </View>
           )}
@@ -67,7 +71,7 @@ export function OwnerEarningsScreen() {
                 <Text style={styles.transactionTitle}>{item.type}</Text>
                 <Text style={styles.transactionMeta}>{item.description || item.status}</Text>
                 <Text style={styles.transactionAmount}>
-                  {item.currency} {item.amount.toFixed(2)}
+                  {formatCurrency(item.amount, item.currency)}
                 </Text>
               </View>
             )}

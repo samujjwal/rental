@@ -4,9 +4,6 @@ import type { User } from "~/types/auth";
 import { api } from "~/lib/api-client";
 
 const STORAGE_KEY = "auth-storage";
-const ACCESS_TOKEN_KEY = "accessToken";
-const REFRESH_TOKEN_KEY = "refreshToken";
-const USER_KEY = "user";
 
 const normalizeRole = (role?: string | null): User["role"] => {
   const normalized = String(role || "").toUpperCase();
@@ -18,17 +15,16 @@ const normalizeRole = (role?: string | null): User["role"] => {
 interface AuthState {
   user: User | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isInitialized: boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
 
   // Actions
-  setAuth: (user: User, accessToken: string, refreshToken: string) => void;
+  setAuth: (user: User, accessToken: string) => void;
   clearAuth: () => void;
   updateUser: (user: Partial<User>) => void;
   restoreSession: () => Promise<void>;
-  setTokens: (accessToken: string, refreshToken: string) => void;
+  setAccessToken: (accessToken: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -36,34 +32,26 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isInitialized: false,
       isLoading: false,
-      get isAuthenticated() {
-        return !!get().user && !!get().accessToken;
-      },
+      isAuthenticated: false,
 
-      setAuth: (user, accessToken, refreshToken) => {
+      setAuth: (user, accessToken) => {
         const normalizedUser = { ...user, role: normalizeRole(user.role) };
-        set({ user: normalizedUser, accessToken, refreshToken, isInitialized: true });
-        if (typeof window !== "undefined") {
-          localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-          localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-          localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
-        }
+        set({ user: normalizedUser, accessToken, isInitialized: true, isAuthenticated: true });
       },
 
       clearAuth: () => {
         set({
           user: null,
           accessToken: null,
-          refreshToken: null,
           isInitialized: true,
+          isAuthenticated: false,
         });
+        // Zustand persist handles localStorage cleanup automatically.
+        // Also remove the persist key to ensure a clean logout.
         if (typeof window !== "undefined") {
-          localStorage.removeItem(ACCESS_TOKEN_KEY);
-          localStorage.removeItem(REFRESH_TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
+          localStorage.removeItem(STORAGE_KEY);
         }
       },
 
@@ -78,19 +66,12 @@ export const useAuthStore = create<AuthState>()(
                 ),
               }
             : null;
-          if (typeof window !== "undefined" && updatedUser) {
-            localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
-          }
           return { user: updatedUser };
         });
       },
 
-      setTokens: (accessToken, refreshToken) => {
-        set({ accessToken, refreshToken });
-        if (typeof window !== "undefined") {
-          localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-          localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-        }
+      setAccessToken: (accessToken) => {
+        set({ accessToken });
       },
 
       restoreSession: async () => {
@@ -102,54 +83,41 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          const storedAccessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-          const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-          const storedUser = localStorage.getItem(USER_KEY);
+          // Read from Zustand persisted state (auto-rehydrated by persist middleware)
+          const { accessToken: storedAccessToken, user: storedUser } = get();
 
-          if (storedAccessToken && storedRefreshToken && storedUser) {
+          if (storedAccessToken && storedUser) {
             // Check if access token is expired
             if (isTokenExpired(storedAccessToken)) {
-              // Try to refresh the token
+              // Try to refresh the token — refresh token is sent via httpOnly cookie (B-29)
               try {
                 const data = await api.post<{
                   accessToken: string;
-                  refreshToken: string;
                   user: User;
-                }>("/auth/refresh", { refreshToken: storedRefreshToken });
-
-                localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-                localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+                }>("/auth/refresh", {});
 
                 set({
                   user: { ...data.user, role: normalizeRole(data.user.role) },
                   accessToken: data.accessToken,
-                  refreshToken: data.refreshToken,
                   isInitialized: true,
+                  isAuthenticated: true,
                   isLoading: false,
                 });
                 return;
-              } catch (error) {
-                console.error("Token refresh failed:", error);
+              } catch {
                 get().clearAuth();
                 set({ isInitialized: true, isLoading: false });
                 return;
               }
             }
 
-            // Access token is still valid, restore session
-            const parsedUser = JSON.parse(storedUser);
-            set({
-              user: { ...parsedUser, role: normalizeRole(parsedUser.role) },
-              accessToken: storedAccessToken,
-              refreshToken: storedRefreshToken,
-              isInitialized: true,
-            });
+            // Access token is still valid, mark initialized
+            set({ isInitialized: true, isAuthenticated: true });
           } else {
             // No stored tokens, clear auth state
             set({ isInitialized: true });
           }
-        } catch (error) {
-          console.error("Failed to restore session:", error);
+        } catch {
           set({ isInitialized: true });
         } finally {
           set({ isLoading: false });
@@ -158,10 +126,10 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: STORAGE_KEY,
+      // B-29: Only persist user + accessToken. Refresh token lives in httpOnly cookie.
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
       }),
     }
   )

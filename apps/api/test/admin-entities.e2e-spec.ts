@@ -4,13 +4,16 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { UserRole } from '@rental-portal/database';
-import { createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, createUserWithRole } from './e2e-helpers';
 
 describe('Admin Dynamic Entities (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let adminToken: string;
   let userToken: string;
+
+  const adminEmail = buildTestEmail('admin-entities');
+  const userEmail = buildTestEmail('entities-user');
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -26,20 +29,20 @@ describe('Admin Dynamic Entities (e2e)', () => {
 
   afterAll(async () => {
     await prisma.user.deleteMany({
-      where: { email: { in: ['admin-entities-test@example.com', 'entities-user-test@example.com'] } },
+      where: { email: { in: [adminEmail, userEmail] } },
     });
     await app.close();
   });
 
   beforeEach(async () => {
     await prisma.user.deleteMany({
-      where: { email: { in: ['admin-entities-test@example.com', 'entities-user-test@example.com'] } },
+      where: { email: { in: [adminEmail, userEmail] } },
     });
 
     const admin = await createUserWithRole({
       app,
       prisma,
-      email: 'admin-entities-test@example.com',
+      email: adminEmail,
       password: 'TestPass123!',
       firstName: 'Admin',
       lastName: 'Entities',
@@ -50,7 +53,7 @@ describe('Admin Dynamic Entities (e2e)', () => {
     const user = await createUserWithRole({
       app,
       prisma,
-      email: 'entities-user-test@example.com',
+      email: userEmail,
       password: 'TestPass123!',
       firstName: 'Regular',
       lastName: 'User',

@@ -220,7 +220,8 @@ export function useToggleFavorite() {
       const previousCount = queryClient.getQueryData(favoritesKeys.count());
 
       // Optimistically toggle
-      const isFavorited = previousFavorite !== null;
+      // previousFavorite may be undefined (not yet cached) or null (not favorited)
+      const isFavorited = previousFavorite != null;
       if (isFavorited) {
         queryClient.setQueryData(favoritesKeys.detail(listingId), null);
         if (typeof previousCount === "number") {

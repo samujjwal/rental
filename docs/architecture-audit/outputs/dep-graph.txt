@@ -1,0 +1,84 @@
+=== API: Cross-Module Imports ===
+(module A → module B via direct file import)
+
+  bookings → fraud-detection  (apps/api/src/modules/bookings/services/bookings.service.ts:14:import { FraudDetectionService } from '@/modules/fraud-detection/services/fraud-detection.service';)
+  bookings → insurance  (apps/api/src/modules/bookings/services/bookings.service.ts:15:import { InsuranceService } from '@/modules/insurance/services/insurance.service';)
+  bookings → listings  (apps/api/src/modules/bookings/services/bookings.service.ts:11:import { AvailabilityService } from '@/modules/listings/services/availability.service';)
+  bookings → moderation  (apps/api/src/modules/bookings/services/bookings.service.ts:16:import { ContentModerationService } from '@/modules/moderation/services/content-moderation.service';)
+  bookings → notifications  (apps/api/src/modules/bookings/processors/booking.processor.ts:5:import { NotificationsService } from '@/modules/notifications/services/notifications.service';)
+  bookings → notifications  (apps/api/src/modules/bookings/services/booking-state-machine.service.ts:5:import { NotificationsService } from '@/modules/notifications/services/notifications.service';)
+  search → ai  (apps/api/src/modules/search/services/search.service.ts:4:import { EmbeddingService } from '@/modules/ai/services/embedding.service';)
+
+=== API: common/ → modules/ Violations ===
+apps/api/src/common/auth/index.ts:2: * Re-exports auth guards, decorators, and utilities from modules/auth/
+apps/api/src/common/auth/index.ts:5: * All other modules should import from '@/common/auth/' instead of '@/modules/auth/guards' or '@/modules/auth/decorators'.
+apps/api/src/common/auth/index.ts:7:export { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
+apps/api/src/common/auth/index.ts:8:export { WsJwtAuthGuard } from '@/modules/auth/guards/ws-jwt-auth.guard';
+apps/api/src/common/auth/index.ts:9:export { RolesGuard, Permission, ROLES_KEY, PERMISSIONS_KEY } from '@/modules/auth/guards/roles.guard';
+apps/api/src/common/auth/index.ts:10:export { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+apps/api/src/common/auth/index.ts:11:export { Roles } from '@/modules/auth/decorators/roles.decorator';
+apps/api/src/common/auth/index.ts:12:export { Permissions } from '@/modules/auth/decorators/permissions.decorator';
+apps/api/src/common/scheduler/scheduler.module.ts:4:import { AiModule } from '@/modules/ai/ai.module';
+apps/api/src/common/storage/storage.controller.ts:15:import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
+apps/api/src/common/interfaces/embedding.interface.ts:3: * direct imports from modules/ai/ (which would be an upward dependency violation).
+
+=== API: Prisma Direct Access in Controllers ===
+  (none — clean)
+
+=== API: forwardRef Usage (Circular Dependency Markers) ===
+  (none)
+
+=== Web: shared-types Adoption ===
+Files importing from shared-types:
+apps/web/app/types/review.ts:1:// Re-exported from @rental-portal/shared-types — single source of truth
+apps/web/app/types/review.ts:8:} from '@rental-portal/shared-types';
+apps/web/app/types/listing.ts:1:// Re-exported from @rental-portal/shared-types — single source of truth
+apps/web/app/types/listing.ts:11:} from '@rental-portal/shared-types';
+apps/web/app/types/booking.ts:1:// Re-exported from @rental-portal/shared-types — single source of truth
+apps/web/app/types/booking.ts:10:} from '@rental-portal/shared-types';
+apps/web/app/types/user.ts:1:// Re-exported from @rental-portal/shared-types — single source of truth
+apps/web/app/types/user.ts:11:} from '@rental-portal/shared-types';
+apps/web/app/types/auth.ts:1:// Re-exported from @rental-portal/shared-types — single source of truth
+apps/web/app/types/auth.ts:5:} from '@rental-portal/shared-types';
+apps/web/app/types/auth.ts:14:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:2: * Shared Types — Re-exports from @rental-portal/shared-types
+apps/web/app/lib/shared-types.ts:34:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:44:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:60:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:77:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:92:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:102:} from '@rental-portal/shared-types';
+apps/web/app/lib/shared-types.ts:114:} from '@rental-portal/shared-types';
+apps/web/app/lib/api/payments.ts:6:} from "~/lib/shared-types";
+apps/web/app/routes/bookings.tsx:16:import { BookingStatus } from "~/lib/shared-types";
+
+Files importing from local ~/types/:
+  28 import statements from ~/types/
+
+=== Duplicate Library Detection ===
+Form libraries in web:
+  react-hook-form imports: 11
+  @tanstack/react-form imports: 0
+
+=== API Module Sizes ===
+  users                     827 LoC
+  tax                       733 LoC
+  search                    1622 LoC
+  reviews                   881 LoC
+  payments                  3035 LoC
+  organizations             843 LoC
+  notifications             3226 LoC
+  moderation                1193 LoC
+  messaging                 1152 LoC
+  listings                  3575 LoC
+  insurance                 787 LoC
+  geo                       718 LoC
+  fraud-detection           569 LoC
+  favorites                 375 LoC
+  disputes                  789 LoC
+  categories                1587 LoC
+  bookings                  2849 LoC
+  auth                      1956 LoC
+  analytics                 500 LoC
+  ai                        412 LoC
+  admin                     3901 LoC

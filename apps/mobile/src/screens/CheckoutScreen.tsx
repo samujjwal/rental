@@ -10,11 +10,13 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
 import { mobileClient } from '../api/client';
 import { useAuth } from '../api/authContext';
-import type { BookingDetail } from '@rental-portal/mobile-sdk';
+import type { BookingDetail } from '~/types';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { FormButton } from '../components/FormInput';
 import { DetailPageSkeleton } from '../components/LoadingSkeleton';
 import { showSuccess, showError, showApiError } from '../components/Toast';
+import { formatCurrency } from '../utils/currency';
+import { formatDate } from '../utils/date';
 
 // Stripe imports — wrapped in try/catch for environments where it's not available
 let useStripe: any;
@@ -31,21 +33,19 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 
-function formatDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-}
-
 function CheckoutContent({ route, navigation }: Props) {
   const { bookingId } = route.params;
   const { user } = useAuth();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
+
+  // Guard: bookingId is required
+  useEffect(() => {
+    if (!bookingId) {
+      navigation.goBack();
+    }
+  }, [bookingId, navigation]);
 
   const stripe = useStripe?.();
 
@@ -174,12 +174,12 @@ function CheckoutContent({ route, navigation }: Props) {
               {formatDate(booking.startDate)} {'\u2192'} {formatDate(booking.endDate)}
             </Text>
           </View>
-          {booking.totalAmount != null && (
+          {(booking.totalPrice ?? booking.totalAmount) != null && (
             <>
               <View style={styles.divider} />
               <View style={styles.row}>
                 <Text style={styles.label}>Total</Text>
-                <Text style={styles.totalValue}>${booking.totalAmount.toFixed(2)}</Text>
+                <Text style={styles.totalValue}>{formatCurrency(booking.totalPrice ?? booking.totalAmount)}</Text>
               </View>
             </>
           )}

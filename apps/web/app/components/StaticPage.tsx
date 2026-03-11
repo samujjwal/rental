@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 
 type StaticPageProps = {
   title: string;
@@ -10,6 +11,8 @@ type StaticPageProps = {
 };
 
 export function StaticPage({ title, description, callToAction }: StaticPageProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="container mx-auto px-4 py-16">
@@ -28,7 +31,7 @@ export function StaticPage({ title, description, callToAction }: StaticPageProps
           )}
           <div className="mt-8 text-sm text-muted-foreground">
             <Link to="/" className="hover:text-primary">
-              Back to home
+              {t("common.backToHome")}
             </Link>
           </div>
         </div>

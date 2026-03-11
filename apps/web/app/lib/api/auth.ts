@@ -12,7 +12,7 @@ export const authApi = {
     return api.post<AuthResponse>("/auth/login", credentials);
   },
 
-  async devLogin(data: { email?: string; role?: string }): Promise<AuthResponse> {
+  async devLogin(data: { email?: string; role?: string; secret?: string }): Promise<AuthResponse> {
     return api.post<AuthResponse>("/auth/dev-login", data);
   },
 
@@ -21,11 +21,13 @@ export const authApi = {
   },
 
   async logout(refreshToken?: string): Promise<void> {
-    return api.post<void>("/auth/logout", { refreshToken });
+    // B-29: refresh token is sent automatically via httpOnly cookie for web clients
+    return api.post<void>("/auth/logout", refreshToken ? { refreshToken } : {});
   },
 
-  async refreshToken(refreshToken: string): Promise<AuthResponse> {
-    return api.post<AuthResponse>("/auth/refresh", { refreshToken });
+  async refreshToken(refreshToken?: string): Promise<AuthResponse> {
+    // B-29: refresh token is sent automatically via httpOnly cookie for web clients
+    return api.post<AuthResponse>("/auth/refresh", refreshToken ? { refreshToken } : {});
   },
 
   async forgotPassword(

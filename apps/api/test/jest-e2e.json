@@ -4,6 +4,7 @@
   "testEnvironment": "node",
   "testRegex": "(\\.e2e-spec|\\.integration-spec)\\.ts$",
   "testTimeout": 20000,
+  "forceExit": true,
   "transform": {
     "^.+\\.(t|j)s$": ["ts-jest", {
       "tsconfig": "./tsconfig.json"

@@ -45,6 +45,11 @@ export class VideoDto {
 }
 
 export class CreateListingDto {
+  @ApiProperty({ description: 'Property type (e.g., APARTMENT, HOUSE, STUDIO, OTHER)', required: false })
+  @IsOptional()
+  @IsString()
+  type?: string;
+
   @ApiProperty({ description: 'Category ID', required: false })
   @IsOptional()
   @IsString()
@@ -160,7 +165,7 @@ export class CreateListingDto {
   @Min(0)
   monthlyPrice?: number;
 
-  @ApiProperty({ description: 'Currency code', required: false, default: 'USD' })
+  @ApiProperty({ description: 'Currency code (ISO 4217)', required: false, example: 'USD' })
   @IsOptional()
   @IsString()
   @MaxLength(3)
@@ -244,9 +249,8 @@ export class CreateListingDto {
 
   @ApiProperty({ description: 'Rules', required: false })
   @IsOptional()
-  @IsArray()
   @IsString({ each: true })
-  rules?: string[];
+  rules?: string | string[];
 
   @ApiProperty({ description: 'SEO meta title', required: false })
   @IsOptional()
@@ -429,9 +433,7 @@ export class UpdateListingDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  rules?: string[];
+  rules?: string | string[];
 
   @ApiProperty({ required: false })
   @IsOptional()

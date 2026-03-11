@@ -74,14 +74,75 @@ export class PropertyValidationService {
     };
   }
 
-  // Skip pricing validation - fields don't exist in Listing schema
+  /**
+   * Validate pricing configuration for a listing.
+   * Checks that prices are positive and pricing mode is consistent.
+   */
   validatePricingConfiguration(listing: Partial<Listing>): ValidationResult {
-    return { isValid: true, errors: [] };
+    const errors: string[] = [];
+
+    if (listing.basePrice !== undefined && listing.basePrice !== null) {
+      const price = toNumber(listing.basePrice);
+      if (price < 0) {
+        errors.push('Base price cannot be negative');
+      }
+    }
+
+    // Check that at least one price is set
+    const hasAnyPrice = [
+      listing.basePrice,
+      (listing as any).hourlyPrice,
+      (listing as any).dailyPrice,
+      (listing as any).weeklyPrice,
+      (listing as any).monthlyPrice,
+    ].some((p) => p !== undefined && p !== null && toNumber(p) > 0);
+
+    if (!hasAnyPrice && listing.basePrice === undefined) {
+      errors.push('At least one pricing tier must be set');
+    }
+
+    // Validate deposit configuration
+    const requiresDeposit = (listing as any).requiresDeposit;
+    const depositAmount = (listing as any).depositAmount;
+    if (requiresDeposit && (!depositAmount || toNumber(depositAmount) <= 0)) {
+      errors.push('Deposit amount must be positive when deposit is required');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
   }
 
-  // Skip booking validation - fields don't exist in Listing schema
+  /**
+   * Validate booking configuration for a listing.
+   * Checks min/max booking duration and booking mode settings.
+   */
   validateBookingConfiguration(listing: Partial<Listing>): ValidationResult {
-    return { isValid: true, errors: [] };
+    const errors: string[] = [];
+
+    const minHours = (listing as any).minBookingHours;
+    const maxDays = (listing as any).maxBookingDays;
+
+    if (minHours !== undefined && minHours < 1) {
+      errors.push('Minimum booking duration must be at least 1 hour');
+    }
+
+    if (maxDays !== undefined && maxDays < 1) {
+      errors.push('Maximum booking duration must be at least 1 day');
+    }
+
+    if (minHours !== undefined && maxDays !== undefined) {
+      const maxHours = maxDays * 24;
+      if (minHours > maxHours) {
+        errors.push('Minimum booking hours cannot exceed maximum booking days');
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
   }
 
   validatePhotoUrls(

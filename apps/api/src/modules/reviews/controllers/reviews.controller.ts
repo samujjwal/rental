@@ -10,12 +10,14 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
+import { i18nForbidden } from '@/common/errors/i18n-exceptions';
+import { UserRole } from '@rental-portal/database';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ReviewsService } from '../services/reviews.service';
 import { CreateReviewDto, UpdateReviewDto } from '../dto/review.dto';
-import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@/common/auth';
 
 @ApiTags('Reviews')
 @Controller('reviews')
@@ -87,14 +89,20 @@ export class ReviewsController {
   @ApiQuery({ name: 'type', required: true, enum: ['received', 'given'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'rating', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Reviews retrieved successfully' })
   async getUserReviews(
     @Param('userId') userId: string,
+    @CurrentUser() currentUser: { id: string; role: string },
     @Query('type') type: 'received' | 'given',
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('rating') rating?: number,
   ) {
-    return this.reviewsService.getUserReviews(userId, type, page, limit);
+    if (currentUser.id !== userId && currentUser.role !== UserRole.ADMIN) {
+      throw i18nForbidden('review.ownOnly');
+    }
+    return this.reviewsService.getUserReviews(userId, type, page, limit, rating ? Number(rating) : undefined);
   }
 
   @Get('user/:userId/public')
@@ -115,8 +123,11 @@ export class ReviewsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get booking reviews (both directions)' })
   @ApiResponse({ status: 200, description: 'Reviews retrieved successfully' })
-  async getBookingReviews(@Param('bookingId') bookingId: string) {
-    return this.reviewsService.getBookingReviews(bookingId);
+  async getBookingReviews(
+    @Param('bookingId') bookingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.reviewsService.getBookingReviews(bookingId, userId);
   }
 
   @Get('booking/:bookingId/can-review')

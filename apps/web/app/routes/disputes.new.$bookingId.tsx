@@ -8,6 +8,8 @@ import {
   useLoaderData,
   useActionData,
   useNavigate,
+  useNavigation,
+  useSubmit,
   Link,
 } from "react-router";
 import { useState } from "react";
@@ -20,16 +22,18 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 import { disputesApi, type CreateDisputeRequest } from "~/lib/api/disputes";
 import { bookingsApi } from "~/lib/api/bookings";
 import { uploadApi } from "~/lib/api/upload";
 import { redirect } from "react-router";
 import { getUser } from "~/utils/auth";
 import { RouteErrorBoundary } from "~/components/ui";
+import { useTranslation } from "react-i18next";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "File a Dispute - Universal Rental Portal" },
+    { title: "File a Dispute | GharBatai Rentals" },
     { name: "description", content: "File a dispute for your booking" },
   ];
 };
@@ -123,8 +127,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     }
     if (
       amount !== undefined &&
-      typeof booking.totalAmount === "number" &&
-      amount > booking.totalAmount
+      amount > safeNumber(booking.totalPrice ?? booking.totalAmount)
     ) {
       return { error: "Requested amount cannot exceed booking total." };
     }
@@ -197,9 +200,13 @@ const DISPUTE_TYPES = [
 ];
 
 export default function DisputeNewRoute() {
+  const { t } = useTranslation();
   const { booking } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigate = useNavigate();
+  const navigation = useNavigation();
+  const submit = useSubmit();
+  const isSubmitting = navigation.state === 'submitting';
   const [selectedType, setSelectedType] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -239,41 +246,40 @@ export default function DisputeNewRoute() {
             className="flex items-center text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
-            Back to Booking
+            {t("disputes.backToBooking")}
           </button>
-          <h1 className="text-3xl font-bold text-foreground">File a Dispute</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t("disputes.fileDispute")}</h1>
           <p className="mt-2 text-muted-foreground">
-            Describe the issue with your booking. We'll review your dispute and
-            work to resolve it fairly.
+            {t("disputes.fileDisputeDesc")}
           </p>
         </div>
 
         {/* Booking Summary */}
         <div className="bg-card rounded-lg shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">
-            Booking Details
+            {t("disputes.bookingDetails")}
           </h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-muted-foreground">Listing</p>
+              <p className="text-sm text-muted-foreground">{t("common.listing")}</p>
               <p className="text-sm font-medium text-foreground">
                 {booking.listing?.title || "N/A"}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Booking ID</p>
+              <p className="text-sm text-muted-foreground">{t("disputes.bookingId")}</p>
               <p className="text-sm font-medium text-foreground">
                 {booking.id}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Total Amount</p>
+              <p className="text-sm text-muted-foreground">{t("disputes.totalAmount")}</p>
               <p className="text-sm font-medium text-foreground">
-                ${safeNumber(booking.totalAmount).toFixed(2)}
+                {formatCurrency(safeNumber(booking.totalPrice ?? booking.totalAmount))}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Status</p>
+              <p className="text-sm text-muted-foreground">{t("disputes.status")}</p>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
                 {booking.status}
               </span>
@@ -294,12 +300,26 @@ export default function DisputeNewRoute() {
         )}
 
         {/* Dispute Form */}
-        <Form method="post" encType="multipart/form-data" className="bg-card rounded-lg shadow-sm p-6">
+        <Form
+          method="post"
+          encType="multipart/form-data"
+          className="bg-card rounded-lg shadow-sm p-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            // Remove the stale native file input entries and add accumulated evidence files
+            formData.delete("evidence");
+            for (const file of evidence) {
+              formData.append("evidence", file);
+            }
+            submit(formData, { method: "post", encType: "multipart/form-data" });
+          }}
+        >
           <div className="space-y-6">
             {/* Dispute Type */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-3">
-                What is the issue? *
+                {t("disputes.whatIsIssue")}
               </label>
               <div className="space-y-3">
                 {DISPUTE_TYPES.map((type) => (
@@ -323,10 +343,10 @@ export default function DisputeNewRoute() {
                     />
                     <div className="ml-3">
                       <p className="text-sm font-medium text-foreground">
-                        {type.label}
+                        {t(`disputes.types.${({PROPERTY_DAMAGE:"propertyDamage",MISSING_ITEMS:"missingItems",CONDITION_MISMATCH:"conditionMismatch",REFUND_REQUEST:"refundRequest",PAYMENT_ISSUE:"paymentIssue",OTHER:"other"} as Record<string,string>)[type.value] || "other"}`)}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {type.description}
+                        {t(`disputes.types.${({PROPERTY_DAMAGE:"propertyDamageDesc",MISSING_ITEMS:"missingItemsDesc",CONDITION_MISMATCH:"conditionMismatchDesc",REFUND_REQUEST:"refundRequestDesc",PAYMENT_ISSUE:"paymentIssueDesc",OTHER:"otherDesc"} as Record<string,string>)[type.value] || "otherDesc"}`)}
                       </p>
                     </div>
                   </label>
@@ -337,7 +357,7 @@ export default function DisputeNewRoute() {
             {/* Title */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Dispute title *
+                {t("disputes.disputeTitle")}
               </label>
               <input
                 type="text"
@@ -346,7 +366,7 @@ export default function DisputeNewRoute() {
                 onChange={(e) =>
                   setTitle(e.target.value.slice(0, MAX_DISPUTE_TITLE_LENGTH))
                 }
-                placeholder="Brief summary of the issue"
+                placeholder={t("disputes.titlePlaceholder")}
                 className="w-full border border-input rounded-lg px-3 py-2 bg-background focus:ring-2 focus:ring-ring"
                 required
               />
@@ -358,7 +378,7 @@ export default function DisputeNewRoute() {
                 htmlFor="description"
                 className="block text-sm font-medium text-foreground mb-2"
               >
-                Describe the issue *
+                {t("disputes.describeIssue")}
               </label>
               <textarea
                 id="description"
@@ -370,13 +390,12 @@ export default function DisputeNewRoute() {
                     e.target.value.slice(0, MAX_DISPUTE_DESCRIPTION_LENGTH)
                   )
                 }
-                placeholder="Please provide as much detail as possible about what went wrong..."
+                placeholder={t("disputes.descriptionPlaceholder")}
                 className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-primary"
                 required
               />
               <p className="mt-2 text-sm text-muted-foreground">
-                Include specific details like dates, times, condition of item,
-                communications with the other party, etc.
+                {t("disputes.detailsHint")}
               </p>
             </div>
 
@@ -386,11 +405,11 @@ export default function DisputeNewRoute() {
                 htmlFor="requestedAmount"
                 className="block text-sm font-medium text-foreground mb-2"
               >
-                Refund Amount Requested (Optional)
+                {t("disputes.refundAmountRequested")}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-muted-foreground sm:text-sm">$</span>
+                  <span className="text-muted-foreground sm:text-sm">{t("common.currencySymbol")}</span>
                 </div>
                 <input
                   type="number"
@@ -398,7 +417,7 @@ export default function DisputeNewRoute() {
                   name="requestedAmount"
                   step="0.01"
                   min="0"
-                  max={safeNumber(booking.totalAmount)}
+                  max={safeNumber(booking.totalPrice ?? booking.totalAmount)}
                   value={requestedAmount}
                   onChange={(e) => setRequestedAmount(e.target.value)}
                   placeholder="0.00"
@@ -406,14 +425,14 @@ export default function DisputeNewRoute() {
                 />
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Maximum: ${safeNumber(booking.totalAmount).toFixed(2)}
+                {t("disputes.maximum", { amount: formatCurrency(safeNumber(booking.totalPrice ?? booking.totalAmount)) })}
               </p>
             </div>
 
             {/* Evidence Upload */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Supporting Evidence (Optional)
+                {t("disputes.supportingEvidence")}
               </label>
               <div className="border-2 border-dashed border-input rounded-lg p-6 text-center">
                 <input
@@ -430,10 +449,10 @@ export default function DisputeNewRoute() {
                   className="cursor-pointer inline-flex items-center px-4 py-2 border border-input rounded-md shadow-sm text-sm font-medium text-foreground bg-card hover:bg-muted"
                 >
                   <Upload className="w-5 h-5 mr-2" />
-                  Upload Files
+                  {t("disputes.uploadFiles")}
                 </label>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Photos, documents, or screenshots (Max 10MB per file)
+                  {t("disputes.evidenceHint")}
                 </p>
               </div>
 
@@ -474,10 +493,7 @@ export default function DisputeNewRoute() {
                 <AlertCircle className="h-5 w-5 text-warning" />
                 <div className="ml-3">
                   <p className="text-sm text-warning-foreground">
-                    <strong>Important:</strong> Disputes are taken seriously.
-                    Please only file a dispute if you've attempted to resolve
-                    the issue directly with the other party and were
-                    unsuccessful.
+                    <strong>{t("disputes.importantNote")}</strong> {t("disputes.importantNoteText")}
                   </p>
                 </div>
               </div>
@@ -490,14 +506,14 @@ export default function DisputeNewRoute() {
                 onClick={() => navigate(-1)}
                 className="flex-1 px-6 py-3 border border-input rounded-lg font-medium text-foreground hover:bg-muted transition-colors"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="submit"
-                disabled={!selectedType || !description}
+                disabled={isSubmitting || !selectedType || !description}
                 className="flex-1 px-6 py-3 bg-destructive text-destructive-foreground rounded-lg font-medium hover:bg-destructive/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors"
               >
-                Submit Dispute
+                {isSubmitting ? t("common.submitting") : t("disputes.submitDispute")}
               </button>
             </div>
           </div>
@@ -506,18 +522,16 @@ export default function DisputeNewRoute() {
         {/* Help Section */}
         <div className="mt-6 bg-primary/5 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-primary mb-2">
-            Need Help?
+            {t("disputes.needHelp")}
           </h3>
           <p className="text-sm text-primary/80 mb-4">
-            Before filing a dispute, try communicating with the other party
-            through messages. Many issues can be resolved quickly through direct
-            communication.
+            {t("disputes.needHelpText")}
           </p>
           <Link
             to={`/messages?booking=${booking.id}`}
             className="inline-flex items-center text-sm font-medium text-primary hover:text-primary/80"
           >
-            Go to Messages →
+            {t("disputes.goToMessages")}
           </Link>
         </div>
       </div>

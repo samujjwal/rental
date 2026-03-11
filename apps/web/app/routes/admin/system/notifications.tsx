@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import {
   Bell,
@@ -173,6 +174,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 }
 
 export default function NotificationsSettingsPage() {
+  const { t } = useTranslation();
   const { settings, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -224,11 +226,11 @@ export default function NotificationsSettingsPage() {
           to="/admin/system"
           className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
         >
-          ← Back to System Settings
+          {t("admin.backToSystemSettings")}
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900">Notification Settings</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("admin.notificationSettings")}</h1>
         <p className="text-gray-600 mt-1">
-          Configure how and when notifications are sent
+          {t("admin.notificationSettingsSubtitle")}
         </p>
       </div>
 
@@ -248,7 +250,7 @@ export default function NotificationsSettingsPage() {
       {error && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700">
           <AlertTriangle className="w-5 h-5 inline-block mr-2" />
-          Using default settings: {error}
+          {t("admin.usingDefaultSettings")}: {error}
         </div>
       )}
 
@@ -258,7 +260,7 @@ export default function NotificationsSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Bell className="w-5 h-5 text-blue-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Notification Channels</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.notificationChannels")}</h2>
           </div>
 
           <div className="space-y-4">
@@ -266,8 +268,8 @@ export default function NotificationsSettingsPage() {
               <div className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-gray-600" />
                 <div>
-                  <p className="font-medium text-gray-900">Email Notifications</p>
-                  <p className="text-sm text-gray-500">Send notifications via email</p>
+                  <p className="font-medium text-gray-900">{t("admin.emailNotifications")}</p>
+                  <p className="text-sm text-gray-500">{t("admin.emailNotificationsDesc")}</p>
                 </div>
               </div>
               <ToggleSwitch
@@ -281,8 +283,8 @@ export default function NotificationsSettingsPage() {
               <div className="flex items-center gap-3">
                 <MessageSquare className="w-5 h-5 text-gray-600" />
                 <div>
-                  <p className="font-medium text-gray-900">Push Notifications</p>
-                  <p className="text-sm text-gray-500">Send browser/app push notifications</p>
+                  <p className="font-medium text-gray-900">{t("admin.pushNotifications")}</p>
+                  <p className="text-sm text-gray-500">{t("admin.pushNotificationsDesc")}</p>
                 </div>
               </div>
               <ToggleSwitch
@@ -296,8 +298,8 @@ export default function NotificationsSettingsPage() {
               <div className="flex items-center gap-3">
                 <Smartphone className="w-5 h-5 text-gray-600" />
                 <div>
-                  <p className="font-medium text-gray-900">SMS Notifications</p>
-                  <p className="text-sm text-gray-500">Send SMS for critical alerts</p>
+                  <p className="font-medium text-gray-900">{t("admin.smsNotifications")}</p>
+                  <p className="text-sm text-gray-500">{t("admin.smsNotificationsDesc")}</p>
                 </div>
               </div>
               <ToggleSwitch
@@ -313,14 +315,14 @@ export default function NotificationsSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Mail className="w-5 h-5 text-green-500" />
-            <h2 className="text-xl font-semibold text-gray-900">User Email Templates</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.userEmailTemplates")}</h2>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Welcome Email</p>
-                <p className="text-sm text-gray-500">Send welcome email to new users</p>
+                <p className="font-medium text-gray-900">{t("admin.welcomeEmail")}</p>
+                <p className="text-sm text-gray-500">{t("admin.welcomeEmailDesc")}</p>
               </div>
               <ToggleSwitch
                 name="welcomeEmailEnabled"
@@ -332,8 +334,8 @@ export default function NotificationsSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Booking Confirmation</p>
-                <p className="text-sm text-gray-500">Send confirmation when booking is made</p>
+                <p className="font-medium text-gray-900">{t("admin.bookingConfirmation")}</p>
+                <p className="text-sm text-gray-500">{t("admin.bookingConfirmationDesc")}</p>
               </div>
               <ToggleSwitch
                 name="bookingConfirmationEnabled"
@@ -345,8 +347,8 @@ export default function NotificationsSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Payment Notifications</p>
-                <p className="text-sm text-gray-500">Send email for payment receipts</p>
+                <p className="font-medium text-gray-900">{t("admin.paymentNotificationsLabel")}</p>
+                <p className="text-sm text-gray-500">{t("admin.paymentNotificationsDesc")}</p>
               </div>
               <ToggleSwitch
                 name="paymentNotificationEnabled"
@@ -358,8 +360,8 @@ export default function NotificationsSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Review Request</p>
-                <p className="text-sm text-gray-500">Request reviews after rental completion</p>
+                <p className="font-medium text-gray-900">{t("admin.reviewRequest")}</p>
+                <p className="text-sm text-gray-500">{t("admin.reviewRequestDesc")}</p>
               </div>
               <ToggleSwitch
                 name="reviewRequestEnabled"
@@ -375,14 +377,14 @@ export default function NotificationsSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <Volume2 className="w-5 h-5 text-purple-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Admin Notifications</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.adminNotifications")}</h2>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">New User Registration</p>
-                <p className="text-sm text-gray-500">Notify when a new user registers</p>
+                <p className="font-medium text-gray-900">{t("admin.newUserRegistration")}</p>
+                <p className="text-sm text-gray-500">{t("admin.newUserRegistrationDesc")}</p>
               </div>
               <ToggleSwitch
                 name="newUserNotification"
@@ -393,8 +395,8 @@ export default function NotificationsSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">New Listing Created</p>
-                <p className="text-sm text-gray-500">Notify when a new listing is created</p>
+                <p className="font-medium text-gray-900">{t("admin.newListingCreated")}</p>
+                <p className="text-sm text-gray-500">{t("admin.newListingCreatedDesc")}</p>
               </div>
               <ToggleSwitch
                 name="newListingNotification"
@@ -405,8 +407,8 @@ export default function NotificationsSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Dispute Filed</p>
-                <p className="text-sm text-gray-500">Notify when a dispute is filed</p>
+                <p className="font-medium text-gray-900">{t("admin.disputeFiled")}</p>
+                <p className="text-sm text-gray-500">{t("admin.disputeFiledDesc")}</p>
               </div>
               <ToggleSwitch
                 name="disputeNotification"
@@ -417,8 +419,8 @@ export default function NotificationsSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Payment Failure</p>
-                <p className="text-sm text-gray-500">Notify when a payment fails</p>
+                <p className="font-medium text-gray-900">{t("admin.paymentFailure")}</p>
+                <p className="text-sm text-gray-500">{t("admin.paymentFailureDesc")}</p>
               </div>
               <ToggleSwitch
                 name="paymentFailureNotification"
@@ -433,14 +435,14 @@ export default function NotificationsSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <MessageSquare className="w-5 h-5 text-yellow-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Digest & Reports</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.digestReports")}</h2>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Daily Digest</p>
-                <p className="text-sm text-gray-500">Send daily summary to admins</p>
+                <p className="font-medium text-gray-900">{t("admin.dailyDigest")}</p>
+                <p className="text-sm text-gray-500">{t("admin.dailyDigestDesc")}</p>
               </div>
               <ToggleSwitch
                 name="dailyDigestEnabled"
@@ -451,8 +453,8 @@ export default function NotificationsSettingsPage() {
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="font-medium text-gray-900">Weekly Report</p>
-                <p className="text-sm text-gray-500">Send weekly analytics report</p>
+                <p className="font-medium text-gray-900">{t("admin.weeklyReport")}</p>
+                <p className="text-sm text-gray-500">{t("admin.weeklyReportDesc")}</p>
               </div>
               <ToggleSwitch
                 name="weeklyReportEnabled"
@@ -463,7 +465,7 @@ export default function NotificationsSettingsPage() {
 
             <div className="p-4 bg-gray-50 rounded-lg">
               <label htmlFor="adminDigestTime" className="block font-medium text-gray-900 mb-2">
-                Digest Delivery Time
+                {t("admin.digestDeliveryTime")}
               </label>
               <input
                 type="time"
@@ -481,13 +483,13 @@ export default function NotificationsSettingsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <VolumeX className="w-5 h-5 text-red-500" />
-            <h2 className="text-xl font-semibold text-gray-900">Rate Limits</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t("admin.rateLimits")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="maxEmailsPerHour" className="block text-sm font-medium text-gray-700 mb-1">
-                Max Emails Per Hour
+                {t("admin.maxEmailsPerHour")}
               </label>
               <input
                 type="number"
@@ -503,7 +505,7 @@ export default function NotificationsSettingsPage() {
 
             <div>
               <label htmlFor="maxPushPerHour" className="block text-sm font-medium text-gray-700 mb-1">
-                Max Push Notifications Per Hour
+                {t("admin.maxPushPerHour")}
               </label>
               <input
                 type="number"
@@ -525,12 +527,12 @@ export default function NotificationsSettingsPage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
+                {t("admin.saving")}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Save Settings
+                {t("admin.saveSettings")}
               </>
             )}
           </UnifiedButton>

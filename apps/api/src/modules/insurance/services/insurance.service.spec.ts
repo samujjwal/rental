@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InsuranceService } from './insurance.service';
 import { InsuranceStatus } from '@rental-portal/database';
 import { PrismaService } from '../../../common/prisma/prisma.service';
@@ -137,7 +137,7 @@ describe('InsuranceService', () => {
       prismaService.listing.findUnique.mockResolvedValue(null);
 
       await expect(service.checkInsuranceRequirement('nonexistent')).rejects.toThrow(
-        BadRequestException,
+        NotFoundException,
       );
     });
   });
@@ -158,6 +158,7 @@ describe('InsuranceService', () => {
     it('should submit policy for verification', async () => {
       const mockListing = {
         id: 'listing-456',
+        ownerId: 'user-123',
         basePrice: 600,
         category: { name: 'Vehicles' },
       };
@@ -183,6 +184,7 @@ describe('InsuranceService', () => {
     it('should reject policy with insufficient coverage', async () => {
       const mockListing = {
         id: 'listing-456',
+        ownerId: 'user-123',
         basePrice: 600,
         category: { name: 'Vehicles' },
       };
@@ -202,6 +204,7 @@ describe('InsuranceService', () => {
     it('should reject expired policy', async () => {
       const mockListing = {
         id: 'listing-456',
+        ownerId: 'user-123',
         basePrice: 600,
         category: { name: 'Vehicles' },
       };
@@ -221,6 +224,7 @@ describe('InsuranceService', () => {
     it('should validate effective date is before expiration date', async () => {
       const mockListing = {
         id: 'listing-456',
+        ownerId: 'user-123',
         basePrice: 600,
         category: { name: 'Vehicles' },
       };

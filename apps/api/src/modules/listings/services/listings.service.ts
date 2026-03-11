@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { EmbeddingService } from '../../ai/services/embedding.service';
@@ -18,8 +19,9 @@ import {
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
 import { PropertyValidationService } from './listing-validation.service';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
+import { ListingVersionService } from './listing-version.service';
 
-export interface CreatePropertyDto {
+export interface CreateListingDto {
   categoryId?: string;
   organizationId?: string;
   title: string;
@@ -54,23 +56,19 @@ export interface CreatePropertyDto {
   condition?: string;
   features?: string[];
   amenities?: any[];
-  // cancellationPolicyId?: string;
-  rules?: string[];
+  cancellationPolicyId?: string;
+  rules?: string | string[];
   metaTitle?: string;
   metaDescription?: string;
 }
 
-// Aliases for backward compatibility
-export interface CreateListingDto extends CreatePropertyDto {}
-export interface UpdateListingDto extends CreatePropertyDto {}
-export interface ListingFilters extends PropertyFilters {}
-
-export interface UpdatePropertyDto extends Partial<CreatePropertyDto> {
+export interface UpdateListingDto extends Partial<CreateListingDto> {
   status?: PropertyStatus;
   images?: string[];
 }
 
-export interface PropertyFilters {
+
+export interface ListingFilters {
   categoryId?: string;
   ownerId?: string;
   organizationId?: string;
@@ -86,8 +84,8 @@ export interface PropertyFilters {
 }
 
 @Injectable()
-export class PropertysService {
-  private readonly logger = new Logger(PropertysService.name);
+export class ListingsService {
+  private readonly logger = new Logger(ListingsService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -96,12 +94,13 @@ export class PropertysService {
     private readonly validationService: PropertyValidationService,
     private readonly moderationService: ContentModerationService,
     private readonly embeddingService: EmbeddingService,
+    private readonly versionService: ListingVersionService,
   ) {}
 
   private async resolveCategoryId(input: any): Promise<string> {
     const categoryValue = input?.categoryId || input?.category;
     if (!categoryValue || typeof categoryValue !== 'string') {
-      throw new BadRequestException('Category is required');
+      throw i18nBadRequest('listing.categoryRequired');
     }
 
     const category = await this.prisma.category.findFirst({
@@ -115,7 +114,7 @@ export class PropertysService {
     });
 
     if (!category) {
-      throw new BadRequestException('Invalid category');
+      throw i18nBadRequest('listing.invalidCategory');
     }
 
     return category.id;
@@ -158,7 +157,7 @@ export class PropertysService {
     return Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : undefined;
   }
 
-  async create(ownerId: string, dto: CreatePropertyDto): Promise<Property> {
+  async create(ownerId: string, dto: CreateListingDto): Promise<Property> {
     const categoryId = await this.resolveCategoryId(dto);
 
     // Validate category-specific data
@@ -185,7 +184,7 @@ export class PropertysService {
       const modResult = await this.moderationService.moderateListing({
         title: dto.title,
         description: dto.description,
-        photos: [],
+        photos: dto.photos?.map((p) => (typeof p === 'string' ? p : p.url)) || [],
         userId: ownerId,
       });
       if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
@@ -196,7 +195,11 @@ export class PropertysService {
       }
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
-      this.logger.warn('Listing moderation check failed, proceeding', error);
+      this.logger.error('Listing moderation service unavailable — blocking listing creation (fail-closed)', error);
+      throw new BadRequestException({
+        message: 'Unable to verify listing content. Please try again later.',
+        code: 'MODERATION_SERVICE_UNAVAILABLE',
+      });
     }
 
     const location = (dto as any).location || dto;
@@ -255,16 +258,18 @@ export class PropertysService {
           dto.photos?.map((p) => (typeof p === 'string' ? p : p.url)) ||
           (dto as any).images ||
           [],
-        type: 'APARTMENT' as any, // Required field
+        type: (dto as any).type || 'OTHER',
         basePrice: basePrice,
         currency: dto.currency || 'USD',
         // requiresDeposit, depositAmount, depositType don't exist in schema
         // bookingMode, minBookingHours, maxBookingDays, leadTime, advanceNotice don't exist in schema
         amenities: dto.amenities || [],
         features: dto.features || [],
-        // cancellationPolicyId: dto.cancellationPolicyId,
+        cancellationPolicyId: dto.cancellationPolicyId || undefined,
         rules: this.normalizeRules(dto.rules) || [],
         // metaTitle, metaDescription don't exist in schema
+        // Listings start as DRAFT and must be published by the owner,
+        // then approved by an admin before becoming bookable.
         status: PropertyStatus.DRAFT,
         verificationStatus: VerificationStatus.PENDING,
         bookingMode: bookingMode || BookingMode.REQUEST,
@@ -300,7 +305,7 @@ export class PropertysService {
   }
 
   async findAll(
-    filters: PropertyFilters,
+    filters: ListingFilters,
     page: number = 1,
     limit: number = 20,
   ): Promise<{
@@ -314,7 +319,12 @@ export class PropertysService {
     if (filters.categoryId) where.categoryId = filters.categoryId;
     if (filters.ownerId) where.ownerId = filters.ownerId;
     if (filters.organizationId) where.organizationId = filters.organizationId;
-    if (filters.status) where.status = filters.status;
+    // Default to AVAILABLE for public queries; allow explicit status override for admin/owner
+    if (filters.status) {
+      where.status = filters.status;
+    } else if (!filters.ownerId) {
+      where.status = PropertyStatus.AVAILABLE;
+    }
     if (filters.featured != null) where.featured = filters.featured;
     if (filters.bookingMode) where.bookingMode = filters.bookingMode;
     if (filters.city) where.city = { contains: filters.city, mode: 'insensitive' };
@@ -396,11 +406,12 @@ export class PropertysService {
         category: true,
         cancellationPolicy: true,
         organization: includePrivate,
+        contents: true,
       },
     });
 
     if (!listing) {
-      throw new NotFoundException('Property not found');
+      throw i18nNotFound('listing.notFound');
     }
 
     if (!includePrivate && listing.status === PropertyStatus.AVAILABLE) {
@@ -435,11 +446,12 @@ export class PropertysService {
         },
         category: true,
         cancellationPolicy: true,
+        contents: true,
       },
     });
 
     if (!listing) {
-      throw new NotFoundException('Property not found');
+      throw i18nNotFound('listing.notFound');
     }
 
     if (listing.status === PropertyStatus.AVAILABLE) {
@@ -452,12 +464,26 @@ export class PropertysService {
   async findOne(id: string): Promise<Property> {
     return this.findById(id, false);
   }
-  async update(id: string, userId: string, dto: UpdateListingDto | UpdatePropertyDto): Promise<Property> {
+  async update(id: string, userId: string, dto: UpdateListingDto): Promise<Property> {
     const listing = await this.findById(id, true);
 
     // Check ownership
     if (listing.ownerId !== userId) {
-      throw new ForbiddenException('You do not have permission to update this listing');
+      throw i18nForbidden('listing.unauthorized');
+    }
+
+    // Validate organization ownership if organizationId is being changed
+    if ((dto as any).organizationId && (dto as any).organizationId !== listing.organizationId) {
+      const membership = await this.prisma.organizationMember.findFirst({
+        where: {
+          organizationId: (dto as any).organizationId,
+          userId,
+          role: { in: ['OWNER', 'ADMIN', 'MEMBER'] },
+        },
+      });
+      if (!membership) {
+        throw i18nForbidden('auth.forbidden');
+      }
     }
 
     // Validate category-specific data if provided
@@ -540,8 +566,9 @@ export class PropertysService {
         const modResult = await this.moderationService.moderateListing({
           title: mapped.title || listing.title,
           description: mapped.description || listing.description,
-          photos: mapped.photos || [],
+          photos: (mapped.photos || listing.photos || []).map((p: any) => (typeof p === 'string' ? p : p.url)),
           userId,
+          listingId: id,
         });
         if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
           throw new BadRequestException({
@@ -551,7 +578,11 @@ export class PropertysService {
         }
       } catch (error) {
         if (error instanceof BadRequestException) throw error;
-        this.logger.warn('Listing update moderation check failed, proceeding', error);
+        this.logger.error('Listing update moderation service unavailable — blocking update (fail-closed)', error);
+        throw new BadRequestException({
+          message: 'Unable to verify updated listing content. Please try again later.',
+          code: 'MODERATION_SERVICE_UNAVAILABLE',
+        });
       }
     }
 
@@ -577,6 +608,15 @@ export class PropertysService {
     await this.cacheService.del(`listing:${id}`);
     await this.cacheService.del(`listing:slug:${listing.slug}`);
 
+    // Create version snapshot of the previous state for audit trail
+    this.versionService.createSnapshot({
+      listingId: id,
+      changedBy: userId,
+      changeNotes: `Updated fields: ${Object.keys(mapped).join(', ')}`,
+    }).catch((err) =>
+      this.logger.warn(`Failed to create version snapshot for listing ${id}`, err),
+    );
+
     // Regenerate embedding asynchronously if content changed
     if (mapped.title || mapped.description) {
       this.embeddingService.updateListingEmbedding(id).catch((err) =>
@@ -591,11 +631,11 @@ export class PropertysService {
     const listing = await this.findById(id, true);
 
     if (listing.ownerId !== userId) {
-      throw new ForbiddenException('You do not have permission to publish this listing');
+      throw i18nForbidden('listing.unauthorized');
     }
 
     if (listing.status !== PropertyStatus.DRAFT) {
-      throw new BadRequestException('Only draft listings can be published');
+      throw i18nBadRequest('listing.draftOnly');
     }
 
     // Validate listing is complete
@@ -607,11 +647,53 @@ export class PropertysService {
       });
     }
 
+    // Run content moderation before publishing
+    try {
+      const modResult = await this.moderationService.moderateListing({
+        title: listing.title,
+        description: listing.description,
+        photos: (listing as any).photos?.map((p: any) => p.url) || [],
+        userId,
+        listingId: id,
+      });
+
+      if (modResult.status === 'REJECTED') {
+        throw new BadRequestException({
+          message: 'Listing content was rejected by moderation',
+          flags: modResult.flags,
+        });
+      }
+
+      if (modResult.status === 'FLAGGED') {
+        // Flagged listings go to pending review instead of auto-publish
+        const updated = await this.prisma.listing.update({
+          where: { id },
+          data: {
+            status: PropertyStatus.UNAVAILABLE,
+            verificationStatus: VerificationStatus.PENDING,
+          },
+        });
+        await this.cacheService.del(`listing:${id}`);
+        this.logger.warn(`Listing ${id} flagged by moderation — placed in review queue.`);
+        return updated;
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      // Safety-first: moderation failure puts listing back to DRAFT, not auto-publish
+      this.logger.error(`Moderation check failed for listing ${id}, reverting to DRAFT`, error);
+      const drafted = await this.prisma.listing.update({
+        where: { id },
+        data: { status: PropertyStatus.DRAFT },
+      });
+      await this.cacheService.del(`listing:${id}`);
+      return drafted;
+    }
+
     const updated = await this.prisma.listing.update({
       where: { id },
       data: {
-        status: PropertyStatus.UNAVAILABLE,
-        // publishedAt field doesn't exist in schema
+        status: PropertyStatus.AVAILABLE,
+        verificationStatus: VerificationStatus.PENDING,
       },
     });
 
@@ -624,7 +706,11 @@ export class PropertysService {
     const listing = await this.findById(id, true);
 
     if (listing.ownerId !== userId) {
-      throw new ForbiddenException('You do not have permission to pause this listing');
+      throw i18nForbidden('listing.unauthorized');
+    }
+
+    if (listing.status !== PropertyStatus.AVAILABLE) {
+      throw i18nBadRequest('listing.cannotPause');
     }
 
     const updated = await this.prisma.listing.update({
@@ -642,11 +728,15 @@ export class PropertysService {
     const listing = await this.findById(id, true);
 
     if (listing.ownerId !== userId) {
-      throw new ForbiddenException('You do not have permission to activate this listing');
+      throw i18nForbidden('listing.unauthorized');
+    }
+
+    if (listing.status !== PropertyStatus.UNAVAILABLE) {
+      throw i18nBadRequest('listing.cannotActivate');
     }
 
     if (listing.verificationStatus !== VerificationStatus.VERIFIED) {
-      throw new BadRequestException('Property must be verified before activation');
+      throw i18nBadRequest('listing.verificationRequired');
     }
 
     const updated = await this.prisma.listing.update({
@@ -663,26 +753,26 @@ export class PropertysService {
     const listing = await this.findById(id, true);
 
     if (listing.ownerId !== userId) {
-      throw new ForbiddenException('You do not have permission to delete this listing');
+      throw i18nForbidden('listing.unauthorized');
     }
 
-    // Check for active bookings
+    // Check for active bookings (any in-progress state)
     const activeBookings = await this.prisma.booking.count({
       where: {
         listingId: id,
-        status: { in: ['CONFIRMED', 'COMPLETED'] },
+        status: { in: ['CONFIRMED', 'IN_PROGRESS', 'PENDING_PAYMENT', 'PENDING_OWNER_APPROVAL', 'AWAITING_RETURN_INSPECTION'] },
       },
     });
 
     if (activeBookings > 0) {
-      throw new BadRequestException('Cannot delete listing with active bookings');
+      throw i18nBadRequest('listing.hasActiveBookings');
     }
 
     await this.prisma.listing.update({
       where: { id },
       data: {
-        status: PropertyStatus.UNAVAILABLE,
-        // deletedAt field doesn't exist in schema
+        status: PropertyStatus.ARCHIVED,
+        // Mark as archived with ARCHIVED status to distinguish from paused (UNAVAILABLE)
       },
     });
 
@@ -697,7 +787,7 @@ export class PropertysService {
     });
   }
 
-  async getOwnerPropertys(ownerId: string, includeAll: boolean = false): Promise<Property[]> {
+  async getOwnerProperties(ownerId: string, includeAll: boolean = false): Promise<Property[]> {
     const where: any = { ownerId };
 
     if (!includeAll) {
@@ -758,13 +848,23 @@ export class PropertysService {
 
     let slug = baseSlug;
     let counter = 1;
+    const MAX_ATTEMPTS = 10;
 
-    while (await this.prisma.listing.findUnique({ where: { slug } })) {
+    // Use a retry loop that handles race conditions: if a concurrent insert
+    // claims the slug between our findUnique and our create, the caller's
+    // Prisma unique-constraint error will be caught, and we retry here.
+    while (counter <= MAX_ATTEMPTS) {
+      const existing = await this.prisma.listing.findUnique({ where: { slug } });
+      if (!existing) {
+        return slug;
+      }
       slug = `${baseSlug}-${counter}`;
       counter++;
     }
 
-    return slug;
+    // After MAX_ATTEMPTS, append a random suffix to guarantee uniqueness
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    return `${baseSlug}-${randomSuffix}`;
   }
 
   /**
@@ -784,7 +884,7 @@ export class PropertysService {
     sampleSize: number;
   }> {
     const where: any = {
-      status: 'PUBLISHED',
+      status: PropertyStatus.AVAILABLE,
       deletedAt: null,
     };
     if (params.categoryId) where.categoryId = params.categoryId;
@@ -845,5 +945,3 @@ export class PropertysService {
   }
 }
 
-// Alias for backward compatibility
-export const ListingsService = PropertysService;

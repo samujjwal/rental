@@ -18,7 +18,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@ne
 import { UserRole } from '@rental-portal/database';
 import { PropertyStatus } from '@rental-portal/database';
 import {
-  PropertysService,
+  ListingsService,
   ListingFilters,
 } from '../services/listings.service';
 import { CreateListingDto, UpdateListingDto } from '../dto/listing.dto';
@@ -40,10 +40,9 @@ type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<Ret
 @Controller('listings')
 export class ListingsController {
   constructor(
-    private readonly listingsService: PropertysService,
+    private readonly listingsService: ListingsService,
     private readonly availabilityService: AvailabilityService,
     private readonly completenessService: ListingCompletenessService,
-    @Inject(forwardRef(() => SearchService))
     private readonly searchService: SearchService,
   ) {}
 
@@ -58,7 +57,7 @@ export class ListingsController {
   async create(
     @CurrentUser('id') userId: string,
     @Body() dto: CreateListingDto,
-  ): Promise<AsyncMethodResult<PropertysService['create']>> {
+  ): Promise<AsyncMethodResult<ListingsService['create']>> {
     return this.listingsService.create(userId, dto);
   }
 
@@ -98,7 +97,7 @@ export class ListingsController {
     @CurrentUser('id') userId: string,
     @Query('all') all?: boolean,
   ) {
-    const listings = await this.listingsService.getOwnerPropertys(
+    const listings = await this.listingsService.getOwnerProperties(
       userId,
       all === true,
     );
@@ -265,7 +264,7 @@ export class ListingsController {
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateListingDto,
-  ): Promise<AsyncMethodResult<PropertysService['update']>> {
+  ): Promise<AsyncMethodResult<ListingsService['update']>> {
     return this.listingsService.update(id, userId, dto as any);
   }
 
@@ -280,7 +279,7 @@ export class ListingsController {
   async publish(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
-  ): Promise<AsyncMethodResult<PropertysService['publish']>> {
+  ): Promise<AsyncMethodResult<ListingsService['publish']>> {
     return this.listingsService.publish(id, userId);
   }
 
@@ -294,7 +293,7 @@ export class ListingsController {
   async pause(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
-  ): Promise<AsyncMethodResult<PropertysService['pause']>> {
+  ): Promise<AsyncMethodResult<ListingsService['pause']>> {
     return this.listingsService.pause(id, userId);
   }
 
@@ -309,7 +308,7 @@ export class ListingsController {
   async activate(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
-  ): Promise<AsyncMethodResult<PropertysService['activate']>> {
+  ): Promise<AsyncMethodResult<ListingsService['activate']>> {
     return this.listingsService.activate(id, userId);
   }
 
@@ -394,7 +393,7 @@ export class ListingsController {
     return {
       available: result.isAvailable,
       blockedDates,
-      availableDates: [],
+      availableDates: [] as any[],
       message: result.isAvailable
         ? 'Listing is available for selected dates'
         : result.conflicts?.[0]?.reason || 'Listing is not available for selected dates',

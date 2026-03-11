@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EmailModule } from '@/common/email/email.module';
+import { CacheModule } from '@/common/cache/cache.module';
 
 import { AuthService } from './services/auth.service';
 import { PasswordService } from './services/password.service';
@@ -10,6 +11,7 @@ import { TokenService } from './services/token.service';
 import { MfaService } from './services/mfa.service';
 import { OAuthService } from './services/oauth.service';
 import { OtpService } from './services/otp.service';
+import { SmsService } from './services/sms.service';
 
 import { AuthController } from './controllers/auth.controller';
 
@@ -24,6 +26,7 @@ import { WsJwtAuthGuard } from './guards/ws-jwt-auth.guard';
 @Module({
   imports: [
     EmailModule,
+    CacheModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -44,6 +47,7 @@ import { WsJwtAuthGuard } from './guards/ws-jwt-auth.guard';
     MfaService,
     OAuthService,
     OtpService,
+    SmsService,
     JwtStrategy,
     LocalStrategy,
     JwtAuthGuard,

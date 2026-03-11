@@ -27,7 +27,7 @@ describe('EventsService (smoke)', () => {
       listingId: 'l1',
       startDate: new Date(),
       endDate: new Date(),
-      totalAmount: 100,
+      totalPrice: 100,
     });
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -157,7 +157,6 @@ describe('EventsService (smoke)', () => {
       paymentId: 'p4',
       bookingId: 'b1',
       amount: 25,
-      status: 'COMPLETED' as any,
       renterId: 'r1',
       ownerId: 'o1',
       refundId: 'ref1',

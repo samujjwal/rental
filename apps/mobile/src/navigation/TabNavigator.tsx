@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SearchScreen } from '../screens/SearchScreen';
 import { BookingsScreen } from '../screens/BookingsScreen';
@@ -18,19 +19,26 @@ export type TabParamList = {
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const TAB_ICONS: Record<string, { active: IoniconName; inactive: IoniconName }> = {
+  HomeTab: { active: 'home', inactive: 'home-outline' },
+  SearchTab: { active: 'search', inactive: 'search-outline' },
+  BookingsTab: { active: 'calendar', inactive: 'calendar-outline' },
+  MessagesTab: { active: 'chatbubble', inactive: 'chatbubble-outline' },
+  ProfileTab: { active: 'person', inactive: 'person-outline' },
+};
+
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    HomeTab: '🏠',
-    SearchTab: '🔍',
-    BookingsTab: '📅',
-    MessagesTab: '💬',
-    ProfileTab: '👤',
-  };
+  const icons = TAB_ICONS[name];
+  if (!icons) return null;
   return (
     <View style={styles.iconContainer}>
-      <Text style={[styles.icon, focused && styles.iconFocused]}>
-        {icons[name] || '•'}
-      </Text>
+      <Ionicons
+        name={focused ? icons.active : icons.inactive}
+        size={24}
+        color={focused ? colors.primary : colors.textSecondary}
+      />
     </View>
   );
 }
@@ -38,8 +46,9 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 export function TabNavigator() {
   return (
     <Tab.Navigator
+      initialRouteName="SearchTab"
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
+        tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name={route.name} focused={focused} />,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: styles.tabBar,
@@ -72,12 +81,5 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  icon: {
-    fontSize: 22,
-    opacity: 0.5,
-  },
-  iconFocused: {
-    opacity: 1,
   },
 });

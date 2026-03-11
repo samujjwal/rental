@@ -1,7 +1,12 @@
 import { Link } from "react-router";
 import type { MetaFunction } from "react-router";
+import { useTranslation } from "react-i18next";
+import { useState, useEffect } from "react";
 import { RouteErrorBoundary } from "~/components/ui";
-import { Shield, FileCheck, AlertCircle, CheckCircle } from "lucide-react";
+import { Shield, FileCheck, AlertCircle, CheckCircle, Clock, X } from "lucide-react";
+import { useAuthStore } from "~/lib/store/auth";
+import { insuranceApi, type InsurancePolicy } from "~/lib/api/insurance";
+import { formatCurrency } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
   return [
@@ -10,79 +15,98 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-const coverageTypes = [
-  {
-    icon: Shield,
-    title: "Property Protection",
-    description: "Coverage for damage, loss, or theft of rented items during the rental period.",
-  },
-  {
-    icon: FileCheck,
-    title: "Liability Coverage",
-    description: "Protection against third-party claims arising from the use of rented items.",
-  },
-  {
-    icon: AlertCircle,
-    title: "Security Deposits",
-    description: "Owners can require refundable deposits held by the platform until the item is returned safely.",
-  },
+const coverageTypeDefs = [
+  { icon: Shield, titleKey: "pages.insurance.propertyProtection", descKey: "pages.insurance.propertyProtectionDesc" },
+  { icon: FileCheck, titleKey: "pages.insurance.liabilityCoverage", descKey: "pages.insurance.liabilityCoverageDesc" },
+  { icon: AlertCircle, titleKey: "pages.insurance.securityDeposits", descKey: "pages.insurance.securityDepositsDesc" },
 ];
 
+const STATUS_CONFIG: Record<string, { label: string; className: string; icon: React.ElementType }> = {
+  ACTIVE: { label: "Active", className: "text-green-700 bg-green-100", icon: CheckCircle },
+  PENDING: { label: "Pending", className: "text-yellow-700 bg-yellow-100", icon: Clock },
+  EXPIRED: { label: "Expired", className: "text-gray-600 bg-gray-100", icon: Clock },
+  CANCELLED: { label: "Cancelled", className: "text-red-700 bg-red-100", icon: X },
+  CLAIMED: { label: "Claimed", className: "text-blue-700 bg-blue-100", icon: Shield },
+};
+
+function PolicyStatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status] ?? { label: status, className: "text-gray-600 bg-gray-100", icon: Shield };
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium ${cfg.className}`}>
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  );
+}
+
 export default function InsurancePage() {
+  const { t } = useTranslation();
+  const { isAuthenticated } = useAuthStore();
+  const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
+  const [policiesLoading, setPoliciesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    setPoliciesLoading(true);
+    insuranceApi.getMyPolicies({ limit: 10 })
+      .then((res) => { if (!cancelled) setPolicies(res.data ?? []); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setPoliciesLoading(false); });
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="container mx-auto max-w-4xl px-4 py-16">
         <div className="text-center">
-          <h1 className="text-4xl font-bold tracking-tight">Insurance &amp; Protection</h1>
+          <h1 className="text-4xl font-bold tracking-tight">{t("pages.insurance.title")}</h1>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            Rent with confidence. GharBatai offers multiple layers of protection for both renters
-            and owners.
+            {t("pages.insurance.subtitle")}
           </p>
         </div>
 
         <div className="mt-12 grid gap-6 sm:grid-cols-3">
-          {coverageTypes.map((type) => (
-            <div key={type.title} className="rounded-xl border bg-card p-6 text-center">
+          {coverageTypeDefs.map((type) => (
+            <div key={type.titleKey} className="rounded-xl border bg-card p-6 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <type.icon className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="mt-4 text-lg font-semibold">{type.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{type.description}</p>
+              <h3 className="mt-4 text-lg font-semibold">{t(type.titleKey)}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t(type.descKey)}</p>
             </div>
           ))}
         </div>
 
         <div className="mt-16 space-y-8">
           <section>
-            <h2 className="text-2xl font-semibold">For Owners</h2>
+            <h2 className="text-2xl font-semibold">{t("pages.insurance.forOwners")}</h2>
             <div className="mt-4 rounded-xl border bg-card p-6 space-y-4">
               <div className="flex items-start gap-3">
                 <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
                 <div>
-                  <h4 className="font-medium">Upload Insurance Documents</h4>
+                  <h4 className="font-medium">{t("pages.insurance.uploadInsuranceDocs")}</h4>
                   <p className="text-sm text-muted-foreground">
-                    Certain categories (vehicles, high-value items) require proof of insurance
-                    before your listing goes live. Upload your policy through the listing dashboard.
+                    {t("pages.insurance.uploadInsuranceDocsDesc")}
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
                 <div>
-                  <h4 className="font-medium">Set Security Deposits</h4>
+                  <h4 className="font-medium">{t("pages.insurance.setSecurityDeposits")}</h4>
                   <p className="text-sm text-muted-foreground">
-                    Add a fixed or percentage-based deposit to your listing. Deposits are collected
-                    at booking and held until the item is returned in good condition.
+                    {t("pages.insurance.setSecurityDepositsDesc")}
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
                 <div>
-                  <h4 className="font-medium">Damage Claims</h4>
+                  <h4 className="font-medium">{t("pages.insurance.damageClaims")}</h4>
                   <p className="text-sm text-muted-foreground">
-                    If an item is returned damaged, file a dispute with photographic evidence.
-                    Our team will review and facilitate resolution.
+                    {t("pages.insurance.damageClaimsDesc")}
                   </p>
                 </div>
               </div>
@@ -90,35 +114,32 @@ export default function InsurancePage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold">For Renters</h2>
+            <h2 className="text-2xl font-semibold">{t("pages.insurance.forRenters")}</h2>
             <div className="mt-4 rounded-xl border bg-card p-6 space-y-4">
               <div className="flex items-start gap-3">
                 <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
                 <div>
-                  <h4 className="font-medium">Secure Payments</h4>
+                  <h4 className="font-medium">{t("pages.insurance.securePayments")}</h4>
                   <p className="text-sm text-muted-foreground">
-                    All payments are processed securely through Stripe. Your payment details are
-                    never stored on our servers.
+                    {t("pages.insurance.securePaymentsDesc")}
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
                 <div>
-                  <h4 className="font-medium">Dispute Resolution</h4>
+                  <h4 className="font-medium">{t("pages.insurance.disputeResolution")}</h4>
                   <p className="text-sm text-muted-foreground">
-                    If something goes wrong with your rental, file a dispute within 48 hours
-                    of the rental end date. Our team mediates between parties.
+                    {t("pages.insurance.disputeResolutionDesc")}
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
                 <div>
-                  <h4 className="font-medium">Refund Protection</h4>
+                  <h4 className="font-medium">{t("pages.insurance.refundProtection")}</h4>
                   <p className="text-sm text-muted-foreground">
-                    Cancellations made more than 48 hours before the start date are eligible
-                    for a full refund. Late cancellations follow the owner's policy.
+                    {t("pages.insurance.refundProtectionDesc")}
                   </p>
                 </div>
               </div>
@@ -127,29 +148,75 @@ export default function InsurancePage() {
         </div>
 
         <div className="mt-12 rounded-xl border bg-card p-8 text-center">
-          <h2 className="text-xl font-semibold">Have Questions About Coverage?</h2>
+          <h2 className="text-xl font-semibold">{t("pages.insurance.coverageQuestion")}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Contact our support team for help with insurance requirements or claims.
+            {t("pages.insurance.coverageQuestionDesc")}
           </p>
           <div className="mt-4 flex justify-center gap-4">
             <Link
               to="/contact"
               className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
             >
-              Contact Support
+              {t("pages.insurance.contactSupport")}
             </Link>
             <Link
               to="/help"
               className="inline-flex items-center justify-center rounded-lg border bg-background px-5 py-2.5 text-sm font-semibold hover:bg-accent"
             >
-              Help Center
+              {t("pages.insurance.helpCenter")}
             </Link>
           </div>
         </div>
 
         <div className="mt-8 text-center text-sm text-muted-foreground">
-          <Link to="/" className="hover:text-primary">Back to Home</Link>
+          <Link to="/" className="hover:text-primary">{t("common.backToHome")}</Link>
         </div>
+
+        {/* My Policies — authenticated users only */}
+        {isAuthenticated && (
+          <div className="mt-16">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-semibold">{t("pages.insurance.myPolicies", "My Insurance Policies")}</h2>
+            </div>
+            {policiesLoading ? (
+              <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground text-sm">
+                {t("common.loading", "Loading policies…")}
+              </div>
+            ) : policies.length === 0 ? (
+              <div className="rounded-xl border border-dashed bg-card p-8 text-center text-muted-foreground">
+                <Shield className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-foreground">{t("pages.insurance.noPolicies", "No insurance policies yet")}</p>
+                <p className="text-xs mt-1">{t("pages.insurance.noPoliciesDesc", "Policies are created automatically when you book a listing with insurance requirements.")}</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border bg-card overflow-hidden">
+                {policies.map((policy, idx) => (
+                  <div
+                    key={policy.id}
+                    className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${idx > 0 ? "border-t border-border" : ""}`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-foreground">{policy.listing?.title ?? t("pages.insurance.unknownListing", "Listing")}</span>
+                        <PolicyStatusBadge status={policy.status} />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {policy.type} · #{policy.policyNumber} · {t("pages.insurance.coverage", "Coverage:")} {formatCurrency(policy.coverageAmount)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(policy.startDate).toLocaleDateString()} – {new Date(policy.endDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(policy.premiumAmount)}</p>
+                      <p className="text-xs text-muted-foreground">{t("pages.insurance.premium", "Premium")}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

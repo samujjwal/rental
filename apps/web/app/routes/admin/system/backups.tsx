@@ -1,5 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import {
   HardDrive,
@@ -15,6 +16,7 @@ import {
 import { adminApi, type SystemBackup } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { formatDateTime } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
   return [
@@ -25,7 +27,7 @@ export const meta: MetaFunction = () => {
 
 const safeDateTimeLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
-  return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "Unknown date" : formatDateTime(date);
 };
 const safeNumber = (value: unknown): number => {
   const parsed = Number(value);
@@ -130,6 +132,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function BackupsPage() {
+  const { t } = useTranslation();
   const { backups, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
@@ -176,7 +179,7 @@ export default function BackupsPage() {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold mb-2">Error Loading Backups</h3>
+          <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingBackups")}</h3>
           <p className="text-red-600">{error}</p>
         </div>
       </div>
@@ -192,11 +195,11 @@ export default function BackupsPage() {
             to="/admin/system"
             className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block"
           >
-            ← Back to System Settings
+            {t("admin.backToSystemSettings")}
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Backup Management</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{t("admin.backupManagement")}</h1>
           <p className="text-gray-600 mt-1">
-            Create and manage database backups
+            {t("admin.createAndManageBackups")}
           </p>
         </div>
       </div>
@@ -217,7 +220,7 @@ export default function BackupsPage() {
 
       {/* Create Backup Section */}
       <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Create New Backup</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">{t("admin.createNewBackup")}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Form method="post">
             <input type="hidden" name="intent" value="create" />
@@ -232,10 +235,10 @@ export default function BackupsPage() {
               ) : (
                 <HardDrive className="w-4 h-4 mr-2" />
               )}
-              Full Backup
+              {t("admin.fullBackup")}
             </UnifiedButton>
             <p className="text-sm text-gray-500 mt-2">
-              Complete backup of all database tables and files
+              {t("admin.fullBackupDesc")}
             </p>
           </Form>
 
@@ -253,10 +256,10 @@ export default function BackupsPage() {
               ) : (
                 <RefreshCw className="w-4 h-4 mr-2" />
               )}
-              Incremental Backup
+              {t("admin.incrementalBackup")}
             </UnifiedButton>
             <p className="text-sm text-gray-500 mt-2">
-              Backup only changes since last full backup
+              {t("admin.incrementalBackupDesc")}
             </p>
           </Form>
         </div>
@@ -268,11 +271,10 @@ export default function BackupsPage() {
           <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" />
           <div>
             <h3 className="text-sm font-medium text-yellow-800">
-              Important: Restore Operations
+              {t("admin.restoreWarningTitle")}
             </h3>
             <p className="text-sm text-yellow-700 mt-1">
-              Restoring from a backup will overwrite all current data. This action cannot be undone.
-              Make sure to create a backup of the current state before proceeding with any restore.
+              {t("admin.restoreWarningDesc")}
             </p>
           </div>
         </div>
@@ -281,14 +283,14 @@ export default function BackupsPage() {
       {/* Backup List */}
       <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Available Backups</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t("admin.availableBackups")}</h2>
         </div>
 
         {backups.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <HardDrive className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            <p>No backups available</p>
-            <p className="text-sm mt-1">Create your first backup using the buttons above</p>
+            <p>{t("admin.noBackupsAvailable")}</p>
+            <p className="text-sm mt-1">{t("admin.noBackupsDesc")}</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
@@ -336,7 +338,7 @@ export default function BackupsPage() {
                           className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                         >
                           <Download className="w-4 h-4 mr-1" />
-                          Download
+                          {t("admin.download")}
                         </a>
                       )}
 
@@ -374,7 +376,7 @@ export default function BackupsPage() {
                           onClick={() => setShowConfirmRestore(backup.id)}
                         >
                           <Upload className="w-4 h-4 mr-1" />
-                          Restore
+                          {t("admin.restore")}
                         </UnifiedButton>
                       )}
                     </div>

@@ -27,7 +27,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <div className={cn("mb-8", className)}>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             {title}
@@ -36,7 +36,9 @@ export function PageHeader({
             <p className="mt-2 text-muted-foreground">{description}</p>
           )}
         </div>
-        {children && <div className="flex shrink-0 gap-3">{children}</div>}
+        {children && (
+          <div className="flex shrink-0 flex-wrap gap-3">{children}</div>
+        )}
       </div>
     </div>
   );

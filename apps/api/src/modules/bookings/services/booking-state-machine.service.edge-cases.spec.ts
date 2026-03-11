@@ -6,11 +6,14 @@ import { BookingStatus } from '@rental-portal/database';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { BookingCalculationService } from './booking-calculation.service';
+import { getQueueToken } from '@nestjs/bull';
 
 const mockPrismaService = {
+  $transaction: jest.fn().mockImplementation((fn) => fn(mockPrismaService)),
   booking: {
     findUnique: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     findMany: jest.fn(),
   },
   bookingStateHistory: {
@@ -85,6 +88,8 @@ describe('BookingStateMachineService - Edge Cases', () => {
             calculateRefund: jest.fn().mockResolvedValue({ refundAmount: 50 }),
           },
         },
+        { provide: getQueueToken('payments'), useValue: { add: jest.fn().mockResolvedValue({}), process: jest.fn() } },
+        { provide: getQueueToken('bookings'), useValue: { add: jest.fn().mockResolvedValue({}), process: jest.fn() } },
       ],
     }).compile();
 
@@ -257,10 +262,6 @@ describe('BookingStateMachineService - Edge Cases', () => {
       };
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.PENDING_PAYMENT,
-      });
 
       // Simulate two concurrent approvals
       const promise1 = service.transition('booking-1', 'OWNER_APPROVE', 'owner-1', 'OWNER');
@@ -281,65 +282,47 @@ describe('BookingStateMachineService - Edge Cases', () => {
       });
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.PENDING_PAYMENT,
-      });
 
       await service.transition('booking-1', 'OWNER_APPROVE', 'owner-1', 'OWNER', {
         reason: 'Approved by owner',
       });
 
-      expect(mockPrismaService.booking.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            stateHistory: expect.objectContaining({
-              create: expect.objectContaining({
-                toStatus: BookingStatus.PENDING_PAYMENT,
-                changedBy: 'owner-1',
-                metadata: JSON.stringify({ reason: 'Approved by owner' }),
-              }),
-            }),
-          }),
+      expect(mockPrismaService.bookingStateHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          bookingId: 'booking-1',
+          toStatus: BookingStatus.PENDING_PAYMENT,
+          changedBy: 'owner-1',
+          metadata: JSON.stringify({ reason: 'Approved by owner' }),
         }),
-      );
+      });
     });
   });
 
   describe('Edge Case: Dispute resolution paths', () => {
-    it('should allow ADMIN to resolve dispute to COMPLETED', async () => {
+    it('should allow ADMIN to resolve dispute in owner favor (→ COMPLETED)', async () => {
       const booking = mockBooking({
         status: BookingStatus.DISPUTED,
       });
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.COMPLETED,
-      });
 
-      const result = await service.transition('booking-1', 'RESOLVE_DISPUTE', 'admin-1', 'ADMIN');
+      const result = await service.transition('booking-1', 'RESOLVE_DISPUTE_OWNER_FAVOR', 'admin-1', 'ADMIN');
 
       expect(result.success).toBe(true);
       expect(result.newState).toBe(BookingStatus.COMPLETED);
     });
 
-    it('should allow ADMIN to resolve dispute to REFUNDED', async () => {
+    it('should allow ADMIN to resolve dispute in renter favor (→ REFUNDED)', async () => {
       const booking = mockBooking({
         status: BookingStatus.DISPUTED,
       });
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.COMPLETED,
-      });
 
-      // RESOLVE_DISPUTE from DISPUTED matches first transition → COMPLETED
-      const result = await service.transition('booking-1', 'RESOLVE_DISPUTE', 'admin-1', 'ADMIN');
+      const result = await service.transition('booking-1', 'RESOLVE_DISPUTE_RENTER_FAVOR', 'admin-1', 'ADMIN');
 
       expect(result.success).toBe(true);
-      expect(result.newState).toBe(BookingStatus.COMPLETED);
+      expect(result.newState).toBe(BookingStatus.REFUNDED);
     });
   });
 
@@ -351,10 +334,6 @@ describe('BookingStateMachineService - Edge Cases', () => {
       });
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.CANCELLED,
-      });
 
       const result = await service.transition('booking-1', 'EXPIRE', 'system', 'SYSTEM');
 
@@ -368,10 +347,6 @@ describe('BookingStateMachineService - Edge Cases', () => {
       });
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.COMPLETED,
-      });
 
       const result = await service.transition('booking-1', 'EXPIRE', 'system', 'SYSTEM');
 
@@ -388,10 +363,6 @@ describe('BookingStateMachineService - Edge Cases', () => {
       };
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.SETTLED,
-      });
 
       const result = await service.transition('booking-1', 'SETTLE', 'system', 'SYSTEM');
 
@@ -408,10 +379,6 @@ describe('BookingStateMachineService - Edge Cases', () => {
       };
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.REFUNDED,
-      });
 
       const result = await service.transition('booking-1', 'REFUND', 'system', 'SYSTEM');
 
@@ -472,24 +439,14 @@ describe('BookingStateMachineService - Edge Cases', () => {
       };
 
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.booking.update.mockResolvedValue({
-        ...booking,
-        status: BookingStatus.COMPLETED,
-      });
 
       await service.transition('booking-1', 'APPROVE_RETURN', 'owner-1', 'OWNER', metadata);
 
-      expect(mockPrismaService.booking.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            stateHistory: expect.objectContaining({
-              create: expect.objectContaining({
-                metadata: JSON.stringify(metadata),
-              }),
-            }),
-          }),
+      expect(mockPrismaService.bookingStateHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: JSON.stringify(metadata),
         }),
-      );
+      });
     });
   });
 });
