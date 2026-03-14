@@ -35,6 +35,7 @@ const buildMockListing = (id: string, overrides: Record<string, unknown> = {}) =
       "This is a mocked listing used for deterministic edge-case e2e tests across booking flows.",
     category: "Photography",
     subcategory: null,
+    basePrice: 100,
     pricePerDay: 100,
     pricePerWeek: null,
     pricePerMonth: null,
@@ -118,10 +119,43 @@ const buildMockListing = (id: string, overrides: Record<string, unknown> = {}) =
   return merged;
 };
 
+/**
+ * Click a date (YYYY-MM-DD) in the BookingCalendar component.
+ * Navigates forward month by month until the date is visible, then clicks it.
+ */
+const clickCalendarDate = async (page: Page, dateStr: string) => {
+  // Parse target date
+  const [year, month, day] = dateStr.split("-").map(Number);
+  // Month names for aria-label matching (date-fns format: "MMMM d, yyyy")
+  const MONTH_NAMES = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December",
+  ];
+  const targetLabel = `${MONTH_NAMES[month - 1]} ${day}, ${year}`;
+
+  // Wait for the calendar to mount and finish loading blocked dates.
+  // We first wait for the "Next month" nav button to appear (calendar mounted),
+  // then wait for ANY role="button" day cell to appear (loading done).
+  await page.getByRole("button", { name: "Next month" }).waitFor({ timeout: 15000 });
+  await page.locator('[role="button"][aria-label]').first().waitFor({ timeout: 10000 });
+
+  // Navigate calendar forward until the target day button is visible
+  for (let attempts = 0; attempts < 24; attempts++) {
+    const dayBtn = page.locator(`[role="button"][aria-label="${targetLabel}"]`);
+    if (await dayBtn.count() > 0) {
+      await dayBtn.first().click();
+      return;
+    }
+    // Click "Next month" to advance the calendar
+    await page.getByRole("button", { name: "Next month" }).click();
+    await page.waitForTimeout(200);
+  }
+  throw new Error(`Could not find calendar day: ${targetLabel}`);
+};
+
 const fillBookingDates = async (page: Page, start: string, end: string) => {
-  const dateInputs = page.locator('input[type="date"]');
-  await dateInputs.nth(0).fill(start);
-  await dateInputs.nth(1).fill(end);
+  await clickCalendarDate(page, start);
+  await clickCalendarDate(page, end);
 };
 
 const fillQuickCreateBasics = async (page: Page) => {
@@ -138,6 +172,8 @@ const fillQuickCreateBasics = async (page: Page) => {
 
   const categorySelect = page.getByTestId("category-select");
   await expect(categorySelect).toBeVisible();
+  // Wait for categories to finish loading (first real option appears)
+  await categorySelect.locator('option:not([value=""])').first().waitFor({ timeout: 10000 }).catch(() => {});
   const firstCategoryValue = await categorySelect
     .locator('option:not([value=""])')
     .first()
@@ -208,7 +244,9 @@ test.describe("Edge Cases and Error Scenarios", () => {
 
     test("should retry transient search failures and recover", async ({ page }) => {
       let attempts = 0;
-      await page.route("**/api/listings/search**", (route) => {
+      // The search API is at /api/search (not /api/listings/search).
+      // withRetry({ maxRetries: 2 }) tries 3 times total, so attempts reaches 3.
+      await page.route("**/api/search**", (route) => {
         attempts += 1;
         if (attempts < 3) {
           return route.fulfill({
@@ -222,18 +260,18 @@ test.describe("Edge Cases and Error Scenarios", () => {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
-            listings: [],
+            results: [],
             total: 0,
             page: 1,
-            limit: 20,
-            totalPages: 0,
+            size: 20,
           }),
         });
       });
 
       await page.goto("/search?query=camera");
 
-      await expect.poll(() => attempts).toBe(3);
+      // Wait up to 15s for all 3 attempts (withRetry back-off adds ~1.5s delay)
+      await expect.poll(() => attempts, { timeout: 15000 }).toBe(3);
       await expect(page.locator('text=/Search Error|Failed to load search results/i')).toHaveCount(0);
       await expect(page.locator("body")).toBeVisible();
     });
@@ -243,18 +281,35 @@ test.describe("Edge Cases and Error Scenarios", () => {
     test("should handle expired session", async ({ page }) => {
       await loginAs(page, testUsers.renter);
       
-      // Simulate invalid/expired local auth state.
+      // Simulate expired auth: mock /auth/me to return 401 and /auth/refresh
+      // to also fail, so the token-refresh path triggers client-side logout.
+      await page.route("**/api/auth/me**", (route) =>
+        route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "Unauthorized" }),
+        })
+      );
+      await page.route("**/api/auth/refresh**", (route) =>
+        route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "Invalid refresh token" }),
+        })
+      );
+
+      // Clear session cookies and Zustand persisted auth so the next navigation
+      // drives through the 401 → refresh-fail → logout → /auth/login path.
       await page.context().clearCookies();
       await page.evaluate(() => {
-        localStorage.setItem("accessToken", "expired.invalid.token");
-        localStorage.setItem("refreshToken", "expired-refresh-token");
+        localStorage.removeItem("auth-storage");
       });
       
-      // Try to access protected route
-      await page.goto("/dashboard");
+      // Navigate to a page that triggers a protected API call
+      await page.goto("/listings");
       
-      // Should redirect to login
-      await expect(page).toHaveURL(/.*login|.*auth/);
+      // Should redirect to login after refresh failure
+      await expect(page).toHaveURL(/.*login|.*auth/, { timeout: 10000 });
     });
 
     test("should handle concurrent login attempts", async ({ page }) => {
@@ -285,20 +340,31 @@ test.describe("Edge Cases and Error Scenarios", () => {
     test("should handle refresh token failure", async ({ page }) => {
       await loginAs(page, testUsers.renter);
       
-      // Mock token refresh failure
+      // Mock both /auth/me (to trigger 401) and /auth/refresh (to fail the
+      // retry), ensuring the client-side logout + redirect path is exercised.
+      await page.route("**/api/auth/me**", (route) =>
+        route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "Unauthorized" }),
+        })
+      );
       await page.route("**/api/auth/refresh**", (route) => {
         route.fulfill({
           status: 401,
+          contentType: "application/json",
           body: JSON.stringify({ error: "Invalid refresh token" }),
         });
       });
 
-      // Force a 401 path so refresh logic is exercised.
+      // Clear cookies and Zustand persisted auth so the axios interceptor
+      // has no valid Bearer token, provoking a 401 on the next API call.
+      await page.context().clearCookies();
       await page.evaluate(() => {
-        localStorage.setItem("accessToken", "expired.invalid.token");
+        localStorage.removeItem("auth-storage");
       });
       
-      // Navigate around app
+      // Navigate around app — the protected listings data fetch will hit 401
       await page.goto("/listings");
       
       // Should eventually redirect to login
@@ -471,13 +537,21 @@ test.describe("Edge Cases and Error Scenarios", () => {
           }),
         })
       );
+      await page.route(`**/api/bookings/blocked-dates/${listingId}`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        })
+      );
 
+      await loginAs(page, testUsers.renter);
       await page.goto(`/listings/${listingId}`);
       await fillBookingDates(page, futureDate(7), futureDate(9));
-      await page.getByRole("button", { name: /Check Availability/i }).click();
 
+      // Wait for the availability message inside the booking panel
       await expect(
-        page.locator('text=/no longer available|not available|unavailable/i')
+        page.getByTestId("booking-panel").locator('text=/no longer available|Selected dates are not available/i')
       ).toBeVisible();
     });
 
@@ -500,10 +574,17 @@ test.describe("Edge Cases and Error Scenarios", () => {
           }),
         })
       );
+      await page.route(`**/api/bookings/blocked-dates/${listingId}`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        })
+      );
 
+      await loginAs(page, testUsers.renter);
       await page.goto(`/listings/${listingId}`);
       await fillBookingDates(page, futureDate(10), futureDate(12));
-      await page.getByRole("button", { name: /Check Availability/i }).click();
 
       await expect(page.locator('text=/dates already booked|not available/i')).toBeVisible();
     });
@@ -529,6 +610,13 @@ test.describe("Edge Cases and Error Scenarios", () => {
           }),
         })
       );
+      await page.route(`**/api/bookings/blocked-dates/${listingId}`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        })
+      );
       await page.route("**/api/bookings/calculate-price", (route) => {
         calculationCalls += 1;
         const totalAmount = calculationCalls === 1 ? 777 : 888;
@@ -547,13 +635,14 @@ test.describe("Edge Cases and Error Scenarios", () => {
         });
       });
 
+      await loginAs(page, testUsers.renter);
       await page.goto(`/listings/${listingId}`);
       await fillBookingDates(page, futureDate(13), futureDate(15));
 
-      await page.getByRole("button", { name: /Check Availability/i }).click();
       await expect(page.locator('text=/\\$777/')).toBeVisible();
 
-      await page.getByRole("button", { name: /Check Availability/i }).click();
+      // Auto-trigger fires on date selection; click the Recalculate button to trigger second price
+      await page.getByRole("button", { name: /Recalculate/i }).click();
       await expect(page.locator('text=/\\$888/')).toBeVisible();
     });
   });
@@ -569,6 +658,16 @@ test.describe("Edge Cases and Error Scenarios", () => {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify([]),
+        })
+      );
+      // Mock categories to return a simple "Other" category with no required category-specific
+      // fields (slug "other" has no entry in CATEGORY_FIELD_MAP), ensuring handleQuickCreate
+      // reaches the upload step without bailing out on missing category-specific fields.
+      await page.route("**/api/categories**", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([{ id: "cat-other-999", name: "Other", slug: "other" }]),
         })
       );
 
@@ -646,6 +745,13 @@ test.describe("Edge Cases and Error Scenarios", () => {
           }),
         })
       );
+      await context.route(`**/api/bookings/blocked-dates/${listingId}`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        })
+      );
       await context.route("**/api/bookings/calculate-price", (route) =>
         route.fulfill({
           status: 200,
@@ -693,9 +799,11 @@ test.describe("Edge Cases and Error Scenarios", () => {
         fillBookingDates(page2, startDate, endDate),
       ]);
 
+      // Wait for auto-triggered availability check to complete on both pages
+      // (Recalculate button appears only when availabilityStatus === "available" | "unavailable")
       await Promise.all([
-        page.getByRole("button", { name: /Check Availability/i }).click(),
-        page2.getByRole("button", { name: /Check Availability/i }).click(),
+        page.getByRole("button", { name: /Recalculate/i }).waitFor({ timeout: 15000 }),
+        page2.getByRole("button", { name: /Recalculate/i }).waitFor({ timeout: 15000 }),
       ]);
 
       await Promise.all([
@@ -734,7 +842,16 @@ test.describe("Edge Cases and Error Scenarios", () => {
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(buildMockListing(listingId, { pricePerDay: currentPrice })),
+          body: JSON.stringify(
+            buildMockListing(listingId, { pricePerDay: currentPrice, basePrice: currentPrice })
+          ),
+        })
+      );
+      await context.route(`**/api/bookings/blocked-dates/${listingId}`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
         })
       );
 

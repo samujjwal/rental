@@ -1,4 +1,4 @@
-import { type LoaderFunctionArgs } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { useLoaderData, Link } from "react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { ActivityFeed, type ActivityItem } from "~/components/admin/ActivityFeed";
 import { RouteErrorBoundary } from "~/components/ui";
+
+export const meta: MetaFunction = () => [{ title: "Admin Dashboard | GharBatai Rentals" }];
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await requireAdmin(request);
@@ -145,6 +147,8 @@ export default function AdminDashboard() {
               <Link
                 key={tab.label}
                 to={tab.href}
+                role="tab"
+                aria-selected={false}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors"
               >
                 <Icon className="h-4 w-4" /> {t(`admin.${tab.label}`)}

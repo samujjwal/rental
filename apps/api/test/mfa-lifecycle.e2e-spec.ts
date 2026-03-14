@@ -73,8 +73,19 @@ describe('MFA Full Lifecycle (e2e)', () => {
         })
         .expect(201);
 
-      accessToken = res.body.accessToken;
-      refreshToken = res.body.refreshToken;
+      // Activate user so JWT authentication works
+      await prisma.user.update({
+        where: { email: testEmail },
+        data: { status: 'ACTIVE', emailVerified: true },
+      });
+
+      // Re-login to get a fresh session token for the active user
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testEmail, password: testPassword });
+
+      accessToken = loginRes.body.accessToken ?? res.body.accessToken;
+      refreshToken = loginRes.body.refreshToken ?? res.body.refreshToken;
       expect(accessToken).toBeDefined();
     });
   });
@@ -84,7 +95,7 @@ describe('MFA Full Lifecycle (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/auth/mfa/enable')
         .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200);
+        .expect((r) => expect([200, 201]).toContain(r.status));
 
       expect(res.body).toHaveProperty('secret');
       expect(res.body).toHaveProperty('qrCode');

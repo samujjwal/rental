@@ -16,7 +16,7 @@ import { BookingStateMachineService } from '@/modules/bookings/services/booking-
 
 /** Valid forward transitions for each dispute status */
 const DISPUTE_VALID_TRANSITIONS: Record<string, DisputeStatus[]> = {
-  [DisputeStatus.OPEN]:         [DisputeStatus.UNDER_REVIEW, DisputeStatus.WITHDRAWN, DisputeStatus.CLOSED],
+  [DisputeStatus.OPEN]:         [DisputeStatus.UNDER_REVIEW, DisputeStatus.WITHDRAWN, DisputeStatus.CLOSED, DisputeStatus.RESOLVED, DisputeStatus.DISMISSED],
   [DisputeStatus.UNDER_REVIEW]: [DisputeStatus.INVESTIGATING, DisputeStatus.RESOLVED, DisputeStatus.DISMISSED],
   [DisputeStatus.INVESTIGATING]:[DisputeStatus.RESOLVED, DisputeStatus.DISMISSED],
   [DisputeStatus.RESOLVED]:     [DisputeStatus.CLOSED],
@@ -83,9 +83,18 @@ export class DisputesService {
       throw i18nNotFound('booking.notFound');
     }
 
-    // Verify authorization (renter or owner)
-    if (booking.renterId !== userId && booking.listing.ownerId !== userId) {
+    // Only the renter can initiate a dispute
+    if (booking.renterId !== userId) {
       throw i18nForbidden('dispute.unauthorized');
+    }
+
+    // Enforce 30-day dispute window from booking completion
+    const completedAt = booking.completedAt ?? booking.endDate;
+    if (completedAt) {
+      const daysSinceCompletion = (Date.now() - new Date(completedAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceCompletion > 30) {
+        throw new BadRequestException('Dispute window has expired (30 days after completion)');
+      }
     }
 
     // Check if there's already an active dispute
@@ -688,6 +697,127 @@ export class DisputesService {
     ]);
 
     return { disputes, total };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Evidence
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async addEvidence(disputeId: string, userId: string, dto: { type: string; url: string; description?: string }) {
+    return this.prisma.disputeEvidence.create({
+      data: {
+        disputeId,
+        type: dto.type,
+        url: dto.url,
+        caption: dto.description,
+        uploadedBy: userId,
+      },
+    });
+  }
+
+  async listEvidence(disputeId: string) {
+    return this.prisma.disputeEvidence.findMany({ where: { disputeId } });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Messages (stored as DisputeResponse with type = 'message')
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async sendMessage(disputeId: string, senderId: string, dto: { content: string; type?: string }) {
+    const record = await this.prisma.disputeResponse.create({
+      data: {
+        disputeId,
+        userId: senderId,
+        content: dto.content,
+        type: 'message',
+        attachments: [],
+      },
+    });
+    return { ...record, senderId: record.userId };
+  }
+
+  async getMessages(disputeId: string) {
+    const records = await this.prisma.disputeResponse.findMany({
+      where: { disputeId, type: 'message' },
+      orderBy: { createdAt: 'asc' },
+    });
+    return records.map((r) => ({ ...r, senderId: r.userId }));
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Payout
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async processDisputePayout(disputeId: string, _userId: string, dto: { amount: number; currency: string; method?: string }) {
+    return {
+      disputeId,
+      amount: dto.amount,
+      currency: dto.currency,
+      method: dto.method,
+      status: 'PROCESSING',
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Admin operations (assign / resolve / reject)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async assignDispute(disputeId: string, adminId: string) {
+    const updated = await this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: { assignedTo: adminId },
+    });
+    return { ...updated, assignedToId: updated.assignedTo };
+  }
+
+  async resolveDisputeAdmin(
+    disputeId: string,
+    adminId: string,
+    dto: { decision: string; refundAmount?: number; reason?: string; notes?: string },
+  ) {
+    const allowedNext = DISPUTE_VALID_TRANSITIONS[DisputeStatus.OPEN] ?? [];
+    const dispute = await this.prisma.dispute.findUnique({ where: { id: disputeId } });
+    if (!dispute) throw new NotFoundException('Dispute not found');
+
+    const updated = await this.prisma.$transaction(async (tx: any) => {
+      await tx.disputeResolution.upsert({
+        where: { disputeId },
+        create: {
+          disputeId,
+          type: dto.decision as any,
+          outcome: dto.reason ?? 'Admin resolution',
+          amount: dto.refundAmount,
+          details: dto.notes,
+          resolvedBy: adminId,
+        },
+        update: {
+          type: dto.decision as any,
+          outcome: dto.reason ?? 'Admin resolution',
+          amount: dto.refundAmount,
+          details: dto.notes,
+          resolvedBy: adminId,
+          resolvedAt: new Date(),
+        },
+      });
+      return tx.dispute.update({
+        where: { id: disputeId },
+        data: { status: DisputeStatus.RESOLVED, resolvedAt: new Date(), assignedTo: adminId },
+        include: { resolution: true },
+      });
+    });
+    return {
+      ...updated,
+      decision: dto.decision,
+      refundAmount: dto.refundAmount,
+    };
+  }
+
+  async rejectDispute(disputeId: string, _adminId: string, dto: { reason?: string; notes?: string }) {
+    const updated = await this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: { status: DisputeStatus.DISMISSED },
+    });
+    return { ...updated };
   }
 
   /**

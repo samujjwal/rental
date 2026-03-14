@@ -3,7 +3,7 @@
  *
  * Tests the full payout pipeline:
  * 1. Owner with completed bookings has pending earnings
- * 2. Owner requests payout via POST /api/payments/payouts
+ * 2. Owner requests payout via POST /payments/payouts
  * 3. System validates owner (stripeConnectId, onboarding complete)
  * 4. System creates Stripe payout
  * 5. System creates payout record in DB
@@ -175,7 +175,7 @@ describe('Payout Flow (e2e)', () => {
     });
 
     // Login owner
-    const loginRes = await loginUser(app, ownerEmail, 'Password123!');
+    const loginRes = await loginUser(app, ownerEmail);
     ownerAccessToken = loginRes.accessToken;
 
     // Create renter
@@ -236,7 +236,7 @@ describe('Payout Flow (e2e)', () => {
     listingId = listing.id;
   });
 
-  describe('POST /api/payments/payouts', () => {
+  describe('POST /payments/payouts', () => {
     it('should create payout, call Stripe, and record ledger entries', async () => {
       // Create a completed booking with owner earnings
       const booking = await prisma.booking.create({
@@ -269,7 +269,7 @@ describe('Payout Flow (e2e)', () => {
 
       // Request payout
       const response = await request(app.getHttpServer())
-        .post('/api/payments/payouts')
+        .post('/payments/payouts')
         .set('Authorization', `Bearer ${ownerAccessToken}`)
         .send({ amount: 2700 })
         .expect(201);
@@ -333,7 +333,7 @@ describe('Payout Flow (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .post('/api/payments/payouts')
+        .post('/payments/payouts')
         .set('Authorization', `Bearer ${ownerAccessToken}`)
         .send({ amount: 1000 })
         .expect(400);
@@ -352,7 +352,7 @@ describe('Payout Flow (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .post('/api/payments/payouts')
+        .post('/payments/payouts')
         .set('Authorization', `Bearer ${ownerAccessToken}`)
         .send({ amount: 1000 })
         .expect(400);
@@ -362,7 +362,7 @@ describe('Payout Flow (e2e)', () => {
       // No bookings created, so no earnings
 
       await request(app.getHttpServer())
-        .post('/api/payments/payouts')
+        .post('/payments/payouts')
         .set('Authorization', `Bearer ${ownerAccessToken}`)
         .send({ amount: 1000 })
         .expect(400);
@@ -399,7 +399,7 @@ describe('Payout Flow (e2e)', () => {
 
       // Request more than available
       await request(app.getHttpServer())
-        .post('/api/payments/payouts')
+        .post('/payments/payouts')
         .set('Authorization', `Bearer ${ownerAccessToken}`)
         .send({ amount: 5000 })
         .expect(400);

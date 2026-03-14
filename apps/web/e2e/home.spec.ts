@@ -60,12 +60,12 @@ test.describe("Homepage", () => {
   });
 
   test("should show auth links for guests", async ({ page }) => {
-    await expect(page.locator('a[href="/auth/login"]')).toBeVisible();
-    await expect(page.locator('a[href="/auth/signup"]')).toBeVisible();
+    await expect(page.locator('a[href^="/auth/login"]').first()).toBeVisible();
+    await expect(page.locator('a[href^="/auth/signup"]').first()).toBeVisible();
   });
 
   test("should navigate to login page", async ({ page }) => {
-    await page.click('a[href="/auth/login"]');
+    await page.locator('a[href^="/auth/login"]').first().click();
     await expect(page).toHaveURL(/\/auth\/login/);
   });
 

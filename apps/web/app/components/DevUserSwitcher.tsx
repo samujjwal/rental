@@ -189,7 +189,7 @@ export function DevUserSwitcher() {
               <div className="text-[10px] font-bold truncate leading-tight">
                 {isLoggingIn === user.email ? "..." : user.label}
               </div>
-              <div className="text-[8px] opacity-80 truncate leading-tight">{user.role}</div>
+              <div className="text-[10px] truncate leading-tight text-white">{user.role}</div>
             </div>
           </button>
         ))}

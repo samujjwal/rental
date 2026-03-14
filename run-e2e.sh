@@ -2,7 +2,8 @@
 # run-e2e.sh — One-command E2E test runner for local development
 #
 # Usage:
-#   ./run-e2e.sh                         # Run all E2E specs (chromium)
+#   ./run-e2e.sh                         # Run the core web E2E suite (chromium)
+#   ./run-e2e.sh full                    # Run the full web E2E suite (chromium)
 #   ./run-e2e.sh state-action-matrix     # Run single spec by name fragment
 #   ./run-e2e.sh --headed                # Run with visible browser
 #   STRIPE_TEST_BYPASS=false ./run-e2e   # Use real Stripe test keys
@@ -95,7 +96,10 @@ info "  E2E_API_URL=$E2E_API_URL"
 
 cd apps/web
 
-# Pass all script arguments through to Playwright (spec filter, --headed, etc.)
-pnpm exec playwright test \
-  --project=chromium \
-  "$@"
+# Default to Chromium unless the caller chose a project explicitly.
+if [[ " $* " != *" --project "* ]] && [[ " $* " != *"--project="* ]]; then
+  export PLAYWRIGHT_DEFAULT_PROJECT="chromium"
+fi
+
+# Pass all script arguments through to the grouped Playwright runner.
+pnpm exec node ./scripts/run-playwright-suite.mjs "$@"

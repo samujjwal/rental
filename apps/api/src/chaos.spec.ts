@@ -7,7 +7,7 @@
  *   - Malformed data
  *   - Concurrent requests
  *
- * Run with: pnpm --filter @rental-portal/api test -- --testPathPattern chaos
+ * Run with: pnpm --filter @rental-portal/api test -- --testPathPatterns chaos
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { FilterBuilderService } from './modules/admin/services/filter-builder.service';
@@ -40,32 +40,36 @@ describe('🌪️ Chaos / Fault Injection', () => {
 
     it('handles empty string field names', () => {
       expect(() =>
-        filterBuilder.buildWhereClause([
-          { field: '', operator: 'eq', value: 'test' },
-        ]),
+        filterBuilder.buildWhereClause([{ field: '', operator: 'eq', value: 'test' }]),
       ).toThrow('not allowed');
     });
 
     it('handles extremely long field names', () => {
       const longField = 'a'.repeat(10000);
       expect(() =>
-        filterBuilder.buildWhereClause([
-          { field: longField, operator: 'eq', value: 'test' },
-        ]),
+        filterBuilder.buildWhereClause([{ field: longField, operator: 'eq', value: 'test' }]),
       ).toThrow('not allowed');
     });
 
     it('throws on unsupported operator', () => {
       expect(() =>
-        filterBuilder.buildWhereClause([
-          { field: 'status', operator: 'INVALID' as any, value: 1 },
-        ]),
+        filterBuilder.buildWhereClause([{ field: 'status', operator: 'INVALID' as any, value: 1 }]),
       ).toThrow();
     });
 
     it('survives deeply nested filter groups', () => {
       // FilterGroup with many allowed-field conditions
-      const allowedFields = ['id', 'status', 'role', 'email', 'firstName', 'lastName', 'title', 'price', 'city'];
+      const allowedFields = [
+        'id',
+        'status',
+        'role',
+        'email',
+        'firstName',
+        'lastName',
+        'title',
+        'price',
+        'city',
+      ];
       const filters = Array.from({ length: 100 }, (_, i) => ({
         field: allowedFields[i % allowedFields.length],
         operator: 'eq' as const,
@@ -136,7 +140,18 @@ describe('🌪️ Chaos / Fault Injection', () => {
   describe('Concurrency stress', () => {
     it('FilterBuilder handles concurrent buildWhereClause calls', async () => {
       const filterBuilder = new FilterBuilderService();
-      const allowedFields = ['id', 'status', 'role', 'email', 'firstName', 'lastName', 'title', 'price', 'city', 'country'];
+      const allowedFields = [
+        'id',
+        'status',
+        'role',
+        'email',
+        'firstName',
+        'lastName',
+        'title',
+        'price',
+        'city',
+        'country',
+      ];
       const promises = Array.from({ length: 1000 }, (_, i) =>
         Promise.resolve(
           filterBuilder.buildWhereClause([
@@ -177,9 +192,9 @@ describe('🌪️ Chaos / Fault Injection', () => {
         },
       };
 
-      await expect(
-        mockPrisma.user.create({ data: { email: 'dup@test.com' } }),
-      ).rejects.toThrow('Unique constraint');
+      await expect(mockPrisma.user.create({ data: { email: 'dup@test.com' } })).rejects.toThrow(
+        'Unique constraint',
+      );
     });
   });
 

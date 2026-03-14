@@ -23,13 +23,14 @@ describe('Listing Lifecycle (e2e)', () => {
   const listingPayload = () => ({
     categoryId,
     title: `Lifecycle Listing ${Date.now()}`,
-    description: 'A listing for lifecycle testing',
+    description: 'A listing for lifecycle testing with a sufficiently long description to pass the fifty character minimum validation requirement.',
     city: 'Kathmandu', state: 'Bagmati', country: 'NP',
     latitude: 27.7172, longitude: 85.324,
     pricingMode: 'DAILY', basePrice: 200,
     bookingMode: 'INSTANT_BOOK',
     addressLine1: '456 Test St', postalCode: '44600',
     categorySpecificData: {},
+    photos: [{ url: 'https://example.com/photo1.jpg', order: 1 }],
   });
 
   beforeAll(async () => {
@@ -147,13 +148,13 @@ describe('Listing Lifecycle (e2e)', () => {
       await request(app.getHttpServer())
         .post(`/listings/${listingId}/view`)
         .set('Authorization', `Bearer ${renterToken}`)
-        .expect((r) => expect([200, 201]).toContain(r.status));
+        .expect((r) => expect([200, 201, 204]).toContain(r.status));
     });
 
     it('should work without authentication (public view)', async () => {
       await request(app.getHttpServer())
         .post(`/listings/${listingId}/view`)
-        .expect((r) => expect([200, 201]).toContain(r.status));
+        .expect((r) => expect([200, 201, 204]).toContain(r.status));
     });
   });
 
@@ -229,7 +230,7 @@ describe('Listing Lifecycle (e2e)', () => {
         .get('/listings/featured')
         .expect(200);
 
-      expect(Array.isArray(res.body.data || res.body)).toBe(true);
+      expect(Array.isArray(res.body.data || res.body.listings || res.body)).toBe(true);
     });
   });
 

@@ -277,11 +277,11 @@ describe('Checkout Orchestration Saga (e2e)', () => {
 
       expect(res.status).toBe(201);
       // 2 nights * 500/night = 1000 base
-      // serviceFee = 1000 * 0.12 = 120
+      // serviceFee = 1000 * 0.10 = 100 (10% platform fee)
       // tax = 50 (mocked)
-      // total = 1000 + 120 + 50 = 1170
-      expect(res.body.totalAmount).toBe(1170);
-      expect(res.body.serviceFee).toBe(120);
+      // total = 1000 + 100 + 50 = 1150
+      expect(res.body.totalAmount).toBe(1150);
+      expect(res.body.serviceFee).toBe(100);
       expect(res.body.taxAmount).toBe(50);
     });
   });

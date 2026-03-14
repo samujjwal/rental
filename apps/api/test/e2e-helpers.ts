@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '../src/common/prisma/prisma.service';
-import { UserRole } from '@rental-portal/database';
+import { UserRole, UserStatus } from '@rental-portal/database';
 
 const DEFAULT_PASSWORD = 'SecurePass123!';
 
@@ -26,6 +26,8 @@ type CreateUserWithRoleInput = RegisterUserInput & {
   app: INestApplication;
   prisma: PrismaService;
   role?: UserRole;
+  status?: UserStatus;
+  emailVerified?: boolean;
 };
 
 export const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -100,7 +102,9 @@ export const createUserWithRole = async ({
   lastName = 'User',
   phoneNumber = '+1234567890',
   role = UserRole.USER,
-}: CreateUserWithRoleInput): Promise<{ userId: string; accessToken: string; refreshToken?: string }> => {
+  status = UserStatus.ACTIVE,
+  emailVerified = true,
+}: CreateUserWithRoleInput): Promise<{ userId: string; user: { id: string }; accessToken: string; refreshToken?: string }> => {
   const registered = await registerUser(app, {
     email,
     password,
@@ -121,22 +125,20 @@ export const createUserWithRole = async ({
     userId = user.id;
   }
 
-  if (role !== UserRole.USER) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { role },
-    });
-
-    const relogin = await loginUser(app, email, password);
-    return {
-      userId,
-      accessToken: assertAccessToken(relogin.accessToken, `createUserWithRole(${email})`),
-      refreshToken: relogin.refreshToken,
-    };
-  }
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      role,
+      status,
+      emailVerified,
+      loginAttempts: 0,
+      lockedUntil: null,
+    },
+  });
 
   return {
-    userId: extractUserId(registered, `createUserWithRole(${email})`),
+    userId,
+    user: { id: userId },
     accessToken: assertAccessToken(registered.accessToken, `createUserWithRole(${email})`),
     refreshToken: registered.refreshToken,
   };

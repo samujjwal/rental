@@ -55,7 +55,7 @@ export class FavoritesController {
     @Headers('authorization') authorization?: string,
   ) {
     if (!authorization) {
-      return { favorited: false };
+      return { isFavorite: false };
     }
     
     try {
@@ -69,9 +69,10 @@ export class FavoritesController {
       const payload = jwt.verify(token) as { sub: string };
       const userId = payload.sub;
       
-      return this.favoritesService.getFavoriteByListingId(userId, listingId);
+      const result = await this.favoritesService.getFavoriteByListingId(userId, listingId);
+      return { isFavorite: result?.favorited ?? !!result };
     } catch {
-      return { favorited: false };
+      return { isFavorite: false };
     }
   }
 

@@ -19,7 +19,7 @@
 
 import { test, expect, type Page } from "@playwright/test";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3401";
 const API = process.env.E2E_API_URL ?? "http://localhost:3400/api";
 
 // ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ async function devLogin(page: Page, role: "USER" | "HOST" | "ADMIN") {
         : "renter@test.com";
 
   const res = await page.request.post(`${API}/auth/dev-login`, {
-    data: { email, role },
+    data: { email, role, secret: 'dev-secret-123' },
   });
   if (!res.ok()) throw new Error(`dev-login failed: ${res.status()}`);
   const payload = await res.json();

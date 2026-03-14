@@ -132,7 +132,7 @@ export class KycService {
     });
 
     this.logger.log(`Document ${documentId} ${dto.status} by admin ${adminId}`);
-    return updated;
+    return { ...updated, verificationStatus: updated.status };
   }
 
   /**
@@ -162,7 +162,7 @@ export class KycService {
       }),
     ]);
 
-    return { items, total, page, limit };
+    return { documents: items, total, page, limit };
   }
 
   /**

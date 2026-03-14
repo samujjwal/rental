@@ -70,14 +70,13 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   const validatedRole = parsedForm.role;
 
   try {
-    // Pass the selected role to the API
+    // Note: API doesn't accept a 'role' field on registration — new users are always USER
     const response = await authApi.signup({
       email: validatedEmail,
       password: validatedPassword,
       firstName: validatedFirstName,
       lastName: validatedLastName || undefined,
       phone: validatedPhone || undefined,
-      role: validatedRole,
     });
 
     // Update auth store immediately for better SPA experience
@@ -89,7 +88,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
       remember: false,
-      redirectTo: "/",
+      redirectTo: "/dashboard",
     });
   } catch (error: unknown) {
     return {

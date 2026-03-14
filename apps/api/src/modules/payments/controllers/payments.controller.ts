@@ -216,7 +216,12 @@ export class PaymentsController {
       return { data: [] as any[] };
     }
 
-    return this.stripe.getPaymentMethods(stripeCustomerId);
+    try {
+      return await this.stripe.getPaymentMethods(stripeCustomerId);
+    } catch {
+      // Return empty list if Stripe is unavailable or customer not found
+      return { data: [] as any[] };
+    }
   }
 
   @Post('methods/attach')

@@ -33,10 +33,10 @@ export class UpdateProfileDto {
   })
   phoneNumber?: string;
 
-  @ApiProperty({ description: 'Short biography', required: false, maxLength: 500 })
+  @ApiProperty({ description: 'Short biography', required: false, maxLength: 5000 })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(5000)
   bio?: string;
 
   @ApiProperty({ description: 'Profile photo URL', required: false })

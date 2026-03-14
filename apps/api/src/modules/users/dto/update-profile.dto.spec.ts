@@ -92,8 +92,8 @@ describe('UpdateProfileDto', () => {
     expect(errors.some((e) => e.property === 'lastName')).toBe(true);
   });
 
-  it('fails when bio exceeds 500 chars', async () => {
-    const dto = plainToInstance(UpdateProfileDto, { bio: 'B'.repeat(501) });
+  it('fails when bio exceeds 5000 chars', async () => {
+    const dto = plainToInstance(UpdateProfileDto, { bio: 'B'.repeat(5001) });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'bio')).toBe(true);
   });

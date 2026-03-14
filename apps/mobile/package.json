@@ -13,9 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "test:e2e": "maestro test .maestro/",
-    "test:e2e:login": "maestro test .maestro/auth-login.yaml",
-    "test:e2e:booking": "maestro test .maestro/booking-flow.yaml"
+    "test:e2e": "maestro test .maestro/"
   },
   "dependencies": {
     "@react-native-community/datetimepicker": "^8.0.0",

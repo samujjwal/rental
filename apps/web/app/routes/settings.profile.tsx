@@ -370,6 +370,7 @@ export default function ProfileSettings() {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors"
+                      aria-label="Upload profile photo"
                     >
                       <Camera className="w-4 h-4" />
                     </button>
@@ -414,11 +415,12 @@ export default function ProfileSettings() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
+                        <label htmlFor="firstName" className="block text-sm font-medium text-foreground mb-2">
                           {t("settings.profileSettings.firstName")}
                         </label>
                         <input
                           {...register("firstName")}
+                          id="firstName"
                           name="firstName"
                           type="text"
                           maxLength={50}
@@ -432,11 +434,12 @@ export default function ProfileSettings() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
+                        <label htmlFor="lastName" className="block text-sm font-medium text-foreground mb-2">
                           {t("settings.profileSettings.lastName")}
                         </label>
                         <input
                           {...register("lastName")}
+                          id="lastName"
                           name="lastName"
                           type="text"
                           maxLength={50}
@@ -446,13 +449,14 @@ export default function ProfileSettings() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
+                      <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
                         {t("settings.profileSettings.emailAddress")}
                       </label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                         <input
                           {...register("email")}
+                          id="email"
                           name="email"
                           type="email"
                           maxLength={320}
@@ -473,13 +477,14 @@ export default function ProfileSettings() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
+                      <label htmlFor="phoneNumber" className="block text-sm font-medium text-foreground mb-2">
                         {t("settings.profileSettings.phoneNumber")}
                       </label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                         <input
                           {...register("phoneNumber")}
+                          id="phoneNumber"
                           name="phoneNumber"
                           type="tel"
                           maxLength={20}
@@ -551,10 +556,11 @@ export default function ProfileSettings() {
                   <input type="hidden" name="intent" value="change-password" />
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
+                      <label htmlFor="currentPassword" className="block text-sm font-medium text-foreground mb-2">
                         {t("settings.profileSettings.currentPassword")}
                       </label>
                       <input
+                        id="currentPassword"
                         type="password"
                         name="currentPassword"
                         maxLength={128}
@@ -562,10 +568,11 @@ export default function ProfileSettings() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
+                      <label htmlFor="newPassword" className="block text-sm font-medium text-foreground mb-2">
                         {t("settings.profileSettings.newPassword")}
                       </label>
                       <input
+                        id="newPassword"
                         type="password"
                         name="newPassword"
                         maxLength={128}
@@ -573,10 +580,11 @@ export default function ProfileSettings() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
+                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground mb-2">
                         {t("settings.profileSettings.confirmPassword")}
                       </label>
                       <input
+                        id="confirmPassword"
                         type="password"
                         name="confirmPassword"
                         maxLength={128}
@@ -609,10 +617,11 @@ export default function ProfileSettings() {
                 <Form method="post">
                   <input type="hidden" name="intent" value="delete-account" />
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label htmlFor="deleteConfirmation" className="block text-sm font-medium text-foreground mb-2">
                       {t("settings.profileSettings.typeDeleteToConfirm")}
                     </label>
                     <input
+                      id="deleteConfirmation"
                       type="text"
                       name="deleteConfirmation"
                       value={deleteConfirmation}

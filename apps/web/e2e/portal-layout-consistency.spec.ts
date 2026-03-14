@@ -144,7 +144,7 @@ test.describe("Portal layout consistency", () => {
 
     await expect(page.locator("h1")).toContainText(/Renter Portal/i);
     await expect(
-      page.getByRole("link", { name: /Browse Rentals/i })
+      page.getByRole("link", { name: /Browse Rentals/i }).first()
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Open navigation menu" })

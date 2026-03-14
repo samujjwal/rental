@@ -55,6 +55,7 @@ export class LedgerService {
         data: [
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.CASH, // Renter's "account"
             transactionType: TransactionType.PAYMENT,
             side: LedgerSide.DEBIT,
@@ -65,6 +66,7 @@ export class LedgerService {
           },
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.LIABILITY, // Platform liability
             transactionType: TransactionType.PAYMENT,
             side: LedgerSide.CREDIT,
@@ -81,6 +83,7 @@ export class LedgerService {
         data: [
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.PLATFORM_FEE,
             side: LedgerSide.DEBIT,
@@ -91,6 +94,7 @@ export class LedgerService {
           },
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.REVENUE,
             transactionType: TransactionType.PLATFORM_FEE,
             side: LedgerSide.CREDIT,
@@ -107,6 +111,7 @@ export class LedgerService {
         data: [
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.SERVICE_FEE,
             side: LedgerSide.DEBIT,
@@ -117,6 +122,7 @@ export class LedgerService {
           },
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.REVENUE,
             transactionType: TransactionType.SERVICE_FEE,
             side: LedgerSide.CREDIT,
@@ -139,6 +145,7 @@ export class LedgerService {
         data: [
           {
             bookingId,
+            accountId: ownerId,
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.OWNER_EARNING,
             side: LedgerSide.DEBIT,
@@ -149,6 +156,7 @@ export class LedgerService {
           },
           {
             bookingId,
+            accountId: ownerId,
             accountType: AccountType.RECEIVABLE, // Owner's Receivable
             transactionType: TransactionType.OWNER_EARNING,
             side: LedgerSide.CREDIT,
@@ -173,6 +181,7 @@ export class LedgerService {
         data: [
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.CASH,
             transactionType: TransactionType.REFUND,
             // Refund: Credit CASH = money leaves the platform
@@ -184,6 +193,7 @@ export class LedgerService {
           },
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.REFUND,
             // Refund: Debit LIABILITY = platform's liability to renter decreases
@@ -232,6 +242,7 @@ export class LedgerService {
         data: [
           {
             bookingId,
+            accountId: ownerId,
             accountType: AccountType.RECEIVABLE,
             transactionType: TransactionType.PAYOUT,
             side: LedgerSide.DEBIT, // Debit Receivable (Decrease liability to owner)
@@ -242,6 +253,7 @@ export class LedgerService {
           },
           {
             bookingId,
+            accountId: ownerId,
             accountType: AccountType.CASH,
             transactionType: TransactionType.PAYOUT,
             side: LedgerSide.CREDIT, // Credit Cash (Money leaves platform)
@@ -266,6 +278,7 @@ export class LedgerService {
         data: [
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.CASH,
             transactionType: TransactionType.DEPOSIT_HOLD,
             side: LedgerSide.CREDIT, // Credit Renter (Hold money out)
@@ -276,6 +289,7 @@ export class LedgerService {
           },
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.DEPOSIT_HOLD,
             side: LedgerSide.DEBIT, // Debit Liability (We owe it back/hold it)
@@ -300,6 +314,7 @@ export class LedgerService {
         data: [
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.CASH,
             transactionType: TransactionType.DEPOSIT_RELEASE,
             side: LedgerSide.DEBIT, // Receive money back
@@ -310,6 +325,7 @@ export class LedgerService {
           },
           {
             bookingId,
+            accountId: renterId,
             accountType: AccountType.LIABILITY,
             transactionType: TransactionType.DEPOSIT_RELEASE,
             side: LedgerSide.CREDIT, // Release liability

@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: '0 2 * * 0' # Weekly on Sunday at 2 AM
 
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '10'
+
 jobs:
   e2e-expanded:
     name: Expanded E2E Test Suite
@@ -39,31 +43,32 @@ jobs:
       fail-fast: false
       matrix:
         suite:
-          - name: "Owner Flows"
-            files: "e2e/owner-dashboard.spec.ts e2e/owner-listings.spec.ts"
-          - name: "Renter Flows"
-            files: "e2e/renter-dashboard.spec.ts e2e/search-browse.spec.ts"
-          - name: "Feature Tests"
-            files: "e2e/home.spec.ts e2e/favorites.spec.ts e2e/messages.spec.ts"
-          - name: "Payment & Reviews"
-            files: "e2e/payments-reviews-notifications.spec.ts"
-          - name: "Password Recovery"
-            files: "e2e/password-recovery.spec.ts"
-          - name: "Organizations"
-            files: "e2e/organizations.spec.ts"
+          - name: 'Owner Flows'
+            files: 'e2e/owner-dashboard.spec.ts e2e/owner-listings.spec.ts'
+          - name: 'Renter Flows'
+            files: 'e2e/renter-dashboard.spec.ts e2e/search-browse.spec.ts'
+          - name: 'Feature Tests'
+            files: 'e2e/home.spec.ts e2e/favorites.spec.ts e2e/messages.spec.ts'
+          - name: 'Payment & Reviews'
+            files: 'e2e/payments-reviews-notifications.spec.ts'
+          - name: 'Password Recovery'
+            files: 'e2e/password-recovery.spec.ts'
+          - name: 'Organizations'
+            files: 'e2e/organizations.spec.ts'
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -88,30 +93,9 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
         continue-on-error: true
 
-      - name: Start API server
-        run: cd apps/api && pnpm start &
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-          REDIS_URL: redis://localhost:6379
-          NODE_ENV: test
-          EMAIL_ENABLED: "false"
-
-      - name: Start web server
-        run: cd apps/web && pnpm dev &
-        env:
-          NODE_ENV: test
-
-      - name: Wait for servers
-        run: |
-          npx wait-on http://localhost:3000 http://localhost:5000 --timeout 60000
-
       - name: Run ${{ matrix.suite.name }}
         run: |
-          cd apps/web
-          npx playwright test ${{ matrix.suite.files }} \
-            --project=chromium \
-            --reporter=list,html \
-            --timeout=30000
+          pnpm --filter @rental-portal/web run test:e2e -- ${{ matrix.suite.files }} --project=chromium --reporter=list,html --timeout=30000
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379
@@ -119,7 +103,7 @@ jobs:
 
       - name: Upload test results for ${{ matrix.suite.name }}
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.suite.name }}
           path: apps/web/playwright-report/
@@ -127,7 +111,7 @@ jobs:
 
       - name: Upload test videos
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-videos-${{ matrix.suite.name }}
           path: apps/web/test-results/

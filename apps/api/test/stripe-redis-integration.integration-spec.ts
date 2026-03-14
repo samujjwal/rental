@@ -137,15 +137,9 @@ describe('Stripe + Redis Integration (integration)', () => {
 
   describe('Payment DB Records', () => {
     it('should enforce unique constraint on payment intent ID', async () => {
-      // Check if Payment model exists and has the expected fields
-      const modelNames = Object.keys(prisma).filter(
-        (k) => !k.startsWith('_') && !k.startsWith('$') && typeof (prisma as any)[k]?.findMany === 'function',
-      );
-
-      // Verify the payment model (or similar) exists in Prisma
-      const hasPaymentModel = modelNames.some((m) =>
-        m.toLowerCase().includes('payment'),
-      );
+      // Check if Payment model exists in Prisma client
+      // (checks prototype chain which is where Prisma delegates live)
+      const hasPaymentModel = typeof (prisma as any).payment?.findMany === 'function';
 
       expect(hasPaymentModel).toBe(true);
     });

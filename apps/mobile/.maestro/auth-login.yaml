@@ -25,7 +25,6 @@ appId: com.gharbatai.rental
 # 4. Wait for navigation to home/main screen
 - assertVisible:
     text: "Home"
-    timeout: 10000
 
 # 5. Verify bottom tabs are visible (authenticated state)
 - assertVisible: "Search"

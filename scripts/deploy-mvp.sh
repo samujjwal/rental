@@ -256,44 +256,10 @@ fi
 
 log_section "Backup Automation"
 
-cat >"$PROJECT_ROOT/scripts/backup-mvp.sh" <<'EOF'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-COMPOSE_FILE="$PROJECT_ROOT/docker-compose.mvp.yml"
-ENV_FILE="$PROJECT_ROOT/.env.mvp"
-
-if docker compose version >/dev/null 2>&1; then
-  COMPOSE_CMD=(docker compose)
-elif command -v docker-compose >/dev/null 2>&1; then
-  COMPOSE_CMD=(docker-compose)
-else
-  echo "Docker Compose is not installed"
+if [ ! -f "$PROJECT_ROOT/scripts/backup-mvp.sh" ]; then
+  log_error "Missing backup script: $PROJECT_ROOT/scripts/backup-mvp.sh"
   exit 1
 fi
-
-compose() {
-  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
-}
-
-set -a
-source "$ENV_FILE"
-set +a
-
-BACKUP_DIR="$PROJECT_ROOT/backups"
-RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
-BACKUP_FILE="$BACKUP_DIR/backup-$(date +%Y%m%d-%H%M%S).sql"
-
-mkdir -p "$BACKUP_DIR"
-
-compose exec -T postgres pg_dump -U "${POSTGRES_USER:-postgres}" "${POSTGRES_DB:-gharbatai}" >"$BACKUP_FILE"
-gzip -f "$BACKUP_FILE"
-
-find "$BACKUP_DIR" -name "backup-*.sql.gz" -mtime +"$RETENTION_DAYS" -delete
-echo "Backup completed: ${BACKUP_FILE}.gz"
-EOF
 
 chmod +x "$PROJECT_ROOT/scripts/backup-mvp.sh"
 

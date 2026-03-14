@@ -124,6 +124,11 @@ describe('Authentication (e2e)', () => {
         lastName: 'Test',
         phoneNumber: '+1234567890',
       });
+      // Activate user so login succeeds (registration creates PENDING_VERIFICATION status)
+      await prisma.user.update({
+        where: { email: loginEmail },
+        data: { status: 'ACTIVE', emailVerified: true },
+      });
     });
 
     it('should login with correct credentials', async () => {
@@ -165,14 +170,19 @@ describe('Authentication (e2e)', () => {
     let refreshToken: string;
 
     beforeEach(async () => {
+      const refreshEmail = buildEmail('refreshtest');
       const response = await request(app.getHttpServer()).post('/auth/register').send({
-        email: buildEmail('refreshtest'),
+        email: refreshEmail,
         password: 'SecurePass123!',
         firstName: 'Refresh',
         lastName: 'Test',
         phoneNumber: '+1234567890',
       });
-
+      // Activate user so refresh succeeds
+      await prisma.user.update({
+        where: { email: refreshEmail },
+        data: { status: 'ACTIVE', emailVerified: true },
+      });
       refreshToken = response.body.refreshToken;
     });
 
@@ -199,14 +209,19 @@ describe('Authentication (e2e)', () => {
     let accessToken: string;
 
     beforeEach(async () => {
+      const protectedEmail = buildEmail('protected');
       const response = await request(app.getHttpServer()).post('/auth/register').send({
-        email: buildEmail('protected'),
+        email: protectedEmail,
         password: 'SecurePass123!',
         firstName: 'Protected',
         lastName: 'Test',
         phoneNumber: '+1234567890',
       });
-
+      // Activate user so protected routes accept the token
+      await prisma.user.update({
+        where: { email: protectedEmail },
+        data: { status: 'ACTIVE', emailVerified: true },
+      });
       accessToken = response.body.accessToken;
     });
 

@@ -125,6 +125,12 @@ describe('Email Verification Flow (e2e)', () => {
         select: { id: true, emailVerified: true },
       });
       userId = user!.id;
+
+      // Activate account (status ACTIVE) but keep emailVerified:false so verification tests work
+      await prisma.user.update({
+        where: { id: userId },
+        data: { status: 'ACTIVE' as any, emailVerified: false },
+      });
     });
 
     it('should send verification email and store token hash in DB', async () => {

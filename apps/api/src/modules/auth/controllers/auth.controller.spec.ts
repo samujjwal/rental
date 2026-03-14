@@ -300,7 +300,13 @@ describe('AuthController', () => {
     it('passes email, code, ip and user-agent', async () => {
       otpService.verifyOtp.mockResolvedValue({ accessToken: 'tok' } as any);
       await controller.verifyOtp({ email: 'a@b.com', code: '123456' } as any, '::1', mockReq);
-      expect(otpService.verifyOtp).toHaveBeenCalledWith('a@b.com', '123456', '::1', 'test-agent');
+      expect(otpService.verifyOtp).toHaveBeenCalledWith(
+        'a@b.com',
+        '123456',
+        '::1',
+        'test-agent',
+        undefined,
+      );
     });
   });
 

@@ -86,10 +86,10 @@ describe('Category DTOs', () => {
       expect(errors.some((e) => e.property === 'slug')).toBe(true);
     });
 
-    it('fails when description exceeds 500 chars', async () => {
+    it('fails when description exceeds 5000 chars', async () => {
       const dto = plainToInstance(CreateCategoryDto, {
         ...validData,
-        description: 'D'.repeat(501),
+        description: 'D'.repeat(5001),
       });
       const errors = await validate(dto);
       expect(errors.some((e) => e.property === 'description')).toBe(true);

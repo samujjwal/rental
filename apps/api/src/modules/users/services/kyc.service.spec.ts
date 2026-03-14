@@ -177,7 +177,7 @@ describe('KycService', () => {
       (prisma.identityDocument.count as jest.Mock).mockResolvedValue(1);
 
       const result = await service.getPendingDocuments(1, 10);
-      expect(result).toEqual({ items, total: 1, page: 1, limit: 10 });
+      expect(result).toEqual({ documents: items, total: 1, page: 1, limit: 10 });
     });
 
     it('uses default pagination', async () => {

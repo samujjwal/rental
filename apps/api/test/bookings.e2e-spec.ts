@@ -85,7 +85,7 @@ describe('Bookings (e2e)', () => {
     const category = await prisma.category.create({
       data: {
         name: 'Test Category',
-        slug: 'test-category-booking',
+        slug: `test-category-booking-${Date.now()}`,
         description: 'Test category for bookings',
         icon: 'test',
         isActive: true,
@@ -103,7 +103,7 @@ describe('Bookings (e2e)', () => {
         category: { connect: { id: categoryId } },
         title: 'Test Listing for Booking',
         description: 'A test listing',
-        slug: 'test-listing-booking',
+        slug: `test-listing-booking-${Date.now()}`,
         address: '123 Booking Test St',
         basePrice: 100,
         currency: 'USD',
@@ -147,9 +147,9 @@ describe('Bookings (e2e)', () => {
       expect(response.body.listingId).toBe(listingId);
       expect(response.body.renterId).toBe(renterId);
       expect(response.body.status).toBe(BookingStatus.PENDING_OWNER_APPROVAL);
-      expect(response.body).toHaveProperty('subtotal');
+      expect(response.body).toHaveProperty('basePrice');
       expect(response.body).toHaveProperty('platformFee');
-      expect(response.body).toHaveProperty('totalAmount');
+      expect(response.body).toHaveProperty('totalPrice');
 
       bookingId = response.body.id;
     });
@@ -198,6 +198,7 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .send({
           listingId,
+          ownerId,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
         })
@@ -215,12 +216,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.CONFIRMED,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -238,6 +239,7 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .send({
           listingId,
+          ownerId,
           startDate: overlapStart.toISOString(),
           endDate: overlapEnd.toISOString(),
         })
@@ -255,6 +257,7 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
           listingId,
+          ownerId,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
         })
@@ -271,6 +274,7 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .send({
           listingId,
+          ownerId,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
         })
@@ -290,12 +294,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -310,9 +314,9 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body[0].renterId).toBe(renterId);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(response.body.data[0].renterId).toBe(renterId);
     });
 
     it('should filter bookings by status', async () => {
@@ -322,8 +326,8 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      response.body.forEach((booking: any) => {
+      expect(Array.isArray(response.body.data)).toBe(true);
+      response.body.data.forEach((booking: any) => {
         expect(booking.status).toBe(BookingStatus.PENDING_OWNER_APPROVAL);
       });
     });
@@ -340,12 +344,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -360,9 +364,9 @@ describe('Bookings (e2e)', () => {
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body[0].listing.ownerId).toBe(ownerId);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(response.body.data[0].listing.ownerId).toBe(ownerId);
     });
   });
 
@@ -377,12 +381,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -422,12 +426,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -464,12 +468,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.PENDING_OWNER_APPROVAL,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -508,12 +512,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.CONFIRMED,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -553,12 +557,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.CONFIRMED,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -596,12 +600,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.IN_PROGRESS,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,
@@ -638,12 +642,12 @@ describe('Bookings (e2e)', () => {
         data: {
           renterId,
           listingId,
+          ownerId,
           startDate,
           endDate,
           status: BookingStatus.AWAITING_RETURN_INSPECTION,
           basePrice: 300,
           totalPrice: 330,
-          totalAmount: 330,
           currency: 'USD',
           platformFee: 2000,
           serviceFee: 1000,

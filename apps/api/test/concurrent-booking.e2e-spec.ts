@@ -14,6 +14,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { UserRole } from '@rental-portal/database';
 import {
   createUserWithRole,
   loginUser,
@@ -59,49 +60,50 @@ describe('Concurrent Booking Race Condition (e2e)', () => {
     await app.init();
 
     // Create owner with Stripe connect
-    const { user: owner } = await createUserWithRole({
+    const { userId: ownerUserId } = await createUserWithRole({
       app,
       prisma,
       email: ownerEmail,
-      role: 'OWNER',
+      role: UserRole.HOST,
       password: 'ConcTest!123',
       firstName: 'ConcOwner',
     });
     await prisma.user.update({
-      where: { id: owner.id },
+      where: { id: ownerUserId },
       data: {
         emailVerified: true,
         stripeConnectId: `acct_test_conc_${suffix}`,
-        stripeConnectStatus: 'ACTIVE',
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
       },
     });
     ownerToken = (await loginUser(app, ownerEmail, 'ConcTest!123')).accessToken;
 
     // Create two renters
-    const { user: renter1 } = await createUserWithRole({
+    const { userId: renter1UserId } = await createUserWithRole({
       app,
       prisma,
       email: renter1Email,
-      role: 'RENTER',
+      role: UserRole.USER,
       password: 'ConcTest!123',
       firstName: 'Renter1',
     });
     await prisma.user.update({
-      where: { id: renter1.id },
+      where: { id: renter1UserId },
       data: { emailVerified: true },
     });
     renter1Token = (await loginUser(app, renter1Email, 'ConcTest!123')).accessToken;
 
-    const { user: renter2 } = await createUserWithRole({
+    const { userId: renter2UserId } = await createUserWithRole({
       app,
       prisma,
       email: renter2Email,
-      role: 'RENTER',
+      role: UserRole.USER,
       password: 'ConcTest!123',
       firstName: 'Renter2',
     });
     await prisma.user.update({
-      where: { id: renter2.id },
+      where: { id: renter2UserId },
       data: { emailVerified: true },
     });
     renter2Token = (await loginUser(app, renter2Email, 'ConcTest!123')).accessToken;
@@ -115,14 +117,20 @@ describe('Concurrent Booking Race Condition (e2e)', () => {
     const listing = await prisma.listing.create({
       data: {
         title: `Concurrent Test Listing ${suffix}`,
+        slug: `conc-listing-${suffix}`,
         description: 'Testing concurrent booking prevention',
+        address: '1 Test Street',
+        city: 'Kathmandu',
+        state: 'Bagmati',
+        zipCode: '44600',
+        country: 'NP',
+        type: 'HOUSE',
         basePrice: 100,
         currency: 'NPR',
         categoryId: cat.id,
-        ownerId: owner.id,
-        status: 'ACTIVE',
+        ownerId: ownerUserId,
+        status: 'AVAILABLE',
         condition: 'GOOD',
-        location: 'Kathmandu',
       },
     });
     listingId = listing.id;

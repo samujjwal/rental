@@ -80,7 +80,7 @@ export class EscrowService {
       throw new BadRequestException(`Active escrow already exists for booking ${bookingId}`);
     }
 
-    const holdUntil = holdDays
+    const holdUntil = holdDays != null
       ? new Date(Date.now() + holdDays * 24 * 60 * 60 * 1000)
       : new Date(booking.endDate.getTime() + 48 * 60 * 60 * 1000); // Default: 48h after checkout
 

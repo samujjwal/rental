@@ -12,7 +12,6 @@ appId: com.gharbatai.rental
 # 1. Navigate to Home tab (default after login)
 - assertVisible:
     text: "Home"
-    timeout: 5000
 
 # 2. Tap on a featured/recent listing
 - tapOn:
@@ -32,14 +31,12 @@ appId: com.gharbatai.rental
 # 3. On listing detail, tap Book/Request button
 - assertVisible:
     text: "Book|Request"
-    timeout: 8000
 - tapOn:
     text: "Book|Request"
 
 # 4. Booking flow screen — select dates
 - assertVisible:
     text: "Select Dates|Choose Dates|Start Date"
-    timeout: 8000
 
 # 5. Tap start date (pick a date ~5 days from now)
 - tapOn:
@@ -55,7 +52,6 @@ appId: com.gharbatai.rental
 - assertVisible:
     text: "Total|Price|NPR|Rs"
     optional: true
-    timeout: 5000
 
 # 8. Confirm booking
 - tapOn:
@@ -65,5 +61,4 @@ appId: com.gharbatai.rental
 # 9. Should see success or pending status
 - assertVisible:
     text: "Pending|Confirmed|Success|Booked"
-    timeout: 10000
     optional: true

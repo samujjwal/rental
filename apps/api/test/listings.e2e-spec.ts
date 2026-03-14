@@ -209,6 +209,8 @@ describe('Listings (e2e)', () => {
         .send({ ...listingPayload(), status: 'AVAILABLE' })
         .expect(201);
       availableListingId = availableListing.body.id;
+      // API creates listings as DRAFT; update to AVAILABLE via Prisma for status-based tests
+      await prisma.listing.update({ where: { id: availableListingId }, data: { status: 'AVAILABLE' } });
 
       const archivedListing = await request(app.getHttpServer())
         .post('/listings')
@@ -216,6 +218,8 @@ describe('Listings (e2e)', () => {
         .send({ ...listingPayload(), status: 'ARCHIVED' })
         .expect(201);
       archivedListingId = archivedListing.body.id;
+      // Update to ARCHIVED via Prisma for status-based tests
+      await prisma.listing.update({ where: { id: archivedListingId }, data: { status: 'ARCHIVED' } });
     });
 
     it('should allow public access to AVAILABLE listing', async () => {

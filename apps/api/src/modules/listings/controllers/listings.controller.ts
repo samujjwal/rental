@@ -13,6 +13,7 @@ import {
   Inject,
   forwardRef,
   NotFoundException,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@rental-portal/database';
@@ -28,6 +29,7 @@ import {
   AvailabilityCheckDto,
 } from '../services/availability.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '@/modules/auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
@@ -153,11 +155,14 @@ export class ListingsController {
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get listing by ID' })
   @ApiResponse({ status: 200, description: 'Listing retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Listing not found' })
-  async findById(@Param('id') id: string) {
-    const listing = await this.listingsService.findById(id);
+  async findById(@Param('id') id: string, @Req() req: any) {
+    // Optionally use authenticated user context to allow owners/admins to see their own non-AVAILABLE listings
+    const user = req.user as { id?: string; role?: string } | undefined;
+    const listing = await this.listingsService.findById(id, false, user?.id, user?.role);
     return this.mapToFrontendListing(listing);
   }
 

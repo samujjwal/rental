@@ -51,12 +51,23 @@ function toApiRole(role: TestUser["role"]): "USER" | "HOST" | "ADMIN" {
 }
 
 async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
-  const response = await page.request.post(`${API_BASE_URL}/auth/dev-login`, {
-    data: {
-      email: user.email,
-      role: toApiRole(user.role),
-    },
+  const requestData = {
+    email: user.email,
+    role: toApiRole(user.role),
+    secret: 'dev-secret-123',
+  };
+
+  let response = await page.request.post(`${API_BASE_URL}/auth/dev-login`, {
+    data: requestData,
   });
+
+  // Retry on rate-limit (429) or transient server errors (5xx) with backoff
+  for (let attempt = 1; attempt <= 3 && (response.status() === 429 || response.status() >= 500); attempt++) {
+    await new Promise((r) => setTimeout(r, attempt * 2000));
+    response = await page.request.post(`${API_BASE_URL}/auth/dev-login`, {
+      data: requestData,
+    });
+  }
 
   if (!response.ok()) {
     return false;
@@ -75,6 +86,9 @@ async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
   await page.goto("/");
   await page.evaluate(
     ({ authStorageKey, accessToken, authUser }) => {
+      // Clear any stale auth state before setting new auth
+      localStorage.clear();
+
       const rawRole =
         authUser &&
         typeof authUser === "object" &&
@@ -115,11 +129,42 @@ async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
 
   const destination = user.role === "admin" ? "/admin" : "/dashboard";
   await page
-    .goto(destination, { waitUntil: "domcontentloaded", timeout: 10000 })
+    .goto(destination, { waitUntil: "domcontentloaded", timeout: 30000 })
     .catch(() => {
       // Some heavy pages can exceed the default navigation budget in CI-like environments.
     });
-  return !page.url().includes("/auth/login");
+
+  // Wait for SPA client-side redirects to settle (clientLoader runs async after DOM loads)
+  await page
+    .waitForURL((url) => !url.pathname.startsWith("/auth/"), { timeout: 8000 })
+    .catch(() => {
+      // If still on auth page after 8s, it's a real auth failure
+    });
+
+  // Verify auth succeeded — we should NOT be on the login page
+  if (page.url().includes("/auth/login")) {
+    return false;
+  }
+
+  // Also verify we landed somewhere expected (not a completely wrong page)
+  const expectedPath = user.role === "admin" ? "/admin" : "/dashboard";
+  if (!page.url().includes(expectedPath)) {
+    return false;
+  }
+
+  // Verify auth state is present in localStorage after navigation
+  const hasAuth = await page.evaluate((storageKey: string) => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as { state?: { accessToken?: string } };
+      return typeof parsed?.state?.accessToken === "string";
+    } catch {
+      return false;
+    }
+  }, AUTH_STORAGE_KEY);
+
+  return hasAuth;
 }
 
 /**

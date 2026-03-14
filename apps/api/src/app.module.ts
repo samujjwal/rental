@@ -44,6 +44,8 @@ import { ComplianceModule } from './modules/compliance/compliance.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { CleanupModule } from './common/cleanup/cleanup.module';
+import { SchedulerModule } from './common/scheduler/scheduler.module';
+import { HealthModule } from './common/health/health.module';
 
 import configuration from './config/configuration';
 import { CsrfGuard } from './common/guards/csrf.guard';
@@ -62,12 +64,15 @@ import { ConfigCascadeModule } from './common/config/config-cascade.module';
     ConfigCascadeModule,
 
     // Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 1 minute
-        limit: 100, // 100 requests per minute
-      },
-    ]),
+    ThrottlerModule.forRoot({
+      skipIf: () => process.env.DISABLE_THROTTLE === 'true',
+      throttlers: [
+        {
+          ttl: parseInt(process.env.RATE_LIMIT_TTL || '60') * 1000, // ms
+          limit: parseInt(process.env.RATE_LIMIT_MAX || '100'), // requests per window
+        },
+      ],
+    }),
 
     // Scheduling
     ScheduleModule.forRoot(),
@@ -124,6 +129,8 @@ import { ConfigCascadeModule } from './common/config/config-cascade.module';
     MarketplaceModule,
     MetricsModule,
     CleanupModule,
+    SchedulerModule,
+    HealthModule,
   ],
   providers: [
     // Global rate limiting guard

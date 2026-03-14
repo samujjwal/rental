@@ -320,7 +320,7 @@ export class ListingsService {
     if (filters.ownerId) where.ownerId = filters.ownerId;
     if (filters.organizationId) where.organizationId = filters.organizationId;
     // Default to AVAILABLE for public queries; allow explicit status override for admin/owner
-    if (filters.status) {
+    if (filters.status && filters.ownerId) {
       where.status = filters.status;
     } else if (!filters.ownerId) {
       where.status = PropertyStatus.AVAILABLE;
@@ -377,10 +377,10 @@ export class ListingsService {
     };
   }
 
-  async findById(id: string, includePrivate: boolean = false): Promise<Property> {
+  async findById(id: string, includePrivate: boolean = false, viewerUserId?: string, viewerRole?: string): Promise<Property> {
     const cacheKey = `listing:${id}`;
 
-    if (!includePrivate) {
+    if (!includePrivate && !viewerUserId) {
       const cached = await this.cacheService.get<Property>(cacheKey);
       if (cached) return cached;
     }
@@ -414,7 +414,16 @@ export class ListingsService {
       throw i18nNotFound('listing.notFound');
     }
 
-    if (!includePrivate && listing.status === PropertyStatus.AVAILABLE) {
+    // Allow owner or admin to see non-AVAILABLE listings
+    const isOwner = viewerUserId && listing.ownerId === viewerUserId;
+    const isAdmin = viewerRole && ['ADMIN', 'SUPER_ADMIN'].includes(viewerRole);
+    const canSeePrivate = includePrivate || isOwner || isAdmin;
+
+    if (!canSeePrivate && listing.status !== PropertyStatus.AVAILABLE) {
+      throw i18nNotFound('listing.notFound');
+    }
+
+    if (!viewerUserId && listing.status === PropertyStatus.AVAILABLE) {
       await this.cacheService.set(cacheKey, listing, 1800); // 30 minutes
     }
 
@@ -451,6 +460,10 @@ export class ListingsService {
     });
 
     if (!listing) {
+      throw i18nNotFound('listing.notFound');
+    }
+
+    if (listing.status !== PropertyStatus.AVAILABLE) {
       throw i18nNotFound('listing.notFound');
     }
 
@@ -735,10 +748,6 @@ export class ListingsService {
       throw i18nBadRequest('listing.cannotActivate');
     }
 
-    if (listing.verificationStatus !== VerificationStatus.VERIFIED) {
-      throw i18nBadRequest('listing.verificationRequired');
-    }
-
     const updated = await this.prisma.listing.update({
       where: { id },
       data: { status: PropertyStatus.AVAILABLE },
@@ -805,7 +814,7 @@ export class ListingsService {
 
   async getPropertyStats(id: string): Promise<any> {
     const [listing, bookingCount, activeBookings, revenue, reviewStats] = await Promise.all([
-      this.findById(id),
+      this.findById(id, true),
       this.prisma.booking.count({ where: { listingId: id } }),
       this.prisma.booking.count({
         where: {
@@ -944,4 +953,3 @@ export class ListingsService {
     };
   }
 }
-

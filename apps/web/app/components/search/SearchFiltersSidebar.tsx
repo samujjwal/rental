@@ -174,6 +174,7 @@ export function SearchFiltersSidebar({
             <div className="flex items-center gap-2">
               <input
                 type="number"
+                name="minPrice"
                 placeholder={t("search.min")}
                 value={searchParams.minPrice || ""}
                 onChange={(e) => onFilterChange("minPrice", e.target.value)}
@@ -182,6 +183,7 @@ export function SearchFiltersSidebar({
               <span className="text-muted-foreground">-</span>
               <input
                 type="number"
+                name="maxPrice"
                 placeholder={t("search.max")}
                 value={searchParams.maxPrice || ""}
                 onChange={(e) => onFilterChange("maxPrice", e.target.value)}

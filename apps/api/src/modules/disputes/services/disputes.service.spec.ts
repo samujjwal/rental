@@ -233,7 +233,10 @@ describe('DisputesService', () => {
   describe('updateDispute (admin)', () => {
     it('should allow admin to update dispute status', async () => {
       prisma.user.findUnique.mockResolvedValue({ role: UserRole.ADMIN });
-      prisma.dispute.findUnique.mockResolvedValue(mockDispute);
+      prisma.dispute.findUnique.mockResolvedValue({
+        ...mockDispute,
+        status: DisputeStatus.UNDER_REVIEW,
+      });
       prisma.dispute.update.mockResolvedValue({
         ...mockDispute,
         status: DisputeStatus.RESOLVED,

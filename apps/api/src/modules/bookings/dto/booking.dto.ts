@@ -8,7 +8,6 @@ import {
   Max,
   MaxLength,
   IsNotEmpty,
-  IsUUID,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -21,7 +20,8 @@ export enum DeliveryMethod {
 
 export class CreateBookingDto {
   @ApiProperty({ description: 'Listing ID to book' })
-  @IsUUID('4')
+  @IsString()
+  @IsNotEmpty()
   listingId: string;
 
   @ApiProperty({ description: 'Start date of booking', example: '2025-03-01T00:00:00Z' })

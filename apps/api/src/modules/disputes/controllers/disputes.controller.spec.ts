@@ -50,8 +50,14 @@ describe('DisputesController', () => {
       service.createDispute.mockResolvedValue(mockDispute as any);
       const dto = { bookingId: 'b1', reason: 'Damaged item' } as any;
       const result = await controller.createDispute('u1', dto);
-      expect(service.createDispute).toHaveBeenCalledWith('u1', dto);
-      expect(result).toBe(mockDispute);
+      expect(service.createDispute).toHaveBeenCalledWith('u1', {
+        ...dto,
+        type: 'Damaged item',
+        amount: undefined,
+        title: 'Damaged item',
+        evidence: undefined,
+      });
+      expect(result).toMatchObject({ id: 'd1', status: 'OPEN', bookingId: 'b1' });
     });
   });
 

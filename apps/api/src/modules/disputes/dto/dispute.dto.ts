@@ -24,31 +24,43 @@ export class CreateDisputeDto {
   @IsString()
   bookingId: string;
 
-  @ApiProperty({ description: 'Dispute title' })
+  @ApiProperty({ description: 'Dispute title', required: false })
+  @IsOptional()
   @IsString()
   @MaxLength(200)
-  title: string;
+  title?: string;
 
-  @ApiProperty({ description: 'Type of dispute', enum: DisputeType })
+  @ApiProperty({ description: 'Type of dispute', enum: DisputeType, required: false })
+  @IsOptional()
   @IsEnum(DisputeType)
-  type: DisputeType;
+  type?: DisputeType;
+
+  @ApiProperty({ description: 'Reason / type alias', enum: DisputeType, required: false })
+  @IsOptional()
+  @IsEnum(DisputeType)
+  reason?: DisputeType;
 
   @ApiProperty({ description: 'Detailed description of the dispute' })
   @IsString()
   @MaxLength(5000)
   description: string;
 
-  @ApiProperty({ description: 'URLs of evidence files', required: false })
+  @ApiProperty({ description: 'URLs or objects of evidence files', required: false })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  evidence?: string[];
+  evidence?: any[];
 
   @ApiProperty({ description: 'Disputed amount', required: false })
   @IsOptional()
   @IsNumber()
   @Min(0)
   amount?: number;
+
+  @ApiProperty({ description: 'Requested amount alias for amount', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  requestedAmount?: number;
 }
 
 export class UpdateDisputeDto {

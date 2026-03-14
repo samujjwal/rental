@@ -197,7 +197,7 @@ export class AdminAnalyticsService {
     ]);
 
     // Get category details
-    const categoryIds = topCategories.map((c) => c.categoryId);
+    const categoryIds = topCategories.map((c) => c.categoryId).filter((id): id is string => id !== null);
     const categories = await this.prisma.category.findMany({
       where: { id: { in: categoryIds } },
       select: { id: true, name: true },

@@ -1,8 +1,8 @@
-import { IsString, IsUUID, IsEnum, IsOptional, IsArray, IsIn } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsArray, IsIn } from 'class-validator';
 import { NotificationType } from '@rental-portal/database';
 
 export class CreateNotificationDto {
-  @IsUUID()
+  @IsString()
   userId: string;
 
   @IsEnum(NotificationType)

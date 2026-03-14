@@ -105,23 +105,23 @@
 
     /* Muted - For de-emphasized text */
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted-foreground: 215.4 16.3% 40%;  /* Darkened from 46.9% → 40% for WCAG AA contrast */
 
     /* Accent - For hover states and subtle highlights */
     --accent: 210 40% 96.1%;
     --accent-foreground: 222 47% 11.2%;
 
-    /* Destructive - Modern Red */
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Destructive - Modern Red (darkened to red-600 for WCAG AA 4.5:1 contrast) */
+    --destructive: 0 72.2% 50.6%;
+    --destructive-foreground: 0 0% 100%;
 
-    /* Success - Green (Confirmations, positive actions) */
-    --success: 142 76% 36%;
+    /* Success - Green (darkened to green-700 for WCAG AA 4.5:1 contrast) */
+    --success: 142 71% 29%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning - Amber (Caution, attention needed) */
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 0%;
+    /* Warning - Amber (darkened to 30% for WCAG AA 4.5:1 text contrast on white) */
+    --warning: 38 92% 30%;
+    --warning-foreground: 0 0% 100%;
 
     /* Info - Blue (Informational messages) */
     --info: 217 91% 60%;

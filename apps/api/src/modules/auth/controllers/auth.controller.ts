@@ -58,7 +58,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User successfully registered' })
   @ApiResponse({ status: 409, description: 'User already exists' })
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: 50, ttl: 60000 } })
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
@@ -68,7 +68,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'Successfully logged in' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
   async login(@Body() dto: LoginDto, @Ip() ipAddress: string, @Req() req: Request) {
     const userAgent = req.headers['user-agent'];
     return this.authService.login(dto, ipAddress, userAgent);
@@ -80,7 +80,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Successfully logged in for development' })
   @ApiResponse({ status: 401, description: 'Not available outside development' })
   @ApiResponse({ status: 404, description: 'Endpoint disabled' })
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: 500, ttl: 60000 } })
   async devLogin(
     @Body() body: DevLoginDto,
     @Ip() ipAddress: string,
@@ -98,7 +98,7 @@ export class AuthController {
     }
     
     // 3. IP whitelist check (optional additional security)
-    const allowedIps = process.env.DEV_LOGIN_ALLOWED_IPS?.split(',') || [];
+    const allowedIps = process.env.DEV_LOGIN_ALLOWED_IPS?.split(',').filter(ip => ip.trim()) || [];
     if (allowedIps.length > 0 && !allowedIps.includes(ipAddress)) {
       throw new NotFoundException('Development login not allowed from this IP');
     }

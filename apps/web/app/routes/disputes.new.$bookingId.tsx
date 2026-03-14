@@ -38,9 +38,10 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
+// Accepts both UUID and CUID/CUID2 formats used by this system
+const ID_PATTERN = /^[a-z0-9_-]{20,}$/i;
+const isValidId = (value: string | undefined): value is string =>
+  Boolean(value && ID_PATTERN.test(value));
 const MAX_EVIDENCE_FILES = 8;
 const MAX_EVIDENCE_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_DISPUTE_TITLE_LENGTH = 120;
@@ -58,7 +59,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   }
 
   const bookingId = params.bookingId;
-  if (!isUuid(bookingId)) return redirect("/bookings");
+  if (!isValidId(bookingId)) return redirect("/bookings");
 
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
@@ -80,7 +81,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
   }
 
   const bookingId = params.bookingId;
-  if (!isUuid(bookingId)) return { error: "Booking ID is required" };
+  if (!isValidId(bookingId)) return { error: "Booking ID is required" };
 
   const formData = await request.formData();
   const type = formData.get("type") as string;
@@ -242,7 +243,7 @@ export default function DisputeNewRoute() {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(`/bookings/${booking.id}`)}
             className="flex items-center text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
@@ -503,7 +504,7 @@ export default function DisputeNewRoute() {
             <div className="flex gap-4">
               <button
                 type="button"
-                onClick={() => navigate(-1)}
+                onClick={() => navigate(`/bookings/${booking.id}`)}
                 className="flex-1 px-6 py-3 border border-input rounded-lg font-medium text-foreground hover:bg-muted transition-colors"
               >
                 {t("common.cancel")}

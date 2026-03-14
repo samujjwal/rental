@@ -42,7 +42,7 @@ fi
 echo -e "${YELLOW}Checking if API is running...${NC}"
 if ! curl -s "${API_URL}/api/${API_VERSION}/health" > /dev/null; then
     echo -e "${RED}Error: API is not running at ${API_URL}${NC}"
-    echo "Start the API with: npm run start:dev"
+    echo "Start the API with: pnpm run dev"
     exit 1
 fi
 echo -e "${GREEN}✓ API is running${NC}"

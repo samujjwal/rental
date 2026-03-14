@@ -154,7 +154,6 @@ describe('Disputes (e2e)', () => {
         status: BookingStatus.COMPLETED,
         basePrice: 300,
         totalPrice: 300,
-        totalAmount: 300,
         platformFee: 45,
         serviceFee: 15,
         currency: 'USD',

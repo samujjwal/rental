@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerService } from './scheduler.service';
 import { AiModule } from '@/modules/ai/ai.module';
+import { LockingModule } from '@/common/locking/locking.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), AiModule],
+  imports: [AiModule, LockingModule],
   providers: [SchedulerService],
   exports: [SchedulerService],
 })

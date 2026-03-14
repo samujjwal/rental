@@ -2,9 +2,11 @@
 
 # MVP Server Setup Script
 # Sets up a single DigitalOcean droplet for MVP deployment
-# Usage: ./scripts/setup-mvp-server.sh
+# Usage: REPO_URL=https://github.com/<org>/<repo>.git ./scripts/setup-mvp-server.sh
 
 set -e
+
+REPO_URL="${1:-${REPO_URL:-}}"
 
 # Colors
 RED='\033[0;31m'
@@ -163,9 +165,12 @@ sysctl -p
 log_info "Creating application directories..."
 su - deploy -c "mkdir -p ~/gharbatai-rentals/{nginx/{ssl,logs,www},backups}"
 
-# Clone repository
-log_info "Cloning repository..."
-su - deploy -c "cd ~ && git clone https://github.com/your-org/gharbatai-rentals.git 2>/dev/null || echo 'Repository already exists'"
+if [ -n "$REPO_URL" ]; then
+    log_info "Cloning repository..."
+    su - deploy -c "cd ~ && git clone \"$REPO_URL\" gharbatai-rentals 2>/dev/null || echo 'Repository already exists'"
+else
+    log_warn "REPO_URL not provided. Clone the repository manually into /home/deploy/gharbatai-rentals."
+fi
 
 # Set up cron jobs
 log_info "Setting up cron jobs..."

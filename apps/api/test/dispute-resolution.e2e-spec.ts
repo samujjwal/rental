@@ -23,6 +23,7 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
   let adminAccessToken: string;
   let testBooking: any;
   let testDispute: any;
+  let testUserIds: { renter: string; owner: string; admin: string };
 
   // Test data
   const testUsers = {
@@ -62,7 +63,10 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
-  }, 30_000);
+
+    // Setup test users once for all tests in this suite
+    await setupTestUsers();
+  }, 60_000);
 
   afterAll(async () => {
     // Cleanup test data
@@ -72,10 +76,7 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
   });
 
   beforeEach(async () => {
-    // Setup test users and authenticate
-    await setupTestUsers();
-    
-    // Create a test booking in COMPLETED status (eligible for dispute)
+    // Create a fresh test booking in COMPLETED status (eligible for dispute)
     testBooking = await createTestBooking();
   });
 
@@ -116,7 +117,7 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
       expect(testDispute).toMatchObject({
         bookingId: testBooking.id,
         reason: 'PROPERTY_DAMAGE',
-        status: DisputeStatus.PENDING_REVIEW,
+        status: DisputeStatus.OPEN,
         requestedAmount: 50000,
       });
 
@@ -205,10 +206,10 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
       const response = await request(app.getHttpServer())
         .patch(`/admin/disputes/${testDispute.id}/assign`)
         .set('Authorization', `Bearer ${adminAccessToken}`)
-        .send({ adminId: testUsers.admin.id })
+        .send({ adminId: testUserIds.admin })
         .expect(200);
 
-      expect(response.body.assignedToId).toBe(testUsers.admin.id);
+      expect(response.body.assignedToId).toBe(testUserIds.admin);
     });
 
     it('PATCH /admin/disputes/:id/resolve → 200 (Resolve dispute)', async () => {
@@ -216,7 +217,7 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
       await request(app.getHttpServer())
         .patch(`/admin/disputes/${testDispute.id}/assign`)
         .set('Authorization', `Bearer ${adminAccessToken}`)
-        .send({ adminId: testUsers.admin.id });
+        .send({ adminId: testUserIds.admin });
 
       // Then resolve it
       const resolutionData = {
@@ -249,7 +250,7 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
         .send(rejectionData)
         .expect(200);
 
-      expect(response.body.status).toBe(DisputeStatus.REJECTED);
+      expect(response.body.status).toBe(DisputeStatus.DISMISSED);
     });
   });
 
@@ -273,7 +274,7 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
       expect(response.body).toMatchObject({
         disputeId: testDispute.id,
         content: 'I would like to provide additional evidence',
-        senderId: testUsers.renter.id,
+        senderId: testUserIds.renter,
       });
     });
 
@@ -337,9 +338,14 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
   // Helper functions
   async function setupTestUsers() {
     // Create and authenticate renter
-    await request(app.getHttpServer())
+    const renterReg = await request(app.getHttpServer())
       .post('/auth/register')
       .send(testUsers.renter);
+
+    await prisma.user.update({
+      where: { email: testUsers.renter.email },
+      data: { status: 'ACTIVE', emailVerified: true },
+    });
 
     const renterLogin = await request(app.getHttpServer())
       .post('/auth/login')
@@ -351,9 +357,14 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
     renterAccessToken = renterLogin.body.accessToken;
 
     // Create and authenticate owner
-    await request(app.getHttpServer())
+    const ownerReg = await request(app.getHttpServer())
       .post('/auth/register')
       .send(testUsers.owner);
+
+    await prisma.user.update({
+      where: { email: testUsers.owner.email },
+      data: { status: 'ACTIVE', emailVerified: true },
+    });
 
     const ownerLogin = await request(app.getHttpServer())
       .post('/auth/login')
@@ -365,14 +376,14 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
     ownerAccessToken = ownerLogin.body.accessToken;
 
     // Create and authenticate admin
-    await prisma.user.update({
-      where: { email: testUsers.admin.email },
-      data: { role: 'ADMIN' },
-    });
-
-    await request(app.getHttpServer())
+    const adminReg = await request(app.getHttpServer())
       .post('/auth/register')
       .send(testUsers.admin);
+
+    await prisma.user.update({
+      where: { email: testUsers.admin.email },
+      data: { role: 'ADMIN', status: 'ACTIVE', emailVerified: true },
+    });
 
     const adminLogin = await request(app.getHttpServer())
       .post('/auth/login')
@@ -382,6 +393,18 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
       });
 
     adminAccessToken = adminLogin.body.accessToken;
+
+    // Resolve user IDs
+    const [renterUser, ownerUser, adminUser] = await Promise.all([
+      prisma.user.findUnique({ where: { email: testUsers.renter.email }, select: { id: true } }),
+      prisma.user.findUnique({ where: { email: testUsers.owner.email }, select: { id: true } }),
+      prisma.user.findUnique({ where: { email: testUsers.admin.email }, select: { id: true } }),
+    ]);
+    testUserIds = {
+      renter: renterReg.body?.user?.id ?? renterUser!.id,
+      owner: ownerReg.body?.user?.id ?? ownerUser!.id,
+      admin: adminReg.body?.user?.id ?? adminUser!.id,
+    };
   }
 
   async function createTestBooking() {
@@ -395,9 +418,11 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
         state: 'TS',
         zipCode: '12345',
         country: 'US',
-        ownerId: testUsers.owner.id,
+        type: 'HOUSE',
+        ownerId: testUserIds.owner,
         status: 'AVAILABLE',
-        pricePerNight: 10000, // $100.00 in cents
+        basePrice: 10000,
+        currency: 'USD',
       },
     });
 
@@ -405,11 +430,13 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
     const booking = await prisma.booking.create({
       data: {
         listingId: listing.id,
-        renterId: testUsers.renter.id,
-        ownerId: testUsers.owner.id,
+        renterId: testUserIds.renter,
+        ownerId: testUserIds.owner,
         startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
         endDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+        basePrice: 20000,
         totalPrice: 30000, // $300.00
+        currency: 'USD',
         status: BookingStatus.COMPLETED,
         completedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), // 4 days ago
       },
@@ -425,11 +452,13 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
     return await prisma.booking.create({
       data: {
         listingId: listing!.id,
-        renterId: testUsers.renter.id,
-        ownerId: testUsers.owner.id,
+        renterId: testUserIds.renter,
+        ownerId: testUserIds.owner,
         startDate: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
         endDate: new Date(Date.now() - 38 * 24 * 60 * 60 * 1000),
+        basePrice: 20000,
         totalPrice: 30000,
+        currency: 'USD',
         status: BookingStatus.COMPLETED,
         completedAt: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000),
       },

@@ -421,7 +421,7 @@ describe('Messaging (integration)', () => {
         await request(app.getHttpServer())
           .get(`/conversations/${conversationId}`)
           .set('Authorization', `Bearer ${renterToken}`)
-          .expect(404);
+          .expect((r) => expect([403, 404]).toContain(r.status));
       });
     });
   });

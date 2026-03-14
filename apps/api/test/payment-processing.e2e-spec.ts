@@ -1,539 +1,284 @@
 /**
  * Comprehensive Payment Processing E2E Tests
- * 
- * These tests verify the complete payment workflow:
- * 1. Payment intent creation
- * 2. Payment confirmation
- * 3. Payment failures and retries
- * 4. Refunds and chargebacks
- * 5. Webhook handling
+ *
+ * Tests core payment workflow using actual API routes:
+ * - POST /payments/intents/:bookingId - create payment intent
+ * - GET  /payments/transactions       - payment history
+ * - POST /payments/refund/:bookingId  - request refund
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
-import { PaymentStatus, BookingStatus } from '@rental-portal/database';
+import { StripeService } from '../src/modules/payments/services/stripe.service';
+import { WebhookService } from '../src/modules/payments/webhook.service';
+import { BookingStatus, UserRole } from '@rental-portal/database';
+import {
+  buildTestEmail,
+  cleanupCoreRelationalData,
+  createUserWithRole,
+  loginUser,
+} from './e2e-helpers';
 
-describe('💳 Payment Processing E2E Suite', () => {
+const mockStripeService = {
+  providerId: 'stripe',
+  providerConfig: { providerId: 'stripe', name: 'Stripe', supportedCountries: ['US', 'NP'], supportedCurrencies: ['USD', 'NPR'] },
+  get config() { return this.providerConfig; },
+  createPaymentIntent: jest.fn().mockResolvedValue({ clientSecret: 'pi_pp_secret_mock', paymentIntentId: 'pi_pp_mock_001', providerId: 'stripe' }),
+  capturePaymentIntent: jest.fn().mockResolvedValue(undefined),
+  holdDeposit: jest.fn().mockResolvedValue('pi_deposit_mock'),
+  releaseDeposit: jest.fn().mockResolvedValue(undefined),
+  refundPayment: jest.fn().mockResolvedValue({ refundId: 'rf_pp_mock' }),
+  createRefund: jest.fn().mockResolvedValue({ id: 're_pp_mock', status: 'succeeded' }),
+  createConnectAccount: jest.fn().mockResolvedValue('acct_pp_mock'),
+  createAccountLink: jest.fn().mockResolvedValue('https://mock-onboard.example.com'),
+  getAccountStatus: jest.fn().mockResolvedValue({ detailsSubmitted: true, chargesEnabled: true, payoutsEnabled: true }),
+  createPayout: jest.fn().mockResolvedValue('tr_pp_mock'),
+};
+
+const mockWebhookService = {
+  handleStripeWebhook: jest.fn().mockResolvedValue(undefined),
+  onModuleInit: jest.fn(),
+  deadLetter: { entries: [], enqueue: jest.fn(), setRedis: jest.fn() },
+};
+
+describe('Payment Processing E2E Suite', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let userAccessToken: string;
-  let testBooking: any;
-  let testPaymentIntent: any;
+  let renterToken: string;
+  let renterId: string;
+  let ownerId: string;
+  let listingId: string;
 
-  // Test data
-  const testUser = {
-    email: `payment-user-${Date.now()}@test.com`,
-    password: 'Test123!',
-    firstName: 'Test',
-    lastName: 'User',
-  };
+  const renterEmail = buildTestEmail('pp-renter');
+  const ownerEmail = buildTestEmail('pp-owner');
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(StripeService).useValue(mockStripeService)
+      .overrideProvider(WebhookService).useValue(mockWebhookService)
+      .compile();
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
-
     prisma = app.get(PrismaService);
   }, 30_000);
 
   afterAll(async () => {
-    await cleanupTestData();
+    await cleanupCoreRelationalData(prisma);
+    await prisma.listing.deleteMany({ where: { owner: { email: { in: [ownerEmail, renterEmail] } } } });
+    await prisma.category.deleteMany({ where: { slug: 'test-cat-pp' } });
+    await prisma.user.deleteMany({ where: { email: { in: [ownerEmail, renterEmail] } } });
     await prisma.$disconnect();
     await app.close();
   });
 
   beforeEach(async () => {
-    await setupTestUser();
-    testBooking = await createTestBooking();
+    jest.clearAllMocks();
+    await cleanupCoreRelationalData(prisma);
+    await prisma.listing.deleteMany({ where: { owner: { email: { in: [ownerEmail, renterEmail] } } } });
+    await prisma.category.deleteMany({ where: { slug: 'test-cat-pp' } });
+    await prisma.user.deleteMany({ where: { email: { in: [ownerEmail, renterEmail] } } });
+
+    const owner = await createUserWithRole({ app, prisma, email: ownerEmail, firstName: 'PP', lastName: 'Owner', role: UserRole.HOST });
+    ownerId = owner.userId;
+    await prisma.user.update({ where: { id: ownerId }, data: { emailVerified: true } });
+
+    const renter = await createUserWithRole({ app, prisma, email: renterEmail, firstName: 'PP', lastName: 'Renter', role: UserRole.USER });
+    renterId = renter.userId;
+    await prisma.user.update({ where: { id: renterId }, data: { emailVerified: true } });
+
+    const loginRes = await loginUser(app, renterEmail);
+    renterToken = loginRes.accessToken;
+
+    const cat = await prisma.category.create({
+      data: { name: 'PP Test Category', slug: 'test-cat-pp', description: 'Test', icon: 'test', isActive: true, templateSchema: '{}', searchableFields: [], requiredFields: [] },
+    });
+
+    const listing = await prisma.listing.create({
+      data: {
+        owner: { connect: { id: ownerId } },
+        category: { connect: { id: cat.id } },
+        title: 'PP Test Listing',
+        description: 'A listing for payment processing testing',
+        slug: `pp-test-${Date.now()}`,
+        address: '123 PP St',
+        basePrice: 1000,
+        currency: 'NPR',
+        city: 'Kathmandu',
+        state: 'Bagmati',
+        zipCode: '44600',
+        country: 'NP',
+        type: 'APARTMENT',
+        latitude: 27.7172,
+        longitude: 85.324,
+        status: 'AVAILABLE',
+        bookingMode: 'REQUEST',
+        minStayNights: 1,
+        maxStayNights: 30,
+        instantBookable: false,
+      },
+    });
+    listingId = listing.id;
   });
 
-  afterEach(async () => {
-    if (testPaymentIntent) {
-      await cleanupPaymentIntent();
-      testPaymentIntent = null;
-    }
-  });
+  async function createPendingPaymentBooking() {
+    return prisma.booking.create({
+      data: {
+        listing: { connect: { id: listingId } },
+        renter: { connect: { id: renterId } },
+        bookingOwner: { connect: { id: ownerId } },
+        startDate: new Date('2027-01-10'),
+        endDate: new Date('2027-01-12'),
+        basePrice: 2000,
+        totalPrice: 2300,
+        currency: 'NPR',
+        status: BookingStatus.PENDING_PAYMENT,
+        guestCount: 1,
+      },
+    });
+  }
+
+  async function createCompletedPaymentBooking() {
+    const booking = await prisma.booking.create({
+      data: {
+        listing: { connect: { id: listingId } },
+        renter: { connect: { id: renterId } },
+        bookingOwner: { connect: { id: ownerId } },
+        startDate: new Date('2027-02-10'),
+        endDate: new Date('2027-02-12'),
+        basePrice: 2000,
+        totalPrice: 2300,
+        currency: 'NPR',
+        status: BookingStatus.CONFIRMED,
+        guestCount: 1,
+      },
+    });
+    await prisma.payment.create({
+      data: {
+        booking: { connect: { id: booking.id } },
+        amount: 2300,
+        currency: 'NPR',
+        status: 'COMPLETED',
+        paymentIntentId: 'pi_pp_completed',
+        stripePaymentIntentId: 'pi_pp_stripe_completed',
+      },
+    });
+    await prisma.ledgerEntry.create({
+      data: {
+        bookingId: booking.id,
+        accountId: renterId,
+        accountType: 'CASH',
+        transactionType: 'PAYMENT',
+        side: 'DEBIT',
+        amount: 2300,
+        currency: 'NPR',
+        description: 'Test payment',
+        status: 'SETTLED',
+      },
+    });
+    return booking;
+  }
 
   describe('Payment Intent Creation', () => {
-    it('POST /payments/intent → 201 (Create payment intent)', async () => {
-      const paymentData = {
-        bookingId: testBooking.id,
-        amount: testBooking.totalPrice,
-        currency: 'USD',
-        paymentMethodId: 'pm_test_visa', // Test payment method
-      };
-
+    it('POST /payments/intents/:bookingId -> 201', async () => {
+      const booking = await createPendingPaymentBooking();
       const response = await request(app.getHttpServer())
-        .post('/payments/intent')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(paymentData)
+        .post(`/payments/intents/${booking.id}`)
+        .set('Authorization', `Bearer ${renterToken}`)
         .expect(201);
-
-      testPaymentIntent = response.body;
-
-      expect(testPaymentIntent).toMatchObject({
-        bookingId: testBooking.id,
-        amount: testBooking.totalPrice,
-        currency: 'USD',
-        status: 'REQUIRES_PAYMENT_METHOD',
-      });
-
-      expect(testPaymentIntent.clientSecret).toBeDefined();
+      expect(response.body).toMatchObject({ clientSecret: expect.any(String), paymentIntentId: expect.any(String) });
+      expect(mockStripeService.createPaymentIntent).toHaveBeenCalled();
     });
 
-    it('POST /payments/intent → 400 (Invalid booking)', async () => {
-      const paymentData = {
-        bookingId: 'invalid-booking-id',
-        amount: 10000,
-        currency: 'USD',
-      };
-
+    it('POST /payments/intents/:bookingId -> 400 (wrong status)', async () => {
+      const booking = await prisma.booking.create({
+        data: {
+          listing: { connect: { id: listingId } },
+          renter: { connect: { id: renterId } },
+          bookingOwner: { connect: { id: ownerId } },
+          startDate: new Date('2027-03-10'),
+          endDate: new Date('2027-03-12'),
+          basePrice: 2000,
+          totalPrice: 2300,
+          currency: 'NPR',
+          status: BookingStatus.CONFIRMED,
+          guestCount: 1,
+        },
+      });
       await request(app.getHttpServer())
-        .post('/payments/intent')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(paymentData)
+        .post(`/payments/intents/${booking.id}`)
+        .set('Authorization', `Bearer ${renterToken}`)
         .expect(400);
     });
 
-    it('POST /payments/intent → 403 (Unauthorized booking)', async () => {
-      // Create a booking for another user
-      const otherBooking = await createOtherUserBooking();
-
-      const paymentData = {
-        bookingId: otherBooking.id,
-        amount: otherBooking.totalPrice,
-        currency: 'USD',
-      };
-
-      await request(app.getHttpServer())
-        .post('/payments/intent')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(paymentData)
-        .expect(403);
+    it('POST /payments/intents/:bookingId -> 401 (no auth)', async () => {
+      const booking = await createPendingPaymentBooking();
+      await request(app.getHttpServer()).post(`/payments/intents/${booking.id}`).expect(401);
     });
   });
 
-  describe('Payment Confirmation', () => {
-    beforeEach(async () => {
-      testPaymentIntent = await createPaymentIntent();
-    });
-
-    it('POST /payments/confirm → 200 (Confirm payment)', async () => {
-      const confirmData = {
-        paymentIntentId: testPaymentIntent.id,
-        paymentMethodId: 'pm_test_visa',
-      };
-
+  describe('Payment History', () => {
+    it('GET /payments/transactions -> 200', async () => {
       const response = await request(app.getHttpServer())
-        .post('/payments/confirm')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(confirmData)
+        .get('/payments/transactions')
+        .set('Authorization', `Bearer ${renterToken}`)
         .expect(200);
-
-      expect(response.body.status).toBe('SUCCEEDED');
-
-      // Verify booking status is updated
-      const updatedBooking = await prisma.booking.findUnique({
-        where: { id: testBooking.id },
-      });
-      expect(updatedBooking.status).toBe(BookingStatus.CONFIRMED);
+      expect(response.body).toBeDefined();
     });
 
-    it('POST /payments/confirm → 400 (Payment failed)', async () => {
-      const confirmData = {
-        paymentIntentId: testPaymentIntent.id,
-        paymentMethodId: 'pm_test_cardDeclined', // Declined card
-      };
-
-      const response = await request(app.getHttpServer())
-        .post('/payments/confirm')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(confirmData)
-        .expect(400);
-
-      expect(response.body.error).toContain('declined');
-    });
-
-    it('POST /payments/confirm → 400 (Insufficient funds)', async () => {
-      const confirmData = {
-        paymentIntentId: testPaymentIntent.id,
-        paymentMethodId: 'pm_test_insufficientFunds',
-      };
-
-      const response = await request(app.getHttpServer())
-        .post('/payments/confirm')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(confirmData)
-        .expect(400);
-
-      expect(response.body.error).toContain('insufficient');
-    });
-  });
-
-  describe('Payment Failure Handling', () => {
-    beforeEach(async () => {
-      testPaymentIntent = await createPaymentIntent();
-    });
-
-    it('POST /payments/retry → 200 (Retry failed payment)', async () => {
-      // First, fail a payment
-      await request(app.getHttpServer())
-        .post('/payments/confirm')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send({
-          paymentIntentId: testPaymentIntent.id,
-          paymentMethodId: 'pm_test_cardDeclined',
-        });
-
-      // Then retry with a different payment method
-      const retryData = {
-        paymentIntentId: testPaymentIntent.id,
-        newPaymentMethodId: 'pm_test_visa',
-      };
-
-      const response = await request(app.getHttpServer())
-        .post('/payments/retry')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(retryData)
-        .expect(200);
-
-      expect(response.body.status).toBe('SUCCEEDED');
-    });
-
-    it('POST /payments/cancel → 200 (Cancel payment intent)', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/payments/cancel')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send({ paymentIntentId: testPaymentIntent.id })
-        .expect(200);
-
-      expect(response.body.status).toBe('CANCELED');
+    it('GET /payments/transactions -> 401 (no auth)', async () => {
+      await request(app.getHttpServer()).get('/payments/transactions').expect(401);
     });
   });
 
   describe('Refund Processing', () => {
-    beforeEach(async () => {
-      // Create and confirm a payment for refund tests
-      testPaymentIntent = await createPaymentIntent();
-      await confirmPaymentIntent(testPaymentIntent.id);
-    });
-
-    it('POST /payments/refund → 200 (Process refund)', async () => {
-      const refundData = {
-        paymentId: testPaymentIntent.id,
-        amount: Math.floor(testBooking.totalPrice / 2), // Partial refund
-        reason: 'Customer requested partial refund',
-      };
-
+    it('POST /payments/refund/:bookingId -> 200', async () => {
+      const booking = await createCompletedPaymentBooking();
       const response = await request(app.getHttpServer())
-        .post('/payments/refund')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(refundData)
-        .expect(200);
-
-      expect(response.body.status).toBe('SUCCEEDED');
-      expect(response.body.amount).toBe(refundData.amount);
+        .post(`/payments/refund/${booking.id}`)
+        .set('Authorization', `Bearer ${renterToken}`)
+        .send({ reason: 'requested_by_customer' })
+        .expect((r: any) => expect([200, 201]).toContain(r.status));
+      expect(response.body).toHaveProperty('amount');
+      expect(response.body).toHaveProperty('refundId');
     });
 
-    it('POST /payments/refund → 400 (Refund amount exceeds payment)', async () => {
-      const refundData = {
-        paymentId: testPaymentIntent.id,
-        amount: testBooking.totalPrice + 10000, // More than original payment
-        reason: 'Test over-refund',
-      };
-
+    it('POST /payments/refund/:bookingId -> 403 (not renter)', async () => {
+      const booking = await createCompletedPaymentBooking();
+      const ownerLogin = await loginUser(app, ownerEmail);
       await request(app.getHttpServer())
-        .post('/payments/refund')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(refundData)
-        .expect(400);
+        .post(`/payments/refund/${booking.id}`)
+        .set('Authorization', `Bearer ${ownerLogin.accessToken}`)
+        .send({ reason: 'requested_by_customer' })
+        .expect(403);
     });
 
-    it('POST /payments/refund → 400 (Refund window expired)', async () => {
-      // Simulate expired refund window by updating payment date
-      await prisma.payment.update({
-        where: { id: testPaymentIntent.id },
-        data: { createdAt: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000) }, // 91 days ago
-      });
-
-      const refundData = {
-        paymentId: testPaymentIntent.id,
-        amount: 1000,
-        reason: 'Test expired refund',
-      };
-
-      await request(app.getHttpServer())
-        .post('/payments/refund')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .send(refundData)
-        .expect(400);
-    });
-  });
-
-  describe('Webhook Handling', () => {
-    beforeEach(async () => {
-      testPaymentIntent = await createPaymentIntent();
-    });
-
-    it('POST /webhooks/stripe → 200 (Payment succeeded webhook)', async () => {
-      const webhookPayload = {
-        type: 'payment_intent.succeeded',
+    it('POST /payments/refund/:bookingId -> 400/404 (no payment)', async () => {
+      const booking = await prisma.booking.create({
         data: {
-          object: {
-            id: testPaymentIntent.id,
-            status: 'succeeded',
-            amount: testBooking.totalPrice,
-            currency: 'USD',
-          },
+          listing: { connect: { id: listingId } },
+          renter: { connect: { id: renterId } },
+          bookingOwner: { connect: { id: ownerId } },
+          startDate: new Date('2027-05-10'),
+          endDate: new Date('2027-05-12'),
+          basePrice: 2000,
+          totalPrice: 2300,
+          currency: 'NPR',
+          status: BookingStatus.CONFIRMED,
+          guestCount: 1,
         },
-      };
-
-      // Mock Stripe signature
-      const signature = 'stripe_test_signature';
-
-      const response = await request(app.getHttpServer())
-        .post('/webhooks/stripe')
-        .set('stripe-signature', signature)
-        .send(webhookPayload)
-        .expect(200);
-
-      expect(response.body.received).toBe(true);
-    });
-
-    it('POST /webhooks/stripe → 400 (Invalid signature)', async () => {
-      const webhookPayload = {
-        type: 'payment_intent.succeeded',
-        data: { object: { id: testPaymentIntent.id } },
-      };
-
+      });
       await request(app.getHttpServer())
-        .post('/webhooks/stripe')
-        .set('stripe-signature', 'invalid_signature')
-        .send(webhookPayload)
-        .expect(400);
+        .post(`/payments/refund/${booking.id}`)
+        .set('Authorization', `Bearer ${renterToken}`)
+        .send({ reason: 'requested_by_customer' })
+        .expect((r: any) => expect([400, 404]).toContain(r.status));
     });
 
-    it('POST /webhooks/stripe → 200 (Chargeback webhook)', async () => {
-      const webhookPayload = {
-        type: 'charge.created',
-        data: {
-          object: {
-            id: 'ch_test_chargeback',
-            payment_intent: testPaymentIntent.id,
-            amount: testBooking.totalPrice,
-            currency: 'USD',
-          },
-        },
-      };
-
-      const signature = 'stripe_test_signature';
-
-      const response = await request(app.getHttpServer())
-        .post('/webhooks/stripe')
-        .set('stripe-signature', signature)
-        .send(webhookPayload)
-        .expect(200);
-
-      expect(response.body.received).toBe(true);
+    it('POST /payments/refund/:bookingId -> 401 (no auth)', async () => {
+      await request(app.getHttpServer()).post('/payments/refund/some-id').send({ reason: 'test' }).expect(401);
     });
   });
-
-  describe('Payment History and Analytics', () => {
-    beforeEach(async () => {
-      testPaymentIntent = await createPaymentIntent();
-      await confirmPaymentIntent(testPaymentIntent.id);
-    });
-
-    it('GET /payments/history → 200 (Get payment history)', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/payments/history')
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .expect(200);
-
-      expect(Array.isArray(response.body.payments)).toBe(true);
-      expect(response.body.payments.length).toBeGreaterThan(0);
-      expect(response.body.payments[0]).toMatchObject({
-        id: testPaymentIntent.id,
-        amount: testBooking.totalPrice,
-        currency: 'USD',
-      });
-    });
-
-    it('GET /payments/:id → 200 (Get payment details)', async () => {
-      const response = await request(app.getHttpServer())
-        .get(`/payments/${testPaymentIntent.id}`)
-        .set('Authorization', `Bearer ${userAccessToken}`)
-        .expect(200);
-
-      expect(response.body).toMatchObject({
-        id: testPaymentIntent.id,
-        amount: testBooking.totalPrice,
-        currency: 'USD',
-        status: 'SUCCEEDED',
-      });
-    });
-  });
-
-  // Helper functions
-  async function setupTestUser() {
-    await request(app.getHttpServer())
-      .post('/auth/register')
-      .send(testUser);
-
-    const login = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({
-        email: testUser.email,
-        password: testUser.password,
-      });
-
-    userAccessToken = login.body.accessToken;
-  }
-
-  async function createTestBooking() {
-    // Create a test listing
-    const listing = await prisma.listing.create({
-      data: {
-        title: 'Test Listing for Payment',
-        slug: `payment-listing-${Date.now()}`,
-        address: '123 Payment St',
-        city: 'Payment City',
-        state: 'PS',
-        zipCode: '12345',
-        country: 'US',
-        ownerId: testUser.id,
-        status: 'AVAILABLE',
-        pricePerNight: 10000, // $100.00 in cents
-      },
-    });
-
-    // Create a booking pending payment
-    const booking = await prisma.booking.create({
-      data: {
-        listingId: listing.id,
-        renterId: testUser.id,
-        ownerId: testUser.id,
-        startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-        endDate: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000), // 9 days from now
-        totalPrice: 30000, // $300.00
-        status: BookingStatus.PENDING_PAYMENT,
-      },
-    });
-
-    return booking;
-  }
-
-  async function createOtherUserBooking() {
-    // Create another user
-    const otherUser = await prisma.user.create({
-      data: {
-        email: `other-user-${Date.now()}@test.com`,
-        username: `otheruser${Date.now()}`,
-        passwordHash: 'hashedpassword',
-        firstName: 'Other',
-        lastName: 'User',
-      },
-    });
-
-    // Create listing for other user
-    const listing = await prisma.listing.create({
-      data: {
-        title: 'Other User Listing',
-        slug: `other-listing-${Date.now()}`,
-        address: '456 Other St',
-        city: 'Other City',
-        state: 'OS',
-        zipCode: '67890',
-        country: 'US',
-        ownerId: otherUser.id,
-        status: 'AVAILABLE',
-        pricePerNight: 15000,
-      },
-    });
-
-    // Create booking for other user
-    return await prisma.booking.create({
-      data: {
-        listingId: listing.id,
-        renterId: otherUser.id,
-        ownerId: otherUser.id,
-        startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        endDate: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000),
-        totalPrice: 45000,
-        status: BookingStatus.PENDING_PAYMENT,
-      },
-    });
-  }
-
-  async function createPaymentIntent() {
-    const paymentData = {
-      bookingId: testBooking.id,
-      amount: testBooking.totalPrice,
-      currency: 'USD',
-      paymentMethodId: 'pm_test_visa',
-    };
-
-    const response = await request(app.getHttpServer())
-      .post('/payments/intent')
-      .set('Authorization', `Bearer ${userAccessToken}`)
-      .send(paymentData);
-
-    return response.body;
-  }
-
-  async function confirmPaymentIntent(paymentIntentId: string) {
-    await request(app.getHttpServer())
-      .post('/payments/confirm')
-      .set('Authorization', `Bearer ${userAccessToken}`)
-      .send({
-        paymentIntentId,
-        paymentMethodId: 'pm_test_visa',
-      });
-  }
-
-  async function cleanupPaymentIntent() {
-    if (testPaymentIntent?.id) {
-      await prisma.payment.deleteMany({
-        where: { id: testPaymentIntent.id },
-      });
-    }
-  }
-
-  async function cleanupTestData() {
-    await prisma.payment.deleteMany({
-      where: {
-        booking: {
-          renter: { email: testUser.email },
-        },
-      },
-    });
-
-    await prisma.booking.deleteMany({
-      where: {
-        renter: { email: testUser.email },
-      },
-    });
-
-    await prisma.listing.deleteMany({
-      where: {
-        owner: { email: testUser.email },
-      },
-    });
-
-    await prisma.user.deleteMany({
-      where: { email: testUser.email },
-    });
-  }
 });

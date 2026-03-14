@@ -51,13 +51,14 @@ describe('Users (e2e)', () => {
     testUserEmail = `testuser-profile-${suffix}@test.com`;
 
     await register(adminEmail, 'Admin', 'User');
-    await prisma.user.update({ where: { email: adminEmail }, data: { role: 'ADMIN' } });
+    await prisma.user.update({ where: { email: adminEmail }, data: { role: 'ADMIN', status: 'ACTIVE', emailVerified: true } });
 
     const adminLogin = await login(adminEmail);
     adminToken = adminLogin.accessToken;
 
     const userSignup = await register(testUserEmail, 'Test', 'User');
-    userToken = userSignup.accessToken;
+    await prisma.user.update({ where: { email: testUserEmail }, data: { status: 'ACTIVE', emailVerified: true } });
+    userToken = (await login(testUserEmail)).accessToken;
     testUserId = userSignup.user.id;
   });
 

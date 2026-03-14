@@ -39,8 +39,9 @@ export const meta: MetaFunction = () => {
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CUID_PATTERN = /^c[a-z0-9]{20,}$/i;
 const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
+  Boolean(value && (UUID_PATTERN.test(value) || CUID_PATTERN.test(value)));
 const MAX_BOOKING_REASON_LENGTH = 1000;
 const MAX_REVIEW_COMMENT_LENGTH = 1000;
 const safeNumber = (value: unknown): number => {
@@ -80,25 +81,34 @@ const getInitials = (firstName?: string, lastName?: string | null) => {
 };
 
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
+  console.log("[bookings.$id clientLoader] START", params.id);
   const user = await getUser(request);
+  console.log("[bookings.$id clientLoader] user:", user ? `${user.id} (${user.role})` : "null");
   if (!user) {
+    console.log("[bookings.$id clientLoader] no user → redirect /auth/login");
     throw redirect("/auth/login");
   }
 
   const bookingId = params.id;
   if (!isUuid(bookingId)) {
+    console.log("[bookings.$id clientLoader] invalid uuid → redirect /bookings");
     throw redirect("/bookings");
   }
 
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
+    console.log("[bookings.$id clientLoader] booking:", booking.id, "ownerId:", booking.ownerId, "renterId:", booking.renterId);
     const isParticipant =
       booking.ownerId === user.id || booking.renterId === user.id || user.role === "admin";
+    console.log("[bookings.$id clientLoader] isParticipant:", isParticipant, "user.id:", user.id);
     if (!isParticipant) {
+      console.log("[bookings.$id clientLoader] not participant → redirect /bookings");
       throw redirect("/bookings");
     }
     return { booking };
   } catch (error) {
+    if (error instanceof Response) throw error; // re-throw redirects
+    console.error("[bookings.$id clientLoader] catch error:", error);
     throw redirect("/bookings");
   }
 }
@@ -291,9 +301,13 @@ export default function BookingDetail() {
   const { booking } = useLoaderData<{ booking: Booking }>();
   const actionData = useActionData<{ success?: string; error?: string }>();
 
-  // Show toast for action results
+  // Show toast for action results and close modal on success
   useEffect(() => {
-    if (actionData?.success) toast.success(actionData.success);
+    if (actionData?.success) {
+      toast.success(actionData.success);
+      setShowCancelModal(false);
+      setCancelReason("");
+    }
     if (actionData?.error) toast.error(actionData.error);
   }, [actionData]);
   const navigate = useNavigate();
@@ -1065,7 +1079,7 @@ export default function BookingDetail() {
                     type="button"
                     onClick={() => setRating(star)}
                     className="focus:outline-none"
-                    aria-label={`Rate ${star} star${star !== 1 ? 's' : ''}`}
+                    aria-label={`Rate ${star} star(s)`}
                   >
                     <Star
                       className={`w-8 h-8 ${

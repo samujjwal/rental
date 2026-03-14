@@ -34,13 +34,13 @@ cp .env.mvp.example .env.mvp
 3. Deploy:
 
 ```bash
-sudo ./scripts/deploy-mvp.sh yourdomain.com
+sudo pnpm run deploy:mvp -- yourdomain.com
 ```
 
 Optional flags:
 
-- `INCLUDE_WWW=true sudo ./scripts/deploy-mvp.sh yourdomain.com`
-- `SEED_DB=true sudo ./scripts/deploy-mvp.sh yourdomain.com`
+- `INCLUDE_WWW=true sudo pnpm run deploy:mvp -- yourdomain.com`
+- `SEED_DB=true sudo pnpm run deploy:mvp -- yourdomain.com`
 
 4. Verify:
 
@@ -75,7 +75,7 @@ cp .env.production.example .env.production
 4. Deploy:
 
 ```bash
-./scripts/deploy.sh production
+pnpm run deploy:prod
 ```
 
 5. Verify:
@@ -102,5 +102,11 @@ docker compose -f docker-compose.prod.yml --env-file .env.production logs -f
 Run MVP backup manually:
 
 ```bash
-./scripts/backup-mvp.sh
+pnpm run backup:mvp
+```
+
+Run production backup manually:
+
+```bash
+pnpm run backup:prod
 ```

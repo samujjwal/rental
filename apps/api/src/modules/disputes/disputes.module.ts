@@ -6,11 +6,12 @@ import { EventsModule } from '@/common/events/events.module';
 import { DisputesService } from './services/disputes.service';
 import { DisputeEscalationService } from './services/dispute-escalation.service';
 import { DisputesController } from './controllers/disputes.controller';
+import { AdminDisputesController } from './controllers/admin-disputes.controller';
 import { DisputeSlaScheduler } from './schedulers/dispute-sla.scheduler';
 
 @Module({
   imports: [EmailModule, NotificationsModule, forwardRef(() => BookingsModule), EventsModule],
-  controllers: [DisputesController],
+  controllers: [DisputesController, AdminDisputesController],
   providers: [DisputesService, DisputeEscalationService, DisputeSlaScheduler],
   exports: [DisputesService, DisputeEscalationService],
 })

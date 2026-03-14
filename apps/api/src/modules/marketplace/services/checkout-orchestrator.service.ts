@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { BookingStatus } from '@rental-portal/database';
@@ -347,10 +348,10 @@ export class CheckoutOrchestratorService {
     }
 
     return this.prisma.$transaction(async (tx: any) => {
-      // Database-level advisory lock using two 32-bit halves of the UUID for collision resistance
-      const buf = Buffer.from(params.listingId.replace(/-/g, ''), 'hex');
-      const lockKey1 = buf.readInt32BE(0);
-      const lockKey2 = buf.readInt32BE(4);
+      // Database-level advisory lock using SHA-256 hash of listing ID
+      const idHash = createHash('sha256').update(params.listingId).digest();
+      const lockKey1 = idHash.readInt32BE(0);
+      const lockKey2 = idHash.readInt32BE(4);
       await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock($1, $2)`, lockKey1, lockKey2);
 
       const booking = await tx.booking.create({

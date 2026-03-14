@@ -82,7 +82,7 @@ echo ""
 
 # 6. Generate Prisma client
 print_step "Generating Prisma client..."
-if cd packages/database && npx prisma generate && cd ../..; then
+if pnpm run db:generate; then
     print_success "Prisma client generated"
 else
     print_error "Failed to generate Prisma client"
@@ -100,10 +100,10 @@ echo ""
 
 # Run tests
 print_step "Running tests..."
-if pnpm run test || echo "Test runner encountered issues but build is still valid"; then
-    print_success "All tests passed"
+if pnpm run test; then
+    print_success "Workspace tests passed"
 else
-    print_error "Tests had issues (may be due to test configuration)"
+    print_error "Tests failed"
 fi
 echo ""
 

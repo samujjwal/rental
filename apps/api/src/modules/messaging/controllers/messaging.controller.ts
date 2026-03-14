@@ -18,7 +18,12 @@ export class MessagingController {
   @Post()
   @ApiOperation({ summary: 'Create or get conversation' })
   async createConversation(@CurrentUser('id') userId: string, @Body() dto: CreateConversationDto) {
-    return this.conversationsService.createOrGetConversation(userId, dto);
+    // Support recipientId as alias for participantId
+    const resolvedDto = {
+      ...dto,
+      participantId: dto.participantId ?? dto.recipientId,
+    };
+    return this.conversationsService.createOrGetConversation(userId, resolvedDto);
   }
 
   @Get()

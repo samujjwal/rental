@@ -15,7 +15,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3401";
 const API = process.env.E2E_API_URL ?? "http://localhost:3400/api";
 
 // ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ async function loginAs(page: Page, role: "USER" | "HOST" | "ADMIN") {
         : "renter@test.com";
 
   const res = await page.request.post(`${API}/auth/dev-login`, {
-    data: { email, role },
+    data: { email, role, secret: 'dev-secret-123' },
   });
   if (!res.ok()) throw new Error(`dev-login failed: ${res.status()}`);
   const payload = await res.json();
@@ -77,8 +77,16 @@ async function expectAccessible(page: Page, pageName: string) {
   if (serious.length > 0) {
     const summary = serious
       .map(
-        (v: any) =>
-          `[${v.impact}] ${v.id}: ${v.description} (${v.nodes.length} instance${v.nodes.length > 1 ? "s" : ""})`
+        (v: any) => {
+          const nodeDetails = v.nodes.slice(0, 3).map((n: any) => {
+            const contrastData = n.any?.[0]?.data;
+            const contrastInfo = contrastData?.contrastRatio
+              ? ` (ratio: ${contrastData.contrastRatio}, required: ${contrastData.expectedContrastRatio})`
+              : '';
+            return `    - ${n.html?.substring(0, 120)}${contrastInfo}`;
+          }).join('\n');
+          return `[${v.impact}] ${v.id}: ${v.description} (${v.nodes.length} instance${v.nodes.length > 1 ? "s" : ""})\n${nodeDetails}`;
+        }
       )
       .join("\n  ");
     expect
@@ -100,7 +108,7 @@ test.describe("Accessibility — Public Pages", () => {
   });
 
   test("signup page passes WCAG 2.1 AA", async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth/register`, {
+    await page.goto(`${BASE_URL}/auth/signup`, {
       waitUntil: "networkidle",
     });
     await expectAccessible(page, "signup");
@@ -157,7 +165,7 @@ test.describe("Accessibility — Owner Pages", () => {
   });
 
   test("owner listings", async ({ page }) => {
-    await page.goto(`${BASE_URL}/owner/listings`, {
+    await page.goto(`${BASE_URL}/dashboard/owner`, {
       waitUntil: "networkidle",
     });
     await expectAccessible(page, "owner-listings");

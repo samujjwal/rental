@@ -2,9 +2,11 @@
 
 # Server Setup Script for DigitalOcean Droplet
 # Run this script on a fresh Ubuntu 22.04 droplet
-# Usage: curl -fsSL https://raw.githubusercontent.com/your-org/gharbatai-rentals/main/scripts/setup-server.sh | bash
+# Usage: REPO_URL=https://github.com/<org>/<repo>.git ./scripts/setup-server.sh
 
 set -e
+
+REPO_URL="${1:-${REPO_URL:-}}"
 
 echo "🔧 Setting up Gharbatai Rentals server..."
 
@@ -146,7 +148,7 @@ cat > /etc/logrotate.d/gharbatai << 'EOF'
     create 0640 deploy deploy
     sharedscripts
     postrotate
-        docker-compose -f /home/deploy/gharbatai-rentals/docker-compose.prod.yml kill -s USR1 nginx
+        docker compose -f /home/deploy/gharbatai-rentals/docker-compose.prod.yml kill -s USR1 nginx
     endscript
 }
 EOF
@@ -160,9 +162,16 @@ dpkg-reconfigure -plow unattended-upgrades
 log_info "Creating application directories..."
 su - deploy -c "mkdir -p ~/gharbatai-rentals/{logs,backups,ssl}"
 
+if [ -n "$REPO_URL" ]; then
+    log_info "Cloning repository..."
+    su - deploy -c "cd ~ && git clone \"$REPO_URL\" gharbatai-rentals 2>/dev/null || echo 'Repository already exists'"
+else
+    log_warn "REPO_URL not provided. Clone the repository manually into /home/deploy/gharbatai-rentals."
+fi
+
 # Set up cron jobs
 log_info "Setting up cron jobs..."
-(crontab -u deploy -l 2>/dev/null; echo "0 2 * * * cd /home/deploy/gharbatai-rentals && ./scripts/backup.sh") | crontab -u deploy -
+(crontab -u deploy -l 2>/dev/null; echo "0 2 * * * cd /home/deploy/gharbatai-rentals && ./scripts/backup.sh production") | crontab -u deploy -
 (crontab -u deploy -l 2>/dev/null; echo "0 3 * * 0 docker system prune -af") | crontab -u deploy -
 
 # Install monitoring tools
@@ -197,8 +206,8 @@ echo "========================================="
 echo ""
 echo "Next steps:"
 echo "1. Switch to deploy user: su - deploy"
-echo "2. Clone repository: git clone https://github.com/your-org/gharbatai-rentals.git"
-echo "3. Set up environment variables: cd gharbatai-rentals && cp .env.example .env.production"
+echo "2. Clone the repository into ~/gharbatai-rentals if you skipped REPO_URL"
+echo "3. Set up environment variables: cd gharbatai-rentals && cp .env.production.example .env.production"
 echo "4. Configure SSL: certbot certonly --standalone -d yourdomain.com"
 echo "5. Deploy application: ./scripts/deploy.sh production"
 echo ""

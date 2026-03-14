@@ -200,7 +200,9 @@ describe('Search (e2e)', () => {
     });
 
     it('should reject non-admin users', async () => {
-      const user = await registerUser(app, {
+      const user = await createUserWithRole({
+        app,
+        prisma,
         email: userEmail,
         firstName: 'Regular',
         lastName: 'User',

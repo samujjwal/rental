@@ -29,13 +29,20 @@ export class UsersController {
     return profile;
   }
 
+  @Get('profile')
+  @ApiOperation({ summary: 'Get current user profile (alias for /me)' })
+  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
+  async getProfile(@CurrentUser('id') userId: string) {
+    return this.getCurrentProfile(userId);
+  }
+
   @Patch('me')
   @ApiOperation({ summary: 'Update current user profile' })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   async updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateProfileDto) {
     const user = await this.usersService.updateProfile(userId, dto);
-    const { passwordHash, mfaSecret, ...profile } = user;
-    return profile;
+    const { passwordHash, mfaSecret, phone, ...profile } = user;
+    return { ...profile, phoneNumber: phone ?? undefined };
   }
 
   @Delete('me')

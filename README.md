@@ -59,28 +59,11 @@ This is a monorepo managed by Turbo, containing:
 git clone <repository-url>
 cd rental
 
-# 2. Start services (PostgreSQL + Redis)
-docker compose up -d
+# 2. Prepare local env files and install dependencies
+pnpm run setup
 
-# 3. Install dependencies
-pnpm install
-
-# 4. Configure environment
-cp apps/api/.env.example apps/api/.env
-# Edit apps/api/.env with your configuration
-
-# 5. Generate Prisma client and run migrations
-cd packages/database
-npx prisma generate
-npx prisma db push
-
-# 6. Start API server
-cd ../../apps/api
-pnpm run start:dev
-
-# 7. Start web app (in another terminal)
-cd apps/web
-pnpm run dev
+# 3. Start services, migrate, and run API + web
+pnpm run dev:full
 ```
 
 **Services will be available at:**
@@ -98,14 +81,26 @@ See [QUICK_START.md](QUICK_START.md) for detailed manual installation steps.
 ### Option 3: Run Tests
 
 ```bash
-# Run all tests with automated script
-./test-all.sh
+# Local bootstrap
+pnpm run setup
+pnpm run services:up
 
-# Or run individual test suites:
-cd apps/api
-pnpm run test           # Unit tests
-pnpm run test:e2e       # E2E tests
-pnpm run lint           # Linting
+# Workspace tests
+pnpm run test
+pnpm run test:coverage
+
+# API integration and specialty suites
+pnpm run test:integration
+pnpm run test:security
+pnpm run test:property
+pnpm run test:chaos
+
+# Web and mobile end-to-end suites
+pnpm run test:e2e:web
+pnpm run test:e2e:mobile
+
+# Load tests
+pnpm run test:load -- api
 ```
 
 - API server on http://localhost:3000
@@ -254,23 +249,21 @@ The database schema includes 70+ models covering:
 ## 🧪 Testing
 
 ```bash
-# Run all tests with automated script
-./test-all.sh
-
-# Or run individual test suites:
-cd apps/api
-
-# Unit tests
+# Unit, component, and package tests
 pnpm run test
 
-# E2E tests
-pnpm run test:e2e
+# Coverage across workspaces
+pnpm run test:coverage
 
-# Test coverage
-pnpm run test:cov
+# API integration tests
+pnpm run test:integration
 
-# Linting
-pnpm run lint
+# Browser and device end-to-end tests
+pnpm run test:e2e:web
+pnpm run test:e2e:mobile
+
+# Full local test pass
+pnpm run test:all
 ```
 
 ## 🎯 Implementation Roadmap
@@ -331,14 +324,14 @@ pnpm run lint
 
 ### Getting Started
 
-- [QUICK_START.md](QUICK_START.md) - Detailed setup guide
-- [DEVELOPER_QUICK_START.md](DEVELOPER_QUICK_START.md) - Developer onboarding
+- [README.md](README.md) - Local setup, dev, test, and deployment overview
+- [BUILD_SYSTEM.md](BUILD_SYSTEM.md) - Workspace command reference
 
 ### Implementation
 
-- [EXECUTION_PLAN_README.md](EXECUTION_PLAN_README.md) - Master execution plan
-- [IMPLEMENTATION_GAP_ANALYSIS.md](IMPLEMENTATION_GAP_ANALYSIS.md) - Current status & gaps
-- [PROGRESS_REPORT.md](PROGRESS_REPORT.md) - Feature implementation history
+- [COMPREHENSIVE_QUALITY_AUDIT_REPORT.md](COMPREHENSIVE_QUALITY_AUDIT_REPORT.md) - Current codebase audit
+- [RequirementsForRentalSystem.md](RequirementsForRentalSystem.md) - Product requirements
+- [SEED_DATA_SUMMARY.md](SEED_DATA_SUMMARY.md) - Seeded local data overview
 
 ### Deployment
 
@@ -347,14 +340,14 @@ pnpm run lint
 
 ### Architecture
 
-- [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md) - System architecture
-- [RentalPortal_arch_TDD.md](RentalPortal_arch_TDD.md) - Technical design documents
-- [API_README.md](API_README.md) - API documentation
+- [GLOBAL_POLICY_ENGINE_SPEC.md](GLOBAL_POLICY_ENGINE_SPEC.md) - Policy and domain rules
+- [MOBILE_SPEC.md](MOBILE_SPEC.md) - Mobile product scope
+- [MOBILE_WIREFRAMES.md](MOBILE_WIREFRAMES.md) - Mobile UX reference
 
 ### Testing
 
-- [TESTING_GUIDE.md](TESTING_GUIDE.md) - Testing strategies
-- [test-all.sh](test-all.sh) - Automated test execution script
+- [docs/TEST_SUITE_GUIDE.md](docs/TEST_SUITE_GUIDE.md) - Test commands and suite coverage
+- [COMPREHENSIVE_TESTING_CHECKLIST.md](COMPREHENSIVE_TESTING_CHECKLIST.md) - Test coverage checklist
 
 ## 🚨 Critical Next Steps
 
@@ -369,7 +362,7 @@ pnpm run lint
 2. **Run Complete Test Suite** (Priority: P0)
 
    ```bash
-   ./test-all.sh
+   pnpm run test:all
    ```
 
    - Fix any failing tests
@@ -414,7 +407,7 @@ This project follows standard development practices:
 
 1. Create feature branch from `develop`
 2. Write tests for new features
-3. Ensure all tests pass: `./test-all.sh`
+3. Ensure all tests pass: `pnpm run test:all`
 4. Submit pull request for review
 5. Merge to `develop` after approval
 6. Deploy to staging for validation
@@ -424,8 +417,8 @@ This project follows standard development practices:
 
 - **Documentation:** All markdown files in repository root
 - **API Docs:** http://localhost:3000/api/docs (when running)
-- **Execution Plan:** [EXECUTION_PLAN_README.md](EXECUTION_PLAN_README.md)
-- **Gap Analysis:** [IMPLEMENTATION_GAP_ANALYSIS.md](IMPLEMENTATION_GAP_ANALYSIS.md)
+- **Build System:** [BUILD_SYSTEM.md](BUILD_SYSTEM.md)
+- **Test Guide:** [docs/TEST_SUITE_GUIDE.md](docs/TEST_SUITE_GUIDE.md)
 - **Deployment Guide:** [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md)
 - `JWT_SECRET`: Secret key for JWT tokens
 - `REDIS_HOST`, `REDIS_PORT`: Redis connection

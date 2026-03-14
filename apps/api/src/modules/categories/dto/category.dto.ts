@@ -25,10 +25,10 @@ export class CreateCategoryDto {
   @MaxLength(100)
   slug: string;
 
-  @ApiProperty({ description: 'Category description', required: false, maxLength: 500 })
+  @ApiProperty({ description: 'Category description', required: false, maxLength: 5000 })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(5000)
   description?: string;
 
   @ApiProperty({ description: 'Icon URL or icon name', required: false })

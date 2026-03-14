@@ -4,6 +4,7 @@ import {
   IsArray,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -46,7 +47,14 @@ export class CreateConversationDto {
   listingId: string;
 
   @ApiProperty({ description: 'Other participant ID' })
+  @ValidateIf((o) => !o.recipientId)
   @IsString()
   @MinLength(1)
-  participantId: string;
+  participantId?: string;
+
+  @ApiProperty({ description: 'Recipient ID (alias for participantId)', required: false })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  recipientId?: string;
 }

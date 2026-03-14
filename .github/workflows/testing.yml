@@ -1,262 +1,15 @@
-name: Testing Suite
+name: Extended Quality Checks
 
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0' # Weekly on Sunday
+    - cron: '0 0 * * 0'
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '10'
 
 jobs:
-  unit-tests:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run unit tests
-        run: pnpm test
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage/lcov.info
-          flags: unittests
-
-  e2e-tests:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: cd apps/web && npx playwright install --with-deps
-
-      - name: Build application
-        run: pnpm build
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-          REDIS_URL: redis://localhost:6379
-
-      - name: Run database migrations
-        run: cd packages/database && npx prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-
-      - name: Seed test data
-        run: cd packages/database && npx prisma db seed
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-        continue-on-error: true
-
-      - name: Start API server
-        run: cd apps/api && pnpm start &
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-          REDIS_URL: redis://localhost:6379
-          NODE_ENV: test
-          EMAIL_ENABLED: "false"
-
-      - name: Start web server
-        run: cd apps/web && pnpm dev &
-        env:
-          NODE_ENV: test
-
-      - name: Wait for servers
-        run: |
-          npx wait-on http://localhost:3000 http://localhost:5000 --timeout 60000
-
-      - name: Run Core E2E Tests (Production Ready)
-        run: |
-          pnpm --filter @rental-portal/web run e2e:core:chromium
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-          REDIS_URL: redis://localhost:6379
-
-      - name: Check test results
-        if: success()
-        run: |
-          echo "✅ Core E2E tests passed! Expected: 96+ passed, ~5 skipped"
-          echo "Pass rate: 97%"
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report/
-          retention-days: 30
-
-      - name: Upload test video on failure
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-videos
-          path: apps/web/test-results/
-          retention-days: 7
-
-  e2e-comprehensive:
-    name: E2E Comprehensive (${{ matrix.suite }})
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    continue-on-error: true
-
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - comprehensive-edge-cases.spec.ts
-          - comprehensive-form-validation.spec.ts
-          - comprehensive-user-journeys.spec.ts
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: cd apps/web && npx playwright install --with-deps
-
-      - name: Build application
-        run: pnpm build
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-          REDIS_URL: redis://localhost:6379
-
-      - name: Run database migrations
-        run: cd packages/database && npx prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-
-      - name: Seed test data
-        run: cd packages/database && npx prisma db seed
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-        continue-on-error: true
-
-      - name: Start API server
-        run: cd apps/api && pnpm start &
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-          REDIS_URL: redis://localhost:6379
-          NODE_ENV: test
-          EMAIL_ENABLED: "false"
-
-      - name: Start web server
-        run: cd apps/web && pnpm dev &
-        env:
-          NODE_ENV: test
-
-      - name: Wait for servers
-        run: |
-          npx wait-on http://localhost:3000 http://localhost:5000 --timeout 60000
-
-      - name: Run comprehensive suite
-        run: |
-          pnpm --filter @rental-portal/web exec playwright test e2e/${{ matrix.suite }} \
-            --project=chromium \
-            --reporter=list,html
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-          REDIS_URL: redis://localhost:6379
-
-      - name: Upload comprehensive test results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: playwright-report-comprehensive-${{ matrix.suite }}
-          path: apps/web/playwright-report/
-          retention-days: 14
-
   lighthouse:
     name: Lighthouse Performance
     runs-on: ubuntu-latest
@@ -264,21 +17,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build web app
-        run: cd apps/web && pnpm build
+        run: pnpm --filter @rental-portal/web run build
 
       - name: Run Lighthouse CI
         run: |
@@ -288,7 +42,8 @@ jobs:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
       - name: Upload Lighthouse results
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: lighthouse-results
           path: .lighthouseci/
@@ -297,10 +52,23 @@ jobs:
   load-tests:
     name: Load Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install k6
         run: |
@@ -310,13 +78,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install k6
 
-      - name: Run load tests
-        run: k6 run tests/load/api-load-test.js
+      - name: Run API load suite
+        run: pnpm run test:load -- api --out json=k6-results.json
         env:
           API_URL: ${{ secrets.STAGING_API_URL }}
 
       - name: Upload k6 results
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: k6-results
           path: k6-results.json
@@ -329,32 +98,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run npm audit
-        run: pnpm audit --audit-level=moderate
+      - name: Run security audit
+        run: pnpm run audit:security
         continue-on-error: true
 
-      - name: Run security audit script
-        run: ./scripts/security-audit.sh
-        continue-on-error: true
-
-      - name: Upload security report
-        uses: actions/upload-artifact@v3
+      - name: Upload security audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: security-audit-report
-          path: security-audit-report-*.txt
+          name: security-audit-artifacts
+          path: |
+            npm-audit-report.json
+            licenses-report.json
+            gitleaks-report.json
+            security-audit-report-*.txt
           retention-days: 90
 
       - name: OWASP Dependency Check
@@ -365,7 +136,8 @@ jobs:
           format: 'HTML'
 
       - name: Upload OWASP report
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: owasp-report
           path: reports/
@@ -378,48 +150,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build web app
-        run: cd apps/web && pnpm build
+        run: pnpm --filter @rental-portal/web run build
 
       - name: Run axe accessibility tests
         run: |
           npm install -g @axe-core/cli
-          cd apps/web && pnpm start &
-          sleep 10
-          axe http://localhost:3000 --exit
+          pnpm --filter @rental-portal/web run start >/tmp/rental-web.log 2>&1 &
+          WEB_PID=$!
+          trap 'kill $WEB_PID 2>/dev/null || true' EXIT
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000 >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          npx @axe-core/cli http://127.0.0.1:3000 --exit > axe-results.txt
 
       - name: Upload accessibility report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: accessibility-report
-          path: axe-results.json
+          path: axe-results.txt
           retention-days: 30
-
-  notify:
-    name: Notify Results
-    runs-on: ubuntu-latest
-    needs: [unit-tests, e2e-tests, lighthouse, security-audit]
-    if: always()
-
-    steps:
-      - name: Send Slack notification
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          text: 'Testing suite completed'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
-        if: always()

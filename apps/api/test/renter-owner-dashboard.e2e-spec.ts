@@ -152,18 +152,20 @@ describe('Renter & Owner Dashboard Flows (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.some((booking: any) => booking.id === bookingId)).toBe(true);
+      const bookings = Array.isArray(response.body) ? response.body : (response.body.data ?? []);
+      expect(Array.isArray(bookings)).toBe(true);
+      expect(bookings.some((booking: any) => booking.id === bookingId)).toBe(true);
     });
 
-    it('should return owner host bookings', async () => {
+    it('should return owner bookings', async () => {
       const response = await request(app.getHttpServer())
         .get('/bookings/host-bookings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.some((booking: any) => booking.id === bookingId)).toBe(true);
+      const hostBookings = Array.isArray(response.body) ? response.body : (response.body.data ?? []);
+      expect(Array.isArray(hostBookings)).toBe(true);
+      expect(hostBookings.some((booking: any) => booking.id === bookingId)).toBe(true);
     });
   });
 

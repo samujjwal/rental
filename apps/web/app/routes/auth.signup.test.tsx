@@ -123,7 +123,7 @@ describe("auth.signup route", () => {
       expect(mocks.signup).toHaveBeenCalled();
       expect(mocks.setAuth).toHaveBeenCalledWith(user, "at");
       expect(mocks.createUserSession).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: "u1", redirectTo: "/" })
+        expect.objectContaining({ userId: "u1", redirectTo: "/dashboard" })
       );
     });
 

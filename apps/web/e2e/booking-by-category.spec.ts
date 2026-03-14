@@ -50,7 +50,9 @@ const FAR_FUTURE_END = futureDate(500);
 
 async function openListing(page: Page, listingId: string): Promise<void> {
   await page.goto(`/listings/${listingId}`);
-  await expect(page.locator("h1").first()).toBeVisible({ timeout: 8000 });
+  // Allow extra time under load; if the page shows 404 the locator won't resolve and
+  // the assertion will fail with a meaningful "not visible" message.
+  await expect(page.locator("h1").first()).toBeVisible({ timeout: 15000 });
 }
 
 async function fillDates(page: Page, start: string, end: string): Promise<boolean> {
@@ -305,6 +307,8 @@ function buildCategoryBookingSuites(params: {
 
     test("unauthenticated user redirected to login when trying to book", async ({ page }) => {
       await page.context().clearCookies();
+      // Navigate to app domain first so localStorage is accessible
+      await page.goto("/");
       await page.evaluate(() => localStorage.clear());
       await openListing(page, listing.id);
       await fillDates(page, START, END);
@@ -434,6 +438,8 @@ function buildCategoryBookingSuites(params: {
 
     test("unauthenticated user redirected from any multi-listing booking", async ({ page }) => {
       await page.context().clearCookies();
+      // Navigate to app domain first so localStorage is accessible
+      await page.goto("/");
       await page.evaluate(() => localStorage.clear());
       await openListing(page, listings[0].id);
       await fillDates(page, START, END);

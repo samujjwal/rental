@@ -60,7 +60,7 @@ async function ensureTestUsers(): Promise<void> {
   for (const { role, email } of TEST_ROLES) {
     try {
       const res = await ctx.post(`${API}/auth/dev-login`, {
-        data: { email, role },
+        data: { email, role, secret: 'dev-secret-123' },
         timeout: 10_000,
       });
 
@@ -71,7 +71,8 @@ async function ensureTestUsers(): Promise<void> {
 
       const body = await res.text();
 
-      if (res.status() === 404 || body.includes("not found")) {
+      if (res.status() === 404 || body.includes("not found") ||
+          (res.status() === 401 && (body.includes("noDevUser") || body.includes("No active user")))) {
         // User doesn't exist — attempt seed
         console.log(
           `[global-setup]   ⚠ ${role} (${email}) not found. Triggering seed…`,
@@ -79,7 +80,7 @@ async function ensureTestUsers(): Promise<void> {
         await triggerSeed(ctx);
         // Re-test once after seed
         const retry = await ctx.post(`${API}/auth/dev-login`, {
-          data: { email, role },
+          data: { email, role, secret: 'dev-secret-123' },
           timeout: 10_000,
         });
         if (retry.ok()) {

@@ -57,41 +57,68 @@ export async function getUser(request: Request): Promise<User | null> {
   if (typeof window !== "undefined" && !token) {
     const storeState = useAuthStore.getState();
     token = storeState.accessToken;
+
+    // Zustand v5 persist may hydrate async; read localStorage directly as fallback
+    if (!token) {
+      try {
+        const raw = localStorage.getItem("auth-storage");
+        if (raw) {
+          const parsed = JSON.parse(raw) as { state?: { accessToken?: string } };
+          token = parsed?.state?.accessToken ?? null;
+        }
+      } catch {
+        // ignore parse errors
+      }
+      // Sync token into Zustand store so the API client interceptor can use it
+      if (token) {
+        useAuthStore.getState().setAccessToken(token);
+      }
+    }
   }
 
   if (!token) return null;
 
-  try {
-    const rawUser = await api.get<User>("/auth/me");
-    const normalizedRole = (() => {
-      const role = String((rawUser as { role?: unknown }).role || "").toUpperCase();
-      if (role === "ADMIN" || role === "SUPER_ADMIN") return "admin";
-      if (role === "HOST" || role === "OWNER") return "owner";
-      return "renter";
-    })();
-    return {
-      ...rawUser,
-      role: normalizedRole,
-    };
-  } catch (error) {
-    const status =
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      (error as { response?: { status?: number } }).response?.status;
+  // Retry auth check up to 2 times for transient errors (e.g., API under load)
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    try {
+      const rawUser = await api.get<User>("/auth/me");
+      const normalizedRole = (() => {
+        const role = String((rawUser as { role?: unknown }).role || "").toUpperCase();
+        if (role === "ADMIN" || role === "SUPER_ADMIN") return "admin";
+        if (role === "HOST" || role === "OWNER") return "owner";
+        return "renter";
+      })();
+      return {
+        ...rawUser,
+        role: normalizedRole,
+      };
+    } catch (error) {
+      const status =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        (error as { response?: { status?: number } }).response?.status;
 
-    // 401 is expected for anonymous users or expired sessions.
-    // Clear the Zustand auth store to stay in sync.
-    if (status === 401) {
-      if (typeof window !== "undefined") {
-        useAuthStore.getState().clearAuth();
+      // 401 is expected for anonymous users or expired sessions.
+      // Clear the Zustand auth store to stay in sync.
+      if (status === 401) {
+        if (typeof window !== "undefined") {
+          useAuthStore.getState().clearAuth();
+        }
+        return null;
       }
+
+      // For transient errors (5xx, 429, network timeout), retry with backoff
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+        continue;
+      }
+
+      // Non-401 errors after retries: return null silently to avoid leaking details
       return null;
     }
-
-    // Non-401 errors: return null silently to avoid leaking details
-    return null;
   }
+  return null;
 }
 
 export async function requireUserId(

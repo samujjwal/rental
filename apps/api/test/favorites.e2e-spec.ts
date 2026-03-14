@@ -122,7 +122,7 @@ describe('Favorites (e2e)', () => {
         .set('Authorization', `Bearer ${renterToken}`)
         .expect(200);
 
-      expect(Array.isArray(res.body.data || res.body)).toBe(true);
+      expect(Array.isArray(res.body.data || res.body.favorites || res.body)).toBe(true);
     });
 
     it('should require authentication', async () => {

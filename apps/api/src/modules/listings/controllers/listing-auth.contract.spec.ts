@@ -74,7 +74,7 @@ describe('Listing Authentication Contract Tests', () => {
         const listing = { ...mockListing, status: listingStatus };
         listingsService.findById.mockResolvedValue(listing as any);
 
-        const result = await controller.findById(listing.id);
+        const result = await controller.findById(listing.id, { user: undefined });
         expect(result).toBeDefined();
         expect(result.id).toBe(listing.id);
 
@@ -87,7 +87,7 @@ describe('Listing Authentication Contract Tests', () => {
       listingsService.findById.mockResolvedValue(listing as any);
 
       // Controller doesn't do JWT checking — service does via guards
-      const result = await controller.findById(listing.id);
+      const result = await controller.findById(listing.id, { user: undefined });
       expect(result).toBeDefined();
       expect(result.id).toBe(listing.id);
     });
@@ -96,7 +96,7 @@ describe('Listing Authentication Contract Tests', () => {
       const listing = { ...mockListing, status: 'AVAILABLE' };
       listingsService.findById.mockResolvedValue(listing as any);
 
-      const result = await controller.findById(listing.id);
+      const result = await controller.findById(listing.id, { user: undefined });
       expect(result).toBeDefined();
       expect(result.id).toBe(listing.id);
     });
@@ -106,7 +106,7 @@ describe('Listing Authentication Contract Tests', () => {
       listingsService.findById.mockResolvedValue(listing as any);
 
       // Controller delegates to service — ensure mapped result is correct
-      const result = await controller.findById(listing.id);
+      const result = await controller.findById(listing.id, { user: undefined });
       expect(result.id).toBe(listing.id);
       expect(result.ownerId).toBe(listing.ownerId);
     });

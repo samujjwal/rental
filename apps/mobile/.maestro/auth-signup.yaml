@@ -48,4 +48,3 @@ appId: com.gharbatai.rental
 # 6. Should navigate to home or verification screen
 - assertVisible:
     text: "Home|Verify|Welcome"
-    timeout: 10000

@@ -53,9 +53,12 @@ rental/
 ### Development
 
 ```bash
-pnpm dev              # Start all apps in dev mode
-pnpm -F @rental-portal/api dev    # Start API only
-pnpm -F @rental-portal/web dev    # Start web only
+pnpm run setup        # Bootstrap local env files + install deps
+pnpm run services:up  # Start Postgres / Redis / Elasticsearch
+pnpm run dev:full     # Start infra, migrate, then launch API + web
+pnpm run dev          # Start API + web in dev mode
+pnpm run dev:api      # Start API only
+pnpm run dev:web      # Start web only
 ```
 
 ### Building
@@ -63,6 +66,7 @@ pnpm -F @rental-portal/web dev    # Start web only
 ```bash
 pnpm build            # Build all packages
 pnpm validate         # Run full build validation
+pnpm run deploy:prod  # Run production compose deployment
 ```
 
 ### Code Quality
@@ -80,7 +84,8 @@ pnpm format:check     # Check code formatting
 pnpm test             # Run all tests
 pnpm -F @rental-portal/api test       # API tests
 pnpm -F @rental-portal/web test       # Web tests
-pnpm -F @rental-portal/web e2e        # E2E tests
+pnpm -F @rental-portal/web test:e2e   # Core web E2E tests
+pnpm run test:all    # Full local test pass
 ```
 
 ### Database
@@ -89,6 +94,7 @@ pnpm -F @rental-portal/web e2e        # E2E tests
 pnpm db:migrate       # Run database migrations
 pnpm db:studio        # Open Prisma Studio
 pnpm db:seed          # Seed database
+pnpm run backup:prod  # Back up production database via .env.production
 ```
 
 ## TypeScript Configuration
@@ -154,7 +160,7 @@ Husky automatically runs on `git commit`:
 Run comprehensive validation:
 
 ```bash
-./validate-build.sh
+pnpm run validate
 ```
 
 This script validates:
@@ -218,7 +224,7 @@ nvm use  # Uses version from .nvmrc
 ### Dependency issues
 
 ```bash
-pnpm clean    # Remove node_modules
+pnpm run clean   # Clear workspace clean tasks
 pnpm install  # Reinstall
 ```
 

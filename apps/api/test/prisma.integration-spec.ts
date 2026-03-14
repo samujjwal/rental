@@ -10,6 +10,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { BookingStatus, PropertyStatus, PropertyType, UserRole } from '@rental-portal/database';
 
 const DB_URL = process.env.DATABASE_URL;
 const describeIf = DB_URL ? describe : describe.skip;
@@ -68,16 +69,17 @@ describeIf('Prisma Integration Tests', () => {
       const user = await prisma.user.create({
         data: {
           email: testEmail,
+          username: testEmail,
           passwordHash: 'hashed',
           firstName: 'Test',
           lastName: 'User',
-          role: 'RENTER',
+          role: UserRole.USER,
         },
       });
       userId = user.id;
       expect(user.id).toBeDefined();
       expect(user.email).toBe(testEmail);
-      expect(user.role).toBe('RENTER');
+      expect(user.role).toBe(UserRole.USER);
       expect(user.createdAt).toBeInstanceOf(Date);
     });
 
@@ -101,9 +103,10 @@ describeIf('Prisma Integration Tests', () => {
         prisma.user.create({
           data: {
             email: testEmail,
+            username: `dup-${testEmail}`,
             passwordHash: 'hashed',
             firstName: 'Dup',
-            role: 'RENTER',
+            role: UserRole.USER,
           },
         }),
       ).rejects.toThrow();
@@ -126,12 +129,14 @@ describeIf('Prisma Integration Tests', () => {
     let listingId: string;
 
     beforeAll(async () => {
+      const ownerEmail = `owner-${Date.now()}@integration.np`;
       const owner = await prisma.user.create({
         data: {
-          email: `owner-${Date.now()}@integration.np`,
+          email: ownerEmail,
+          username: ownerEmail,
           passwordHash: 'hashed',
           firstName: 'Owner',
-          role: 'OWNER',
+          role: UserRole.HOST,
         },
       });
       ownerId = owner.id;
@@ -141,6 +146,8 @@ describeIf('Prisma Integration Tests', () => {
           name: `TestCat-${Date.now()}`,
           slug: `testcat-${Date.now()}`,
           description: 'Integration test category',
+          searchableFields: [],
+          requiredFields: [],
         },
       });
       catId = cat.id;
@@ -158,16 +165,26 @@ describeIf('Prisma Integration Tests', () => {
           title: 'Integration Test Bike',
           description: 'A test listing',
           slug: `int-test-${Date.now()}`,
+          address: '10 Test Street',
+          city: 'Kathmandu',
+          state: 'Bagmati',
+          zipCode: '44600',
+          country: 'NP',
+          type: PropertyType.OTHER,
           basePrice: 500,
           currency: 'NPR',
-          status: 'DRAFT',
+          amenities: [],
+          features: [],
+          photos: [],
+          rules: [],
+          status: PropertyStatus.DRAFT,
           ownerId,
           categoryId: catId,
         },
       });
       listingId = listing.id;
       expect(listing.id).toBeDefined();
-      expect(listing.basePrice).toBe(500);
+      expect(Number(listing.basePrice)).toBe(500);
     });
 
     it('reads listing with owner relation', async () => {
@@ -182,22 +199,22 @@ describeIf('Prisma Integration Tests', () => {
 
     it('filters listings by status', async () => {
       const drafts = await prisma.listing.findMany({
-        where: { status: 'DRAFT', id: listingId },
+        where: { status: PropertyStatus.DRAFT, id: listingId },
       });
       expect(drafts.length).toBe(1);
 
-      const published = await prisma.listing.findMany({
-        where: { status: 'PUBLISHED', id: listingId },
+      const available = await prisma.listing.findMany({
+        where: { status: PropertyStatus.AVAILABLE, id: listingId },
       });
-      expect(published.length).toBe(0);
+      expect(available.length).toBe(0);
     });
 
     it('updates listing status', async () => {
       const updated = await prisma.listing.update({
         where: { id: listingId },
-        data: { status: 'PUBLISHED' },
+        data: { status: PropertyStatus.AVAILABLE },
       });
-      expect(updated.status).toBe('PUBLISHED');
+      expect(updated.status).toBe(PropertyStatus.AVAILABLE);
     });
 
     it('enforces unique slug constraint', async () => {
@@ -208,9 +225,19 @@ describeIf('Prisma Integration Tests', () => {
             title: 'Duplicate Slug',
             description: 'Should fail',
             slug: existing!.slug,
+            address: '11 Test Street',
+            city: 'Kathmandu',
+            state: 'Bagmati',
+            zipCode: '44600',
+            country: 'NP',
+            type: PropertyType.OTHER,
             basePrice: 100,
             currency: 'NPR',
-            status: 'DRAFT',
+            amenities: [],
+            features: [],
+            photos: [],
+            rules: [],
+            status: PropertyStatus.DRAFT,
             ownerId,
             categoryId: catId,
           },
@@ -229,21 +256,25 @@ describeIf('Prisma Integration Tests', () => {
     let bookingId: string;
 
     beforeAll(async () => {
+      const ownerEmail = `booking-owner-${Date.now()}@int.np`;
+      const renterEmail = `booking-renter-${Date.now()}@int.np`;
       const [owner, renter] = await Promise.all([
         prisma.user.create({
           data: {
-            email: `booking-owner-${Date.now()}@int.np`,
+            email: ownerEmail,
+            username: ownerEmail,
             passwordHash: 'h',
             firstName: 'BookOwner',
-            role: 'OWNER',
+            role: UserRole.HOST,
           },
         }),
         prisma.user.create({
           data: {
-            email: `booking-renter-${Date.now()}@int.np`,
+            email: renterEmail,
+            username: renterEmail,
             passwordHash: 'h',
             firstName: 'BookRenter',
-            role: 'RENTER',
+            role: UserRole.USER,
           },
         }),
       ]);
@@ -255,6 +286,8 @@ describeIf('Prisma Integration Tests', () => {
           name: `BookCat-${Date.now()}`,
           slug: `bookcat-${Date.now()}`,
           description: 'Booking test',
+          searchableFields: [],
+          requiredFields: [],
         },
       });
       catId = cat.id;
@@ -264,9 +297,19 @@ describeIf('Prisma Integration Tests', () => {
           title: 'Booking Test Item',
           description: 'For booking tests',
           slug: `booking-test-${Date.now()}`,
+          address: '20 Test Street',
+          city: 'Kathmandu',
+          state: 'Bagmati',
+          zipCode: '44600',
+          country: 'NP',
+          type: PropertyType.OTHER,
           basePrice: 1000,
           currency: 'NPR',
-          status: 'PUBLISHED',
+          amenities: [],
+          features: [],
+          photos: [],
+          rules: [],
+          status: PropertyStatus.AVAILABLE,
           ownerId,
           categoryId: catId,
         },
@@ -289,14 +332,16 @@ describeIf('Prisma Integration Tests', () => {
           ownerId,
           startDate: new Date('2026-03-01'),
           endDate: new Date('2026-03-05'),
+          basePrice: 1000,
           totalPrice: 4000,
-          status: 'PENDING_OWNER_APPROVAL',
+          currency: 'NPR',
+          status: BookingStatus.PENDING_OWNER_APPROVAL,
         },
       });
       bookingId = booking.id;
       expect(booking.id).toBeDefined();
-      expect(booking.totalPrice).toBe(4000);
-      expect(booking.status).toBe('PENDING_OWNER_APPROVAL');
+      expect(Number(booking.totalPrice)).toBe(4000);
+      expect(booking.status).toBe(BookingStatus.PENDING_OWNER_APPROVAL);
     });
 
     it('queries bookings with listing relation', async () => {
@@ -311,9 +356,9 @@ describeIf('Prisma Integration Tests', () => {
     it('updates booking status', async () => {
       const updated = await prisma.booking.update({
         where: { id: bookingId },
-        data: { status: 'CONFIRMED' },
+        data: { status: BookingStatus.CONFIRMED },
       });
-      expect(updated.status).toBe('CONFIRMED');
+      expect(updated.status).toBe(BookingStatus.CONFIRMED);
     });
 
     it('queries bookings by renter', async () => {
@@ -336,9 +381,10 @@ describeIf('Prisma Integration Tests', () => {
           await tx.user.create({
             data: {
               email,
+              username: email,
               passwordHash: 'h',
               firstName: 'TxTest',
-              role: 'RENTER',
+              role: UserRole.USER,
             },
           });
           throw new Error('Intentional rollback');
@@ -358,9 +404,10 @@ describeIf('Prisma Integration Tests', () => {
         await tx.user.create({
           data: {
             email,
+            username: email,
             passwordHash: 'h',
             firstName: 'TxCommit',
-            role: 'RENTER',
+            role: UserRole.USER,
           },
         });
       });

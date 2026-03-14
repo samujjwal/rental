@@ -63,7 +63,12 @@ export async function getFavoriteByListingId(
   listingId: string
 ): Promise<Favorite | null> {
   try {
-    return await apiClient.get<Favorite>(`/favorites/listing/${listingId}`);
+    const result = await apiClient.get<Favorite | { isFavorite: boolean }>(`/favorites/listing/${listingId}`);
+    // API may return { isFavorite: boolean } instead of a Favorite object
+    if (result && typeof result === "object" && "isFavorite" in result) {
+      return (result as { isFavorite: boolean }).isFavorite ? ({ id: "", listingId, userId: "", createdAt: "" } as Favorite) : null;
+    }
+    return result as Favorite | null;
   } catch (error: unknown) {
     const status =
       error && typeof error === "object" && "response" in error

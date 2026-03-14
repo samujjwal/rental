@@ -30,7 +30,7 @@ describe('Geo (e2e)', () => {
         .get('/geo/autocomplete?query=Kathmandu')
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
+      expect(Array.isArray(res.body.results || res.body)).toBe(true);
     });
 
     it('should return empty array for gibberish', async () => {
@@ -38,7 +38,7 @@ describe('Geo (e2e)', () => {
         .get('/geo/autocomplete?query=zzxxyyww123')
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
+      expect(Array.isArray(res.body.results || res.body)).toBe(true);
     });
 
     it('should handle empty query', async () => {

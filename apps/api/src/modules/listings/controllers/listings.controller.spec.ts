@@ -222,32 +222,32 @@ describe('ListingsController', () => {
 
     it('returns mapped listing for any status', async () => {
       listingsService.findById.mockResolvedValue({ ...mockListing, status: 'AVAILABLE' } as any);
-      const result = await controller.findById('l1');
+      const result = await controller.findById('l1', { user: undefined });
       expect(result).toHaveProperty('id', 'l1');
-      expect(listingsService.findById).toHaveBeenCalledWith('l1');
+      expect(listingsService.findById).toHaveBeenCalledWith('l1', false, undefined, undefined);
     });
 
     it('returns RENTED listing', async () => {
       listingsService.findById.mockResolvedValue({ ...mockListing, status: 'RENTED' } as any);
-      const result = await controller.findById('l1');
+      const result = await controller.findById('l1', { user: undefined });
       expect(result).toHaveProperty('id', 'l1');
     });
 
     it('returns DRAFT listing (service handles visibility)', async () => {
       listingsService.findById.mockResolvedValue({ ...mockListing, status: 'DRAFT' } as any);
-      const result = await controller.findById('l1');
+      const result = await controller.findById('l1', { user: undefined });
       expect(result).toHaveProperty('id', 'l1');
       expect(result).toHaveProperty('status', 'DRAFT');
     });
 
     it('propagates NotFoundException when service throws', async () => {
       listingsService.findById.mockRejectedValue(new NotFoundException('Not found'));
-      await expect(controller.findById('l1')).rejects.toThrow(NotFoundException);
+      await expect(controller.findById('l1', { user: undefined })).rejects.toThrow(NotFoundException);
     });
 
     it('returns listing with mapped properties', async () => {
       listingsService.findById.mockResolvedValue(mockListing as any);
-      const result = await controller.findById('l1');
+      const result = await controller.findById('l1', { user: undefined });
       expect(result).toHaveProperty('pricePerDay');
       expect(result).toHaveProperty('location');
       expect(result).toHaveProperty('owner');
@@ -408,21 +408,21 @@ describe('ListingsController', () => {
   describe('mapToFrontendListing (via findById)', () => {
     it('computes weekly/monthly prices from discounts', async () => {
       listingsService.findById.mockResolvedValue(mockListing as any);
-      const result = await controller.findById('l1');
+      const result = await controller.findById('l1', { user: undefined });
       expect(result.pricePerWeek).toBe(Math.round(100 * 7 * 0.9));
       expect(result.pricePerMonth).toBe(Math.round(100 * 30 * 0.8));
     });
 
     it('sets availability string based on status', async () => {
       listingsService.findById.mockResolvedValue({ ...mockListing, status: 'RENTED' } as any);
-      const result = await controller.findById('l1');
+      const result = await controller.findById('l1', { user: undefined });
       expect(result.availability).toBe('rented');
     });
 
     it('parses metadata when present', async () => {
       const withMeta = { ...mockListing, metadata: JSON.stringify({ subcategory: 'Laptops' }) };
       listingsService.findById.mockResolvedValue(withMeta as any);
-      const result = await controller.findById('l1');
+      const result = await controller.findById('l1', { user: undefined });
       expect(result.subcategory).toBe('Laptops');
     });
   });

@@ -113,7 +113,7 @@ describe('Refund Calculation Accuracy (e2e)', () => {
         category: { connect: { id: categoryId } },
         title: 'Refund Test Listing',
         description: 'A listing for refund calculation testing',
-        slug: 'refund-test-listing',
+        slug: `refund-test-listing-${Date.now()}`,
         address: '456 Refund St',
         basePrice: 1000,
         currency: 'NPR',
@@ -160,7 +160,7 @@ describe('Refund Calculation Accuracy (e2e)', () => {
 
     // Approve
     await request(app.getHttpServer())
-      .patch(`/bookings/${bookingId}/approve`)
+      .post(`/bookings/${bookingId}/approve`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .expect(200);
 
@@ -179,7 +179,7 @@ describe('Refund Calculation Accuracy (e2e)', () => {
       const bookingId = await createConfirmedBooking(7, 3);
 
       const cancelRes = await request(app.getHttpServer())
-        .patch(`/bookings/${bookingId}/cancel`)
+        .post(`/bookings/${bookingId}/cancel`)
         .set('Authorization', `Bearer ${renterToken}`);
 
       // Should succeed
@@ -232,16 +232,16 @@ describe('Refund Calculation Accuracy (e2e)', () => {
       }
     });
 
-    it('should have subtotal >= 0 for any booking', async () => {
+    it('should have serviceFee >= 0 for any booking', async () => {
       const bookingId = await createConfirmedBooking(14, 1);
       const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
 
       expect(booking).toBeDefined();
-      if (booking?.subtotal) {
-        expect(parseFloat(booking.subtotal.toString())).toBeGreaterThanOrEqual(0);
+      if (booking?.serviceFee) {
+        expect(parseFloat(booking.serviceFee.toString())).toBeGreaterThanOrEqual(0);
       }
-      if (booking?.total) {
-        expect(parseFloat(booking.total.toString())).toBeGreaterThanOrEqual(0);
+      if (booking?.totalPrice) {
+        expect(parseFloat(booking.totalPrice.toString())).toBeGreaterThanOrEqual(0);
       }
     });
   });
@@ -254,13 +254,13 @@ describe('Refund Calculation Accuracy (e2e)', () => {
       const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
       expect(booking).toBeDefined();
 
-      // basePrice should be less than or equal to total (total includes fees)
-      if (booking?.basePrice && booking?.total) {
+      // basePrice should be less than or equal to totalPrice (totalPrice includes fees)
+      if (booking?.basePrice && booking?.totalPrice) {
         const basePrice = parseFloat(booking.basePrice.toString());
-        const total = parseFloat(booking.total.toString());
+        const total = parseFloat(booking.totalPrice.toString());
         expect(basePrice).toBeLessThanOrEqual(total);
 
-        // If there are service/platform fees, total > basePrice
+        // If there are service/platform fees, totalPrice > basePrice
         if (booking.serviceFee) {
           const sf = parseFloat(booking.serviceFee.toString());
           if (sf > 0) {

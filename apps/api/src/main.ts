@@ -42,6 +42,7 @@ async function bootstrap() {
   // Trust proxy — required behind nginx/load-balancer for correct client IP + secure cookies
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
+  expressApp.disable('x-powered-by');
 
   // Compression — gzip/brotli responses (P0 security fix)
   app.use(compression());

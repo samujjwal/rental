@@ -56,10 +56,13 @@ export class CategoriesService {
 
   async findAll(activeOnly: boolean = true): Promise<Category[]> {
     const cacheKey = `categories:${activeOnly ? 'active' : 'all'}`;
-    const cached = await this.cacheService.get<Category[]>(cacheKey);
-
-    if (cached) {
-      return cached;
+    try {
+      const cached = await this.cacheService.get<Category[]>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    } catch {
+      // Cache unavailable — fall through to database
     }
 
     const categories = await this.prisma.category.findMany({
@@ -67,18 +70,25 @@ export class CategoriesService {
       orderBy: { order: 'asc' },
     });
 
-    // Cache for 1 hour
-    await this.cacheService.set(cacheKey, categories, 3600);
+    // Cache for 1 hour (best-effort)
+    try {
+      await this.cacheService.set(cacheKey, categories, 3600);
+    } catch {
+      // Cache write failed — return data anyway
+    }
 
     return categories;
   }
 
   async findById(id: string): Promise<Category> {
     const cacheKey = `category:${id}`;
-    const cached = await this.cacheService.get<Category>(cacheKey);
-
-    if (cached) {
-      return cached;
+    try {
+      const cached = await this.cacheService.get<Category>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    } catch {
+      // Cache unavailable — fall through to database
     }
 
     const category = await this.prisma.category.findUnique({
@@ -89,17 +99,24 @@ export class CategoriesService {
       throw new NotFoundException(`Category with ID '${id}' not found`);
     }
 
-    await this.cacheService.set(cacheKey, category, 3600);
+    try {
+      await this.cacheService.set(cacheKey, category, 3600);
+    } catch {
+      // Cache write failed — return data anyway
+    }
 
     return category;
   }
 
   async findBySlug(slug: string): Promise<Category> {
     const cacheKey = `category:slug:${slug}`;
-    const cached = await this.cacheService.get<Category>(cacheKey);
-
-    if (cached) {
-      return cached;
+    try {
+      const cached = await this.cacheService.get<Category>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    } catch {
+      // Cache unavailable — fall through to database
     }
 
     const category = await this.prisma.category.findUnique({
@@ -110,7 +127,11 @@ export class CategoriesService {
       throw new NotFoundException(`Category with slug '${slug}' not found`);
     }
 
-    await this.cacheService.set(cacheKey, category, 3600);
+    try {
+      await this.cacheService.set(cacheKey, category, 3600);
+    } catch {
+      // Cache write failed — return data anyway
+    }
 
     return category;
   }

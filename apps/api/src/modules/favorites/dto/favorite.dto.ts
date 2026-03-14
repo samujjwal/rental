@@ -1,9 +1,10 @@
-import { IsString, IsArray, IsUUID } from 'class-validator';
+import { IsArray, IsNotEmpty, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AddFavoriteDto {
   @ApiProperty({ description: 'Listing ID to add to favorites' })
   @IsUUID()
+  @IsNotEmpty()
   listingId: string;
 }
 

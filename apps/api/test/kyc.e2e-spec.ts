@@ -172,7 +172,7 @@ describe('KYC (e2e)', () => {
         .post('/kyc/documents')
         .set('Authorization', `Bearer ${userToken}`)
         .send({
-          documentType: 'DRIVING_LICENSE',
+          documentType: 'DRIVERS_LICENSE',
           documentUrl: 'https://storage.test/reject.pdf',
         })
         .expect(201);

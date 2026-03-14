@@ -174,6 +174,8 @@ test.describe("Full booking flow — from listing to /bookings list", () => {
 
   test("guest clicking Book is redirected to login", async ({ page }) => {
     await page.context().clearCookies();
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     await page.evaluate(() => localStorage.clear());
     await page.goto(`/listings/${listing.id}`);
     const dateInputs = page.locator('input[type="date"]');
@@ -530,6 +532,8 @@ test.describe("Favorites — empty state (no listings favorited)", () => {
 
   test("guest accessing /favorites is redirected to login", async ({ page }) => {
     await page.context().clearCookies();
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     await page.evaluate(() => localStorage.clear());
     await page.goto("/favorites");
     await expectAnyVisible(page, [
@@ -659,25 +663,38 @@ test.describe("Favorites — add, view, navigate, remove (seeded listing)", () =
     await page.goto(`/listings/${listing.id}`);
     await expect(page.locator("h1").first()).toBeVisible({ timeout: 8000 });
 
+    // Wait for favorite button to finish loading before interacting
+    await page.waitForFunction(() => {
+      const btn = document.querySelector('button[aria-label="Add to favorites"], button[aria-label="Remove from favorites"]');
+      return btn && !(btn as HTMLButtonElement).disabled;
+    }, { timeout: 6000 }).catch(() => null);
+
     // Start from known state — unfavorited if possible
-    const removeFirst = page.locator('button[aria-label="Remove from favorites"]');
+    const removeFirst = page.locator('button[aria-label="Remove from favorites"]:not([disabled])');
     if (await removeFirst.isVisible({ timeout: 2000 }).catch(() => false)) {
       await removeFirst.click();
-      await page.waitForTimeout(1000);
+      await page.waitForFunction(() => {
+        const btn = document.querySelector('button[aria-label="Add to favorites"]');
+        return btn && !(btn as HTMLButtonElement).disabled;
+      }, { timeout: 5000 }).catch(() => null);
     }
 
-    const addBtn = page.locator('button[aria-label="Add to favorites"]');
-    if (!(await addBtn.isVisible({ timeout: 3000 }).catch(() => false))) return;
+    const addBtn = page.locator('button[aria-label="Add to favorites"]:not([disabled])');
+    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) return;
 
     // Add
     await addBtn.click();
-    await page.waitForTimeout(1200);
-    await expect(page.locator('button[aria-label="Remove from favorites"]')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button[aria-label="Remove from favorites"]')).toBeVisible({ timeout: 8000 });
+
+    // Wait for button to be enabled before clicking Remove
+    await page.waitForFunction(() => {
+      const btn = document.querySelector('button[aria-label="Remove from favorites"]');
+      return btn && !(btn as HTMLButtonElement).disabled;
+    }, { timeout: 5000 }).catch(() => null);
 
     // Remove
-    await page.locator('button[aria-label="Remove from favorites"]').click();
-    await page.waitForTimeout(1200);
-    await expect(page.locator('button[aria-label="Add to favorites"]')).toBeVisible({ timeout: 5000 });
+    await page.locator('button[aria-label="Remove from favorites"]:not([disabled])').click();
+    await expect(page.locator('button[aria-label="Add to favorites"]')).toBeVisible({ timeout: 8000 });
   });
 
   test("favoriting same listing twice is idempotent (no duplicate in /favorites)", async ({ page }) => {
@@ -711,6 +728,8 @@ test.describe("Favorites — add, view, navigate, remove (seeded listing)", () =
 
   test("guest clicking heart button is redirected to login or shown login prompt", async ({ page }) => {
     await page.context().clearCookies();
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     await page.evaluate(() => localStorage.clear());
     await page.goto(`/listings/${listing.id}`);
     await expect(page.locator("h1").first()).toBeVisible({ timeout: 8000 });
@@ -755,17 +774,25 @@ test.describe("Favorites — multiple favorited listings", () => {
     for (const l of [listingA, listingB]) {
       await page.goto(`/listings/${l.id}`);
       await expect(page.locator("h1").first()).toBeVisible({ timeout: 8000 });
-      const addBtn = page.locator('button[aria-label="Add to favorites"]');
+      // Wait for favorite button to finish loading (not disabled)
+      await page.waitForFunction(() => {
+        const btn = document.querySelector('button[aria-label="Add to favorites"], button[aria-label="Remove from favorites"]');
+        return btn && !(btn as HTMLButtonElement).disabled;
+      }, { timeout: 6000 }).catch(() => null);
+      const addBtn = page.locator('button[aria-label="Add to favorites"]:not([disabled])');
       if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await addBtn.click();
-        await page.waitForTimeout(1000);
+        // Wait for the button to change to "Remove from favorites" to confirm mutation succeeded
+        await expect(page.locator('button[aria-label="Remove from favorites"]')).toBeVisible({ timeout: 8000 }).catch(() => null);
       }
     }
 
     await page.goto("/favorites");
     await page.waitForLoadState("domcontentloaded");
 
+    // Wait for favorites page content to load
     const links = page.locator('a[href^="/listings/"]');
+    await expect(links.first()).toBeVisible({ timeout: 8000 }).catch(() => null);
     expect(await links.count()).toBeGreaterThanOrEqual(1);
   });
 

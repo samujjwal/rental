@@ -156,7 +156,7 @@ export class BookingStateMachineService {
         from: BookingStatus.CONFIRMED,
         to: BookingStatus.IN_PROGRESS,
         transition: 'START_RENTAL',
-        allowedRoles: ['OWNER', 'RENTER', 'SYSTEM'],
+        allowedRoles: ['OWNER', 'SYSTEM'],
       },
 
       // CONFIRMED → CANCELLED (cancelled before start)

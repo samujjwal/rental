@@ -113,7 +113,9 @@ describe('OTP Passwordless Flow (e2e)', () => {
 
       // Retrieve the OTP from cache (test-only: direct cache access)
       const normalizedEmail = otpEmail.toLowerCase();
-      const cachedOtp = await cacheService.get<string>(`otp:${normalizedEmail}`);
+      const cachedOtpData = await cacheService.get<any>(`otp:${normalizedEmail}`);
+      // Service stores { code, attempts } object
+      const cachedOtp = typeof cachedOtpData === 'string' ? cachedOtpData : cachedOtpData?.code;
 
       if (!cachedOtp) {
         console.warn('OTP not found in cache — email service may be mocking. Skipping.');
@@ -139,7 +141,8 @@ describe('OTP Passwordless Flow (e2e)', () => {
       if (reqRes.status !== 200 && reqRes.status !== 201) return;
 
       const normalizedEmail = otpEmail.toLowerCase();
-      const cachedOtp = await cacheService.get<string>(`otp:${normalizedEmail}`);
+      const cachedOtpData = await cacheService.get<any>(`otp:${normalizedEmail}`);
+      const cachedOtp = typeof cachedOtpData === 'string' ? cachedOtpData : cachedOtpData?.code;
       if (!cachedOtp) return;
 
       // First verification

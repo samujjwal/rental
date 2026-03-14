@@ -107,7 +107,7 @@ export class AuthService {
           phone: dto.phone ?? dto.phoneNumber ?? null,
           dateOfBirth: dto.dateOfBirth,
           role: resolvedRole,
-          status: UserStatus.PENDING_VERIFICATION,
+          status: process.env.NODE_ENV === 'development' ? UserStatus.ACTIVE : UserStatus.PENDING_VERIFICATION,
         },
       });
 

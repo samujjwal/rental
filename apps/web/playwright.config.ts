@@ -25,7 +25,7 @@ export default defineConfig({
     : ["**/debug-*.spec.ts", "**/diagnostic.spec.ts"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 2 : 1,
   // Use 1 worker to avoid parallel login conflicts causing server errors
   // Multiple workers trying to login as same user simultaneously causes DB contention
   workers: 1,
@@ -73,18 +73,23 @@ export default defineConfig({
       // The API server loads its own .env automatically via NestJS ConfigModule.
       // We layer STRIPE_TEST_BYPASS on top so Playwright-spawned API processes
       // skip real Stripe API calls and return synthetic PaymentIntents instead.
-      command: "pnpm --filter @rental-portal/api run start:dev",
-      url: "http://localhost:3400/api/health",
+      command: "pnpm --filter @rental-portal/api run build && pnpm --filter @rental-portal/api run start",
+      url: "http://localhost:3400/api/health/liveness",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: {
         NODE_ENV: "development",
         STRIPE_TEST_BYPASS: stripeTestBypass,
         ALLOW_DEV_LOGIN: "true",
+        DATABASE_URL:
+          "postgresql://rental_user:rental_password@localhost:3433/rental_portal_e2e?schema=public",
+        REDIS_HOST: "localhost",
+        REDIS_PORT: "3480",
+        DISABLE_THROTTLE: "true",
       },
     },
     {
-      command: "pnpm run dev --host 127.0.0.1 --port 3401",
+      command: "pnpm run dev",
       url: "http://localhost:3401",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

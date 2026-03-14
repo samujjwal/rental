@@ -115,12 +115,12 @@ describe('Reviews (e2e)', () => {
       data: {
         listingId,
         renterId,
+        ownerId,
         startDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
         endDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
         status: BookingStatus.COMPLETED,
         basePrice: 10000,
         totalPrice: 10000,
-        totalAmount: 10000,
         platformFee: 1500,
         serviceFee: 500,
         currency: 'USD',

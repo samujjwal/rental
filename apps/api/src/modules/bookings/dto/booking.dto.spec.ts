@@ -15,7 +15,7 @@ import {
 describe('Booking DTOs', () => {
   describe('CreateBookingDto', () => {
     const validData = {
-      listingId: 'listing-123',
+      listingId: '123e4567-e89b-42d3-a456-426614174000',
       startDate: '2025-03-01T00:00:00Z',
       endDate: '2025-03-05T00:00:00Z',
       deliveryMethod: DeliveryMethod.PICKUP,
@@ -230,7 +230,7 @@ describe('Booking DTOs', () => {
   describe('CalculatePriceDto', () => {
     it('passes with valid data', async () => {
       const dto = plainToInstance(CalculatePriceDto, {
-        listingId: 'listing-abc',
+        listingId: '123e4567-e89b-42d3-a456-426614174001',
         startDate: '2025-03-01T00:00:00Z',
         endDate: '2025-03-05T00:00:00Z',
       });

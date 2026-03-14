@@ -65,13 +65,13 @@ describe('FavoritesController', () => {
     it('delegates to service with valid auth', async () => {
       service.getFavoriteByListingId.mockResolvedValue({ favorited: true, id: 'f1' } as any);
       const result = await controller.getFavoriteByListingId('l1', 'Bearer valid.token');
-      expect(result).toEqual({ favorited: true, id: 'f1' });
+      expect(result).toEqual({ isFavorite: true });
       expect(service.getFavoriteByListingId).toHaveBeenCalledWith('u1', 'l1');
     });
 
     it('returns favorited: false without auth', async () => {
       const result = await controller.getFavoriteByListingId('l1');
-      expect(result).toEqual({ favorited: false });
+      expect(result).toEqual({ isFavorite: false });
     });
   });
 

@@ -13,6 +13,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { UserRole } from '@rental-portal/database';
 import {
   createUserWithRole,
   loginUser,
@@ -53,35 +54,36 @@ describe('Auto-Expiration & Time-Based Transitions (e2e)', () => {
     await app.init();
 
     // Create owner
-    const { user: owner } = await createUserWithRole({
+    const { userId: ownerUserId } = await createUserWithRole({
       app,
       prisma,
       email: ownerEmail,
-      role: 'OWNER',
+      role: UserRole.HOST,
       password: 'ExpTest!123',
       firstName: 'ExpOwner',
     });
-    ownerId = owner.id;
+    ownerId = ownerUserId;
     await prisma.user.update({
       where: { id: ownerId },
       data: {
         emailVerified: true,
         stripeConnectId: `acct_test_exp_${suffix}`,
-        stripeConnectStatus: 'ACTIVE',
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
       },
     });
     ownerToken = (await loginUser(app, ownerEmail, 'ExpTest!123')).accessToken;
 
     // Create renter
-    const { user: renter } = await createUserWithRole({
+    const { userId: renterUserId } = await createUserWithRole({
       app,
       prisma,
       email: renterEmail,
-      role: 'RENTER',
+      role: UserRole.USER,
       password: 'ExpTest!123',
       firstName: 'ExpRenter',
     });
-    renterId = renter.id;
+    renterId = renterUserId;
     await prisma.user.update({
       where: { id: renterId },
       data: { emailVerified: true },
@@ -97,14 +99,20 @@ describe('Auto-Expiration & Time-Based Transitions (e2e)', () => {
     const listing = await prisma.listing.create({
       data: {
         title: `Expiration Test Listing ${suffix}`,
+        slug: `exp-listing-${suffix}`,
         description: 'For expiration tests',
+        address: '1 Test Street',
+        city: 'Kathmandu',
+        state: 'Bagmati',
+        zipCode: '44600',
+        country: 'NP',
+        type: 'HOUSE',
         basePrice: 200,
         currency: 'NPR',
         categoryId: cat.id,
         ownerId,
-        status: 'ACTIVE',
+        status: 'AVAILABLE',
         condition: 'GOOD',
-        location: 'Kathmandu',
       },
     });
     listingId = listing.id;
@@ -139,6 +147,7 @@ describe('Auto-Expiration & Time-Based Transitions (e2e)', () => {
       data: {
         listingId,
         renterId,
+        ownerId,
         startDate: start,
         endDate: end,
         status: status as any,

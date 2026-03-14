@@ -99,6 +99,7 @@ describe('WebSocket Messaging (e2e)', () => {
   let user1Socket: Socket;
   let user2Socket: Socket;
   let serverUrl: string;
+  let wsListingId: string;
   const user1Email = buildTestEmail('ws-user1');
   const user2Email = buildTestEmail('ws-user2');
 
@@ -191,11 +192,51 @@ describe('WebSocket Messaging (e2e)', () => {
       data: { emailVerified: true },
     });
 
+    // Create a listing (user2 as owner, user1 contacts them)
+    const wsTs = Date.now();
+    const wsCat = await prisma.category.create({
+      data: {
+        name: `WS Test Category ${wsTs}`,
+        slug: `ws-test-cat-${wsTs}`,
+        description: 'Test',
+        icon: 'test',
+        isActive: true,
+        templateSchema: '{}',
+        searchableFields: [],
+        requiredFields: [],
+      },
+    });
+    const wsListing = await prisma.listing.create({
+      data: {
+        owner: { connect: { id: user2Id } },
+        category: { connect: { id: wsCat.id } },
+        title: 'WS Test Listing',
+        description: 'A listing for WS messaging tests',
+        slug: `ws-test-listing-${Date.now()}`,
+        address: '123 WS St',
+        basePrice: 100,
+        currency: 'NPR',
+        city: 'Kathmandu',
+        state: 'Bagmati',
+        zipCode: '44600',
+        country: 'NP',
+        type: 'APARTMENT',
+        latitude: 27.7172,
+        longitude: 85.324,
+        status: 'AVAILABLE',
+        bookingMode: 'REQUEST',
+        minStayNights: 1,
+        maxStayNights: 30,
+        instantBookable: false,
+      },
+    });
+    wsListingId = wsListing.id;
+
     // Login users
-    const login1 = await loginUser(app, user1Email, 'Password123!');
+    const login1 = await loginUser(app, user1Email);
     user1AccessToken = login1.accessToken;
 
-    const login2 = await loginUser(app, user2Email, 'Password123!');
+    const login2 = await loginUser(app, user2Email);
     user2AccessToken = login2.accessToken;
   });
 
@@ -226,9 +267,15 @@ describe('WebSocket Messaging (e2e)', () => {
         transports: ['websocket'],
       });
 
-      await expect(
-        waitForEvent(user1Socket, 'connect', 2000),
-      ).rejects.toThrow(/Timeout/);
+      // Server may briefly accept the TCP connection then disconnect on auth failure.
+      // Wait for either a disconnect or a timeout; either way the socket should not stay connected.
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 2500);
+        user1Socket.on('disconnect', () => { clearTimeout(timer); resolve(); });
+        user1Socket.on('connect', () => {
+          // Server disconnects after auth failure — wait for that
+        });
+      });
 
       expect(user1Socket.connected).toBe(false);
     });
@@ -252,11 +299,11 @@ describe('WebSocket Messaging (e2e)', () => {
     beforeEach(async () => {
       // Create conversation via REST API
       const response = await request(app.getHttpServer())
-        .post('/api/messaging/conversations')
+        .post('/conversations')
         .set('Authorization', `Bearer ${user1AccessToken}`)
         .send({
-          participantIds: [user2Id],
-          type: 'DIRECT',
+          participantId: user2Id,
+          listingId: wsListingId,
         })
         .expect(201);
 
@@ -387,11 +434,11 @@ describe('WebSocket Messaging (e2e)', () => {
 
     beforeEach(async () => {
       const response = await request(app.getHttpServer())
-        .post('/api/messaging/conversations')
+        .post('/conversations')
         .set('Authorization', `Bearer ${user1AccessToken}`)
         .send({
-          participantIds: [user2Id],
-          type: 'DIRECT',
+          participantId: user2Id,
+          listingId: wsListingId,
         })
         .expect(201);
 
@@ -443,11 +490,11 @@ describe('WebSocket Messaging (e2e)', () => {
 
     beforeEach(async () => {
       const response = await request(app.getHttpServer())
-        .post('/api/messaging/conversations')
+        .post('/conversations')
         .set('Authorization', `Bearer ${user1AccessToken}`)
         .send({
-          participantIds: [user2Id],
-          type: 'DIRECT',
+          participantId: user2Id,
+          listingId: wsListingId,
         })
         .expect(201);
 
@@ -521,11 +568,11 @@ describe('WebSocket Messaging (e2e)', () => {
 
     beforeEach(async () => {
       const response = await request(app.getHttpServer())
-        .post('/api/messaging/conversations')
+        .post('/conversations')
         .set('Authorization', `Bearer ${user1AccessToken}`)
         .send({
-          participantIds: [user2Id],
-          type: 'DIRECT',
+          participantId: user2Id,
+          listingId: wsListingId,
         })
         .expect(201);
 

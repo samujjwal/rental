@@ -883,7 +883,7 @@ export default function ListingDetail() {
 
           {/* Booking Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-4 shadow-lg">
+            <Card className="sticky top-4 shadow-lg" data-testid="booking-panel">
               <CardContent className="p-6">
                 <div className="mb-6">
                   <div className="text-3xl font-bold text-foreground mb-1">

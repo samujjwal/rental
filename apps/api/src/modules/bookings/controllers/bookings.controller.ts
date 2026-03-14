@@ -12,7 +12,6 @@ import {
   Res,
   Header,
   ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
 import { i18nForbidden } from '@/common/errors/i18n-exceptions';
 import { Response } from 'express';
@@ -172,6 +171,45 @@ export class BookingsController {
     return this.bookingsService.cancelBooking(id, userId, dto.reason);
   }
 
+  @Post(':id/bypass-confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[TEST ONLY] Bypass Stripe payment and confirm booking (requires STRIPE_TEST_BYPASS=true)' })
+  @ApiResponse({ status: 200, description: 'Booking confirmed via test bypass' })
+  @ApiResponse({ status: 403, description: 'Not available outside test mode or not authorized' })
+  async bypassConfirm(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<AsyncMethodResult<BookingStateMachineService['transition']>> {
+    if (process.env['STRIPE_TEST_BYPASS'] !== 'true') {
+      throw new ForbiddenException('bypass-confirm is only available when STRIPE_TEST_BYPASS=true');
+    }
+    // Use SYSTEM role so either the renter or owner token can call this endpoint.
+    return this.stateMachine.transition(id, 'COMPLETE_PAYMENT', userId, 'SYSTEM');
+  }
+
+  @Post('dev-reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[TEST ONLY] Force-cancel all non-final bookings (requires STRIPE_TEST_BYPASS=true)' })
+  @ApiResponse({ status: 200, description: 'All non-final bookings cancelled' })
+  @ApiResponse({ status: 403, description: 'Not available outside test mode' })
+  async devReset(): Promise<{ cancelled: number }> {
+    if (process.env['STRIPE_TEST_BYPASS'] !== 'true') {
+      throw new ForbiddenException('dev-reset is only available when STRIPE_TEST_BYPASS=true');
+    }
+    // Cancel ALL bookings (including COMPLETED/SETTLED) so prior-run date slots
+    // never conflict with upcoming test bookings. The conflict check treats
+    // COMPLETED and SETTLED as blocking, so they must be cleared too.
+    const result = await this.prisma.booking.updateMany({
+      where: {
+        status: { notIn: [BookingStatus.CANCELLED, BookingStatus.REFUNDED] },
+      },
+      data: { status: BookingStatus.CANCELLED },
+    });
+    return { cancelled: result.count };
+  }
+
   @Post(':id/start')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -267,53 +305,39 @@ export class BookingsController {
   async calculatePrice(
     @Body() dto: CalculatePriceDto,
   ) {
-    try {
-      // For now, return a simple mock calculation to isolate the issue
-      const start = new Date(dto.startDate);
-      const end = new Date(dto.endDate);
-      const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000));
-      
-      // Mock calculation based on listing data
-      const listing = await this.prisma.listing.findUnique({
-        where: { id: dto.listingId },
-        select: { basePrice: true, currency: true },
-      });
+    const startDate = new Date(dto.startDate);
+    const endDate = new Date(dto.endDate);
+    const pricing = await this.calculation.calculatePrice(dto.listingId, startDate, endDate);
+    const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000));
+    const discounts = pricing.breakdown.discounts ?? [];
+    const discountTotal = discounts.reduce((total, discount) => total + discount.amount, 0);
+    const basePrice =
+      typeof pricing.breakdown.basePrice === 'number'
+        ? pricing.breakdown.basePrice
+        : pricing.subtotal + discountTotal;
 
-      if (!listing) {
-        throw new NotFoundException('Listing not found');
-      }
-
-      const subtotal = Number(listing.basePrice) * totalDays;
-      const serviceFee = subtotal * 0.1; // 10% service fee
-      const securityDeposit = 10000; // Fixed deposit
-      const totalAmount = subtotal + serviceFee + securityDeposit;
-
-      // Simple tax breakdown for now
-      const taxBreakdown = { totalTax: 0, taxLines: [] as unknown[] };
-
-      return {
-        startDate: dto.startDate,
-        endDate: dto.endDate,
-        totalDays,
-        pricePerDay: Number(listing.basePrice),
-        subtotal,
-        serviceFee,
-        deliveryFee: 0,
-        securityDeposit,
-        totalAmount,
-        breakdown: {
-          dailyRental: subtotal,
-          weeklyDiscount: 0,
-          monthlyDiscount: 0,
-          platformFee: serviceFee,
-          taxes: taxBreakdown.totalTax,
-          taxLines: taxBreakdown.taxLines,
-        },
-      };
-    } catch (error) {
-      console.error('Price calculation error:', error);
-      throw error;
-    }
+    return {
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      totalDays,
+      pricePerDay: totalDays > 0 ? basePrice / totalDays : basePrice,
+      subtotal: pricing.subtotal,
+      serviceFee: pricing.serviceFee,
+      platformFee: pricing.platformFee,
+      deliveryFee: 0,
+      securityDeposit: pricing.depositAmount,
+      totalAmount: pricing.total,
+      ownerEarnings: pricing.ownerEarnings,
+      breakdown: {
+        dailyRental: basePrice,
+        weeklyDiscount: discounts.find((discount) => discount.type === 'weekly')?.amount ?? 0,
+        monthlyDiscount: discounts.find((discount) => discount.type === 'monthly')?.amount ?? 0,
+        platformFee: pricing.platformFee,
+        taxes: 0,
+        taxLines: [] as Array<{ name: string; amount: number }>,
+        discounts,
+      },
+    };
   }
 
   @Get(':id/available-transitions')

@@ -623,7 +623,12 @@ describe('BookingsService', () => {
     });
 
     it('should flag safety checks skipped in degraded mode', async () => {
-      mockConfigService.get.mockReturnValue('true'); // fail-open mode
+      // Must differentiate keys: STRIPE_TEST_BYPASS=false (so fraud check runs),
+      // SAFETY_CHECKS_FAIL_OPEN=true (so failures are flagged, not blocked).
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'STRIPE_TEST_BYPASS') return 'false';
+        return 'true'; // SAFETY_CHECKS_FAIL_OPEN and any other key
+      });
       mockFraudDetectionService.performBookingFraudCheck.mockRejectedValueOnce(
         new Error('Fraud service unavailable'),
       );

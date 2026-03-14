@@ -87,7 +87,7 @@ export class VerifyPolicyDto {
 
 export class UploadPolicyDto {
   @ApiProperty({ description: 'Listing ID' })
-  @IsUUID()
+  @IsString()
   listingId: string;
 
   @ApiProperty({ description: 'Policy number' })
@@ -131,7 +131,7 @@ export class CreateClaimDto {
 
   @ApiProperty({ description: 'Associated booking ID', required: false })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   bookingId?: string;
 
   @ApiProperty({ description: 'Claim amount', minimum: 0 })

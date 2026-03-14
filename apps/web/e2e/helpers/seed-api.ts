@@ -72,7 +72,6 @@ interface ListingBlueprint {
   minimumRentalPeriod: number;
   maximumRentalPeriod: number;
   cancellationPolicy: string;
-  availability: string;
 }
 
 const LONG_DESC = (what: string) =>
@@ -80,11 +79,14 @@ const LONG_DESC = (what: string) =>
   `This item is in excellent condition and available for rent. Please do not book this listing — ` +
   `it exists solely for automated testing. Includes all necessary accessories.`;
 
+// Session-unique suffix to prevent slug conflicts between test runs
+const RUN_ID = Date.now().toString(36).slice(-5);
+
 export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
   camera: {
     title: "[E2E] Canon EOS R5 Camera Kit",
     description: LONG_DESC("camera / electronics"),
-    category: "camera",
+    category: "camera-electronics",
     basePrice: 85,
     securityDeposit: 800,
     city: "San Francisco",
@@ -95,12 +97,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 30,
     cancellationPolicy: "flexible",
-    availability: "available",
   },
   drone: {
     title: "[E2E] DJI Mavic 3 Pro Drone",
     description: LONG_DESC("drone / electronics"),
-    category: "drone",
+    category: "camera-electronics",
     basePrice: 120,
     securityDeposit: 1500,
     city: "Austin",
@@ -111,7 +112,6 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 2,
     maximumRentalPeriod: 14,
     cancellationPolicy: "moderate",
-    availability: "available",
   },
   car: {
     title: "[E2E] 2022 Toyota Camry XSE",
@@ -127,12 +127,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 30,
     cancellationPolicy: "strict",
-    availability: "available",
   },
   motorcycle: {
     title: "[E2E] Honda CB500F Motorcycle",
     description: LONG_DESC("motorcycle / vehicle"),
-    category: "motorcycle",
+    category: "bike",
     basePrice: 45,
     securityDeposit: 400,
     city: "Miami",
@@ -143,7 +142,6 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 14,
     cancellationPolicy: "flexible",
-    availability: "available",
   },
   apartment: {
     title: "[E2E] Downtown Studio Apartment",
@@ -159,7 +157,6 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 2,
     maximumRentalPeriod: 90,
     cancellationPolicy: "moderate",
-    availability: "available",
   },
   house: {
     title: "[E2E] 3BR Family House with Garden",
@@ -175,12 +172,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 3,
     maximumRentalPeriod: 90,
     cancellationPolicy: "moderate",
-    availability: "available",
   },
   tent: {
     title: "[E2E] REI Kingdom 6 Camping Tent",
     description: LONG_DESC("tent / outdoor"),
-    category: "tent",
+    category: "sports-equipment",
     basePrice: 35,
     securityDeposit: 150,
     city: "Denver",
@@ -191,12 +187,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 2,
     maximumRentalPeriod: 21,
     cancellationPolicy: "flexible",
-    availability: "available",
   },
   kayak: {
     title: "[E2E] Wilderness Systems Kayak",
     description: LONG_DESC("kayak / outdoor / sports"),
-    category: "kayak",
+    category: "sports-equipment",
     basePrice: 50,
     securityDeposit: 200,
     city: "Seattle",
@@ -207,12 +202,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 14,
     cancellationPolicy: "flexible",
-    availability: "available",
   },
   guitar: {
     title: "[E2E] Taylor 814ce Acoustic Guitar",
     description: LONG_DESC("guitar / musical instrument"),
-    category: "guitar",
+    category: "musical-instrument",
     basePrice: 30,
     securityDeposit: 400,
     city: "Nashville",
@@ -223,12 +217,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 30,
     cancellationPolicy: "flexible",
-    availability: "available",
   },
   piano: {
     title: "[E2E] Roland FP-90X Digital Piano",
     description: LONG_DESC("piano / musical instrument"),
-    category: "piano",
+    category: "musical-instrument",
     basePrice: 25,
     securityDeposit: 300,
     city: "Chicago",
@@ -239,12 +232,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 90,
     cancellationPolicy: "moderate",
-    availability: "available",
   },
   dress: {
     title: "[E2E] Designer Evening Dress Size M",
     description: LONG_DESC("dress / clothing / fashion"),
-    category: "dress",
+    category: "clothing-costumes",
     basePrice: 40,
     securityDeposit: 150,
     city: "New York",
@@ -255,12 +247,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 7,
     cancellationPolicy: "strict",
-    availability: "available",
   },
   suit: {
     title: "[E2E] Hugo Boss Slim Fit Suit Size 40R",
     description: LONG_DESC("suit / clothing / fashion"),
-    category: "suit",
+    category: "clothing-costumes",
     basePrice: 35,
     securityDeposit: 200,
     city: "Chicago",
@@ -271,12 +262,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 7,
     cancellationPolicy: "strict",
-    availability: "available",
   },
   bicycle: {
     title: "[E2E] Trek Marlin 7 Mountain Bike",
     description: LONG_DESC("bicycle / bike"),
-    category: "bicycle",
+    category: "bike",
     basePrice: 25,
     securityDeposit: 150,
     city: "Portland",
@@ -287,12 +277,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 30,
     cancellationPolicy: "flexible",
-    availability: "available",
   },
   ebike: {
     title: "[E2E] Rad Power RadCity Electric Bike",
     description: LONG_DESC("ebike / bike / electric"),
-    category: "ebike",
+    category: "bike",
     basePrice: 40,
     securityDeposit: 300,
     city: "San Francisco",
@@ -303,12 +292,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 14,
     cancellationPolicy: "flexible",
-    availability: "available",
   },
   drill: {
     title: "[E2E] DeWalt 20V Cordless Drill Kit",
     description: LONG_DESC("drill / tools / general"),
-    category: "drill",
+    category: "equipment",
     basePrice: 15,
     securityDeposit: 80,
     city: "Dallas",
@@ -319,12 +307,11 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 14,
     cancellationPolicy: "flexible",
-    availability: "available",
   },
   generator: {
     title: "[E2E] Honda EU2200i Portable Generator",
     description: LONG_DESC("generator / tools / general"),
-    category: "generator",
+    category: "equipment",
     basePrice: 45,
     securityDeposit: 250,
     city: "Phoenix",
@@ -335,7 +322,6 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
     minimumRentalPeriod: 1,
     maximumRentalPeriod: 14,
     cancellationPolicy: "moderate",
-    availability: "available",
   },
 };
 
@@ -345,33 +331,58 @@ export const BLUEPRINTS: Record<CategoryKey, ListingBlueprint> = {
 
 export class SeedApi {
   private ownerToken: string | null = null;
+  private adminToken: string | null = null;
   private createdIds: string[] = [];
+  private listingCounter = 0;
 
   constructor(private readonly request: APIRequestContext) {}
 
   // ── Authentication ────────────────────────────────────────────────────────
 
   /**
-   * Obtain an owner access token via the dev-login endpoint.
+   * Obtain owner and admin access tokens via the dev-login endpoint.
    * Must be called before any createListing() calls.
    */
   async init(): Promise<void> {
     const ownerEmail = process.env.E2E_OWNER_EMAIL || "owner@test.com";
-    const res = await this.request.post(`${API_BASE_URL}/auth/dev-login`, {
-      data: { email: ownerEmail, role: "HOST" },
-    });
+    const adminEmail = process.env.E2E_ADMIN_EMAIL || "admin@test.com";
 
-    if (!res.ok()) {
+    // Helper to request a token with retry on 429 rate-limit
+    const devLogin = async (email: string, role: string) => {
+      let res = await this.request.post(`${API_BASE_URL}/auth/dev-login`, {
+        data: { email, role, secret: "dev-secret-123" },
+      });
+      for (let attempt = 1; attempt <= 3 && res.status() === 429; attempt++) {
+        await new Promise((r) => setTimeout(r, attempt * 2000));
+        res = await this.request.post(`${API_BASE_URL}/auth/dev-login`, {
+          data: { email, role, secret: "dev-secret-123" },
+        });
+      }
+      return res;
+    };
+
+    const [ownerRes, adminRes] = await Promise.all([
+      devLogin(ownerEmail, "HOST"),
+      devLogin(adminEmail, "ADMIN"),
+    ]);
+
+    if (!ownerRes.ok()) {
       throw new Error(
-        `SeedApi.init: dev-login failed (${res.status()}) — is the API running?`
+        `SeedApi.init: dev-login failed (${ownerRes.status()}) — is the API running?`
       );
     }
 
-    const body = (await res.json()) as Partial<DevLoginPayload>;
-    if (!body.accessToken) {
+    const ownerBody = (await ownerRes.json()) as Partial<DevLoginPayload>;
+    if (!ownerBody.accessToken) {
       throw new Error("SeedApi.init: dev-login returned no accessToken");
     }
-    this.ownerToken = body.accessToken;
+    this.ownerToken = ownerBody.accessToken;
+
+    // Admin token is optional — used for approving listings so they appear in search
+    if (adminRes.ok()) {
+      const adminBody = (await adminRes.json()) as Partial<DevLoginPayload>;
+      this.adminToken = adminBody.accessToken ?? null;
+    }
   }
 
   // ── Listing management ────────────────────────────────────────────────────
@@ -386,8 +397,9 @@ export class SeedApi {
     const bp = BLUEPRINTS[categoryKey];
     if (!bp) throw new Error(`No blueprint for category "${categoryKey}"`);
 
+    const seq = ++this.listingCounter;
     const payload = {
-      title: bp.title,
+      title: `${bp.title} ${RUN_ID}-${seq}`,
       description: bp.description,
       category: bp.category,
       basePrice: bp.basePrice,
@@ -404,8 +416,9 @@ export class SeedApi {
       minimumRentalPeriod: bp.minimumRentalPeriod,
       maximumRentalPeriod: bp.maximumRentalPeriod,
       cancellationPolicy: bp.cancellationPolicy,
-      availability: bp.availability,
-      status: "ACTIVE",
+      // Use a local URL so content-moderation's image-accessibility check
+      // completes instantly without depending on external network availability.
+      photos: [{ url: `${API_BASE_URL}/health`, order: 0 }],
     };
 
     const res = await this.request.post(`${API_BASE_URL}/listings`, {
@@ -422,6 +435,50 @@ export class SeedApi {
 
     const created = (await res.json()) as { id: string; title: string; slug?: string };
     this.createdIds.push(created.id);
+
+    // Publish the listing so it appears in public search results.
+    // The publish endpoint returns HTTP 200 even if moderation reverts the listing
+    // back to DRAFT (fail-closed behaviour). We retry up to 3 times checking the
+    // returned `status` field to confirm the listing actually became AVAILABLE.
+    let published = false;
+    for (let attempt = 1; attempt <= 3 && !published; attempt++) {
+      if (attempt > 1) {
+        // Brief pause before retrying — gives moderation service time to recover
+        await new Promise((r) => setTimeout(r, attempt * 1500));
+      }
+      const publishRes = await this.request.post(
+        `${API_BASE_URL}/listings/${created.id}/publish`,
+        { headers: { Authorization: `Bearer ${this.ownerToken}` } }
+      );
+      if (publishRes.ok()) {
+        const publishBody = await publishRes.json().catch(() => ({})) as { status?: string };
+        if (publishBody.status === "AVAILABLE") {
+          published = true;
+        } else if (attempt === 3) {
+          // Final attempt still didn't produce AVAILABLE — warn and continue
+          console.warn(
+            `SeedApi: listing ${created.id} publish returned status="${publishBody.status}" after ${attempt} attempts — detail-page tests may see 404`
+          );
+        }
+      } else if (attempt === 3) {
+        console.warn(
+          `SeedApi: publish listing ${created.id} returned ${publishRes.status()} — tests using search may fail`
+        );
+      }
+    }
+
+    if (published && this.adminToken) {
+      // Admin-approve so it passes verificationStatus: VERIFIED check in search
+      const approveRes = await this.request.post(
+        `${API_BASE_URL}/admin/listings/${created.id}/approve`,
+        { headers: { Authorization: `Bearer ${this.adminToken}` } }
+      );
+      if (!approveRes.ok()) {
+        console.warn(
+          `SeedApi: admin approve listing ${created.id} returned ${approveRes.status()} — listing may not appear in search`
+        );
+      }
+    }
 
     return {
       id: created.id,

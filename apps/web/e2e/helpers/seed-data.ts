@@ -39,7 +39,7 @@ export async function ensureSeedData(page: Page): Promise<SeedData> {
 
   if (existingRes.ok()) {
     const data = await existingRes.json();
-    const items = data.data ?? data.items ?? (Array.isArray(data) ? data : []);
+    const items = data.data ?? data.items ?? data.listings ?? (Array.isArray(data) ? data : []);
     if (items.length > 0) {
       _cached = {
         ownerToken: ownerPayload.accessToken,
@@ -136,7 +136,7 @@ async function devLoginRaw(
   };
 
   const res = await page.request.post(`${API}/auth/dev-login`, {
-    data: { email: emailMap[role], role },
+    data: { email: emailMap[role], role, secret: 'dev-secret-123' },
   });
 
   if (!res.ok()) {

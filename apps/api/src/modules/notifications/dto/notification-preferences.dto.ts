@@ -3,7 +3,15 @@ import { IsOptional, IsBoolean } from 'class-validator';
 export class UpdateNotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
+  email?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   emailEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  sms?: boolean;
 
   @IsOptional()
   @IsBoolean()
@@ -11,7 +19,15 @@ export class UpdateNotificationPreferencesDto {
 
   @IsOptional()
   @IsBoolean()
+  push?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   pushEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  inApp?: boolean;
 
   @IsOptional()
   @IsBoolean()

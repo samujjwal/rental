@@ -15,7 +15,6 @@ appId: com.gharbatai.rental
 # 2. Search screen should show search input
 - assertVisible:
     id: "search-input"
-    timeout: 5000
 
 # 3. Type a search query
 - tapOn:
@@ -25,7 +24,6 @@ appId: com.gharbatai.rental
 # 4. Wait for results to load
 - assertVisible:
     text: ".*"
-    timeout: 8000
 
 # 5. Tap on the first listing result
 - tapOn:
@@ -35,7 +33,6 @@ appId: com.gharbatai.rental
 # 6. Listing detail screen should show
 - assertVisible:
     text: "Book|Request|Contact"
-    timeout: 8000
 
 # 7. Verify price and description are visible
 - assertVisible:

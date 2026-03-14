@@ -190,14 +190,15 @@ export default function SearchPage() {
     useLoaderData<typeof clientLoader>();
   const { t } = useTranslation();
   const [urlSearchParams, setSearchParams] = useSearchParams();
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth >= 1280
+  );
 
-  // Auto-open filter sidebar on xl+ screens; respect user's toggle on smaller screens
+  // Keep filter sidebar open/closed when window is resized across xl breakpoint
   useEffect(() => {
     const update = () => {
       if (window.innerWidth >= 1280) setShowFilters(true);
     };
-    update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);

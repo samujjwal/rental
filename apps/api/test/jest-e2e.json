@@ -5,6 +5,8 @@
   "testRegex": "(\\.e2e-spec|\\.integration-spec)\\.ts$",
   "testTimeout": 20000,
   "forceExit": true,
+  "maxWorkers": 1,
+  "setupFiles": ["./setup-e2e.js"],
   "transform": {
     "^.+\\.(t|j)s$": ["ts-jest", {
       "tsconfig": "./tsconfig.json"

@@ -16,7 +16,8 @@
     "generate": "node scripts/generate-enums.mjs",
     "build": "node scripts/generate-enums.mjs && tsc -p tsconfig.json && tsc -p tsconfig.esm.json",
     "dev": "tsc --watch",
-    "test": "jest"
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
