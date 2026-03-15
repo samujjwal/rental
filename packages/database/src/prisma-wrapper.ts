@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaWrapper {
   private prisma: PrismaClient;
 
-  constructor() {
+  constructor(datasourceUrl?: string) {
     this.prisma = new PrismaClient();
   }
 

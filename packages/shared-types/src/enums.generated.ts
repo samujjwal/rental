@@ -1,7 +1,7 @@
 // ==========================================================================
 // AUTO-GENERATED — DO NOT EDIT
 // Source: packages/database/prisma/schema.prisma
-// Generated: 2026-02-21T02:39:21.511Z
+// Generated: 2026-03-15T03:28:26.868Z
 // Run: pnpm --filter shared-types generate
 // ==========================================================================
 
