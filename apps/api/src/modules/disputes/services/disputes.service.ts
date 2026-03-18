@@ -10,7 +10,13 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { escapeHtml } from '@/common/utils/sanitize';
-import { Dispute, DisputeStatus, UserRole, NotificationType } from '@rental-portal/database';
+import {
+  Dispute,
+  DisputeStatus,
+  NotificationType,
+  ResolutionType,
+  UserRole,
+} from '@rental-portal/database';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
 
@@ -52,6 +58,39 @@ export interface AddEvidenceDto {
   files: string[];
 }
 
+function normalizeResolutionType(
+  decision: string,
+  disputeAmount?: number | string | null,
+  refundAmount?: number,
+): ResolutionType {
+  switch (decision) {
+    case 'REFUND': {
+      if (refundAmount == null) {
+        return ResolutionType.FULL_REFUND;
+      }
+
+      const normalizedDisputeAmount = disputeAmount == null ? Number.NaN : Number(disputeAmount);
+      if (!Number.isNaN(normalizedDisputeAmount) && refundAmount >= normalizedDisputeAmount) {
+        return ResolutionType.FULL_REFUND;
+      }
+
+      return ResolutionType.PARTIAL_REFUND;
+    }
+    case 'DISMISS':
+      return ResolutionType.DISMISSED;
+    case 'CHARGEBACK':
+      return ResolutionType.CHARGE_BACK;
+    case 'FULL_REFUND':
+    case 'PARTIAL_REFUND':
+    case 'CHARGE_BACK':
+    case 'COMPENSATION':
+    case 'DISMISSED':
+      return decision;
+    default:
+      throw new BadRequestException(`Unsupported dispute resolution decision: ${decision}`);
+  }
+}
+
 @Injectable()
 export class DisputesService {
   private readonly logger = new Logger(DisputesService.name);
@@ -83,8 +122,10 @@ export class DisputesService {
       throw i18nNotFound('booking.notFound');
     }
 
-    // Only the renter can initiate a dispute
-    if (booking.renterId !== userId) {
+    const isParticipant =
+      booking.renterId === userId || booking.listing.ownerId === userId;
+
+    if (!isParticipant) {
       throw i18nForbidden('dispute.unauthorized');
     }
 
@@ -779,19 +820,21 @@ export class DisputesService {
     const dispute = await this.prisma.dispute.findUnique({ where: { id: disputeId } });
     if (!dispute) throw new NotFoundException('Dispute not found');
 
+    const resolutionType = normalizeResolutionType(dto.decision, Number(dispute.amount), dto.refundAmount);
+
     const updated = await this.prisma.$transaction(async (tx: any) => {
       await tx.disputeResolution.upsert({
         where: { disputeId },
         create: {
           disputeId,
-          type: dto.decision as any,
+          type: resolutionType,
           outcome: dto.reason ?? 'Admin resolution',
           amount: dto.refundAmount,
           details: dto.notes,
           resolvedBy: adminId,
         },
         update: {
-          type: dto.decision as any,
+          type: resolutionType,
           outcome: dto.reason ?? 'Admin resolution',
           amount: dto.refundAmount,
           details: dto.notes,

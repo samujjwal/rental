@@ -4,6 +4,14 @@ This directory contains comprehensive end-to-end tests for the rental portal web
 
 ## Test Coverage
 
+### Coverage Lanes
+
+- `manual-critical-ui-journeys.spec.ts`: browser-first, manual-style critical path coverage. Uses the real login form, a dedicated request-based listing fixture, the listing page calendar, booking detail actions, booking-thread messaging, checkout guard redirects, owner rejection, renter checkout cancellation, payment-failed retry recovery, the dispute form, and the admin dispute modal. This is the closest lane to human QA behavior, with payment only bridged at the external provider boundary.
+- `ujlt-v2-comprehensive-journeys.spec.ts`: deep lifecycle and state-machine coverage. This suite is intentionally API-assisted so it can validate complete continuation logic, side effects, and admin/system outcomes without relying on long UI setup for every transition.
+- Most other suites in this directory are hybrid: they exercise real UI surfaces but may still use seeded auth, direct API setup, or targeted shortcuts where that gives better determinism.
+
+Use the manual lane when the question is "can a user really do this through the browser?" Use UJLT when the question is "does the full lifecycle and all related side effects hold together end to end?"
+
 ### 1. **Form Validation Tests** (`comprehensive-form-validation.spec.ts`)
 
 Complete validation testing for all forms in the application:
@@ -174,6 +182,18 @@ pnpm --filter @rental-portal/web run test:e2e
 
 ```bash
 pnpm --filter @rental-portal/web run test:e2e:full
+```
+
+### Run the browser-first manual lane
+
+```bash
+pnpm --filter @rental-portal/web run test:e2e:manual -- --project=chromium
+```
+
+### Run the deep lifecycle lane
+
+```bash
+pnpm --filter @rental-portal/web run test:e2e:ujlt
 ```
 
 ### Run a specific test file

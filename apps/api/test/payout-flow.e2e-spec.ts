@@ -24,9 +24,7 @@ import {
   UserRole,
   BookingMode,
   PayoutStatus,
-  AccountType,
   TransactionType,
-  LedgerSide,
 } from '@rental-portal/database';
 import {
   buildTestEmail,
@@ -237,7 +235,7 @@ describe('Payout Flow (e2e)', () => {
   });
 
   describe('POST /payments/payouts', () => {
-    it('should create payout, call Stripe, and record ledger entries', async () => {
+    it('should create payout request and persist a queued payout command', async () => {
       // Create a completed booking with owner earnings
       const booking = await prisma.booking.create({
         data: {
@@ -281,12 +279,8 @@ describe('Payout Flow (e2e)', () => {
         currency: 'NPR',
       });
 
-      // Verify Stripe payout was called
-      expect(mockStripeService.createPayout).toHaveBeenCalledWith(
-        'acct_test_payout',
-        2700,
-        'NPR',
-      );
+      // Stripe payout execution now happens in the queued payment processor.
+      expect(mockStripeService.createPayout).not.toHaveBeenCalled();
 
       // Verify payout record created
       const payout = await prisma.payout.findUnique({
@@ -296,33 +290,24 @@ describe('Payout Flow (e2e)', () => {
       expect(payout?.ownerId).toBe(ownerId);
       expect(Number(payout?.amount)).toBe(2700);
       expect(payout?.status).toBe(PayoutStatus.PENDING);
-      expect(payout?.transferId).toBe('tr_payout_test_123');
+      expect(payout?.transferId).toBeNull();
 
-      // Verify ledger entries created
+      const auditRecord = await prisma.auditLog.findFirst({
+        where: {
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          entityType: 'PAYOUT',
+          entityId: response.body.payoutId,
+        },
+      });
+      expect(auditRecord).toBeDefined();
+
       const ledgerEntries = await prisma.ledgerEntry.findMany({
         where: {
           bookingId: booking.id,
           transactionType: TransactionType.PAYOUT,
         },
-        orderBy: { side: 'asc' },
       });
-      expect(ledgerEntries).toHaveLength(2);
-
-      // DEBIT Receivable (decrease liability to owner)
-      expect(ledgerEntries[0]).toMatchObject({
-        accountType: AccountType.RECEIVABLE,
-        side: LedgerSide.DEBIT,
-        amount: expect.any(Object), // Decimal
-      });
-      expect(Number(ledgerEntries[0].amount)).toBe(2700);
-
-      // CREDIT Cash (decrease cash account)
-      expect(ledgerEntries[1]).toMatchObject({
-        accountType: AccountType.CASH,
-        side: LedgerSide.CREDIT,
-        amount: expect.any(Object),
-      });
-      expect(Number(ledgerEntries[1].amount)).toBe(2700);
+      expect(ledgerEntries).toHaveLength(0);
     });
 
     it('should reject payout when owner has no stripeConnectId', async () => {

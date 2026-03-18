@@ -4,29 +4,13 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceVerificationService } from './insurance-verification.service';
 import { InsurancePolicyService } from './insurance-policy.service';
 import { InsuranceStatus, toNumber } from '@rental-portal/database';
+import { InsurancePolicy } from './insurance.types';
 
 export interface InsuranceRequirement {
   required: boolean;
   type: string; // 'LIABILITY', 'COMPREHENSIVE', 'COLLISION', 'DAMAGE'
   minimumCoverage: number;
   reason: string;
-}
-
-export interface InsurancePolicy {
-  id: string;
-  userId: string;
-  bookingId?: string;
-  listingId?: string;
-  policyNumber: string;
-  provider: string;
-  type: string;
-  coverageAmount: number;
-  effectiveDate: Date;
-  expirationDate: Date;
-  documentUrl: string;
-  status: string;
-  verificationDate?: Date;
-  notes?: string;
 }
 
 @Injectable()

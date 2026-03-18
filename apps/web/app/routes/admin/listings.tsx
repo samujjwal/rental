@@ -67,6 +67,34 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   }
 }
 
+function humanizeStatus(value: string | undefined): string {
+  return String(value || "pending")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getReviewChecklist(listing: AdminListing) {
+  return [
+    {
+      label: "Photos",
+      value: `${listing.photos?.length ?? 0} uploaded`,
+    },
+    {
+      label: "Description",
+      value: listing.description?.trim() ? "Present" : "Missing",
+    },
+    {
+      label: "Location",
+      value: listing.city ? "Present" : "Missing",
+    },
+    {
+      label: "Category",
+      value: listing.category?.name || "Missing",
+    },
+  ];
+}
+
 function ListingCard({
   listing,
   onReject,
@@ -76,6 +104,13 @@ function ListingCard({
 }) {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const reviewChecklist = getReviewChecklist(listing);
+  const verificationLabel = humanizeStatus(listing.verificationStatus);
+  const moderationLabel = humanizeStatus(listing.moderationStatus);
+  const submittedDate = formatDate(new Date(listing.createdAt));
+  const updatedDate = listing.updatedAt
+    ? formatDate(new Date(listing.updatedAt))
+    : submittedDate;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
@@ -119,8 +154,17 @@ function ListingCard({
           )}
           <div className="flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-            <span>{formatDate(new Date(listing.createdAt))}</span>
+            <span>{submittedDate}</span>
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
+            Verification: {verificationLabel}
+          </span>
+          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+            Moderation: {moderationLabel}
+          </span>
         </div>
 
         {listing.city && (
@@ -129,6 +173,28 @@ function ListingCard({
             {listing.country ? `, ${listing.country}` : ""}
           </p>
         )}
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Review Snapshot
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-700">
+            {reviewChecklist.map((item) => (
+              <div key={item.label}>
+                <p className="text-slate-500">{item.label}</p>
+                <p className="font-medium">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-600 space-y-1">
+            <p>
+              Owner email: <span className="font-medium text-slate-800">{listing.owner.email}</span>
+            </p>
+            <p>
+              Last updated: <span className="font-medium text-slate-800">{updatedDate}</span>
+            </p>
+          </div>
+        </div>
 
         <div className="flex gap-2 pt-1">
           <Form method="post" className="flex-1">

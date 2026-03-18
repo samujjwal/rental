@@ -36,7 +36,7 @@ import { API_BASE_URL } from '../config';
 // createMobileClient — previously in @rental-portal/mobile-sdk
 // ---------------------------------------------------------------------------
 function createMobileClient(config: MobileClientConfig = {}) {
-  const baseUrl = config.baseUrl || 'http://localhost:3400/api';
+  const baseUrl = config.baseUrl || API_BASE_URL;
 
   const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
     const headers = new Headers(init.headers || {});

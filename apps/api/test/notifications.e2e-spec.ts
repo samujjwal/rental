@@ -15,6 +15,29 @@ describe('Notifications (e2e)', () => {
 
   const notifEmail = buildTestEmail('notif-user');
 
+  const cleanupNotificationTestData = async () => {
+    const users = await prisma.user.findMany({
+      where: { email: notifEmail },
+      select: { id: true },
+    });
+
+    if (!users.length) {
+      return;
+    }
+
+    const userIds = users.map((user) => user.id);
+
+    await prisma.notification.deleteMany({
+      where: { userId: { in: userIds } },
+    });
+    await prisma.session.deleteMany({
+      where: { userId: { in: userIds } },
+    });
+    await prisma.user.deleteMany({
+      where: { id: { in: userIds } },
+    });
+  };
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -28,18 +51,12 @@ describe('Notifications (e2e)', () => {
   });
 
   afterAll(async () => {
-    await prisma.notification.deleteMany({
-      where: { user: { email: notifEmail } },
-    });
-    await prisma.user.deleteMany({ where: { email: notifEmail } });
+    await cleanupNotificationTestData();
     await app.close();
   });
 
   beforeEach(async () => {
-    await prisma.notification.deleteMany({
-      where: { user: { email: notifEmail } },
-    });
-    await prisma.user.deleteMany({ where: { email: notifEmail } });
+    await cleanupNotificationTestData();
 
     const user = await createUserWithRole({
       app,

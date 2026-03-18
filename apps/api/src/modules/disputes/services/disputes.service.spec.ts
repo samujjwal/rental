@@ -10,7 +10,7 @@ import { EmailService } from '@/common/email/email.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
-import { DisputeStatus, UserRole } from '@rental-portal/database';
+import { DisputeStatus, ResolutionType, UserRole } from '@rental-portal/database';
 
 describe('DisputesService', () => {
   let service: DisputesService;
@@ -60,6 +60,7 @@ describe('DisputesService', () => {
         update: jest.fn(),
         count: jest.fn(),
       },
+      disputeResolution: { upsert: jest.fn() },
       disputeResponse: { create: jest.fn() },
       user: { findUnique: jest.fn() },
     };
@@ -103,6 +104,35 @@ describe('DisputesService', () => {
           data: expect.objectContaining({
             initiatorId: renterId,
             defendantId: ownerId,
+            status: DisputeStatus.OPEN,
+          }),
+        }),
+      );
+      expect(emailService.sendEmail).toHaveBeenCalled();
+    });
+
+    it('should create a dispute as owner', async () => {
+      prisma.booking.findUnique.mockResolvedValue(mockBooking);
+      prisma.dispute.create.mockResolvedValue({
+        ...mockDispute,
+        initiatorId: ownerId,
+        defendantId: renterId,
+      });
+      prisma.user.findUnique.mockResolvedValue({ email: 'renter@test.com', firstName: 'Renter' });
+
+      const result = await service.createDispute(ownerId, {
+        bookingId,
+        title: 'Missing accessory',
+        type: 'MISSING_ITEMS',
+        description: 'Accessory was not returned',
+      });
+
+      expect(result.initiatorId).toBe(ownerId);
+      expect(prisma.dispute.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            initiatorId: ownerId,
+            defendantId: renterId,
             status: DisputeStatus.OPEN,
           }),
         }),
@@ -264,6 +294,54 @@ describe('DisputesService', () => {
       await expect(
         service.updateDispute('missing', adminId, { status: DisputeStatus.RESOLVED }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('resolveDisputeAdmin', () => {
+    it('normalizes REFUND decisions to a resolution enum before persisting', async () => {
+      prisma.dispute.findUnique.mockResolvedValue({
+        ...mockDispute,
+        amount: '25',
+      });
+      prisma.disputeResolution.upsert.mockResolvedValue({ id: 'resolution-1' });
+      prisma.dispute.update.mockResolvedValue({
+        ...mockDispute,
+        status: DisputeStatus.RESOLVED,
+      });
+
+      const result = await service.resolveDisputeAdmin(disputeId, adminId, {
+        decision: 'REFUND',
+        refundAmount: 25,
+        reason: 'Valid claim',
+      });
+
+      expect(prisma.disputeResolution.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ type: ResolutionType.FULL_REFUND }),
+          update: expect.objectContaining({ type: ResolutionType.FULL_REFUND }),
+        }),
+      );
+      expect(result.status).toBe(DisputeStatus.RESOLVED);
+    });
+
+    it('maps DISMISS to DISMISSED before persisting', async () => {
+      prisma.dispute.findUnique.mockResolvedValue(mockDispute);
+      prisma.disputeResolution.upsert.mockResolvedValue({ id: 'resolution-1' });
+      prisma.dispute.update.mockResolvedValue({
+        ...mockDispute,
+        status: DisputeStatus.RESOLVED,
+      });
+
+      await service.resolveDisputeAdmin(disputeId, adminId, {
+        decision: 'DISMISS',
+      });
+
+      expect(prisma.disputeResolution.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ type: ResolutionType.DISMISSED }),
+          update: expect.objectContaining({ type: ResolutionType.DISMISSED }),
+        }),
+      );
     });
   });
 

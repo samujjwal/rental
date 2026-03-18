@@ -42,13 +42,14 @@ export const meta: MetaFunction = () => {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{5,127}$/;
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_ATTACHMENTS = 8;
 const MAX_ATTACHMENT_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_CONVERSATION_SEARCH_LENGTH = 100;
 
-const isUuid = (value: string | null): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
+const isValidEntityId = (value: string | null | undefined): value is string =>
+  Boolean(value && (UUID_PATTERN.test(value) || SAFE_ID_PATTERN.test(value)));
 const safeTimeLabel = (value: unknown, pattern = "h:mm a"): string => {
   const date = new Date(String(value || ""));
   return Number.isNaN(date.getTime()) ? "Unknown time" : format(date, pattern);
@@ -179,7 +180,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
 
   const url = new URL(request.url);
   const rawConversationId = url.searchParams.get("conversation");
-  const conversationId = isUuid(rawConversationId) ? rawConversationId : null;
+  const conversationId = isValidEntityId(rawConversationId)
+    ? rawConversationId
+    : null;
 
   try {
     // Fetch conversations from real API
@@ -441,9 +444,22 @@ export default function Messages() {
     };
   }, [socket, isConnected, selectedConversation, currentUserId]);
 
+  // Subscribe to real-time presence for all conversation participants.
+  // The server immediately replies with current online/offline for each userId,
+  // and streams updates whenever their status changes.
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+    conversationsList.forEach((conv) => {
+      if (conv.otherUser.id) {
+        socket.emit("subscribe_presence", { userId: conv.otherUser.id });
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-subscribe when socket reconnects or conversation list grows
+  }, [socket, isConnected, conversationsList.length]);
+
   useEffect(() => {
     if (!bookingIdParam || !currentUserId || isStartingConversation) return;
-    if (!isUuid(bookingIdParam)) return;
+    if (!isValidEntityId(bookingIdParam)) return;
     let isActive = true;
 
     const startConversationFromBooking = async () => {
@@ -513,8 +529,8 @@ export default function Messages() {
     )
       return;
     if (
-      !isUuid(listingIdParam) ||
-      !isUuid(participantIdParam) ||
+      !isValidEntityId(listingIdParam) ||
+      !isValidEntityId(participantIdParam) ||
       participantIdParam === currentUserId
     ) {
       return;
@@ -791,14 +807,30 @@ export default function Messages() {
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
             {error}
           </div>
+        ) : !isConnected ? (
+          // G3 fix: Surface WebSocket disconnect as a prominent banner so users know
+          // messages may not arrive in real-time and can take action.
+          <div className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
+            <span className="h-2 w-2 flex-shrink-0 rounded-full bg-warning animate-pulse" />
+            <span>
+              <strong>Offline —</strong> real-time messaging is unavailable. Messages you send will
+              be delivered, but you won&apos;t receive new ones until reconnected.
+            </span>
+            <button
+              onClick={() => window.location.reload()}
+              className="ml-auto flex-shrink-0 underline font-medium hover:no-underline"
+            >
+              Reconnect
+            </button>
+          </div>
         ) : null
       }
       actions={
-        <Badge variant={isConnected ? "success" : "outline"}>
-          {isConnected
-            ? t("messages.connected", "Live")
-            : t("messages.disconnected", "Offline")}
-        </Badge>
+        isConnected ? (
+          <Badge variant="success">
+            {t("messages.connected", "Live")}
+          </Badge>
+        ) : null
       }
       containerSize="large"
       containerClassName="py-6"

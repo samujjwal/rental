@@ -16,6 +16,7 @@ vi.mock("react-router", () => ({
   ScrollRestoration: () => null,
   useLoaderData: () => mockUseLoaderData(),
   useNavigate: () => mockUseNavigate(),
+  useLocation: () => ({ pathname: "/", search: "", hash: "" }),
   useRevalidator: () => mockUseRevalidator(),
 }));
 
@@ -27,7 +28,7 @@ const mockGetState = vi.fn();
 const mockUseAuthStoreSelector = vi.fn();
 vi.mock("./lib/store/auth", () => ({
   useAuthStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) =>
+    (selector?: (state: Record<string, unknown>) => unknown) =>
       mockUseAuthStoreSelector(selector),
     {
       getState: () => mockGetState(),
@@ -83,13 +84,15 @@ describe("root", () => {
 
     // Default: initialized, not loading
     mockUseAuthStoreSelector.mockImplementation(
-      (selector: (state: Record<string, unknown>) => unknown) => {
+      (selector?: (state: Record<string, unknown>) => unknown) => {
         const state = {
           isInitialized: true,
           isLoading: false,
           setAuth: vi.fn(),
+          user: null,
+          accessToken: null,
         };
-        return selector(state);
+        return typeof selector === "function" ? selector(state) : state;
       }
     );
 
@@ -145,13 +148,15 @@ describe("root", () => {
   describe("Root (default export)", () => {
     it("renders loading state when not initialized", () => {
       mockUseAuthStoreSelector.mockImplementation(
-        (selector: (state: Record<string, unknown>) => unknown) => {
+        (selector?: (state: Record<string, unknown>) => unknown) => {
           const state = {
             isInitialized: false,
             isLoading: true,
             setAuth: vi.fn(),
+            user: null,
+            accessToken: null,
           };
-          return selector(state);
+          return typeof selector === "function" ? selector(state) : state;
         }
       );
 

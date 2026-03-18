@@ -26,6 +26,13 @@ describe("paymentsApi", () => {
     expect(result.clientSecret).toBe("cs");
   });
 
+  it("getBookingPaymentStatus", async () => {
+    mockApi.get.mockResolvedValue({ confirmationState: "processing" });
+    const result = await paymentsApi.getBookingPaymentStatus("b1");
+    expect(mockApi.get).toHaveBeenCalledWith("/payments/bookings/b1/status");
+    expect(result.confirmationState).toBe("processing");
+  });
+
   it("getPaymentHistory returns transactions array", async () => {
     mockApi.get.mockResolvedValue({ transactions: [{ id: "t1" }] });
     const result = await paymentsApi.getPaymentHistory("u1");

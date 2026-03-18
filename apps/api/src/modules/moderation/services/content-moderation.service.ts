@@ -4,29 +4,11 @@ import { CacheService } from '../../../common/cache/cache.service';
 import { ImageModerationService } from './image-moderation.service';
 import { TextModerationService } from './text-moderation.service';
 import { ModerationQueueService } from './moderation-queue.service';
-
-export enum ModerationStatus {
-  APPROVED = 'APPROVED',
-  PENDING = 'PENDING',
-  REJECTED = 'REJECTED',
-  FLAGGED = 'FLAGGED',
-}
-
-export interface ModerationResult {
-  status: ModerationStatus;
-  confidence: number; // 0-1
-  flags: ModerationFlag[];
-  requiresHumanReview: boolean;
-  blockedReasons?: string[];
-}
-
-export interface ModerationFlag {
-  type: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  confidence: number;
-  description: string;
-  details?: any;
-}
+import {
+  ModerationFlag,
+  ModerationResult,
+  ModerationStatus,
+} from './moderation.types';
 
 @Injectable()
 export class ContentModerationService {

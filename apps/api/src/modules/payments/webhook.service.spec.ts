@@ -54,7 +54,7 @@ describe('WebhookService', () => {
       booking: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUnique: jest.fn() },
       bookingStateHistory: { create: jest.fn().mockResolvedValue({}) },
       ledgerEntry: { findFirst: jest.fn().mockResolvedValue(null) },
-      refund: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
+      refund: { create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
       dispute: { create: jest.fn(), findFirst: jest.fn() },
       payout: { update: jest.fn(), updateMany: jest.fn(), findFirst: jest.fn() },
       user: { update: jest.fn(), updateMany: jest.fn() },
@@ -339,7 +339,7 @@ describe('WebhookService', () => {
 
       expect(prisma.payout.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { stripeId: 'po_2' },
+          where: { OR: [{ stripeId: 'po_2' }, { transferId: 'po_2' }] },
           data: expect.objectContaining({ status: 'FAILED' }),
         }),
       );

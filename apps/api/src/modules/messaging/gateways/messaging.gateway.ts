@@ -14,7 +14,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { MessagesService } from '../services/messages.service';
 import { SendMessageDto } from '../dto/messaging.dto';
 import { ConversationsService } from '../services/conversations.service';
-import { WsJwtAuthGuard } from '@/common/auth';
+import { WsJwtAuthGuard } from '@/modules/auth/guards/ws-jwt-auth.guard';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { NotificationType } from '@rental-portal/database';
 import { CacheService } from '@/common/cache/cache.service';

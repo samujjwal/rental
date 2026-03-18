@@ -45,12 +45,14 @@ export function SignupScreen({ navigation }: Props) {
         value={firstName}
         onChangeText={setFirstName}
         placeholder="First name"
+        testID="firstName-input"
         style={styles.input}
       />
       <TextInput
         value={lastName}
         onChangeText={setLastName}
         placeholder="Last name"
+        testID="lastName-input"
         style={styles.input}
       />
       <TextInput
@@ -59,6 +61,7 @@ export function SignupScreen({ navigation }: Props) {
         placeholder="Email"
         autoCapitalize="none"
         keyboardType="email-address"
+        testID="email-input"
         style={styles.input}
       />
       <TextInput
@@ -66,6 +69,7 @@ export function SignupScreen({ navigation }: Props) {
         onChangeText={setPassword}
         placeholder="Password"
         secureTextEntry
+        testID="password-input"
         style={styles.input}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}

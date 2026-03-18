@@ -584,9 +584,9 @@ describe('Bookings (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post(`/bookings/${bookingId}/start`)
         .set('Authorization', `Bearer ${renterToken}`)
-        .expect(200);
+        .expect(403); // Renters cannot start rental, only owners can
 
-      expect(response.body.status).toBe(BookingStatus.IN_PROGRESS);
+      expect(response.body.message).toContain('not authorized');
     });
   });
 

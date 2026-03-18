@@ -6,6 +6,7 @@ import { EsewaPaymentPlugin } from '../providers/esewa-payment.plugin';
 import { KhaltiPaymentPlugin } from '../providers/khalti-payment.plugin';
 import { RazorpayPaymentPlugin } from '../providers/razorpay-payment.plugin';
 import { BkashPaymentPlugin } from '../providers/bkash-payment.plugin';
+import { PaymentProviderPlugin } from './payment-provider.interface';
 
 /**
  * Global Payment Orchestration (V5 Prompt 11)
@@ -18,14 +19,6 @@ import { BkashPaymentPlugin } from '../providers/bkash-payment.plugin';
  * - Double-entry ledger writes for all financial operations
  * - Provider failover with circuit-breaker awareness
  */
-
-export interface PaymentProviderPlugin {
-  name: string;
-  authorize(amount: number, currency: string, metadata: Record<string, any>): Promise<{ transactionId: string; status: string }>;
-  capture(transactionId: string, amount: number): Promise<{ status: string }>;
-  refund(transactionId: string, amount: number, reason?: string): Promise<{ refundId: string; status: string }>;
-  payout(recipientId: string, amount: number, currency: string): Promise<{ payoutId: string; status: string }>;
-}
 
 @Injectable()
 export class PaymentOrchestrationService {

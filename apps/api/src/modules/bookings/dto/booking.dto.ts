@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsInt,
   IsEnum,
+  IsArray,
   Min,
   Max,
   MaxLength,
@@ -156,4 +157,36 @@ export class CalculatePriceDto {
   @IsString()
   @MaxLength(50)
   promoCode?: string;
+}
+
+export class UpdateConditionReportDto {
+  @ApiProperty({ description: 'Condition notes', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  notes?: string;
+
+  @ApiProperty({ description: 'Description of damages found', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  damages?: string;
+
+  @ApiProperty({ description: 'Signature image URL or base64 data URI', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100000)
+  signature?: string;
+
+  @ApiProperty({ description: 'Array of photo URLs', required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  photos?: string[];
+
+  @ApiProperty({ description: 'JSON-serialised checklist data', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  checklistData?: string;
 }

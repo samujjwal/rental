@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { MessagingGateway } from './messaging.gateway';
 import { MessagesService } from '../services/messages.service';
 import { ConversationsService } from '../services/conversations.service';
-import { WsJwtAuthGuard } from '@/common/auth';
+import { WsJwtAuthGuard } from '@/modules/auth/guards/ws-jwt-auth.guard';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 
 /* ---------- helpers ---------- */

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
 
 /* ─── Mocks ───────────────────────────────────────────────────────── */
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon-stub" />);
@@ -53,7 +54,7 @@ vi.mock("~/lib/utils", () => ({
   formatDate: (d: any) => "2025-01-01",
 }));
 
-import { clientLoader, clientAction } from "./listings";
+import AdminListingsPage, { clientLoader, clientAction } from "./listings";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -142,5 +143,48 @@ describe("admin/listings clientAction", () => {
     const r = (await clientAction({ request: actionRequest(fd) } as any)) as any;
     expect(r.success).toBe(false);
     expect(r.error).toBe("Approval failed");
+  });
+});
+
+describe("AdminListingsPage", () => {
+  it("renders richer operator review context", () => {
+    mocks.useLoaderData.mockReturnValue({
+      listings: [
+        {
+          id: "l1",
+          title: "Mountain Cabin",
+          description: "A peaceful cabin in the hills",
+          status: "UNAVAILABLE",
+          verificationStatus: "PENDING",
+          moderationStatus: "FLAGGED",
+          categoryId: "c1",
+          ownerId: "o1",
+          basePrice: 120,
+          currency: "NPR",
+          photos: ["photo-1.jpg", "photo-2.jpg"],
+          city: "Pokhara",
+          country: "Nepal",
+          createdAt: "2025-01-01T00:00:00.000Z",
+          updatedAt: "2025-01-02T00:00:00.000Z",
+          owner: {
+            id: "o1",
+            email: "owner@example.com",
+            firstName: "Sam",
+            lastName: "Host",
+          },
+          category: { id: "c1", name: "Cabins" },
+        },
+      ],
+      total: 1,
+      error: null,
+    });
+    mocks.useActionData.mockReturnValue(null);
+
+    render(<AdminListingsPage />);
+
+    expect(screen.getByText(/Review Snapshot/i)).toBeInTheDocument();
+    expect(screen.getByText(/Verification: Pending/i)).toBeInTheDocument();
+    expect(screen.getByText(/Moderation: Flagged/i)).toBeInTheDocument();
+    expect(screen.getByText(/Owner email:/i)).toBeInTheDocument();
   });
 });

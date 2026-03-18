@@ -23,14 +23,18 @@ vi.mock("~/utils/auth", () => ({
 vi.mock("~/lib/store/auth", () => ({
   useAuthStore: () => ({ user: null }),
 }));
-vi.mock("lucide-react", () => ({
-  Home: IconStub,
-  Search: IconStub,
-  Calendar: IconStub,
-  MessageSquare: IconStub,
-  Package: IconStub,
-  Banknote: IconStub,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...actual,
+    Home: IconStub,
+    Search: IconStub,
+    Calendar: IconStub,
+    MessageSquare: IconStub,
+    Package: IconStub,
+    Banknote: IconStub,
+  };
+});
 vi.mock("~/components/ui", () => ({
   Card: ({ children }: any) => <div>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,

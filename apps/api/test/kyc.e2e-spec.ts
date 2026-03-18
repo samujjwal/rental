@@ -4,7 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { UserRole } from '@rental-portal/database';
-import { buildTestEmail, createUserWithRole } from './e2e-helpers';
+import { buildTestEmail, createUserWithRole, loginUser } from './e2e-helpers';
 
 describe('KYC (e2e)', () => {
   let app: INestApplication;
@@ -242,9 +242,11 @@ describe('KYC (e2e)', () => {
     });
 
     it('should 400 for missing documentUrl', async () => {
+      const refreshedUser = await loginUser(app, userEmail, 'Password123!');
+
       await request(app.getHttpServer())
         .post('/kyc/documents')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('Authorization', `Bearer ${refreshedUser.accessToken}`)
         .send({ documentType: 'PASSPORT' })
         .expect(400);
     });

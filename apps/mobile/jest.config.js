@@ -24,5 +24,7 @@ export default {
   moduleNameMapper: {
     '^expo-device$': '<rootDir>/src/__mocks__/expo-device.cjs',
     '^expo-linking$': '<rootDir>/src/__mocks__/expo-linking.cjs',
+    '^expo-modules-core/src/Refs$': '<rootDir>/node_modules/expo-modules-core/src/Refs.ts',
+    '^expo-modules-core/src/web/index.web$': '<rootDir>/node_modules/expo-modules-core/src/web/index.web.ts',
   },
 };

@@ -45,6 +45,22 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { MAX: 5, HIGH: 4, DEFAULT: 3, LOW: 2, MIN: 1 },
 }));
 
+// ── expo-secure-store: avoid native module loading in tests ─────────────────
+jest.mock('expo-secure-store', () => {
+  const storage = new Map();
+
+  return {
+    getItemAsync: jest.fn(async (key) => storage.get(key) ?? null),
+    setItemAsync: jest.fn(async (key, value) => {
+      storage.set(key, value);
+    }),
+    deleteItemAsync: jest.fn(async (key) => {
+      storage.delete(key);
+    }),
+    isAvailableAsync: jest.fn().mockResolvedValue(true),
+  };
+});
+
 const originalConsoleError = console.error;
 console.error = (...args) => {
   if (

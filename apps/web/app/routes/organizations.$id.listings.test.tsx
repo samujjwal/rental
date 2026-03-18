@@ -48,7 +48,7 @@ vi.mock("~/components/ui/error-state", () => ({
 
 import { clientLoader } from "./organizations.$id.listings";
 
-const VALID_UUID = "a1b2c3d4-e5f6-1234-a5b6-c7d8e9f0a1b2";
+const VALID_ID = "ckx1234567890abcdefghijkl";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -59,14 +59,14 @@ describe("organizations.$id.listings clientLoader", () => {
   it("redirects unauthenticated users", async () => {
     mocks.getUser.mockResolvedValue(null);
     const r = await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/listings"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/listings"),
     } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe("/auth/login");
   });
 
-  it("redirects on invalid UUID", async () => {
+  it("redirects on invalid organization id", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     const r = await clientLoader({
       params: { id: "not-uuid" },
@@ -80,8 +80,8 @@ describe("organizations.$id.listings clientLoader", () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     mocks.getMyOrganizations.mockResolvedValue({ organizations: [] });
     const r = await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/listings"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/listings"),
     } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe("/organizations");
@@ -90,16 +90,16 @@ describe("organizations.$id.listings clientLoader", () => {
   it("returns organization for authorized user", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     mocks.getMyOrganizations.mockResolvedValue({
-      organizations: [{ id: VALID_UUID }],
+      organizations: [{ id: VALID_ID }],
     });
     mocks.getOrganization.mockResolvedValue({
-      id: VALID_UUID,
+      id: VALID_ID,
       name: "Test Org",
       listings: [{ id: "l1", title: "Apartment" }],
     });
     const r = (await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/listings"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/listings"),
     } as any)) as any;
     expect(r.organization.name).toBe("Test Org");
     expect(r.error).toBeNull();
@@ -107,10 +107,10 @@ describe("organizations.$id.listings clientLoader", () => {
 
   it("admin bypasses membership check", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "admin" });
-    mocks.getOrganization.mockResolvedValue({ id: VALID_UUID, name: "Org" });
+    mocks.getOrganization.mockResolvedValue({ id: VALID_ID, name: "Org" });
     const r = (await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/listings"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/listings"),
     } as any)) as any;
     expect(r.organization.name).toBe("Org");
   });
@@ -118,12 +118,12 @@ describe("organizations.$id.listings clientLoader", () => {
   it("handles API error", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     mocks.getMyOrganizations.mockResolvedValue({
-      organizations: [{ id: VALID_UUID }],
+      organizations: [{ id: VALID_ID }],
     });
     mocks.getOrganization.mockRejectedValue(new Error("Connection lost"));
     const r = (await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/listings"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/listings"),
     } as any)) as any;
     expect(r.error).toBe("Connection lost");
     expect(r.organization).toBeNull();

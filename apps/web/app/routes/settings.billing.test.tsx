@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -37,7 +38,7 @@ vi.mock("react-router", () => ({
     to,
     ...p
   }: {
-    children: unknown;
+    children: ReactNode;
     to: string;
     [k: string]: unknown;
   }) => <a href={to} {...(p as Record<string, unknown>)}>{children}</a>,
@@ -59,14 +60,14 @@ vi.mock("~/lib/api/payments", () => ({
 }));
 
 vi.mock("~/components/ui", () => ({
-  RouteErrorBoundary: ({ children }: { children: unknown }) => (
+  RouteErrorBoundary: ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
   ),
 }));
 
 vi.mock("~/components/ui/card", () => ({
-  Card: ({ children }: { children: unknown }) => <div>{children}</div>,
-  CardContent: ({ children }: { children: unknown }) => <div>{children}</div>,
+  Card: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  CardContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -83,13 +84,14 @@ import { clientLoader } from "./settings.billing";
 import SettingsBillingPage from "./settings.billing";
 
 const authUser = { id: "u1", email: "billing@test.com", role: "owner" };
-const mockBalance = { balance: 15000, pendingBalance: 2500 };
+const mockBalance = { balance: 15000, pendingBalance: 2500, currency: "USD" };
 const mockTxs = {
   transactions: [
     {
       id: "tx1",
       type: "CREDIT",
       amount: 5000,
+      currency: "USD",
       description: "Booking payout",
       createdAt: "2026-03-01T00:00:00Z",
       status: "POSTED",
@@ -167,8 +169,7 @@ describe("SettingsBillingPage", () => {
   it("renders Available Balance with formatted amount", () => {
     render(<SettingsBillingPage />);
     expect(screen.getByText("Available Balance")).toBeInTheDocument();
-    // $150.00 from 15000 cents
-    expect(screen.getByText("$150.00")).toBeInTheDocument();
+    expect(screen.getByText("$15,000")).toBeInTheDocument();
   });
 
   it("renders Recent Transactions section", () => {
@@ -211,6 +212,21 @@ describe("SettingsBillingPage", () => {
       .getAllByRole("link")
       .filter((l) => l.getAttribute("href") === "/payments");
     expect(links.length).toBeGreaterThan(0);
+  });
+
+  it("hides owner-only actions for renters", () => {
+    (mocks.useLoaderData as ReturnType<typeof vi.fn>).mockReturnValue({
+      user: { ...authUser, role: "renter" },
+      balance: mockBalance,
+      transactions: mockTxs.transactions,
+    });
+    render(<SettingsBillingPage />);
+    expect(
+      screen.queryByRole("link", { name: /view all/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Payout Settings")
+    ).not.toBeInTheDocument();
   });
 
   it("renders Payout Settings section linking to /dashboard/owner/earnings", () => {

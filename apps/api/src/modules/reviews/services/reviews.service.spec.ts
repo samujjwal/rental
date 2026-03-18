@@ -181,4 +181,33 @@ describe('ReviewsService', () => {
       await expect(service.update('review-1', 'user-1', {})).rejects.toThrow(BadRequestException);
     });
   });
+
+  describe('getUserReviews', () => {
+    it('returns global stats alongside the current page', async () => {
+      mockPrismaService.review.findMany.mockResolvedValue([
+        { id: 'review-1', rating: 5, status: 'PUBLISHED' },
+      ]);
+      mockPrismaService.review.count
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(1);
+      mockPrismaService.review.groupBy.mockResolvedValue([
+        { rating: 5, _count: 2 },
+        { rating: 3, _count: 1 },
+      ]);
+      mockPrismaService.review.aggregate.mockResolvedValue({
+        _avg: { rating: 4.3333 },
+      });
+
+      const result = await service.getUserReviews('user-1', 'received', 1, 10, 5);
+
+      expect(result.reviews).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(result.stats.totalReviews).toBe(3);
+      expect(result.stats.averageRating).toBeCloseTo(4.33, 1);
+      expect(result.stats.ratings[5]).toBe(2);
+      expect(result.stats.ratings[3]).toBe(1);
+      expect(result.stats.pending).toBe(1);
+    });
+  });
 });

@@ -15,6 +15,7 @@ import { paymentsApi } from "~/lib/api/payments";
 import { RouteErrorBoundary } from "~/components/ui";
 import { Card, CardContent } from "~/components/ui/card";
 import { useTranslation } from "react-i18next";
+import { formatCurrency } from "~/lib/utils";
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -44,14 +45,13 @@ export const meta: MetaFunction = () => [
 ];
 
 export default function SettingsBillingPage() {
-  const { balance, transactions } = useLoaderData<typeof clientLoader>();
+  const { user, balance, transactions } = useLoaderData<typeof clientLoader>();
   const { t } = useTranslation();
+  const canOpenPayments = user.role === "owner" || user.role === "admin";
+  const canManagePayouts = canOpenPayments;
 
-  const formatMoney = (cents: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100);
+  const formatMoney = (amount: number, currency = balance?.currency || "USD") =>
+    formatCurrency(amount, currency);
 
   return (
     <div className="min-h-screen bg-background">
@@ -106,12 +106,12 @@ export default function SettingsBillingPage() {
                         {t("settings.billingSettings.availableBalance", "Available Balance")}
                       </p>
                       <p className="text-3xl font-bold text-foreground mt-1">
-                        {formatMoney(balance.balance ?? 0)}
+                        {formatMoney(balance.balance ?? 0, balance.currency)}
                       </p>
                       {balance.pendingBalance != null &&
                         balance.pendingBalance > 0 && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            {formatMoney(balance.pendingBalance)}{" "}
+                            {formatMoney(balance.pendingBalance, balance.currency)}{" "}
                             {t("settings.billingSettings.pending", "pending")}
                           </p>
                         )}
@@ -134,13 +134,15 @@ export default function SettingsBillingPage() {
                       {t("settings.billingSettings.recentTransactions", "Recent Transactions")}
                     </h2>
                   </div>
-                  <Link
-                    to="/payments"
-                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
-                  >
-                    {t("settings.billingSettings.viewAll", "View all")}
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </Link>
+                  {canOpenPayments && (
+                    <Link
+                      to="/payments"
+                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
+                    >
+                      {t("settings.billingSettings.viewAll", "View all")}
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </Link>
+                  )}
                 </div>
 
                 {transactions.length === 0 ? (
@@ -167,11 +169,16 @@ export default function SettingsBillingPage() {
                         </div>
                         <span
                           className={`text-sm font-semibold ${
-                            tx.amount > 0 ? "text-success" : "text-foreground"
+                            (tx.amountSigned ?? tx.amount) > 0
+                              ? "text-success"
+                              : "text-foreground"
                           }`}
                         >
-                          {tx.amount > 0 ? "+" : ""}
-                          {formatMoney(tx.amount)}
+                          {(tx.amountSigned ?? tx.amount) > 0 ? "+" : ""}
+                          {formatMoney(
+                            tx.amountSigned ?? tx.amount,
+                            tx.currency || balance?.currency || "USD"
+                          )}
                         </span>
                       </div>
                     ))}
@@ -181,29 +188,31 @@ export default function SettingsBillingPage() {
             </Card>
 
             {/* Payout Settings */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <Banknote className="w-5 h-5 text-primary" />
-                  <h2 className="text-lg font-semibold text-foreground">
-                    {t("settings.billingSettings.payoutSettings", "Payout Settings")}
-                  </h2>
-                </div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  {t(
-                    "settings.billingSettings.payoutSettingsDesc",
-                    "Configure your bank account and payout preferences for owner earnings."
-                  )}
-                </p>
-                <Link
-                  to="/dashboard/owner/earnings"
-                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium"
-                >
-                  <ArrowUpRight className="w-4 h-4" />
-                  {t("settings.billingSettings.managePayouts", "Manage payouts →")}
-                </Link>
-              </CardContent>
-            </Card>
+            {canManagePayouts && (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Banknote className="w-5 h-5 text-primary" />
+                    <h2 className="text-lg font-semibold text-foreground">
+                      {t("settings.billingSettings.payoutSettings", "Payout Settings")}
+                    </h2>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {t(
+                      "settings.billingSettings.payoutSettingsDesc",
+                      "Configure your bank account and payout preferences for owner earnings."
+                    )}
+                  </p>
+                  <Link
+                    to="/dashboard/owner/earnings"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium"
+                  >
+                    <ArrowUpRight className="w-4 h-4" />
+                    {t("settings.billingSettings.managePayouts", "Manage payouts →")}
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

@@ -15,6 +15,10 @@ import {
   OrganizationStatus,
   BookingStatus,
 } from '@rental-portal/database';
+import {
+  getPaymentCommandAttentionState,
+  isPaymentCommandAction,
+} from '@/modules/payments/services/payment-command-log.service';
 
 @Injectable()
 export class AdminService {
@@ -319,6 +323,7 @@ export class AdminService {
     userId: string,
     options: {
       action?: string;
+      entity?: string;
       userId?: string;
       page?: number;
       limit?: number;
@@ -326,11 +331,12 @@ export class AdminService {
   ): Promise<any> {
     await this.verifyAdmin(userId);
 
-    const { action, userId: targetUserId, page = 1, limit = 20 } = options;
+    const { action, entity, userId: targetUserId, page = 1, limit = 20 } = options;
     const skip = (page - 1) * limit;
 
     const where: any = {};
     if (action) where.action = action;
+    if (entity) where.entityType = entity;
     if (targetUserId) where.userId = targetUserId;
 
     const [logs, total] = await Promise.all([
@@ -348,13 +354,50 @@ export class AdminService {
       this.prisma.auditLog.count({ where }),
     ]);
 
+    const mappedLogs = logs.map((log) => {
+      const commandPayload = this.parseJson(log.newValues);
+      const command = isPaymentCommandAction(log.action)
+        ? {
+            ...commandPayload,
+            ...getPaymentCommandAttentionState(commandPayload, log.createdAt),
+          }
+        : null;
+
+      return {
+        id: log.id,
+        action: log.action,
+        entity: log.entityType,
+        entityId: log.entityId,
+        userId: log.userId,
+        userEmail: log.user?.email || 'System',
+        metadata: this.parseJson(log.metadata),
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        createdAt: log.createdAt,
+        command,
+      };
+    });
+
     return {
-      logs,
+      logs: mappedLogs,
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  private parseJson(value: string | null | undefined): Record<string, any> {
+    if (!value) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
   }
 
   /**

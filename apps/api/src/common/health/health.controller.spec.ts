@@ -7,7 +7,6 @@ describe('HealthController', () => {
     check: jest.fn(),
   };
   const mockHttpIndicator = { pingCheck: jest.fn() };
-  const mockPrismaIndicator = { pingCheck: jest.fn() };
   const mockMemoryIndicator = {
     checkHeap: jest.fn(),
     checkRSS: jest.fn(),
@@ -31,7 +30,6 @@ describe('HealthController', () => {
     controller = new HealthController(
       mockHealthCheckService as any,
       mockHttpIndicator as any,
-      mockPrismaIndicator as any,
       mockMemoryIndicator as any,
       mockDiskIndicator as any,
       mockPrisma as any,

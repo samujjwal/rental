@@ -37,11 +37,11 @@ describe('InsuranceVerificationService', () => {
   });
 
   describe('getVerificationQueue', () => {
-    it('should return only PENDING verifications', async () => {
+    it('should return only PENDING verifications from stored newValues payloads', async () => {
       prisma.auditLog.findMany.mockResolvedValue([
-        { id: 'a1', metadata: { status: 'PENDING' } },
-        { id: 'a2', metadata: { status: 'COMPLETED' } },
-        { id: 'a3', metadata: { status: 'PENDING' } },
+        { id: 'a1', newValues: JSON.stringify({ status: 'PENDING' }) },
+        { id: 'a2', newValues: JSON.stringify({ status: 'COMPLETED' }) },
+        { id: 'a3', newValues: JSON.stringify({ status: 'PENDING' }) },
       ]);
 
       const queue = await service.getVerificationQueue();
@@ -49,9 +49,21 @@ describe('InsuranceVerificationService', () => {
       expect(queue).toHaveLength(2);
     });
 
+    it('should fall back to metadata for legacy queue entries', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([
+        { id: 'a1', metadata: { status: 'PENDING' } },
+        { id: 'a2', metadata: { status: 'COMPLETED' } },
+      ]);
+
+      const queue = await service.getVerificationQueue();
+
+      expect(queue).toHaveLength(1);
+      expect(queue[0].id).toBe('a1');
+    });
+
     it('should return empty array when no pending items', async () => {
       prisma.auditLog.findMany.mockResolvedValue([
-        { id: 'a1', metadata: { status: 'COMPLETED' } },
+        { id: 'a1', newValues: JSON.stringify({ status: 'COMPLETED' }) },
       ]);
 
       const queue = await service.getVerificationQueue();

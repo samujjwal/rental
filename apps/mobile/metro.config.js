@@ -1,21 +1,15 @@
+const path = require('node:path');
 const { getDefaultConfig } = require('expo/metro-config');
-const path = require('path');
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Watch workspace packages for live updates
 config.watchFolders = [workspaceRoot];
-
-// Resolve packages from workspace root node_modules
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
-
-// Ensure we don't duplicate React
-config.resolver.disableHierarchicalLookup = true;
 
 module.exports = config;

@@ -20,7 +20,7 @@ describe('PaymentDataService', () => {
         update: jest.fn(),
       },
       payment: {
-        create: jest.fn(),
+        upsert: jest.fn(),
         findFirst: jest.fn(),
       },
       depositHold: {
@@ -155,7 +155,7 @@ describe('PaymentDataService', () => {
   });
 
   describe('createPaymentRecord', () => {
-    it('should create a payment record', async () => {
+    it('should upsert a payment record', async () => {
       const paymentData = {
         bookingId,
         amount: 100,
@@ -164,16 +164,26 @@ describe('PaymentDataService', () => {
         paymentIntentId: 'pi_123',
         stripePaymentIntentId: 'pi_stripe_123',
       };
-      prisma.payment.create.mockResolvedValue({ id: 'pay-1', ...paymentData });
+      prisma.payment.upsert.mockResolvedValue({ id: 'pay-1', ...paymentData });
 
       const result = await service.createPaymentRecord(paymentData);
 
       expect(result.id).toBe('pay-1');
-      expect(prisma.payment.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
+      expect(prisma.payment.upsert).toHaveBeenCalledWith({
+        where: { paymentIntentId: 'pi_123' },
+        create: expect.objectContaining({
           bookingId,
           amount: 100,
           currency: 'USD',
+          paymentIntentId: 'pi_123',
+        }),
+        update: expect.objectContaining({
+          bookingId,
+          amount: 100,
+          currency: 'USD',
+          stripePaymentIntentId: 'pi_stripe_123',
+          failureReason: null,
+          processedAt: null,
         }),
       });
     });

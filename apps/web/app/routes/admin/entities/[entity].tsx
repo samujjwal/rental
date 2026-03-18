@@ -68,6 +68,17 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     "payments",
     "organizations",
     "categories",
+    "reviews",
+    "messages",
+    "favorites",
+    "refunds",
+    "payouts",
+    "disputes",
+    "insurance",
+    "claims",
+    "notifications",
+    "condition-reports",
+    "email-templates",
   ]);
   if (!allowedEntities.has(entity)) {
     return redirect("/admin");
@@ -486,4 +497,3 @@ export default function ModernDynamicEntityPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

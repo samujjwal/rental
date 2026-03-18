@@ -277,10 +277,15 @@ describe('FavoritesScreen', () => {
     await waitFor(() => expect(screen.getByText('Camera Lens')).toBeTruthy());
     fireEvent.press(screen.getByText('Remove'));
 
+    // Wait for the removal to be called and UI to update
     await waitFor(() => {
       expect(mockRemoveFavorite).toHaveBeenCalledWith('l1');
+    }, { timeout: 3000 });
+
+    // Wait a bit more for the state to update and re-render
+    await waitFor(() => {
       expect(screen.queryByText('Camera Lens')).toBeNull();
-    });
+    }, { timeout: 3000 });
   });
 
   it('shows empty state', async () => {

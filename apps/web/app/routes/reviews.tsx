@@ -23,6 +23,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { useTranslation } from "react-i18next";
 
 import type { Review } from "~/types/review";
+import type { ReviewListResponse } from "~/types/review";
 
 export const meta: MetaFunction = () => {
   return [
@@ -32,8 +33,9 @@ export const meta: MetaFunction = () => {
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | null): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
+const SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{5,127}$/;
+const isValidReviewId = (value: string | null): value is string =>
+  Boolean(value && (UUID_PATTERN.test(value) || SAFE_ID_PATTERN.test(value)));
 const safeNumber = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -45,6 +47,69 @@ const safeDateLabel = (value: unknown, pattern: string): string => {
 const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
   return text || fallback;
+};
+const EMPTY_RATINGS: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+const EMPTY_STATS = {
+  total: 0,
+  averageRating: 0,
+  ratings: EMPTY_RATINGS,
+  pending: 0,
+};
+const buildFallbackStats = (reviews: Review[], total: number) => ({
+  total,
+  averageRating: reviews.length > 0
+    ? reviews.reduce((sum: number, review: Review) => sum + (review.overallRating ?? review.rating ?? 0), 0) /
+      reviews.length
+    : 0,
+  ratings: {
+    5: reviews.filter((review: Review) => (review.overallRating ?? review.rating) === 5).length,
+    4: reviews.filter((review: Review) => (review.overallRating ?? review.rating) === 4).length,
+    3: reviews.filter((review: Review) => (review.overallRating ?? review.rating) === 3).length,
+    2: reviews.filter((review: Review) => (review.overallRating ?? review.rating) === 2).length,
+    1: reviews.filter((review: Review) => (review.overallRating ?? review.rating) === 1).length,
+  },
+  pending: reviews.filter((review: Review) => review.status === "DRAFT").length,
+});
+const resolveSummaryStats = (
+  reviewResponse: ReviewListResponse,
+  reviews: Review[]
+): {
+  stats: {
+    total: number;
+    averageRating: number;
+    ratings: Record<number, number>;
+    pending: number;
+  };
+  statsScope: "overall" | "current_results" | "unavailable";
+  statsAvailable: boolean;
+} => {
+  if (reviewResponse.stats) {
+    return {
+      stats: {
+        total: reviewResponse.stats.totalReviews,
+        averageRating: reviewResponse.stats.averageRating,
+        ratings: reviewResponse.stats.ratings,
+        pending: reviewResponse.stats.pending,
+      },
+      statsScope: "overall",
+      statsAvailable: true,
+    };
+  }
+
+  const filteredTotal = reviewResponse.total || reviews.length;
+  if (filteredTotal <= reviews.length) {
+    return {
+      stats: buildFallbackStats(reviews, filteredTotal),
+      statsScope: "current_results",
+      statsAvailable: true,
+    };
+  }
+
+  return {
+    stats: EMPTY_STATS,
+    statsScope: "unavailable",
+    statsAvailable: false,
+  };
 };
 
 export async function clientLoader({ request }: { request: Request }) {
@@ -78,40 +143,29 @@ export async function clientLoader({ request }: { request: Request }) {
       normalizedRating ?? undefined
     );
     const reviews = reviewResponse.reviews || [];
+    const { stats, statsScope, statsAvailable } = resolveSummaryStats(
+      reviewResponse,
+      reviews
+    );
 
-    // Stats are calculated from all reviews (no rating filter) when a rating filter is active
-    let stats: { total: number; averageRating: number; ratings: Record<number, number>; pending: number };
-    if (normalizedRating) {
-      // Fetch unfiltered totals for stats display
-      const allResponse = await reviewsApi.getUserReviews(currentUser.id, view, 1, 1);
-      stats = {
-        total: allResponse.total || 0,
-        averageRating: 0,
-        ratings: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
-        pending: 0,
-      };
-    } else {
-      stats = {
-        total: reviewResponse.total || reviews.length,
-        averageRating: reviews.length > 0
-          ? reviews.reduce((sum: number, r: Review) => sum + (r.overallRating ?? r.rating ?? 0), 0) / reviews.length
-          : 0,
-        ratings: {
-          5: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 5).length,
-          4: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 4).length,
-          3: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 3).length,
-          2: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 2).length,
-          1: reviews.filter((r: Review) => (r.overallRating ?? r.rating) === 1).length,
-        },
-        pending: reviews.filter((r: Review) => r.status === "DRAFT").length,
-      };
-    }
-
-    return { reviews, stats, view, error: null, page, total: reviewResponse.total || reviews.length, limit };
+    return {
+      reviews,
+      stats,
+      statsScope,
+      statsAvailable,
+      view,
+      error: null,
+      page,
+      total: reviewResponse.total || reviews.length,
+      limit,
+      activeRating: normalizedRating,
+    };
   } catch (error: unknown) {
     return {
       reviews: [],
-      stats: { total: 0, averageRating: 0, ratings: {}, pending: 0 },
+      stats: EMPTY_STATS,
+      statsScope: "unavailable" as const,
+      statsAvailable: false,
       view,
       error:
         error && typeof error === "object" && "message" in error
@@ -120,6 +174,7 @@ export async function clientLoader({ request }: { request: Request }) {
       page: 1,
       total: 0,
       limit: 10,
+      activeRating: null,
     };
   }
 }
@@ -140,7 +195,7 @@ export async function clientAction({ request }: { request: Request }) {
   const view = String(formData.get("view") || requestView || "");
 
   try {
-    if (!isUuid(reviewId)) {
+    if (!isValidReviewId(reviewId)) {
       return { success: false, message: "Missing review ID" };
     }
     if (view !== "given") {
@@ -278,7 +333,18 @@ function ReviewCard({ review }: { review: Review }) {
 
 export default function ReviewsPage() {
   const { t } = useTranslation();
-  const { reviews, stats, view, error, page, total, limit } = useLoaderData<typeof clientLoader>();
+  const {
+    reviews,
+    stats,
+    statsScope,
+    statsAvailable,
+    view,
+    error,
+    page,
+    total,
+    limit,
+    activeRating,
+  } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -303,6 +369,31 @@ export default function ReviewsPage() {
   };
 
   const totalPages = Math.ceil(total / limit);
+  const summaryLabel =
+    statsScope === "overall"
+      ? t("reviews.overallSummary", "Overall review summary")
+      : statsScope === "current_results"
+        ? t("reviews.currentResultsSummary", "Summary of current results")
+        : t("reviews.summaryUnavailable", "Summary unavailable for this page");
+  const resultsLabel =
+    total > reviews.length
+      ? t("reviews.showingResults", {
+          shown: reviews.length,
+          total,
+          defaultValue: `Showing ${reviews.length} of ${total} results`,
+        })
+      : t("reviews.resultsCount", {
+          count: total,
+          defaultValue: `${total} results`,
+        });
+  const filteredResultsLabel =
+    activeRating !== null
+      ? t("reviews.filteredResultsCount", {
+          count: total,
+          rating: activeRating,
+          defaultValue: `${total} matching ${activeRating}-star reviews`,
+        })
+      : resultsLabel;
 
   if (error) {
     return (
@@ -341,42 +432,87 @@ export default function ReviewsPage() {
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
               {/* Average Rating */}
               <div className="text-center">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  {summaryLabel}
+                </p>
                 <p className="text-5xl font-bold text-foreground">
-                  {safeNumber(stats.averageRating).toFixed(1)}
+                  {statsAvailable ? safeNumber(stats.averageRating).toFixed(1) : "—"}
                 </p>
-                <RatingStars rating={Math.round(safeNumber(stats.averageRating))} />
+                {statsAvailable ? (
+                  <RatingStars rating={Math.round(safeNumber(stats.averageRating))} />
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {t(
+                      "reviews.summaryUnavailableHint",
+                      "Load overall stats before using the rating breakdown."
+                    )}
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground mt-1">
-                  {t("reviews.reviewsCount", { count: stats.total })}
-                  <span className="ml-2 text-xs text-muted-foreground">{t("reviews.pageStats")}</span>
+                  {statsScope === "overall"
+                    ? t("reviews.reviewsCount", { count: stats.total })
+                    : filteredResultsLabel}
                 </p>
+                {statsScope === "overall" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {filteredResultsLabel}
+                  </p>
+                )}
+                {statsScope !== "overall" && total > reviews.length && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {resultsLabel}
+                  </p>
+                )}
+                {statsAvailable && statsScope !== "overall" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t(
+                      "reviews.currentResultsSummaryHint",
+                      "These stats reflect the currently loaded results."
+                    )}
+                  </p>
+                )}
+                {!statsAvailable && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {filteredResultsLabel}
+                  </p>
+                )}
               </div>
 
               {/* Rating Breakdown */}
               <div className="flex-1 w-full">
-                {[5, 4, 3, 2, 1].map((rating) => {
-                  const count = (stats.ratings as Record<number, number>)[rating] || 0;
-                  const percentage = stats.total > 0 ? (count / stats.total) * 100 : 0;
-                  return (
-                    <button
-                      key={rating}
-                      onClick={() => handleRatingFilter(currentRating === String(rating) ? null : String(rating))}
-                      className={cn(
-                        "flex items-center gap-2 w-full py-1 hover:bg-muted rounded transition-colors",
-                        currentRating === String(rating) && "bg-muted"
-                      )}
-                    >
-                      <span className="text-sm text-muted-foreground w-6">{rating}</span>
-                      <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                      <div className="flex-1 bg-muted rounded-full h-2">
-                        <div
-                          className="bg-yellow-500 h-2 rounded-full"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                      <span className="text-sm text-muted-foreground w-8">{count}</span>
-                    </button>
-                  );
-                })}
+                {statsAvailable ? (
+                  [5, 4, 3, 2, 1].map((rating) => {
+                    const count = (stats.ratings as Record<number, number>)[rating] || 0;
+                    const percentage = stats.total > 0 ? (count / stats.total) * 100 : 0;
+                    return (
+                      <button
+                        key={rating}
+                        onClick={() => handleRatingFilter(currentRating === String(rating) ? null : String(rating))}
+                        className={cn(
+                          "flex items-center gap-2 w-full py-1 hover:bg-muted rounded transition-colors",
+                          currentRating === String(rating) && "bg-muted"
+                        )}
+                      >
+                        <span className="text-sm text-muted-foreground w-6">{rating}</span>
+                        <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                        <div className="flex-1 bg-muted rounded-full h-2">
+                          <div
+                            className="bg-yellow-500 h-2 rounded-full"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <span className="text-sm text-muted-foreground w-8">{count}</span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                    {t(
+                      "reviews.breakdownUnavailable",
+                      "Rating breakdown is unavailable until overall summary stats are loaded."
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -467,4 +603,3 @@ export default function ReviewsPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

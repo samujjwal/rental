@@ -8,6 +8,7 @@ import { UnifiedButton, Badge, PageSkeleton } from "~/components/ui";
 import { RouteErrorBoundary } from "~/components/ui/error-state";
 import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
+import { isAppEntityId } from "~/utils/entity-id";
 
 export const ErrorBoundary = RouteErrorBoundary;
 
@@ -18,9 +19,6 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
 const humanizeStatus = (value: unknown): string =>
   String(value || "unknown").toLowerCase().replace(/_/g, " ");
 const safeText = (value: unknown, fallback = ""): string => {
@@ -35,7 +33,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   }
 
   const organizationId = params.id;
-  if (!isUuid(organizationId)) {
+  if (!isAppEntityId(organizationId)) {
     return redirect("/organizations");
   }
 
@@ -242,4 +240,3 @@ export default function OrganizationListingsPage() {
     </div>
   );
 }
-

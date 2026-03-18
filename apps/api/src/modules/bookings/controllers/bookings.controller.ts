@@ -24,6 +24,7 @@ import {
   CancelBookingDto,
   InitiateDisputeDto,
   CalculatePriceDto,
+  UpdateConditionReportDto,
 } from '../dto/booking.dto';
 import { BookingStateMachineService } from '../services/booking-state-machine.service';
 import { BookingCalculationService } from '../services/booking-calculation.service';
@@ -291,6 +292,36 @@ export class BookingsController {
     return this.bookingsService.getBookingStats(id, userId);
   }
 
+  @Get(':id/condition-reports')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get condition reports for a booking' })
+  @ApiResponse({ status: 200, description: 'Condition reports retrieved' })
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async getConditionReports(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.bookingsService.getConditionReports(id, userId);
+  }
+
+  @Patch(':id/condition-reports/:reportId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a condition report (photos, notes, damages, signature)' })
+  @ApiResponse({ status: 200, description: 'Condition report updated' })
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  @ApiResponse({ status: 404, description: 'Condition report not found' })
+  async updateConditionReport(
+    @Param('id') id: string,
+    @Param('reportId') reportId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateConditionReportDto,
+  ) {
+    return this.bookingsService.updateConditionReport(id, reportId, userId, dto);
+  }
+
   @Get('blocked-dates/:listingId')
   @ApiOperation({ summary: 'Get blocked dates for a listing' })
   @ApiResponse({ status: 200, description: 'Blocked dates retrieved' })
@@ -352,7 +383,7 @@ export class BookingsController {
     let role: 'RENTER' | 'OWNER' | 'ADMIN';
     if (booking.renterId === userId) {
       role = 'RENTER';
-    } else if (booking.listing?.ownerId === userId) {
+    } else if (booking.ownerId === userId || booking.listing?.ownerId === userId) {
       role = 'OWNER';
     } else {
       // Verify the user actually has an admin role before granting admin access

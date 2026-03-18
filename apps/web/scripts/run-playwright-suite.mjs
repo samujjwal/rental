@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
 
 const suites = {
+  manual: [
+    "e2e/manual-critical-ui-journeys.spec.ts",
+  ],
   core: [
     "e2e/admin-flows.spec.ts",
     "e2e/auth.spec.ts",
@@ -29,11 +32,14 @@ const suites = {
     "e2e/comprehensive-form-validation.spec.ts",
     "e2e/comprehensive-user-journeys.spec.ts",
   ],
+  ujlt: [
+    "e2e/ujlt-v2-comprehensive-journeys.spec.ts",
+  ],
   debug: ["e2e/debug-disputes.spec.ts", "e2e/diagnostic.spec.ts"],
   full: [],
 };
 
-const rawArgs = process.argv.slice(2);
+const rawArgs = process.argv.slice(2).filter((arg) => arg !== "--");
 const hasNamedSuite = rawArgs[0] && rawArgs[0] in suites;
 const shouldUseCoreSuite =
   rawArgs.length === 0 ||

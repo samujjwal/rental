@@ -19,6 +19,8 @@ import { OfflineBanner, RouteErrorBoundary } from "~/components/ui";
 import { ToastManager } from "~/components/ui/toast-manager";
 import { SkipLink } from "~/components/accessibility/SkipLink";
 import { PageTransition } from "~/components/animations/PageTransition";
+import { CommandPalette } from "~/components/navigation/CommandPalette";
+import { useKeyboardShortcuts } from "~/hooks/useKeyboardShortcuts";
 import type { User as AuthUser } from "~/types/auth";
 import { APP_LANG } from "~/config/locale";
 import "~/i18n"; // Initialize i18next
@@ -26,6 +28,13 @@ import "~/i18n"; // Initialize i18next
 import type { LinksFunction } from "react-router";
 import stylesheet from "./tailwind.css?url";
 import mapStyles from "./styles/map.css?url";
+
+function normalizeStoredRole(role?: string | null): AuthUser["role"] {
+  const normalized = String(role || "").toUpperCase();
+  if (normalized === "ADMIN" || normalized === "SUPER_ADMIN") return "admin";
+  if (normalized === "HOST" || normalized === "OWNER") return "owner";
+  return "renter";
+}
 
 // QueryClient factory — must NOT be module-level in SSR to avoid cross-request data leaks
 function makeQueryClient() {
@@ -57,10 +66,43 @@ export const links: LinksFunction = () => [
 ];
 
 export async function clientLoader({ request }: { request: Request }) {
-  const user = await getUser(request);
+  const storedAuth = (() => {
+    if (typeof window === "undefined") {
+      return { user: null as AuthUser | null, accessToken: null as string | null, refreshToken: null as string | null };
+    }
+
+    try {
+      const raw = localStorage.getItem("auth-storage");
+      if (!raw) {
+        return { user: null, accessToken: null, refreshToken: null };
+      }
+
+      const parsed = JSON.parse(raw) as {
+        state?: { user?: AuthUser | null; accessToken?: string; refreshToken?: string };
+      };
+      const accessToken = parsed?.state?.accessToken ?? null;
+      const refreshToken = parsed?.state?.refreshToken ?? null;
+      const user = parsed?.state?.user
+        ? {
+            ...parsed.state.user,
+            role: normalizeStoredRole(parsed.state.user.role),
+          }
+        : null;
+
+      if (accessToken) {
+        useAuthStore.getState().setAccessToken(accessToken);
+      }
+
+      return { user, accessToken, refreshToken };
+    } catch {
+      return { user: null, accessToken: null, refreshToken: null };
+    }
+  })();
+
+  const user = storedAuth.user ?? (await getUser(request));
   const session = await getSession(request);
-  const accessToken = session.get("accessToken");
-  const refreshToken = session.get("refreshToken");
+  const accessToken = storedAuth.accessToken ?? session.get("accessToken");
+  const refreshToken = storedAuth.refreshToken ?? session.get("refreshToken");
 
   return {
     user,
@@ -71,6 +113,8 @@ export async function clientLoader({ request }: { request: Request }) {
     },
   };
 }
+
+clientLoader.hydrate = true;
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -113,6 +157,7 @@ function RootContent() {
   const revalidator = useRevalidator();
 
   useAuthInit();
+  useKeyboardShortcuts();
 
   // Allow non-component code (e.g., API client, error boundaries) to request
   // navigation/revalidation without using hard reloads.
@@ -181,6 +226,7 @@ function RootContent() {
       <SkipLink />
       <OfflineBanner />
       <ToastManager />
+      <CommandPalette />
       <div id="main-content" tabIndex={-1}>
         <PageTransition mode="fade" duration={0.2}>
           <Outlet />

@@ -21,6 +21,7 @@ module.exports = tseslint.config(
       '@typescript-eslint/no-empty-interface': 'off',
       '@typescript-eslint/ban-ts-comment': 'warn',
       '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-namespace': 'off', // Allow namespace for Express interface extension
     },
   },
   {

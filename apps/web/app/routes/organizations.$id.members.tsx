@@ -10,6 +10,7 @@ import type { OrganizationMember, OrganizationRole } from "~/lib/api/organizatio
 import { getUser } from "~/utils/auth";
 import { APP_LOCALE } from "~/config/locale";
 import { useTranslation } from "react-i18next";
+import { isAppEntityId } from "~/utils/entity-id";
 
 export const ErrorBoundary = RouteErrorBoundary;
 
@@ -17,9 +18,6 @@ export const meta: MetaFunction = () => [
   { title: "Members | Organization | GharBatai Rentals" },
 ];
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
 const mutableRoles: OrganizationRole[] = ["ADMIN", "MEMBER"];
 const safeMemberJoinDate = (value: unknown): string => {
   const date = new Date(String(value || ""));
@@ -42,7 +40,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     return redirect("/auth/login");
   }
 
-  if (!isUuid(params.id)) {
+  if (!isAppEntityId(params.id)) {
     return redirect("/organizations");
   }
   try {
@@ -138,7 +136,7 @@ export default function OrganizationMembers() {
       setErrorMessage("Invalid role selected.");
       return;
     }
-    if (!isUuid(memberUserId)) {
+    if (!isAppEntityId(memberUserId)) {
       setErrorMessage("Invalid member selected.");
       return;
     }
@@ -166,7 +164,7 @@ export default function OrganizationMembers() {
       setErrorMessage("You cannot remove yourself from this page.");
       return;
     }
-    if (!isUuid(memberUserId)) {
+    if (!isAppEntityId(memberUserId)) {
       setErrorMessage("Invalid member selected.");
       return;
     }
@@ -518,4 +516,3 @@ export default function OrganizationMembers() {
     </div>
   );
 }
-

@@ -6,6 +6,26 @@
 import type { PaginationParams, DateRangeFilter } from './api';
 import { BookingStatus, DeliveryMethod } from './enums';
 
+export type BookingTransition =
+  | 'SUBMIT_REQUEST'
+  | 'OWNER_APPROVE'
+  | 'OWNER_REJECT'
+  | 'COMPLETE_PAYMENT'
+  | 'FAIL_PAYMENT'
+  | 'RETRY_PAYMENT'
+  | 'START_RENTAL'
+  | 'CANCEL'
+  | 'REQUEST_RETURN'
+  | 'APPROVE_RETURN'
+  | 'REJECT_RETURN'
+  | 'COMPLETE'
+  | 'SETTLE'
+  | 'INITIATE_DISPUTE'
+  | 'RESOLVE_DISPUTE_OWNER_FAVOR'
+  | 'RESOLVE_DISPUTE_RENTER_FAVOR'
+  | 'REFUND'
+  | 'EXPIRE';
+
 /** Full booking record (as returned by API) */
 export interface Booking {
   id: string;
@@ -82,6 +102,12 @@ export interface Booking {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BookingAvailableTransitionsResponse {
+  currentState: Booking['status'] | string;
+  role: 'RENTER' | 'OWNER' | 'ADMIN';
+  availableTransitions: BookingTransition[];
 }
 
 /** Create booking request body (web-compatible) */

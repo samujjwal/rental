@@ -946,19 +946,16 @@ export class BookingsService {
     const booking = await this.findById(bookingId);
 
     const isOwner = booking.listing.ownerId === userId;
-    const isRenter = booking.renterId === userId;
 
-    if (!isOwner && !isRenter) {
+    if (!isOwner) {
       throw i18nForbidden('booking.unauthorizedAction');
     }
-
-    const role = isOwner ? 'OWNER' : 'RENTER';
 
     await this.stateMachine.transition(
       bookingId,
       'START_RENTAL',
       userId,
-      role,
+      'OWNER',
     );
 
     return this.findById(bookingId);
@@ -1116,6 +1113,74 @@ export class BookingsService {
         initiator: { select: { id: true, firstName: true, lastName: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Get all condition reports for a booking.
+   * User must be the renter, owner, or an admin.
+   */
+  async getConditionReports(bookingId: string, userId: string) {
+    await this.findById(bookingId, false, userId);
+    return this.prisma.conditionReport.findMany({
+      where: { bookingId },
+      include: {
+        creator: {
+          select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Update a specific condition report — add photos, notes, damages, or sign off.
+   *
+   * Access rules:
+   *  - Report creator may always update.
+   *  - Owner may update a CHECK_OUT report (return inspection).
+   *  - Admin may update any report.
+   */
+  async updateConditionReport(
+    bookingId: string,
+    reportId: string,
+    userId: string,
+    dto: { notes?: string; damages?: string; signature?: string; photos?: string[]; checklistData?: string },
+  ) {
+    const booking = await this.findById(bookingId, false, userId);
+
+    const report = await this.prisma.conditionReport.findFirst({
+      where: { id: reportId, bookingId },
+    });
+    if (!report) {
+      throw i18nNotFound('booking.notFound');
+    }
+
+    const isRenter = booking.renterId === userId;
+    const isOwner = booking.listing?.ownerId === userId;
+    const isAdmin = !isRenter && !isOwner;
+
+    const isCreator = report.createdBy === userId;
+    const ownerInspecting = isOwner && report.reportType === 'CHECK_OUT';
+
+    if (!isAdmin && !isCreator && !ownerInspecting) {
+      throw i18nForbidden('booking.unauthorizedAction');
+    }
+
+    return this.prisma.conditionReport.update({
+      where: { id: reportId },
+      data: {
+        ...(dto.notes !== undefined && { notes: dto.notes }),
+        ...(dto.damages !== undefined && { damages: dto.damages }),
+        ...(dto.signature !== undefined && { signature: dto.signature }),
+        ...(dto.checklistData !== undefined && { checklistData: dto.checklistData }),
+        ...(dto.photos !== undefined && { photos: dto.photos }),
+      },
+      include: {
+        creator: {
+          select: { id: true, firstName: true, lastName: true, profilePhotoUrl: true },
+        },
+      },
     });
   }
 }

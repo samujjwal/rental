@@ -1,16 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bull';
 import { PayoutsService } from './payouts.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { StripeService } from './stripe.service';
-import { LedgerService } from './ledger.service';
 import { ConfigService } from '@nestjs/config';
 import { PayoutStatus } from '@rental-portal/database';
+import { PaymentCommandLogService } from './payment-command-log.service';
 
 describe('PayoutsService', () => {
   let service: PayoutsService;
   let prisma: PrismaService;
-  let stripe: StripeService;
-  let ledger: LedgerService;
+  let queue: { add: jest.Mock };
+  let paymentCommands: PaymentCommandLogService;
 
   const mockPrismaService = {
     user: {
@@ -20,6 +20,7 @@ describe('PayoutsService', () => {
     booking: {
       aggregate: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
     },
     payout: {
       aggregate: jest.fn(),
@@ -30,15 +31,17 @@ describe('PayoutsService', () => {
     userPreferences: {
       findUnique: jest.fn(),
     },
+    auditLog: {
+      create: jest.fn(),
+    },
+    $transaction: jest.fn((callback) => {
+        return callback(mockPrismaService);
+      }),
   };
 
-  const mockStripeService = {
-    createPayout: jest.fn(),
-  };
-
-  const mockLedgerService = {
-    recordPayout: jest.fn(),
-    recordPayoutWithBooking: jest.fn(),
+  const mockPaymentCommandLogService = {
+    createCommand: jest.fn(),
+    markEnqueued: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -46,16 +49,16 @@ describe('PayoutsService', () => {
       providers: [
         PayoutsService,
         { provide: PrismaService, useValue: mockPrismaService },
-        { provide: StripeService, useValue: mockStripeService },
-        { provide: LedgerService, useValue: mockLedgerService },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(5000) } },
+        { provide: PaymentCommandLogService, useValue: mockPaymentCommandLogService },
+        { provide: getQueueToken('payments'), useValue: { add: jest.fn() } },
       ],
     }).compile();
 
     service = module.get<PayoutsService>(PayoutsService);
     prisma = module.get<PrismaService>(PrismaService);
-    stripe = module.get<StripeService>(StripeService);
-    ledger = module.get<LedgerService>(LedgerService);
+    queue = module.get(getQueueToken('payments'));
+    paymentCommands = module.get<PaymentCommandLogService>(PaymentCommandLogService);
   });
 
   afterEach(() => {
@@ -81,35 +84,30 @@ describe('PayoutsService', () => {
       mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 200 } });
       mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 50 } }); // Net 150
       mockPrismaService.userPreferences.findUnique.mockResolvedValue(null); // Default NPR
-
-      mockStripeService.createPayout.mockResolvedValue('tr_123');
       mockPrismaService.payout.create.mockResolvedValue({
         id: 'po_1',
         status: PayoutStatus.PENDING,
       });
-
-      // Mock booking find
-      mockPrismaService.booking.findFirst.mockResolvedValue({ id: 'b-last' });
+      mockPrismaService.booking.findMany.mockResolvedValue([{ id: 'b-last' }]);
+      mockPrismaService.auditLog.create.mockResolvedValue({ id: 'cmd-1' });
+      mockPaymentCommandLogService.createCommand.mockResolvedValue({ id: 'cmd-1' });
 
       const result = await service.createPayout(ownerId, 100);
 
-      expect(stripe.createPayout).toHaveBeenCalledWith('acct_123', 100, 'NPR');
-      expect(prisma.payout.create).toHaveBeenCalledWith(
+      // The service returns simplified payout info
+      expect(result).toEqual(
         expect.objectContaining({
-          data: expect.objectContaining({
-            amount: 100,
-            transferId: 'tr_123',
-          }),
+          amount: 100,
+          status: PayoutStatus.PENDING,
         }),
       );
-      expect(ledger.recordPayoutWithBooking).toHaveBeenCalledWith(
-        'b-last',
-        ownerId,
-        100,
-        'NPR',
-        'po_1',
+      // Payment command service is no longer used in this method
+      expect(queue.add).toHaveBeenCalledWith(
+        'process-payout',
+        expect.objectContaining({ payoutId: 'po_1', ownerStripeConnectId: 'acct_123' }),
+        expect.objectContaining({ jobId: 'payout:po_1' }),
       );
-      expect(result).toEqual({ payoutId: 'po_1', amount: 100, currency: 'NPR' });
+      expect(result).toEqual({ payoutId: 'po_1', amount: 100, currency: 'NPR', status: PayoutStatus.PENDING });
     });
 
     it('should fail if owner not verified', async () => {

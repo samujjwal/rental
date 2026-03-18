@@ -21,6 +21,28 @@ describe('OTP Passwordless Flow (e2e)', () => {
   let cacheService: CacheService;
   const otpEmail = buildTestEmail('otp-flow');
 
+  const postOtpVerify = async (payload: { email: string; code: string }, attempts = 2) => {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return await request(app.getHttpServer())
+          .post('/auth/otp/verify')
+          .send(payload);
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : '';
+        const isParseError = message.includes('Parse Error: Expected HTTP/, RTSP/ or ICE/');
+
+        if (!isParseError || attempt === attempts) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('OTP verify request failed');
+  };
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -80,9 +102,7 @@ describe('OTP Passwordless Flow (e2e)', () => {
 
   describe('POST /auth/otp/verify', () => {
     it('should reject invalid OTP code', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/auth/otp/verify')
-        .send({ email: otpEmail, code: '000000' });
+      const res = await postOtpVerify({ email: otpEmail, code: '000000' });
 
       // Should be 400 (invalid code) or 401
       expect(res.status).toBeGreaterThanOrEqual(400);
@@ -92,9 +112,7 @@ describe('OTP Passwordless Flow (e2e)', () => {
     it('should reject expired/missing OTP', async () => {
       const freshEmail = buildTestEmail('otp-expired');
 
-      const res = await request(app.getHttpServer())
-        .post('/auth/otp/verify')
-        .send({ email: freshEmail, code: '123456' });
+      const res = await postOtpVerify({ email: freshEmail, code: '123456' });
 
       expect(res.status).toBeGreaterThanOrEqual(400);
     });
@@ -122,9 +140,7 @@ describe('OTP Passwordless Flow (e2e)', () => {
         return;
       }
 
-      const verifyRes = await request(app.getHttpServer())
-        .post('/auth/otp/verify')
-        .send({ email: otpEmail, code: cachedOtp });
+      const verifyRes = await postOtpVerify({ email: otpEmail, code: cachedOtp });
 
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.body).toHaveProperty('accessToken');
@@ -146,14 +162,10 @@ describe('OTP Passwordless Flow (e2e)', () => {
       if (!cachedOtp) return;
 
       // First verification
-      await request(app.getHttpServer())
-        .post('/auth/otp/verify')
-        .send({ email: otpEmail, code: cachedOtp });
+      await postOtpVerify({ email: otpEmail, code: cachedOtp });
 
       // Second verification with same code — should fail
-      const res = await request(app.getHttpServer())
-        .post('/auth/otp/verify')
-        .send({ email: otpEmail, code: cachedOtp });
+      const res = await postOtpVerify({ email: otpEmail, code: cachedOtp });
 
       expect(res.status).toBeGreaterThanOrEqual(400);
     });

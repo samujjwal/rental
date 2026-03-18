@@ -78,15 +78,65 @@ function waitForEvent<T = any>(
   timeout = 5000,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      socket.off(eventName, handler);
       reject(new Error(`Timeout waiting for event: ${eventName}`));
     }, timeout);
 
-    socket.once(eventName, (data: T) => {
+    const handler = (data: T) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      socket.off(eventName, handler);
       resolve(data);
-    });
+    };
+
+    socket.on(eventName, handler);
   });
+}
+
+async function joinConversation(
+  socket: Socket,
+  conversationId: string,
+  options: { attempts?: number; timeout?: number } = {},
+): Promise<void> {
+  const attempts = options.attempts ?? 2;
+  const timeout = options.timeout ?? 7000;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    if (!socket.connected) {
+      throw new Error('Socket is disconnected before joining conversation');
+    }
+
+    const joinedPromise = waitForEvent<{ conversationId?: string }>(
+      socket,
+      'joined_conversation',
+      timeout,
+    );
+    const errorPromise = waitForEvent<{ message?: string }>(socket, 'error', timeout).then(
+      (payload) => {
+        throw new Error(payload?.message || 'Socket emitted error during join');
+      },
+    );
+
+    socket.emit('join_conversation', { conversationId });
+
+    try {
+      const joined = await Promise.race([joinedPromise, errorPromise]);
+      if (joined?.conversationId === conversationId) {
+        return;
+      }
+    } catch (error) {
+      if (attempt === attempts) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(`Failed to join conversation ${conversationId}`);
 }
 
 describe('WebSocket Messaging (e2e)', () => {
@@ -328,12 +378,9 @@ describe('WebSocket Messaging (e2e)', () => {
 
     it('should deliver message in real-time to recipient', async () => {
       // Both users join conversation
-      user1Socket.emit('join_conversation', { conversationId });
-      user2Socket.emit('join_conversation', { conversationId });
-
       await Promise.all([
-        waitForEvent(user1Socket, 'joined_conversation'),
-        waitForEvent(user2Socket, 'joined_conversation'),
+        joinConversation(user1Socket, conversationId),
+        joinConversation(user2Socket, conversationId),
       ]);
 
       // User1 sends message
@@ -353,12 +400,9 @@ describe('WebSocket Messaging (e2e)', () => {
     });
 
     it('should support bi-directional messaging', async () => {
-      user1Socket.emit('join_conversation', { conversationId });
-      user2Socket.emit('join_conversation', { conversationId });
-
       await Promise.all([
-        waitForEvent(user1Socket, 'joined_conversation'),
-        waitForEvent(user2Socket, 'joined_conversation'),
+        joinConversation(user1Socket, conversationId),
+        joinConversation(user2Socket, conversationId),
       ]);
 
       // User1 → User2
@@ -381,12 +425,9 @@ describe('WebSocket Messaging (e2e)', () => {
     });
 
     it('should broadcast messages to all participants in room', async () => {
-      user1Socket.emit('join_conversation', { conversationId });
-      user2Socket.emit('join_conversation', { conversationId });
-
       await Promise.all([
-        waitForEvent(user1Socket, 'joined_conversation'),
-        waitForEvent(user2Socket, 'joined_conversation'),
+        joinConversation(user1Socket, conversationId),
+        joinConversation(user2Socket, conversationId),
       ]);
 
       // User1 sends message — both should receive (including sender)
@@ -404,12 +445,9 @@ describe('WebSocket Messaging (e2e)', () => {
     });
 
     it('should not deliver message to user who left conversation room', async () => {
-      user1Socket.emit('join_conversation', { conversationId });
-      user2Socket.emit('join_conversation', { conversationId });
-
       await Promise.all([
-        waitForEvent(user1Socket, 'joined_conversation'),
-        waitForEvent(user2Socket, 'joined_conversation'),
+        joinConversation(user1Socket, conversationId),
+        joinConversation(user2Socket, conversationId),
       ]);
 
       // User2 leaves
@@ -459,12 +497,9 @@ describe('WebSocket Messaging (e2e)', () => {
         waitForEvent(user2Socket, 'connect'),
       ]);
 
-      user1Socket.emit('join_conversation', { conversationId });
-      user2Socket.emit('join_conversation', { conversationId });
-
       await Promise.all([
-        waitForEvent(user1Socket, 'joined_conversation'),
-        waitForEvent(user2Socket, 'joined_conversation'),
+        joinConversation(user1Socket, conversationId),
+        joinConversation(user2Socket, conversationId),
       ]);
     });
 
@@ -518,8 +553,7 @@ describe('WebSocket Messaging (e2e)', () => {
 
     it('should emit read receipt when user joins conversation', async () => {
       // User1 sends message while user2 is offline
-      user1Socket.emit('join_conversation', { conversationId });
-      await waitForEvent(user1Socket, 'joined_conversation');
+      await joinConversation(user1Socket, conversationId);
 
       user1Socket.emit('send_message', {
         conversationId,
@@ -530,8 +564,7 @@ describe('WebSocket Messaging (e2e)', () => {
       // User2 joins later — should trigger read receipt
       const readReceiptPromise = waitForEvent(user1Socket, 'messages_read');
 
-      user2Socket.emit('join_conversation', { conversationId });
-      await waitForEvent(user2Socket, 'joined_conversation');
+      await joinConversation(user2Socket, conversationId);
 
       const readReceipt = await readReceiptPromise;
       expect(readReceipt).toMatchObject({

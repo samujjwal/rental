@@ -22,6 +22,7 @@ export function ListingCard({
     <Pressable
       style={styles.card}
       onPress={onPress}
+      testID="listing-card"
       accessibilityRole="button"
       accessibilityLabel={`${listing.title || 'Listing'}, ${formatCurrency(listing.basePrice ?? 0)} per day${listing.averageRating != null && listing.averageRating > 0 ? `, rated ${listing.averageRating?.toFixed(1)} stars` : ''}`}
       accessibilityHint="Opens listing details"
@@ -57,7 +58,7 @@ export function ListingCard({
           {listing.city}{listing.state ? `, ${listing.state}` : ''}
         </Text>
         <View style={styles.footer}>
-          <Text style={styles.price}>{formatCurrency(listing.basePrice)}{pricingModeLabel(listing.pricingMode)}</Text>
+          <Text testID="listing-price" style={styles.price}>{formatCurrency(listing.basePrice)}{pricingModeLabel(listing.pricingMode)}</Text>
           {listing.averageRating != null && listing.averageRating > 0 && (
             <Text style={styles.rating}>
               {'\u2B50'} {listing.averageRating?.toFixed(1)}

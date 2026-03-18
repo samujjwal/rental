@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // ─── Hoisted mocks ──────────────────────────────────────────────────────────
@@ -7,6 +7,7 @@ import "@testing-library/jest-dom/vitest";
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon-stub" />);
 const mocks = vi.hoisted(() => ({
   getBookingById: vi.fn(),
+  getAvailableTransitions: vi.fn(),
   approveBooking: vi.fn(),
   rejectBooking: vi.fn(),
   cancelBooking: vi.fn(),
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   requestReturn: vi.fn(),
   approveReturn: vi.fn(),
   createReview: vi.fn(),
+  getBookingPaymentStatus: vi.fn(),
   getUser: vi.fn(),
   useLoaderData: vi.fn(),
   useActionData: vi.fn(),
@@ -41,6 +43,8 @@ vi.mock("react-router", () => ({
 vi.mock("~/lib/api/bookings", () => ({
   bookingsApi: {
     getBookingById: (...args: any[]) => mocks.getBookingById(...args),
+    getAvailableTransitions: (...args: any[]) =>
+      mocks.getAvailableTransitions(...args),
     approveBooking: (...args: any[]) => mocks.approveBooking(...args),
     rejectBooking: (...args: any[]) => mocks.rejectBooking(...args),
     cancelBooking: (...args: any[]) => mocks.cancelBooking(...args),
@@ -53,6 +57,13 @@ vi.mock("~/lib/api/bookings", () => ({
 vi.mock("~/lib/api/reviews", () => ({
   reviewsApi: {
     createReview: (...args: any[]) => mocks.createReview(...args),
+  },
+}));
+
+vi.mock("~/lib/api/payments", () => ({
+  paymentsApi: {
+    getBookingPaymentStatus: (...args: any[]) =>
+      mocks.getBookingPaymentStatus(...args),
   },
 }));
 
@@ -109,6 +120,7 @@ vi.mock("lucide-react", () => ({
   ArrowLeft: IconStub, Calendar: IconStub, MapPin: IconStub, Package: IconStub,
   Clock: IconStub, CheckCircle: IconStub, XCircle: IconStub, MessageCircle: IconStub,
   AlertCircle: IconStub, FileText: IconStub, Star: IconStub, Loader2: IconStub, RefreshCw: IconStub,
+  CreditCard: IconStub, ArrowRight: IconStub,
 }));
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
@@ -118,6 +130,7 @@ import BookingDetail, { clientLoader, clientAction } from "./bookings.$id";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const VALID_UUID = "a1b2c3d4-e5f6-1234-abcd-1234567890ab";
+const VALID_CUID = "ckx1234567890abcdefghijkl";
 
 const makeBooking = (overrides: Record<string, any> = {}) => ({
   id: VALID_UUID,
@@ -152,8 +165,21 @@ const makeFormData = (fields: Record<string, string>) => {
 describe("bookings.$id route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.useLoaderData.mockReturnValue({ booking: makeBooking() });
+    mocks.useLoaderData.mockReturnValue({
+      booking: makeBooking(),
+      viewerRole: "renter",
+      availableTransitions: [],
+    });
     mocks.useActionData.mockReturnValue(null);
+    mocks.useSearchParams.mockReturnValue([new URLSearchParams(), vi.fn()]);
+    mocks.getAvailableTransitions.mockResolvedValue({ availableTransitions: [] });
+    mocks.getBookingPaymentStatus.mockResolvedValue({
+      confirmationState: "pending",
+      paymentStatus: "PENDING",
+      providerStatus: null,
+      failureReason: null,
+      actionRequired: false,
+    });
   });
 
   // ─── clientLoader ────────────────────────────────────────────────────────
@@ -188,7 +214,27 @@ describe("bookings.$id route", () => {
           params: { id: VALID_UUID },
           request: makeRequest(),
         } as any);
-        expect(result).toEqual({ booking: expect.objectContaining({ id: VALID_UUID }) });
+        expect(result).toEqual(
+          expect.objectContaining({
+            booking: expect.objectContaining({ id: VALID_UUID }),
+            availableTransitions: [],
+          })
+        );
+      });
+
+      it("accepts valid CUID booking ID", async () => {
+        mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
+        mocks.getBookingById.mockResolvedValue(makeBooking({ id: VALID_CUID }));
+        const result = await clientLoader({
+          params: { id: VALID_CUID },
+          request: makeRequest(`http://localhost/bookings/${VALID_CUID}`),
+        } as any);
+        expect(result).toEqual(
+          expect.objectContaining({
+            booking: expect.objectContaining({ id: VALID_CUID }),
+            availableTransitions: [],
+          })
+        );
       });
     });
 
@@ -215,7 +261,12 @@ describe("bookings.$id route", () => {
       const result = await clientLoader({
         params: { id: VALID_UUID }, request: makeRequest(),
       } as any);
-      expect(result).toEqual({ booking: expect.objectContaining({ id: VALID_UUID }) });
+      expect(result).toEqual(
+        expect.objectContaining({
+          booking: expect.objectContaining({ id: VALID_UUID }),
+          availableTransitions: [],
+        })
+      );
     });
 
     it("allows owner to view their booking", async () => {
@@ -224,7 +275,12 @@ describe("bookings.$id route", () => {
       const result = await clientLoader({
         params: { id: VALID_UUID }, request: makeRequest(),
       } as any);
-      expect(result).toEqual({ booking: expect.objectContaining({ id: VALID_UUID }) });
+      expect(result).toEqual(
+        expect.objectContaining({
+          booking: expect.objectContaining({ id: VALID_UUID }),
+          availableTransitions: [],
+        })
+      );
     });
 
     it("allows renter to view their booking", async () => {
@@ -233,7 +289,12 @@ describe("bookings.$id route", () => {
       const result = await clientLoader({
         params: { id: VALID_UUID }, request: makeRequest(),
       } as any);
-      expect(result).toEqual({ booking: expect.objectContaining({ id: VALID_UUID }) });
+      expect(result).toEqual(
+        expect.objectContaining({
+          booking: expect.objectContaining({ id: VALID_UUID }),
+          availableTransitions: [],
+        })
+      );
     });
 
     it("redirects on API error", async () => {
@@ -285,6 +346,9 @@ describe("bookings.$id route", () => {
     it("confirms booking when owner and pending_owner_approval", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "PENDING_OWNER_APPROVAL" }));
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["OWNER_APPROVE", "OWNER_REJECT"],
+      });
       mocks.approveBooking.mockResolvedValue({});
       const result = await clientAction({
         request: makeFormData({ intent: "confirm" }), params: { id: VALID_UUID },
@@ -296,6 +360,7 @@ describe("bookings.$id route", () => {
     it("rejects confirm when not owner", async () => {
       mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "PENDING_OWNER_APPROVAL" }));
+      mocks.getAvailableTransitions.mockResolvedValue({ availableTransitions: [] });
       const result = await clientAction({
         request: makeFormData({ intent: "confirm" }), params: { id: VALID_UUID },
       } as any);
@@ -314,6 +379,9 @@ describe("bookings.$id route", () => {
     it("rejects booking with reason", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "PENDING_OWNER_APPROVAL" }));
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["OWNER_REJECT"],
+      });
       mocks.rejectBooking.mockResolvedValue({});
       const result = await clientAction({
         request: makeFormData({ intent: "reject", reason: "Not available" }),
@@ -326,6 +394,9 @@ describe("bookings.$id route", () => {
     it("requires reason for rejection", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "PENDING_OWNER_APPROVAL" }));
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["OWNER_REJECT"],
+      });
       const result = await clientAction({
         request: makeFormData({ intent: "reject" }),
         params: { id: VALID_UUID },
@@ -336,6 +407,9 @@ describe("bookings.$id route", () => {
     it("cancels and redirects with reason", async () => {
       mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "CONFIRMED" }));
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["CANCEL"],
+      });
       mocks.cancelBooking.mockResolvedValue({});
       const result = await clientAction({
         request: makeFormData({ intent: "cancel", reason: "Changed plans" }),
@@ -348,6 +422,9 @@ describe("bookings.$id route", () => {
     it("requires reason for cancellation", async () => {
       mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "CONFIRMED" }));
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["CANCEL"],
+      });
       const result = await clientAction({
         request: makeFormData({ intent: "cancel" }),
         params: { id: VALID_UUID },
@@ -368,6 +445,9 @@ describe("bookings.$id route", () => {
     it("starts confirmed booking as owner", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "CONFIRMED" }));
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["START_RENTAL"],
+      });
       mocks.startBooking.mockResolvedValue({});
       const result = await clientAction({
         request: makeFormData({ intent: "start" }), params: { id: VALID_UUID },
@@ -387,6 +467,9 @@ describe("bookings.$id route", () => {
     it("requests return as renter when active", async () => {
       mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "IN_PROGRESS" }));
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["REQUEST_RETURN"],
+      });
       mocks.requestReturn.mockResolvedValue({});
       const result = await clientAction({
         request: makeFormData({ intent: "request_return" }), params: { id: VALID_UUID },
@@ -406,6 +489,9 @@ describe("bookings.$id route", () => {
     it("completes booking as owner when return requested", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
       mocks.getBookingById.mockResolvedValue(makeBooking({ status: "AWAITING_RETURN_INSPECTION" }));
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["APPROVE_RETURN", "REJECT_RETURN"],
+      });
       mocks.approveReturn.mockResolvedValue({});
       const result = await clientAction({
         request: makeFormData({ intent: "complete" }), params: { id: VALID_UUID },
@@ -535,21 +621,33 @@ describe("bookings.$id route", () => {
 
   describe("component rendering", () => {
     it("renders booking details", () => {
-      mocks.useLoaderData.mockReturnValue({ booking: makeBooking() });
+      mocks.useLoaderData.mockReturnValue({
+        booking: makeBooking(),
+        viewerRole: "renter",
+        availableTransitions: [],
+      });
       mocks.useActionData.mockReturnValue(null);
       render(<BookingDetail />);
       expect(screen.getByText("Test Item")).toBeInTheDocument();
     });
 
     it("shows success message from action", () => {
-      mocks.useLoaderData.mockReturnValue({ booking: makeBooking() });
+      mocks.useLoaderData.mockReturnValue({
+        booking: makeBooking(),
+        viewerRole: "renter",
+        availableTransitions: [],
+      });
       mocks.useActionData.mockReturnValue({ success: "Done!" });
       render(<BookingDetail />);
       expect(screen.getByText("Done!")).toBeInTheDocument();
     });
 
     it("shows error message from action", () => {
-      mocks.useLoaderData.mockReturnValue({ booking: makeBooking() });
+      mocks.useLoaderData.mockReturnValue({
+        booking: makeBooking(),
+        viewerRole: "renter",
+        availableTransitions: [],
+      });
       mocks.useActionData.mockReturnValue({ error: "Oops!" });
       render(<BookingDetail />);
       expect(screen.getByText("Oops!")).toBeInTheDocument();
@@ -562,6 +660,8 @@ describe("bookings.$id route", () => {
           status: "COMPLETED",
           review: { id: "rev-1", rating: 5, comment: "Excellent", createdAt: new Date().toISOString() },
         }),
+        viewerRole: "renter",
+        availableTransitions: [],
       });
       mocks.useActionData.mockReturnValue(null);
       render(<BookingDetail />);
@@ -573,11 +673,59 @@ describe("bookings.$id route", () => {
     it("shows Leave Review CTA when booking.review is null and status is COMPLETED", () => {
       mocks.useLoaderData.mockReturnValue({
         booking: makeBooking({ status: "COMPLETED", review: null }),
+        viewerRole: "renter",
+        availableTransitions: [],
       });
       mocks.useActionData.mockReturnValue(null);
       render(<BookingDetail />);
       // The review section heading should be present (multiple elements match — at least one must exist)
       expect(screen.getAllByText(/leave a review/i).length).toBeGreaterThan(0);
+    });
+
+    it("shows payment recovery guidance when checkout comes back requiring action", async () => {
+      mocks.useLoaderData.mockReturnValue({
+        booking: makeBooking({
+          status: "PENDING_PAYMENT",
+          paymentStatus: "PENDING",
+        }),
+        viewerRole: "renter",
+        availableTransitions: [],
+      });
+      mocks.useSearchParams.mockReturnValue([
+        new URLSearchParams("payment=success&redirect_status=failed"),
+        vi.fn(),
+      ]);
+      mocks.getBookingPaymentStatus.mockResolvedValue({
+        confirmationState: "action_required",
+        paymentStatus: "PROCESSING",
+        providerStatus: "requires_action",
+        failureReason: null,
+        actionRequired: true,
+      });
+
+      render(<BookingDetail />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Additional payment verification is still required/i)
+        ).toBeInTheDocument();
+      });
+    });
+
+    it("shows dispute guidance when owner is inspecting a return", () => {
+      mocks.useLoaderData.mockReturnValue({
+        booking: makeBooking({
+          status: "AWAITING_RETURN_INSPECTION",
+          ownerId: "user-1",
+          renterId: "renter-2",
+        }),
+        viewerRole: "owner",
+        availableTransitions: ["APPROVE_RETURN", "REJECT_RETURN"],
+      });
+      render(<BookingDetail />);
+      expect(
+        screen.getByText(/Report Damage vs File a Dispute/i)
+      ).toBeInTheDocument();
     });
   });
 });

@@ -53,6 +53,34 @@ export interface NotificationsResponse {
   unreadCount?: number;
 }
 
+function normalizeNotificationData(value: unknown): Record<string, unknown> | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function normalizeNotification(notification: Notification & { data?: unknown }): Notification {
+  return {
+    ...notification,
+    data: normalizeNotificationData(notification.data),
+  };
+}
+
 export const notificationsApi = {
   /**
    * Get all notifications for the current user
@@ -70,9 +98,18 @@ export const notificationsApi = {
     if (params?.type) queryParams.append("type", params.type);
 
     const query = queryParams.toString();
-    return api.get<NotificationsResponse>(
+    const response = await api.get<NotificationsResponse>(
       `/notifications${query ? `?${query}` : ""}`
     );
+
+    return {
+      ...response,
+      notifications: Array.isArray(response.notifications)
+        ? response.notifications.map((notification) =>
+            normalizeNotification(notification as Notification & { data?: unknown })
+          )
+        : [],
+    };
   },
 
   /**

@@ -82,6 +82,7 @@ export function BookingCalendar({
   const [loadingBlocked, setLoadingBlocked] = useState(true);
   /** Internal hover state for range preview */
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
+  const [selectionFeedback, setSelectionFeedback] = useState("");
 
   // Derived controlled dates
   const startDt = useMemo(
@@ -123,6 +124,7 @@ export function BookingCalendar({
 
     // If no start selected, or both already selected → reset to new start
     if (!startDt || (startDt && endDt)) {
+      setSelectionFeedback("");
       // Single-click resets range to new start
       onRangeSelect(ds, ds);
       return;
@@ -130,6 +132,7 @@ export function BookingCalendar({
 
     // Start already picked, pick end
     if (isBefore(d, startDt) || isSameDay(d, startDt)) {
+      setSelectionFeedback("");
       // Clicked before or on start → swap: make this the new start
       onRangeSelect(ds, ds);
       return;
@@ -138,6 +141,7 @@ export function BookingCalendar({
     // Check if any blocked day lies between startDt and d
     const hasBlockedInRange = hasBlockedBetween(startDt, d);
     if (hasBlockedInRange) {
+      setSelectionFeedback("Those dates cross an unavailable day. Choose a shorter range.");
       // Reset – can't select a range that spans a blocked day
       onRangeSelect(ds, ds);
       return;
@@ -145,9 +149,20 @@ export function BookingCalendar({
 
     const diffDays =
       (d.getTime() - startDt.getTime()) / (1000 * 60 * 60 * 24);
-    if (diffDays > maxRentalDays) return; // silently reject too-long ranges
-    if (diffDays < minRentalDays - 1) return; // too short
+    if (diffDays > maxRentalDays) {
+      setSelectionFeedback(
+        `Maximum rental period is ${maxRentalDays} day${maxRentalDays === 1 ? "" : "s"}.`
+      );
+      return;
+    }
+    if (diffDays < minRentalDays - 1) {
+      setSelectionFeedback(
+        `Minimum rental period is ${minRentalDays} day${minRentalDays === 1 ? "" : "s"}.`
+      );
+      return;
+    }
 
+    setSelectionFeedback("");
     onRangeSelect(toDateString(startDt), ds);
   };
 
@@ -379,7 +394,10 @@ export function BookingCalendar({
         {onClear && (
           <button
             type="button"
-            onClick={onClear}
+            onClick={() => {
+              setSelectionFeedback("");
+              onClear();
+            }}
             className="ml-2 text-xs text-destructive hover:underline"
           >
             Clear
@@ -404,6 +422,15 @@ export function BookingCalendar({
       </div>
 
       <Summary />
+      {selectionFeedback && (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+        >
+          {selectionFeedback}
+        </p>
+      )}
       <Legend />
     </div>
   );

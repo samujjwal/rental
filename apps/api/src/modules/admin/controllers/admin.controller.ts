@@ -406,9 +406,10 @@ export class AdminController {
   async getSystemLogs(
     @CurrentUser('id') adminId: string,
     @Query('level') level?: string,
+    @Query('search') search?: string,
     @Query('limit') limit?: number,
   ) {
-    return this.systemService.getSystemLogs(adminId, level, limit);
+    return this.systemService.getSystemLogs(adminId, level, limit, search);
   }
 
   @Get('system/audit')
@@ -416,12 +417,14 @@ export class AdminController {
   async getAuditLogs(
     @CurrentUser('id') adminId: string,
     @Query('action') action?: string,
+    @Query('entity') entity?: string,
     @Query('userId') targetUserId?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
     return this.adminService.getAuditLogs(adminId, {
       action,
+      entity,
       userId: targetUserId,
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,

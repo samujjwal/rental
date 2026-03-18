@@ -1,0 +1,19 @@
+appId: com.gharbatai.mobile
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "email-input"
+- inputText: "owner@test.com"
+- tapOn:
+    id: "password-input"
+- inputText: "Test123!@#"
+- tapOn: "Sign In"
+- assertVisible: "Profile"
+- tapOn: "Profile"
+- assertVisible: "My Listings|Create Listing"
+- tapOn: "My Listings"
+- assertVisible: "My Listings"
+- back
+- tapOn: "Sign Out"
+- assertVisible: "Sign In"

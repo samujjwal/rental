@@ -36,14 +36,12 @@ import {
 import { getUser } from "~/utils/auth";
 import { formatCurrency } from "~/lib/utils";
 import { useTranslation } from "react-i18next";
+import { isAppEntityId } from "~/utils/entity-id";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Checkout | GharBatai Rentals" }];
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
 const MIN_STRIPE_CLIENT_SECRET_LENGTH = 20;
 const safeNumber = (value: unknown): number => {
   const parsed = Number(value);
@@ -73,7 +71,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   }
 
   const bookingId = params.bookingId;
-  if (!isUuid(bookingId)) {
+  if (!isAppEntityId(bookingId)) {
     throw redirect("/bookings");
   }
 
@@ -123,7 +121,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
   }
 
   const bookingId = params.bookingId;
-  if (!isUuid(bookingId)) {
+  if (!isAppEntityId(bookingId)) {
     return { error: "Booking ID is required" };
   }
 
@@ -175,6 +173,9 @@ function CheckoutForm({ booking }: { booking: Booking }) {
   const { t } = useTranslation();
   const stripe = useStripe();
   const elements = useElements();
+  // G4 fix: track whether the Stripe Elements iframe has finished loading.
+  // Stripe's PaymentElement fires an onReady callback when the card form is mounted.
+  const [stripeReady, setStripeReady] = useState(false);
   const navigate = useNavigate();
   const actionData = useActionData<typeof clientAction>();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -219,7 +220,21 @@ function CheckoutForm({ booking }: { booking: Booking }) {
           {t("checkout.paymentInformation")}
         </h2>
 
-        <PaymentElement />
+        {/* G4 fix: skeleton shown while Stripe's iframe initialises (typically 1-3 s).
+            PaymentElement fires onReady once the card fields are interactive. */}
+        {!stripeReady && (
+          <div className="space-y-3 animate-pulse" aria-hidden="true">
+            <div className="h-12 rounded-md bg-muted" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="h-12 rounded-md bg-muted" />
+              <div className="h-12 rounded-md bg-muted" />
+            </div>
+          </div>
+        )}
+        <PaymentElement
+          onReady={() => setStripeReady(true)}
+          className={stripeReady ? undefined : "hidden"}
+        />
 
         {errorMessage && (
           <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-start">
@@ -474,4 +489,3 @@ export default function CheckoutRoute() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

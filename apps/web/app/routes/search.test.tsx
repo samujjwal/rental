@@ -60,6 +60,7 @@ vi.mock("~/components/ui", () => ({
   EmptyStatePresets: {
     NoSearchResults: () => <div data-testid="empty-state">No results</div>,
   },
+  FilterPresets: () => <div data-testid="filter-presets" />,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
   Alert: ({ children, title, message }: any) => <div role="alert">{title}{message}{children}</div>,
 }));
@@ -130,6 +131,25 @@ describe("search route", () => {
 
       expect(data.results).toEqual(results);
       expect(data.error).toBeNull();
+      expect(mocks.searchListings).toHaveBeenCalledWith(
+        expect.objectContaining({ query: "camera" })
+      );
+    });
+
+    it("accepts the legacy q parameter from global navigation", async () => {
+      mocks.searchListings.mockResolvedValue({
+        listings: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      });
+      mocks.getCategories.mockResolvedValue([]);
+
+      await clientLoader({
+        request: new Request("http://localhost/search?q=camera"),
+      } as any);
+
       expect(mocks.searchListings).toHaveBeenCalledWith(
         expect.objectContaining({ query: "camera" })
       );

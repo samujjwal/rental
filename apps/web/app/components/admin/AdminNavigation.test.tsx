@@ -9,7 +9,7 @@ vi.mock('lucide-react', () => {
     MessageSquare: icon, Settings: icon, Shield: icon, FileText: icon,
     CreditCard: icon, AlertTriangle: icon, BarChart3: icon, Building: icon,
     Mail: icon, TrendingUp: icon, Package: icon, Banknote: icon,
-    Zap: icon, Star: icon, Heart: icon, CheckSquare: icon,
+    Zap: icon, Star: icon, Heart: icon, CheckSquare: icon, Activity: icon,
   };
 });
 

@@ -50,6 +50,78 @@ function toApiRole(role: TestUser["role"]): "USER" | "HOST" | "ADMIN" {
   return "USER";
 }
 
+function getExpectedPostLoginPath(role: TestUser["role"]): string {
+  if (role === "admin") return "/admin";
+  if (role === "owner") return "/dashboard/owner";
+  return "/dashboard/renter";
+}
+
+function getExpectedPostLoginPattern(role: TestUser["role"]): RegExp {
+  if (role === "admin") return /\/admin|\/dashboard/;
+  if (role === "owner") return /\/dashboard\/owner/;
+  return /\/dashboard\/renter|\/dashboard/;
+}
+
+async function clearAuthState(page: Page): Promise<void> {
+  await page.goto("/auth/logout", { waitUntil: "domcontentloaded" }).catch(() => {
+    // Best-effort only; the cookie cleanup below still runs if logout navigation fails.
+  });
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  }).catch(() => {
+    // Ignore cross-navigation timing failures and let the next navigation reset state.
+  });
+  await page.context().clearCookies();
+  await page.goto("about:blank").catch(() => {
+    // Force a full app-context unload so any in-memory auth store is discarded.
+  });
+}
+
+async function loginThroughUi(page: Page, user: TestUser): Promise<void> {
+  const expectedPattern = getExpectedPostLoginPattern(user.role);
+  const expectedPath = getExpectedPostLoginPath(user.role);
+
+  await clearAuthState(page);
+  await page.goto("/auth/login");
+
+  const emailInput = page.locator('input[type="email"]');
+  const passwordInput = page.locator('input[type="password"]');
+
+  if (!page.url().includes("/auth/login")) {
+    await page.goto("about:blank").catch(() => {
+      // Best-effort only.
+    });
+    await page.goto("/auth/login");
+  }
+
+  await emailInput.waitFor({ state: "visible", timeout: 10000 });
+  await passwordInput.waitFor({ state: "visible", timeout: 10000 });
+
+  await emailInput.fill(user.email);
+  await passwordInput.fill(user.password);
+  await page.click('button[type="submit"]');
+
+  await page.waitForURL((url) => !url.pathname.startsWith("/auth/"), { timeout: 15000 });
+
+  if (page.url().includes("/auth/login")) {
+    throw new Error(`UI login did not leave the login route for ${user.email}`);
+  }
+
+  await page.goto(expectedPath, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {
+    // The route itself might be slow to settle; the post-navigation auth check below is authoritative.
+  });
+
+  const redirected = await page
+    .waitForURL(expectedPattern, { timeout: 10000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!redirected) {
+    throw new Error(`UI login did not establish an authenticated session for ${user.email}`);
+  }
+}
+
 async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
   const requestData = {
     email: user.email,
@@ -127,7 +199,7 @@ async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
     }
   );
 
-  const destination = user.role === "admin" ? "/admin" : "/dashboard";
+  const destination = getExpectedPostLoginPath(user.role);
   await page
     .goto(destination, { waitUntil: "domcontentloaded", timeout: 30000 })
     .catch(() => {
@@ -147,7 +219,7 @@ async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
   }
 
   // Also verify we landed somewhere expected (not a completely wrong page)
-  const expectedPath = user.role === "admin" ? "/admin" : "/dashboard";
+  const expectedPath = getExpectedPostLoginPath(user.role);
   if (!page.url().includes(expectedPath)) {
     return false;
   }
@@ -179,75 +251,11 @@ export async function loginAs(page: Page, user: TestUser): Promise<void> {
     }
   }
 
-  const expectedPattern =
-    user.role === "admin" ? /.*admin|.*dashboard/ : /.*dashboard/;
-  await page.goto("/auth/login");
-  const emailInput = page.locator('input[type="email"]');
-  const passwordInput = page.locator('input[type="password"]');
-  const loginFormVisible = await emailInput
-    .waitFor({ state: "visible", timeout: 3000 })
-    .then(() => true)
-    .catch(() => false);
+  await loginThroughUi(page, user);
+}
 
-  if (!loginFormVisible) {
-    const isExpectedDestination = expectedPattern.test(page.url());
-    if (isExpectedDestination) {
-      const currentEmail = await page.evaluate(() => {
-        try {
-          const authState = localStorage.getItem("auth-storage");
-          if (authState) {
-            const parsed = JSON.parse(authState) as {
-              state?: { user?: { email?: unknown } };
-            };
-            const storedEmail = parsed.state?.user?.email;
-            if (typeof storedEmail === "string") {
-              return storedEmail;
-            }
-          }
-
-          const rawUser = localStorage.getItem("user");
-          if (rawUser) {
-            const parsedUser = JSON.parse(rawUser) as { email?: unknown };
-            return typeof parsedUser.email === "string"
-              ? parsedUser.email
-              : null;
-          }
-
-          return null;
-        } catch {
-          return null;
-        }
-      });
-
-      if (currentEmail === user.email) {
-        return;
-      }
-    }
-
-    const fallbackWorked = await devLoginFallback(page, user);
-    if (!fallbackWorked) {
-      throw new Error(`Unable to authenticate user ${user.email}`);
-    }
-    return;
-  }
-
-  await emailInput.fill(user.email);
-  await passwordInput.fill(user.password);
-  await page.click('button[type="submit"]');
-
-  const redirected = await page
-    .waitForURL(expectedPattern, { timeout: 8000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (redirected) {
-    return;
-  }
-
-  const fallbackWorked = await devLoginFallback(page, user);
-  if (!fallbackWorked) {
-    throw new Error(`Unable to authenticate user ${user.email}`);
-  }
+export async function loginAsUi(page: Page, user: TestUser): Promise<void> {
+  await loginThroughUi(page, user);
 }
 
 /**
@@ -396,6 +404,40 @@ export async function fillForm(
       await input.fill(value);
     }
   }
+}
+
+/**
+ * Fill an input or textarea while tolerating transient React remounts.
+ */
+export async function stableFill(
+  page: Page,
+  selector: string,
+  value: string,
+  timeoutMs: number = 5000
+): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const locator = page.locator(selector).first();
+
+    try {
+      await locator.waitFor({ state: "visible", timeout: 1000 });
+      await locator.fill(value);
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/detached|not attached|Target closed/i.test(message)) {
+        throw error;
+      }
+      await page.waitForTimeout(150);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Unable to fill selector: ${selector}`);
 }
 
 /**
@@ -572,8 +614,15 @@ export async function clickFirstVisible(
         if (!enabled) {
           continue;
         }
-        await locator.click();
-        return true;
+        try {
+          await locator.click();
+          return true;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!/detached|not attached|not stable/i.test(message)) {
+            throw error;
+          }
+        }
       }
     }
     await page.waitForTimeout(120);

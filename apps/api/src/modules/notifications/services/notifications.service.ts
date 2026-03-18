@@ -9,6 +9,11 @@ import { formatCurrency } from '@rental-portal/shared-types';
 import { escapeHtml } from '@/common/utils/sanitize';
 import { PushNotificationService } from './push-notification.service';
 
+type NotificationPayload = Record<string, any>;
+type NormalizedNotification = Omit<Notification, 'data'> & {
+  data: NotificationPayload | null;
+};
+
 export interface SendNotificationDto {
   userId: string;
   type: NotificationType;
@@ -66,10 +71,34 @@ export class NotificationsService {
     }
   }
 
+  private parseNotificationData(raw: unknown): NotificationPayload | null {
+    if (!raw) {
+      return null;
+    }
+
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    return typeof raw === 'object' ? (raw as NotificationPayload) : null;
+  }
+
+  private normalizeNotification(notification: Notification): NormalizedNotification {
+    return {
+      ...notification,
+      data: this.parseNotificationData(notification.data),
+    };
+  }
+
   /**
    * Send a notification through specified channels
    */
-  async sendNotification(dto: SendNotificationDto): Promise<Notification> {
+  async sendNotification(dto: SendNotificationDto): Promise<NormalizedNotification> {
     const {
       userId,
       type,
@@ -95,19 +124,21 @@ export class NotificationsService {
     const preferences: any = user.userPreferences?.preferences || {};
 
     // Create notification record
+    const payload = { ...data, priority, scheduledFor };
     const notification = await this.prisma.notification.create({
       data: {
         userId,
         type,
         title,
         message,
-        data: JSON.stringify({ ...data, priority, scheduledFor }),
+        data: JSON.stringify(payload),
       },
     });
+    const normalizedNotification = this.normalizeNotification(notification);
 
     // If scheduled for later, we skip sending for now (MVP: scheduling not fully implemented)
     if (scheduledFor && scheduledFor > new Date()) {
-      return notification;
+      return normalizedNotification;
     }
 
     // Send through enabled channels based on user preferences
@@ -117,21 +148,21 @@ export class NotificationsService {
     if (channels.includes('EMAIL') && preferences.email !== false) {
       if (this.shouldSendByType(type, preferences)) {
         usedChannels.push('EMAIL');
-        sendPromises.push(this.sendEmailNotification(user, notification));
+        sendPromises.push(this.sendEmailNotification(user, normalizedNotification));
       }
     }
 
     if (channels.includes('SMS') && preferences.sms === true && user.phoneVerified) {
       if (this.shouldSendByType(type, preferences)) {
         usedChannels.push('SMS');
-        sendPromises.push(this.sendSMSNotification(user, notification));
+        sendPromises.push(this.sendSMSNotification(user, normalizedNotification));
       }
     }
 
     if (channels.includes('PUSH') && preferences.push !== false) {
       if (this.shouldSendByType(type, preferences)) {
         usedChannels.push('PUSH');
-        sendPromises.push(this.sendPushNotification(user, notification));
+        sendPromises.push(this.sendPushNotification(user, normalizedNotification));
       }
     }
 
@@ -152,7 +183,7 @@ export class NotificationsService {
       this.logger.error(`Failed to send notification ${notification.id}`, error);
     }
 
-    return notification;
+    return normalizedNotification;
   }
 
   /**
@@ -183,7 +214,7 @@ export class NotificationsService {
   /**
    * Send email notification
    */
-  private async sendEmailNotification(user: any, notification: Notification): Promise<void> {
+  private async sendEmailNotification(user: any, notification: NormalizedNotification): Promise<void> {
     const template = this.getEmailTemplate(notification);
 
     await this.emailTransporter.sendMail({
@@ -199,7 +230,7 @@ export class NotificationsService {
   /**
    * Send SMS notification
    */
-  private async sendSMSNotification(user: any, notification: Notification): Promise<void> {
+  private async sendSMSNotification(user: any, notification: NormalizedNotification): Promise<void> {
     if (!this.twilioClient) {
       this.logger.warn('Twilio client not configured, skipping SMS');
       return;
@@ -219,13 +250,13 @@ export class NotificationsService {
   /**
    * Send push notification via PushNotificationService
    */
-  private async sendPushNotification(user: any, notification: Notification): Promise<void> {
+  private async sendPushNotification(user: any, notification: NormalizedNotification): Promise<void> {
     try {
       await this.pushService.sendPushNotification({
         userId: user.id,
         title: notification.title,
         body: notification.message,
-        data: (typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data as Record<string, any>) || {},
+        data: notification.data || {},
       });
       this.logger.log(`Push notification sent to user ${user.id} for notification ${notification.id}`);
     } catch (error) {
@@ -236,11 +267,12 @@ export class NotificationsService {
   /**
    * Get email template for notification type
    */
-  private getEmailTemplate(notification: Notification): {
+  private getEmailTemplate(notification: NormalizedNotification): {
     subject: string;
     html: string;
   } {
     const baseUrl = this.configService.get('APP_URL');
+    const data = notification.data || {};
 
     switch (notification.type) {
       case NotificationType.BOOKING_REQUEST:
@@ -249,7 +281,7 @@ export class NotificationsService {
           html: `
             <h2>${escapeHtml(notification.title)}</h2>
             <p>${escapeHtml(notification.message)}</p>
-            <p><a href="${baseUrl}/bookings/${(notification.data as any)?.bookingId}">View Booking</a></p>
+            <p><a href="${baseUrl}/bookings/${data.bookingId ?? ''}">View Booking</a></p>
           `,
         };
 
@@ -259,7 +291,7 @@ export class NotificationsService {
           html: `
             <h2>${escapeHtml(notification.title)}</h2>
             <p>${escapeHtml(notification.message)}</p>
-            <p><a href="${baseUrl}/bookings/${(notification.data as any)?.bookingId}">View Booking Details</a></p>
+            <p><a href="${baseUrl}/bookings/${data.bookingId ?? ''}">View Booking Details</a></p>
           `,
         };
 
@@ -269,7 +301,7 @@ export class NotificationsService {
           html: `
             <h2>${escapeHtml(notification.title)}</h2>
             <p>${escapeHtml(notification.message)}</p>
-            <p>Amount: ${formatCurrency((notification.data as any)?.amount, (notification.data as any)?.currency)}</p>
+            <p>Amount: ${formatCurrency(data.amount, data.currency)}</p>
           `,
         };
 
@@ -279,7 +311,7 @@ export class NotificationsService {
           html: `
             <h2>${escapeHtml(notification.title)}</h2>
             <p>${escapeHtml(notification.message)}</p>
-            <p><a href="${baseUrl}/reviews/${(notification.data as any)?.reviewId}">View Review</a></p>
+            <p><a href="${baseUrl}/reviews/${data.reviewId ?? ''}">View Review</a></p>
           `,
         };
 
@@ -305,7 +337,7 @@ export class NotificationsService {
       page?: number;
       limit?: number;
     } = {},
-  ): Promise<{ notifications: Notification[]; total: number }> {
+  ): Promise<{ notifications: NormalizedNotification[]; total: number }> {
     const { type, unreadOnly, page = 1, limit = 20 } = options;
 
     const where: any = { userId };
@@ -322,13 +354,16 @@ export class NotificationsService {
       this.prisma.notification.count({ where }),
     ]);
 
-    return { notifications, total };
+    return {
+      notifications: notifications.map((notification) => this.normalizeNotification(notification)),
+      total,
+    };
   }
 
   /**
    * Mark notification as read
    */
-  async markAsRead(notificationId: string, userId: string): Promise<Notification> {
+  async markAsRead(notificationId: string, userId: string): Promise<NormalizedNotification> {
     // Verify ownership
     const notification = await this.prisma.notification.findFirst({
       where: { id: notificationId, userId },
@@ -338,10 +373,12 @@ export class NotificationsService {
       throw i18nNotFound('notification.notFound');
     }
 
-    return this.prisma.notification.update({
+    const updated = await this.prisma.notification.update({
       where: { id: notificationId },
       data: { read: true, readAt: new Date() },
     });
+
+    return this.normalizeNotification(updated);
   }
 
   /**

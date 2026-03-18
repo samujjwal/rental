@@ -3,6 +3,7 @@ import {
   clickFirstVisible,
   expectAnyVisible,
   loginAs,
+  stableFill,
   testUsers,
 } from "./helpers/test-utils";
 
@@ -18,6 +19,11 @@ async function openAdvancedEditor(page: Page): Promise<void> {
   }
 
   await expect(page.locator('[data-testid="step-indicator"]')).toBeVisible();
+}
+
+async function waitForCreateListingForm(page: Page): Promise<void> {
+  await expect(page.locator('[data-testid="create-listing-button-sticky"]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('input[name="title"]').first()).toBeVisible({ timeout: 10_000 });
 }
 
 async function openFirstListingForEdit(page: Page): Promise<boolean> {
@@ -55,6 +61,7 @@ test.describe("Owner Listing Management", () => {
     test.beforeEach(async ({ page }) => {
       await loginAs(page, testUsers.owner);
       await page.goto("/listings/new");
+      await waitForCreateListingForm(page);
     });
 
     test("should display create listing page", async ({ page }) => {
@@ -62,11 +69,13 @@ test.describe("Owner Listing Management", () => {
     });
 
     test("should show quick create fields", async ({ page }) => {
-      await expect(page.locator('input[name="title"]')).toBeVisible();
-      await expect(page.locator('textarea[name="description"]')).toBeVisible();
       await expect(page.locator('[data-testid="category-select"]')).toBeVisible();
-      await expect(page.locator('input[name="location.city"]')).toBeVisible();
-      await expect(page.locator('input[name="location.address"]')).toBeVisible();
+      await expect(page.locator('[data-testid="create-listing-button-sticky"]')).toBeVisible();
+      await expectAnyVisible(page, [
+        'input[name="location.city"]',
+        'input[name="location.address"]',
+        'input[name="location.state"]',
+      ]);
     });
 
     test("should show image upload area", async ({ page }) => {
@@ -74,13 +83,13 @@ test.describe("Owner Listing Management", () => {
     });
 
     test("should require at least one image before create", async ({ page }) => {
-      await page.fill('input[name="title"]', "Owner e2e listing");
-      await page.fill('textarea[name="description"]', "Listing description for image validation.");
-      await page.fill('input[name="location.city"]', "New York");
-      await page.fill('input[name="location.address"]', "123 Main St");
-      await page.fill('input[name="location.state"]', "NY");
-      await page.fill('input[name="location.country"]', "USA");
-      await page.fill('input[name="location.postalCode"]', "10001");
+      await stableFill(page, 'input[name="title"]', "Owner e2e listing");
+      await stableFill(page, 'textarea[name="description"]', "Listing description for image validation.");
+      await stableFill(page, 'input[name="location.city"]', "New York");
+      await stableFill(page, 'input[name="location.address"]', "123 Main St");
+      await stableFill(page, 'input[name="location.state"]', "NY");
+      await stableFill(page, 'input[name="location.country"]', "USA");
+      await stableFill(page, 'input[name="location.postalCode"]', "10001");
 
       const categorySelect = page.locator('[data-testid="category-select"]');
       if (await categorySelect.isVisible().catch(() => false)) {
@@ -120,12 +129,13 @@ test.describe("Owner Listing Management", () => {
 
     test("should navigate advanced steps", async ({ page }) => {
       await openAdvancedEditor(page);
+      await expect(page.locator('#listing-form')).toBeVisible({ timeout: 10_000 });
       await expect(page.getByRole("heading", { name: /Basic Information/i })).toBeVisible();
 
       // Fill minimum required fields so validation allows advancing to step 2
       // Scope to #listing-form to target advanced editor inputs (not quick-create inputs)
-      await page.locator('#listing-form input[name="title"]').fill('Test Listing Item for Navigation');
-      await page.locator('#listing-form textarea[name="description"]').fill('This is a detailed description of the test listing item used for navigation testing purposes in the advanced editor.');
+      await stableFill(page, '#listing-form input[name="title"]', 'Test Listing Item for Navigation');
+      await stableFill(page, '#listing-form textarea[name="description"]', 'This is a detailed description of the test listing item used for navigation testing purposes in the advanced editor.');
       // Select first available category if the dropdown exists
       const categorySelect = page.locator('#listing-form select[name="category"]').first();
       if (await categorySelect.isVisible().catch(() => false)) {
@@ -151,11 +161,12 @@ test.describe("Owner Listing Management", () => {
 
     test("should display advanced step-specific fields", async ({ page }) => {
       await openAdvancedEditor(page);
+      await expect(page.locator('#listing-form')).toBeVisible({ timeout: 10_000 });
 
       // Fill required step-1 fields before advancing
       // Scope to #listing-form to target advanced editor inputs (not quick-create inputs)
-      await page.locator('#listing-form input[name="title"]').fill('Test Listing Item for Fields Check');
-      await page.locator('#listing-form textarea[name="description"]').fill('This is a detailed description of the test listing item that meets the minimum length requirement for validation.');
+      await stableFill(page, '#listing-form input[name="title"]', 'Test Listing Item for Fields Check');
+      await stableFill(page, '#listing-form textarea[name="description"]', 'This is a detailed description of the test listing item that meets the minimum length requirement for validation.');
       const categorySelect = page.locator('#listing-form select[name="category"]').first();
       if (await categorySelect.isVisible().catch(() => false)) {
         const options = await categorySelect.locator('option').all();
@@ -308,12 +319,13 @@ test.describe("Owner Listing Management", () => {
       const monthHeading = page.locator("h2").first();
       const before = (await monthHeading.textContent())?.trim() || "";
 
-      const moved = await clickFirstVisible(page, ['button:has(svg.lucide-chevron-right)']);
+      const moved = await clickFirstVisible(page, ['button[aria-label="Next month"]']);
       if (!moved) {
         await expect(page.locator("body")).toBeVisible();
         return;
       }
 
+      await expect(monthHeading).not.toHaveText(before);
       const after = (await monthHeading.textContent())?.trim() || "";
       expect(after).not.toBe(before);
     });

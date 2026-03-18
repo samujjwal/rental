@@ -32,22 +32,35 @@ export class WebhookService implements OnModuleInit {
   ) {
     const stripeKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
+    const nodeEnv = this.configService.get<string>('nodeEnv') || process.env.NODE_ENV;
 
-    if (!stripeKey) {
-      throw new Error(
-        'STRIPE_SECRET_KEY is not configured. Set it in environment variables.',
-      );
+    if (!stripeKey || !webhookSecret) {
+      if (nodeEnv === 'development') {
+        this.logger.warn(
+          'STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET not configured — Webhook service disabled in development',
+        );
+        this.stripe = new Stripe('sk_test_dev_placeholder_key', {
+          apiVersion: '2026-01-28.clover',
+        });
+        this.webhookSecret = 'wh_test_dev_placeholder_secret';
+      } else {
+        if (!stripeKey) {
+          throw new Error(
+            'STRIPE_SECRET_KEY is not configured. Set it in environment variables.',
+          );
+        }
+        if (!webhookSecret) {
+          throw new Error(
+            'STRIPE_WEBHOOK_SECRET is not configured. Set it in environment variables.',
+          );
+        }
+      }
+    } else {
+      this.stripe = new Stripe(stripeKey, {
+        apiVersion: '2026-01-28.clover',
+      });
+      this.webhookSecret = webhookSecret;
     }
-    if (!webhookSecret) {
-      throw new Error(
-        'STRIPE_WEBHOOK_SECRET is not configured. Set it in environment variables.',
-      );
-    }
-
-    this.stripe = new Stripe(stripeKey, {
-      apiVersion: '2026-01-28.clover',
-    });
-    this.webhookSecret = webhookSecret;
   }
 
   onModuleInit() {
@@ -247,32 +260,31 @@ export class WebhookService implements OnModuleInit {
         },
       });
 
-      // Update booking status to CONFIRMED with state history (mirrors state machine behavior)
-      let wasTransitioned = false;
-      await this.prisma.$transaction(async (tx: any) => {
-        const updated = await tx.booking.updateMany({
-          where: { id: payment.bookingId, status: BookingStatus.PENDING_PAYMENT },
-          data: { status: BookingStatus.CONFIRMED },
-        });
-
-        if (updated.count > 0) {
-          wasTransitioned = true;
-          await tx.bookingStateHistory.create({
-            data: {
-              bookingId: payment.bookingId,
-              fromStatus: BookingStatus.PENDING_PAYMENT,
-              toStatus: BookingStatus.CONFIRMED,
-              changedBy: 'SYSTEM',
-              metadata: JSON.stringify({ paymentIntentId: id, source: 'stripe_webhook' }),
-            },
-          });
-        }
-      });
-
-      // Fire CONFIRMED side effects (reminder notification + deposit hold) that the state machine
-      // would normally emit — must run after the DB transaction commits.
-      if (wasTransitioned) {
-        await this.bookingStateMachine.runConfirmedSideEffects(payment.bookingId);
+      // Route booking confirmation through the authoritative state machine so that
+      // all preconditions, guards, optimistic-lock, state-history creation, cache
+      // invalidation, and side-effects (reminder notification, deposit hold) are
+      // applied uniformly regardless of whether the trigger is a UI action or a
+      // Stripe webhook.  This eliminates B6 (bypassing state machine guards).
+      //
+      // Idempotency: if the booking is already CONFIRMED (duplicate webhook replay
+      // after the idempotency guard window), we log and skip — the optimistic-lock
+      // inside transition() would reject the updateMany anyway, but we short-circuit
+      // here to avoid a noisy BadRequestException in the logs.
+      const currentStatus = payment.booking.status;
+      if (currentStatus === BookingStatus.PENDING_PAYMENT) {
+        await this.bookingStateMachine.transition(
+          payment.bookingId,
+          'COMPLETE_PAYMENT',
+          'SYSTEM',
+          'SYSTEM',
+          { paymentIntentId: id, source: 'stripe_webhook' },
+        );
+      } else if (currentStatus !== BookingStatus.CONFIRMED) {
+        this.logger.warn(
+          `Booking ${payment.bookingId} is in unexpected state ${currentStatus} ` +
+          `when processing payment_intent.succeeded [${id}]. ` +
+          `Ledger entries will still be reconciled.`,
+        );
       }
 
       // Record ledger entries (idempotent)
@@ -521,14 +533,27 @@ export class WebhookService implements OnModuleInit {
    * Handle refunded charge
    */
   private async handleChargeRefunded(charge: Stripe.Charge) {
-    const { id, amount_refunded, refunds } = charge;
+    const { id, amount_refunded, amount, refunds } = charge;
 
     if (!refunds?.data?.length) {
       this.logger.warn(`Charge ${id} marked as refunded but no refund data present`);
     }
 
+    // Stripe sends charge.refunded for every individual refund action.
+    // `refunds.data[0]` is the MOST RECENT refund (reverse-chronological order).
+    // `amount_refunded` is the CUMULATIVE total — using it for ledger entries would
+    // double-count on subsequent partial refunds (B5 fix).
+    const latestStripeRefund = refunds?.data?.[0];
+    const stripeRefundId = latestStripeRefund?.id;
+    // Use the individual refund amount, falling back to cumulative only if unavailable.
+    const thisRefundAmount = fromMinorUnits(
+      latestStripeRefund?.amount ?? amount_refunded,
+      charge.currency,
+    );
+    // A charge is fully refunded when total amount_refunded equals the original charge amount.
+    const isFullRefund = amount > 0 && amount_refunded >= amount;
+
     try {
-      // Find payment by charge ID
       const payment = await this.prisma.payment.findFirst({
         where: { stripeChargeId: id },
         include: { booking: true },
@@ -539,34 +564,39 @@ export class WebhookService implements OnModuleInit {
         return;
       }
 
-      // Upsert refund record: if a PENDING record was created by the refund queue processor,
-      // update it to COMPLETED.  Otherwise create a new COMPLETED record.
-      // This prevents the duplicate PENDING row bug where the webhook creates a second record.
-      const stripeRefundId = refunds.data[0]?.id;
-      if (stripeRefundId) {
-        const existingByStripeId = await this.prisma.refund.findFirst({
-          where: { refundId: stripeRefundId },
-        });
-        if (existingByStripeId) {
-          this.logger.warn(
-            `Refund ${stripeRefundId} already recorded for payment ${payment.id} — skipping duplicate`,
-          );
-          return;
-        }
+      // ── Idempotency: skip if this exact Stripe refund ID is already COMPLETED ──
+      const existingByStripeId = stripeRefundId
+        ? await this.prisma.refund.findFirst({
+            where: { refundId: stripeRefundId },
+          })
+        : null;
+
+      if (existingByStripeId?.status === RefundStatus.COMPLETED) {
+        this.logger.warn(
+          `Refund ${stripeRefundId} already completed for payment ${payment.id} — skipping duplicate`,
+        );
+        return;
       }
 
-      // Look for a PENDING refund record created by the queue processor for this booking
-      const pendingRefund = await this.prisma.refund.findFirst({
-        where: { bookingId: payment.bookingId, status: RefundStatus.PENDING },
+      // ── Upsert refund record ──
+      // Prefer updating a PENDING/PROCESSING record created by the refund queue processor
+      // (which already has the correct amount from triggerRefundProcess).  Otherwise create
+      // a fresh COMPLETED record for this individual partial refund.
+      const pendingRefund = existingByStripeId ?? await this.prisma.refund.findFirst({
+        where: {
+          bookingId: payment.bookingId,
+          status: { in: [RefundStatus.PENDING, RefundStatus.PROCESSING] },
+        },
         orderBy: { createdAt: 'desc' },
       });
 
       if (pendingRefund) {
-        // Update the existing PENDING record with the real Stripe refund ID and COMPLETED status
         await this.prisma.refund.update({
           where: { id: pendingRefund.id },
           data: {
             refundId: stripeRefundId || pendingRefund.refundId,
+            // Correct the stored amount to the actual Stripe refund amount (not the estimate).
+            amount: thisRefundAmount,
             status: RefundStatus.COMPLETED,
           },
         });
@@ -574,78 +604,65 @@ export class WebhookService implements OnModuleInit {
         await this.prisma.refund.create({
           data: {
             bookingId: payment.bookingId,
-            amount: fromMinorUnits(amount_refunded, charge.currency),
+            amount: thisRefundAmount,
             currency: charge.currency,
             status: RefundStatus.COMPLETED,
             refundId: stripeRefundId || `refund_${Date.now()}`,
-            reason: refunds.data[0]?.reason || 'requested_by_customer',
+            reason: latestStripeRefund?.reason || 'requested_by_customer',
           },
         });
       }
 
-      // Record refund in double-entry ledger
+      // ── Ledger: record THIS refund's amount (not cumulative) to avoid double-counting ──
       await this.ledger.recordRefund(
         payment.bookingId,
         payment.booking.renterId,
-        fromMinorUnits(amount_refunded, charge.currency),
+        thisRefundAmount,
         charge.currency,
       );
 
-      // Update booking status to REFUNDED via state-machine-aligned transition.
-      // The state machine only defines CANCELLED → REFUNDED (via REFUND transition).
-      // For bookings in other states that receive a Stripe refund, we log a warning
-      // but do NOT force a status change outside the state machine's rules.
-      const validRefundFromStatuses = [
-        BookingStatus.CANCELLED,
-      ];
-
-      await this.prisma.$transaction(async (tx: any) => {
-        const updated = await tx.booking.updateMany({
-          where: {
-            id: payment.bookingId,
-            status: { in: validRefundFromStatuses },
+      // ── Booking status: only transition to REFUNDED on a full refund ──
+      // Partial refunds leave the booking in CANCELLED until fully refunded.
+      // State machine CANCELLED → REFUNDED is triggered here; all other statuses
+      // are logged for manual review.
+      if (isFullRefund && payment.booking.status === BookingStatus.CANCELLED) {
+        await this.bookingStateMachine.transition(
+          payment.bookingId,
+          'REFUND',
+          'SYSTEM',
+          'SYSTEM',
+          {
+            chargeId: id,
+            amountRefunded: fromMinorUnits(amount_refunded, charge.currency),
+            source: 'stripe_webhook',
           },
-          data: { status: BookingStatus.REFUNDED },
-        });
+        );
+      } else if (isFullRefund && payment.booking.status !== BookingStatus.REFUNDED) {
+        this.logger.warn(
+          `Booking ${payment.bookingId} is fully refunded on Stripe but in state ` +
+          `${payment.booking.status} — manual review required.`,
+        );
+      } else {
+        this.logger.log(
+          `Partial refund of ${thisRefundAmount} ${charge.currency} recorded for booking ` +
+          `${payment.bookingId} (total refunded so far: ${fromMinorUnits(amount_refunded, charge.currency)})`,
+        );
+      }
 
-        if (updated.count > 0) {
-          await tx.bookingStateHistory.create({
-            data: {
-              bookingId: payment.bookingId,
-              fromStatus: payment.booking.status as BookingStatus,
-              toStatus: BookingStatus.REFUNDED,
-              changedBy: 'SYSTEM',
-              metadata: JSON.stringify({
-                chargeId: id,
-                transition: 'REFUND',
-                amountRefunded: fromMinorUnits(amount_refunded, charge.currency),
-                source: 'stripe_webhook',
-              }),
-            },
-          });
-        } else {
-          this.logger.warn(
-            `Booking ${payment.bookingId} not in valid state for refund transition (current: ${payment.booking.status}). ` +
-            `Refund record created but booking status unchanged — manual review required.`,
-          );
-        }
-      });
-
-      // Emit refund event
       this.eventsService.emitPaymentRefunded({
         paymentId: payment.id,
         bookingId: payment.bookingId,
-        amount: fromMinorUnits(amount_refunded, charge.currency),
+        amount: thisRefundAmount,
         currency: charge.currency,
         refundId: stripeRefundId ?? `refund_charge_${id}`,
         renterId: payment.booking.renterId,
         ownerId: payment.booking.ownerId,
       });
 
-      this.logger.log(`Refund processed for payment ${payment.id}`);
+      this.logger.log(`Refund processed for payment ${payment.id} — amount: ${thisRefundAmount}, full: ${isFullRefund}`);
     } catch (error) {
       this.logger.error(`Error handling refund: ${error.message}`);
-      throw error; // Rethrow so Stripe retries on transient failures
+      throw error;
     }
   }
 
@@ -745,7 +762,9 @@ export class WebhookService implements OnModuleInit {
     // Update payout status in DB and transition the associated booking to SETTLED
     try {
       await this.prisma.payout.updateMany({
-        where: { stripeId: id },
+        where: {
+          OR: [{ stripeId: id }, { transferId: id }],
+        },
         data: {
           status: PayoutStatus.PAID,
           paidAt: new Date(),
@@ -754,14 +773,16 @@ export class WebhookService implements OnModuleInit {
 
       // Find the payout record to extract bookingId from its metadata
       const payoutRecord = await this.prisma.payout.findFirst({
-        where: { stripeId: id },
+        where: {
+          OR: [{ stripeId: id }, { transferId: id }],
+        },
         select: { metadata: true },
       });
 
       if (payoutRecord?.metadata) {
         try {
           const meta = JSON.parse(payoutRecord.metadata);
-          const bookingId = meta?.bookingId;
+          const bookingId = meta?.bookingId || meta?.bookingIds?.[0];
 
           if (bookingId) {
             const booking = await this.prisma.booking.findUnique({
@@ -817,7 +838,9 @@ export class WebhookService implements OnModuleInit {
     // Update payout status in DB
     try {
       await this.prisma.payout.updateMany({
-        where: { stripeId: id },
+        where: {
+          OR: [{ stripeId: id }, { transferId: id }],
+        },
         data: {
           status: PayoutStatus.FAILED,
         },

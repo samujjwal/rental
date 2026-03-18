@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { bookingsApi } from "~/lib/api/bookings";
 import { BookingStatus } from "~/lib/shared-types";
-import type { Booking } from "~/types/booking";
+import type { Booking, BookingTransition } from "~/types/booking";
 import { useAuthStore } from "~/lib/store/auth";
 import { format } from "date-fns";
 import { cn } from "~/lib/utils";
@@ -55,6 +55,10 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+type BookingWithTransitions = Booking & {
+  availableTransitions: BookingTransition[];
+};
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
   if (!user) {
@@ -78,6 +82,8 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     "completed",
     "settled",
     "cancelled",
+    "payment_failed",
+    "refunded",
     "disputed",
   ]);
   const status =
@@ -92,8 +98,23 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     const filtered = status
       ? bookings.filter((booking) => normalizeStatus(booking.status) === status)
       : bookings;
+    const bookingsWithTransitions: BookingWithTransitions[] = await Promise.all(
+      filtered.map(async (booking) => {
+        const transitions = booking.id
+          ? await bookingsApi
+              .getAvailableTransitions(booking.id)
+              .catch(() => ({ availableTransitions: [] }))
+          : { availableTransitions: [] };
+        return {
+          ...booking,
+          availableTransitions: Array.isArray(transitions.availableTransitions)
+            ? transitions.availableTransitions
+            : [],
+        };
+      })
+    );
     return {
-      bookings: filtered,
+      bookings: bookingsWithTransitions,
       view,
       status,
       canViewOwner,
@@ -125,6 +146,8 @@ const STATUS_VARIANTS: Record<
   completed: "secondary",
   settled: "secondary",
   cancelled: "destructive",
+  payment_failed: "destructive",
+  refunded: "secondary",
   disputed: "destructive",
 };
 
@@ -138,6 +161,8 @@ const STATUS_ICONS: Record<string, typeof Clock> = {
   completed: CheckCircle,
   settled: CheckCircle,
   cancelled: X,
+  payment_failed: AlertCircle,
+  refunded: Banknote,
   disputed: AlertCircle,
 };
 const MAX_CANCELLATION_REASON_LENGTH = 1000;
@@ -174,9 +199,114 @@ const normalizeStatus = (status: unknown) => {
   if (upper === BookingStatus.SETTLED) return "settled";
   if (upper === BookingStatus.CANCELLED) return "cancelled";
   if (upper === BookingStatus.PAYMENT_FAILED) return "payment_failed";
+  if (upper === BookingStatus.REFUNDED) return "refunded";
   if (upper === BookingStatus.DISPUTED) return "disputed";
   if (upper === BookingStatus.PENDING) return "pending";
   return raw.toLowerCase();
+};
+
+const getBookingStateGuidance = (
+  statusKey: string,
+  isRenter: boolean
+): { title: string; description: string; tone: string } => {
+  switch (statusKey) {
+    case "pending_owner_approval":
+      return isRenter
+        ? {
+            title: "Waiting for owner approval",
+            description: "The owner still needs to accept this request before payment can be completed.",
+            tone: "border-yellow-200 bg-yellow-50 text-yellow-900",
+          }
+        : {
+            title: "Decision needed",
+            description: "Review the request, then confirm or decline so the renter knows the next step.",
+            tone: "border-yellow-200 bg-yellow-50 text-yellow-900",
+          };
+    case "pending_payment":
+      return {
+        title: "Payment still required",
+        description: "This booking is not confirmed until payment is completed.",
+        tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
+      };
+    case "payment_failed":
+      return {
+        title: "Payment failed",
+        description: "Retry payment to keep the booking active before it expires.",
+        tone: "border-red-200 bg-red-50 text-red-900",
+      };
+    case "confirmed":
+      return isRenter
+        ? {
+            title: "Booking confirmed",
+            description: "Coordinate pickup or delivery with the owner. The owner will start the rental after handoff.",
+            tone: "border-blue-200 bg-blue-50 text-blue-900",
+          }
+        : {
+            title: "Ready for handoff",
+            description: "Start the booking once the renter has received the item.",
+            tone: "border-blue-200 bg-blue-50 text-blue-900",
+          };
+    case "active":
+      return isRenter
+        ? {
+            title: "Rental in progress",
+            description: "When you are done, request return so the owner can inspect the item.",
+            tone: "border-amber-200 bg-amber-50 text-amber-900",
+          }
+        : {
+            title: "Rental in progress",
+            description: "Keep an eye on messages and be ready for the renter's return request.",
+            tone: "border-amber-200 bg-amber-50 text-amber-900",
+          };
+    case "return_requested":
+      return isRenter
+        ? {
+            title: "Waiting for inspection",
+            description: "The owner still needs to inspect the return and approve it.",
+            tone: "border-amber-200 bg-amber-50 text-amber-900",
+          }
+        : {
+            title: "Inspect the return",
+            description: "Approve the return if everything looks right, or report damage if something is wrong.",
+            tone: "border-amber-200 bg-amber-50 text-amber-900",
+          };
+    case "completed":
+      return {
+        title: "Return approved",
+        description: "This rental is complete. Settlement or any follow-up review comes next.",
+        tone: "border-slate-200 bg-slate-50 text-slate-900",
+      };
+    case "settled":
+      return {
+        title: "Fully settled",
+        description: "Funds and return flow are complete for this booking.",
+        tone: "border-slate-200 bg-slate-50 text-slate-900",
+      };
+    case "refunded":
+      return {
+        title: "Refund completed",
+        description: "The payment has been refunded and no further booking action is required.",
+        tone: "border-sky-200 bg-sky-50 text-sky-900",
+      };
+    case "disputed":
+      return {
+        title: "Operator review in progress",
+        description: "A dispute is open. Use the booking details page to follow updates and next steps.",
+        tone: "border-rose-200 bg-rose-50 text-rose-900",
+      };
+    case "cancelled":
+      return {
+        title: "Booking cancelled",
+        description: "This booking is closed. Open the details page if you need refund or dispute history.",
+        tone: "border-slate-200 bg-slate-50 text-slate-900",
+      };
+    default:
+      return {
+        title: "Booking update",
+        description: "Open the booking details page to see the latest state and actions.",
+        tone: "border-slate-200 bg-slate-50 text-slate-900",
+      };
+  }
 };
 
 export default function BookingsPage() {
@@ -195,6 +325,8 @@ export default function BookingsPage() {
       completed: t("bookings.status.completed"),
       settled: t("bookings.status.settled", "Settled"),
       cancelled: t("bookings.status.cancelled"),
+      payment_failed: t("bookings.status.paymentFailed", "Payment Failed"),
+      refunded: t("bookings.status.refunded", "Refunded"),
       disputed: t("bookings.status.disputed", "Disputed"),
     };
     return map[s] ?? s.replace(/_/g, " ");
@@ -208,7 +340,7 @@ export default function BookingsPage() {
     error,
   } = useLoaderData<typeof clientLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<BookingWithTransitions | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const navigation = useNavigation();
@@ -224,7 +356,7 @@ export default function BookingsPage() {
   // Apply optimistic statuses to bookings
   const bookings = useMemo(
     () =>
-      serverBookings.map((b: Booking) => {
+      serverBookings.map((b: BookingWithTransitions) => {
         const optimisticStatus = optimisticStatuses[b.id];
         return optimisticStatus ? { ...b, status: optimisticStatus } : b;
       }),
@@ -284,11 +416,15 @@ export default function BookingsPage() {
     setCancelReason("");
 
     try {
-      const statusKey = normalizeStatus(selectedBooking.status);
-      if (view === "owner" && statusKey === "pending_owner_approval") {
+      const transitionSet = new Set<BookingTransition>(
+        selectedBooking.availableTransitions ?? []
+      );
+      if (transitionSet.has("OWNER_REJECT")) {
         await bookingsApi.rejectBooking(bookingId, normalizedReason);
-      } else {
+      } else if (transitionSet.has("CANCEL")) {
         await bookingsApi.cancelBooking(bookingId, normalizedReason);
+      } else {
+        throw new Error("Booking cannot be cancelled in its current state.");
       }
       toast.success("Booking cancelled successfully");
       revalidator.revalidate();
@@ -445,10 +581,14 @@ export default function BookingsPage() {
           {[
             "pending_owner_approval",
             "pending_payment",
+            "payment_failed",
             "confirmed",
             "active",
             "return_requested",
             "completed",
+            "settled",
+            "refunded",
+            "disputed",
             "cancelled",
           ].map((s) => (
             <button
@@ -490,6 +630,9 @@ export default function BookingsPage() {
             const statusKey = normalizeStatus(booking.status);
             const StatusIcon = STATUS_ICONS[statusKey] || Clock;
             const isRenter = view === "renter";
+            const transitionSet = new Set<BookingTransition>(
+              booking.availableTransitions ?? []
+            );
             const otherUser = isRenter ? booking.owner : booking.renter;
             const otherFirstName = safeText(otherUser?.firstName, "User");
             const otherLastName = safeText(otherUser?.lastName);
@@ -500,6 +643,16 @@ export default function BookingsPage() {
             const listingId = safeText(booking.listingId);
             const listingImage =
               booking.listing?.images?.[0];
+            const guidance = getBookingStateGuidance(statusKey, isRenter);
+            const paymentStatusLabel = String(booking.paymentStatus).toUpperCase();
+            const paymentStatusTone =
+              paymentStatusLabel === "PAID"
+                ? "text-success"
+                : paymentStatusLabel === "REFUNDED"
+                ? "text-blue-700"
+                : paymentStatusLabel === "FAILED"
+                ? "text-destructive"
+                : "text-warning";
 
             return (
               <Card
@@ -610,14 +763,17 @@ export default function BookingsPage() {
                       <span
                         className={cn(
                           "ml-2 font-medium capitalize",
-                          String(booking.paymentStatus).toUpperCase() === "PAID"
-                            ? "text-success"
-                            : "text-warning"
+                          paymentStatusTone
                         )}
                       >
-                        {String(booking.paymentStatus).toUpperCase()}
+                        {paymentStatusLabel}
                       </span>
                     </div>
+                  </div>
+
+                  <div className={cn("mb-4 rounded-lg border px-4 py-3", guidance.tone)}>
+                    <p className="text-sm font-semibold">{guidance.title}</p>
+                    <p className="mt-1 text-sm opacity-90">{guidance.description}</p>
                   </div>
 
                   {/* Action Buttons */}
@@ -637,13 +793,7 @@ export default function BookingsPage() {
                       </UnifiedButton>
                     </Link>
 
-                    {isRenter &&
-                      [
-                        "pending_owner_approval",
-                        "pending_payment",
-                        "pending",
-                        "confirmed",
-                      ].includes(statusKey) && (
+                    {transitionSet.has("CANCEL") && (
                         <UnifiedButton
                           variant="destructive"
                           onClick={() => {
@@ -656,7 +806,7 @@ export default function BookingsPage() {
                         </UnifiedButton>
                       )}
 
-                    {!isRenter && statusKey === "pending_owner_approval" && (
+                    {transitionSet.has("OWNER_APPROVE") && (
                       <>
                         <UnifiedButton
                           onClick={() => {
@@ -683,7 +833,7 @@ export default function BookingsPage() {
                     )}
 
                     {isRenter &&
-                      ["pending_payment", "pending"].includes(statusKey) && (
+                      ["pending_payment", "payment_failed", "pending"].includes(statusKey) && (
                         <Link
                           to={
                             bookingId ? `/checkout/${bookingId}` : "/bookings"
@@ -692,12 +842,14 @@ export default function BookingsPage() {
                           <UnifiedButton
                             leftIcon={<Banknote className="w-4 h-4" />}
                           >
-                            {t("bookings.details.payNow")}
+                            {statusKey === "payment_failed"
+                              ? t("bookings.actions.retryPayment", "Retry Payment")
+                              : t("bookings.details.payNow")}
                           </UnifiedButton>
                         </Link>
                       )}
 
-                    {!isRenter && statusKey === "confirmed" && (
+                    {transitionSet.has("START_RENTAL") && (
                       <UnifiedButton
                         onClick={() => {
                           if (bookingId) {
@@ -710,7 +862,7 @@ export default function BookingsPage() {
                       </UnifiedButton>
                     )}
 
-                    {!isRenter && statusKey === "return_requested" && (
+                    {transitionSet.has("APPROVE_RETURN") && (
                       <UnifiedButton
                         onClick={() => {
                           if (bookingId) {
@@ -723,7 +875,7 @@ export default function BookingsPage() {
                       </UnifiedButton>
                     )}
 
-                    {isRenter && statusKey === "active" && (
+                    {transitionSet.has("REQUEST_RETURN") && (
                       <UnifiedButton
                         onClick={() => {
                           if (bookingId) {

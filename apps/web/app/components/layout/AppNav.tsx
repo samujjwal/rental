@@ -166,8 +166,8 @@ export function AppNav() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    const q = (e.currentTarget.elements.namedItem("q") as HTMLInputElement)?.value?.trim();
-                    navigate(q ? `/search?q=${encodeURIComponent(q)}` : "/search");
+                    const query = (e.currentTarget.elements.namedItem("navQuery") as HTMLInputElement)?.value?.trim();
+                    navigate(query ? `/search?query=${encodeURIComponent(query)}` : "/search");
                   }}
                   className="flex items-center"
                 >
@@ -181,7 +181,7 @@ export function AppNav() {
                   >
                     <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                     <input
-                      name="q"
+                      name="navQuery"
                       type="text"
                       placeholder={t("common.search", "Search…")}
                       className="bg-transparent outline-none text-sm w-28 placeholder:text-muted-foreground text-foreground"

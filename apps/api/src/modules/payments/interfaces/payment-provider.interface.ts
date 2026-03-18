@@ -43,12 +43,14 @@ export interface RefundParams {
   amount: number;
   currency: string;
   reason?: string;
+  idempotencyKey?: string;
 }
 
 export interface PayoutParams {
   accountId: string;
   amount: number;
   currency: string;
+  idempotencyKey?: string;
 }
 
 export interface CreateConnectAccountResult {

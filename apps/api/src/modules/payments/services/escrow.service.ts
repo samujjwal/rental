@@ -12,7 +12,7 @@
  */
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { EventsService } from '@/common/events/events.service';
+import { EventsService, type EscrowFrozenEvent } from '@/common/events/events.service';
 import { CacheService } from '@/common/cache/cache.service';
 
 export interface CreateEscrowParams {
@@ -104,6 +104,8 @@ export class EscrowService {
   /**
    * Fund the escrow (transition PENDING → FUNDED).
    * Called after successful payment capture.
+   * DB5 fix: records a LIABILITY ledger entry so the escrow hold is visible
+   * in the accounting ledger for reconciliation.
    */
   async fundEscrow(escrowId: string, externalId?: string): Promise<EscrowState> {
     const escrow = await this.prisma.escrowTransaction.update({
@@ -116,6 +118,27 @@ export class EscrowService {
     });
 
     this.logger.log(`Escrow ${escrowId} funded: ${escrow.amount} ${escrow.currency}`);
+
+    // Write ledger entry for the escrow hold (DB5 fix).
+    // CREDIT to LIABILITY account represents funds held in trust.
+    try {
+      await this.prisma.ledgerEntry.create({
+        data: {
+          bookingId: escrow.bookingId,
+          accountId: escrow.id,
+          accountType: 'LIABILITY',
+          side: 'CREDIT',
+          transactionType: 'DEPOSIT_HOLD',
+          amount: escrow.amount,
+          currency: escrow.currency,
+          description: `Escrow funded for booking ${escrow.bookingId}`,
+          status: 'POSTED',
+          referenceId: escrowId,
+        },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to write ledger entry for escrow funded ${escrowId}`, err);
+    }
 
     // Emit event safely — don't let listener errors crash the process
     try {
@@ -179,6 +202,27 @@ export class EscrowService {
       },
     });
 
+    // Write ledger entry for the escrow release (DB5 fix).
+    // DEBIT to LIABILITY account reverses the escrow hold; CREDIT to ASSET = host earnings.
+    try {
+      await this.prisma.ledgerEntry.create({
+        data: {
+          bookingId: escrow.bookingId,
+          accountId: escrow.id,
+          accountType: 'LIABILITY',
+          side: 'DEBIT',
+          transactionType: 'DEPOSIT_RELEASE',
+          amount: toRelease,
+          currency: escrow.currency,
+          description: `Escrow released to host for booking ${escrow.bookingId}`,
+          status: 'POSTED',
+          referenceId: escrowId,
+        },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to write ledger entry for escrow release ${escrowId}`, err);
+    }
+
     // Emit event safely — don't let listener errors crash the process
     try {
       await this.events.emitEscrowReleased({
@@ -220,6 +264,20 @@ export class EscrowService {
     });
 
     this.logger.log(`Escrow ${escrowId} frozen for dispute ${disputeId}`);
+
+    // Emit event safely — don't let listener errors propagate
+    try {
+      this.events.emitEscrowFrozen({
+        escrowId: escrow.id,
+        bookingId: escrow.bookingId,
+        amount: Number(escrow.amount),
+        currency: escrow.currency,
+        disputeId,
+      } satisfies EscrowFrozenEvent);
+    } catch (err) {
+      this.logger.error(`Failed to emit escrow frozen event for ${escrowId}`, err);
+    }
+
     return this.mapToState(escrow);
   }
 
@@ -235,6 +293,27 @@ export class EscrowService {
         metadata: { refundReason: reason },
       },
     });
+
+    // Write ledger entry for the escrow refund (DB5 fix).
+    // DEBIT to LIABILITY account reverses the hold; funds returned to renter.
+    try {
+      await this.prisma.ledgerEntry.create({
+        data: {
+          bookingId: escrow.bookingId,
+          accountId: escrow.id,
+          accountType: 'LIABILITY',
+          side: 'DEBIT',
+          transactionType: 'REFUND',
+          amount: escrow.amount,
+          currency: escrow.currency,
+          description: `Escrow refunded to renter for booking ${escrow.bookingId}`,
+          status: 'POSTED',
+          referenceId: escrowId,
+        },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to write ledger entry for escrow refund ${escrowId}`, err);
+    }
 
     // Emit event safely — don't let listener errors crash the process
     try {

@@ -83,6 +83,7 @@ function makeFormReq(fields: Record<string, string>) {
 }
 
 const validId = "11111111-1111-1111-8111-111111111111";
+const validCuid = "ckx1234567890abcdefghijkl";
 
 import { clientLoader, clientAction } from "./disputes.$id";
 
@@ -114,7 +115,7 @@ describe("clientLoader", () => {
     expect((r as Response).headers.get("Location")).toBe("/auth/login");
   });
 
-  it("redirects on invalid UUID", async () => {
+  it("redirects on invalid dispute id", async () => {
     mocks.getUser.mockResolvedValue(authUser);
     const r = await clientLoader({
       request: new Request("http://localhost/disputes/bad"),
@@ -131,6 +132,16 @@ describe("clientLoader", () => {
       params: { id: validId },
     } as any);
     expect(r).toEqual({ dispute });
+  });
+
+  it("accepts valid CUID dispute ids", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getDisputeById.mockResolvedValue({ ...dispute, id: validCuid });
+    const r = await clientLoader({
+      request: new Request("http://localhost/disputes/" + validCuid),
+      params: { id: validCuid },
+    } as any);
+    expect(r).toEqual({ dispute: { ...dispute, id: validCuid } });
   });
 
   it("redirects non-participant non-admin", async () => {

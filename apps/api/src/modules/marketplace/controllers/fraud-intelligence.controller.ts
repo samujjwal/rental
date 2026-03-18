@@ -3,7 +3,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard, CurrentUser, RolesGuard, Roles } from '@/common/auth';
 import { UserRole } from '@rental-portal/database';
 import { FraudIntelligenceService } from '../services/fraud-intelligence.service';
-import { AnalyzeRiskDto, RegisterDeviceDto, ResolveSignalDto } from '../dto/marketplace.dto';
+import {
+  AnalyzeRiskDto,
+  MarketplaceRegisterDeviceDto,
+  ResolveSignalDto,
+} from '../dto/marketplace.dto';
 
 @ApiTags('Marketplace - Fraud Intelligence')
 @Controller('marketplace/fraud')
@@ -25,7 +29,10 @@ export class FraudIntelligenceController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a device fingerprint' })
   @ApiResponse({ status: 201, description: 'Device registered' })
-  async registerDevice(@CurrentUser('id') userId: string, @Body() dto: RegisterDeviceDto) {
+  async registerDevice(
+    @CurrentUser('id') userId: string,
+    @Body() dto: MarketplaceRegisterDeviceDto,
+  ) {
     return this.fraud.registerDevice(userId, dto.fingerprint, dto.metadata);
   }
 

@@ -29,7 +29,6 @@ let currentLocale = 'en';
 export function detectAndSetLocale(): void {
   try {
     // Use expo-localization if available, otherwise fall back to 'en'
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { getLocales } = require('expo-localization');
     const locales = getLocales();
     if (locales?.length > 0) {

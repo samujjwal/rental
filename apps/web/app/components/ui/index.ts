@@ -67,8 +67,17 @@ export {
 // Dialog components
 export { Dialog, DialogFooter } from "./dialog";
 
+// Saved filter presets
+export { FilterPresets } from "./FilterPresets";
+
 // Pagination
 export { Pagination } from "./pagination";
 
 // Toast/Alert components
 export { Toast, ToastContainer, Alert, FormError } from "./toast";
+
+// Progressive Disclosure components
+export { ProgressiveDisclosure, CollapsibleSection } from "./ProgressiveDisclosure";
+
+// Contextual Help components
+export { ContextualHelp, QuickTip, FirstTimeHelp } from "./ContextualHelp";

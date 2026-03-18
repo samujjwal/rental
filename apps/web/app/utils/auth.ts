@@ -51,20 +51,35 @@ export async function getUserToken(
 export async function getUser(request: Request): Promise<User | null> {
   const session = await getSession(request);
   let token: string | null = session.get("accessToken") ?? null;
+  let persistedUser: User | null = null;
 
   // Fall back to Zustand store for client-side navigation
   // Session cookie is primary source of truth
   if (typeof window !== "undefined" && !token) {
     const storeState = useAuthStore.getState();
     token = storeState.accessToken;
+    persistedUser = storeState.user
+      ? {
+          ...storeState.user,
+          role: normalizeStoredRole(storeState.user.role),
+        }
+      : null;
 
     // Zustand v5 persist may hydrate async; read localStorage directly as fallback
-    if (!token) {
+    if (!token || !persistedUser) {
       try {
         const raw = localStorage.getItem("auth-storage");
         if (raw) {
-          const parsed = JSON.parse(raw) as { state?: { accessToken?: string } };
+          const parsed = JSON.parse(raw) as {
+            state?: { accessToken?: string; user?: User | null };
+          };
           token = parsed?.state?.accessToken ?? null;
+          persistedUser = parsed?.state?.user
+            ? {
+                ...parsed.state.user,
+                role: normalizeStoredRole(parsed.state.user.role),
+              }
+            : persistedUser;
         }
       } catch {
         // ignore parse errors
@@ -74,6 +89,14 @@ export async function getUser(request: Request): Promise<User | null> {
         useAuthStore.getState().setAccessToken(token);
       }
     }
+  }
+
+  if (typeof window !== "undefined" && token && persistedUser) {
+    const storeState = useAuthStore.getState();
+    if (!storeState.accessToken) {
+      storeState.setAccessToken(token);
+    }
+    return persistedUser;
   }
 
   if (!token) return null;
@@ -114,11 +137,22 @@ export async function getUser(request: Request): Promise<User | null> {
         continue;
       }
 
-      // Non-401 errors after retries: return null silently to avoid leaking details
+      // Non-401 errors after retries: fall back to persisted client auth state.
+      if (typeof window !== "undefined" && persistedUser) {
+        return persistedUser;
+      }
+
       return null;
     }
   }
   return null;
+}
+
+function normalizeStoredRole(role?: string | null): User["role"] {
+  const normalized = String(role || "").toUpperCase();
+  if (normalized === "ADMIN" || normalized === "SUPER_ADMIN") return "admin";
+  if (normalized === "HOST" || normalized === "OWNER") return "owner";
+  return "renter";
 }
 
 export async function requireUserId(

@@ -41,6 +41,29 @@ describe("notificationsApi", () => {
     );
   });
 
+  it("normalizes string notification payloads", async () => {
+    mockApi.get.mockResolvedValue({
+      notifications: [
+        {
+          id: "n1",
+          userId: "u1",
+          type: "BOOKING_CONFIRMED",
+          title: "Booked",
+          message: "Confirmed",
+          data: JSON.stringify({ bookingId: "b1" }),
+          read: false,
+          createdAt: "2026-03-16T00:00:00.000Z",
+          updatedAt: "2026-03-16T00:00:00.000Z",
+        },
+      ],
+      total: 1,
+    });
+
+    const result = await notificationsApi.getNotifications();
+
+    expect(result.notifications[0].data).toEqual({ bookingId: "b1" });
+  });
+
   it("getUnreadCount", async () => {
     mockApi.get.mockResolvedValue({ count: 3 });
     const result = await notificationsApi.getUnreadCount();

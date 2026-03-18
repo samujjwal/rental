@@ -37,29 +37,63 @@ export class ResendEmailService {
   }
 
   async sendEmail(options: SendEmailOptions): Promise<{ id: string } | null> {
-    try {
-      const { data, error } = await this.resend.emails.send({
-        from: options.from || this.defaultFrom,
-        to: Array.isArray(options.to) ? options.to : [options.to],
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-        replyTo: options.replyTo,
-        cc: options.cc ? (Array.isArray(options.cc) ? options.cc : [options.cc]) : undefined,
-        bcc: options.bcc ? (Array.isArray(options.bcc) ? options.bcc : [options.bcc]) : undefined,
-      });
+    // G12 fix: retry with exponential backoff (1 s → 2 s → 4 s) before giving up.
+    // Callers already route most emails through Bull queues (with their own retry),
+    // but direct sendEmail() calls had no retry at all — silently lost on transient failures.
+    const MAX_RETRIES = 3;
+    let lastError: Error | null = null;
 
-      if (error) {
-        this.logger.error('Failed to send email via Resend', error);
-        return null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { data, error } = await this.resend.emails.send({
+          from: options.from || this.defaultFrom,
+          to: Array.isArray(options.to) ? options.to : [options.to],
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+          replyTo: options.replyTo,
+          cc: options.cc ? (Array.isArray(options.cc) ? options.cc : [options.cc]) : undefined,
+          bcc: options.bcc ? (Array.isArray(options.bcc) ? options.bcc : [options.bcc]) : undefined,
+        });
+
+        if (error) {
+          // Resend returns structured errors — treat them as retryable unless they are
+          // validation errors (4xx), which will not resolve with a retry.
+          const isValidationError =
+            typeof (error as any).statusCode === 'number' &&
+            (error as any).statusCode >= 400 &&
+            (error as any).statusCode < 500;
+
+          if (isValidationError) {
+            this.logger.error(
+              `Email to ${JSON.stringify(options.to)} failed with non-retryable error (${(error as any).statusCode}): ${(error as any).message}`,
+            );
+            return null;
+          }
+
+          throw new Error(`Resend API error: ${(error as any).message ?? JSON.stringify(error)}`);
+        }
+
+        this.logger.log(`Email sent successfully: ${data.id}`);
+        return { id: data.id };
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+
+        if (attempt < MAX_RETRIES) {
+          const delayMs = Math.pow(2, attempt - 1) * 1000; // 1 s, 2 s
+          this.logger.warn(
+            `Email send attempt ${attempt}/${MAX_RETRIES} failed, retrying in ${delayMs}ms: ${lastError.message}`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
       }
-
-      this.logger.log(`Email sent successfully: ${data.id}`);
-      return { id: data.id };
-    } catch (error) {
-      this.logger.error('Error sending email via Resend', error);
-      return null;
     }
+
+    this.logger.error(
+      `Email to ${JSON.stringify(options.to)} could not be delivered after ${MAX_RETRIES} ` +
+        `attempts: ${lastError?.message}`,
+    );
+    return null;
   }
 
   async sendVerificationEmail(to: string, verificationUrl: string): Promise<boolean> {

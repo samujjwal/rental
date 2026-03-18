@@ -18,6 +18,31 @@ describe('Renter & Owner Dashboard Flows (e2e)', () => {
   let ownerEmail: string;
   let renterEmail: string;
 
+  const unauthenticatedRequest = async (
+    method: 'get' | 'patch' | 'post',
+    path: string,
+    body?: Record<string, unknown>,
+    attempts = 2,
+  ) => {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const req = request(app.getHttpServer())[method](path);
+        return body ? await req.send(body) : await req;
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : '';
+
+        if (!message.includes('socket hang up') || attempt === attempts) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(`Request failed for ${path}`);
+  };
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -241,9 +266,8 @@ describe('Renter & Owner Dashboard Flows (e2e)', () => {
     });
 
     it('should 401 for GET /listings/my-listings without auth', async () => {
-      await request(app.getHttpServer())
-        .get('/listings/my-listings')
-        .expect(401);
+      const response = await unauthenticatedRequest('get', '/listings/my-listings');
+      expect(response.status).toBe(401);
     });
 
     it('should 401 for GET /favorites without auth', async () => {

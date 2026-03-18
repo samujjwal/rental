@@ -3,7 +3,8 @@ import { clickFirstVisible, isAnyVisible } from "./helpers/test-utils";
 
 async function openSearch(page: Page) {
   await page.goto("/search");
-  await expect(page.locator('input[name="query"]')).toBeVisible();
+  // Use the main search input with specific attributes to avoid conflicts with header search
+  await expect(page.locator('input[name="query"][maxlength="120"]')).toBeVisible();
 }
 
 async function openFirstListing(page: Page): Promise<boolean> {
@@ -29,7 +30,7 @@ test.describe("Search and Listing Browse", () => {
     page,
   }) => {
     await openSearch(page);
-    const searchInput = page.locator('input[name="query"]');
+    const searchInput = page.locator('input[name="query"][maxlength="120"]');
     await searchInput.fill("camera");
     await page.keyboard.press("Enter");
 

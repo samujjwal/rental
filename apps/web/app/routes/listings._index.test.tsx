@@ -7,6 +7,7 @@ import "@testing-library/jest-dom/vitest";
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon-stub" />);
 const mocks = vi.hoisted(() => ({
   getMyListings: vi.fn(),
+  getPerformanceMetrics: vi.fn(),
   getListingById: vi.fn(),
   deleteListing: vi.fn(),
   pauseListing: vi.fn(),
@@ -47,6 +48,12 @@ vi.mock("~/lib/api/listings", () => ({
   },
 }));
 
+vi.mock("~/lib/api/analytics", () => ({
+  analyticsApi: {
+    getPerformanceMetrics: (...args: any[]) => mocks.getPerformanceMetrics(...args),
+  },
+}));
+
 vi.mock("~/utils/auth", () => ({
   getUser: (...args: any[]) => mocks.getUser(...args),
 }));
@@ -57,6 +64,12 @@ vi.mock("~/components/ui", () => ({
   ),
   Badge: ({ children }: any) => <span>{children}</span>,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
+}));
+
+vi.mock("~/components/ui/PersonalizedEmptyState", () => ({
+  EnhancedEmptyStatePresets: {
+    NoListings: () => <div>Create Your First Listing</div>,
+  },
 }));
 
 vi.mock("lucide-react", () => ({
@@ -78,6 +91,7 @@ function makeFormData(fields: Record<string, string>) {
 }
 
 const validId = "11111111-1111-1111-8111-111111111111";
+const validCuid = "ckx1234567890abcdefghijkl";
 
 function makeListing(overrides: Record<string, unknown> = {}) {
   return {
@@ -106,6 +120,10 @@ function makeListing(overrides: Record<string, unknown> = {}) {
 describe("listings._index route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getPerformanceMetrics.mockResolvedValue({
+      overview: null,
+      topListings: [],
+    });
   });
 
   describe("clientLoader", () => {
@@ -302,6 +320,17 @@ describe("listings._index route", () => {
       expect(result.success).toBe(true);
     });
 
+    it("accepts CUID listing IDs for owner actions", async () => {
+      mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+      mocks.getListingById.mockResolvedValue({ ownerId: "owner-1" });
+      mocks.publishListing.mockResolvedValue({});
+      const result = await clientAction({
+        request: makeFormData({ intent: "publish", listingId: validCuid }),
+      } as any) as any;
+      expect(result.success).toBe(true);
+      expect(mocks.publishListing).toHaveBeenCalledWith(validCuid);
+    });
+
     it("publishes listing", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
       mocks.getListingById.mockResolvedValue({ ownerId: "owner-1" });
@@ -352,7 +381,9 @@ describe("listings._index route", () => {
       mocks.useLoaderData.mockReturnValue({
         listings: [makeListing()],
         total: 1,
-        stats: { total: 1, active: 1, rented: 0, draft: 0, unavailable: 0, totalEarnings: 2500, totalBookings: 5 },
+        stats: { total: 1, active: 1, rented: 0, draft: 0, underReview: 0, paused: 0, rejected: 0, unavailable: 0, totalEarnings: 2500, totalBookings: 5 },
+        analyticsOverview: null,
+        analyticsByListing: {},
         error: null,
       });
       render(<OwnerListingsPage />);
@@ -363,7 +394,9 @@ describe("listings._index route", () => {
       mocks.useLoaderData.mockReturnValue({
         listings: [],
         total: 0,
-        stats: { total: 0, active: 0, rented: 0, draft: 0, unavailable: 0, totalEarnings: 0, totalBookings: 0 },
+        stats: { total: 0, active: 0, rented: 0, draft: 0, underReview: 0, paused: 0, rejected: 0, unavailable: 0, totalEarnings: 0, totalBookings: 0 },
+        analyticsOverview: null,
+        analyticsByListing: {},
         error: "Failed to load listings",
       });
       render(<OwnerListingsPage />);
@@ -374,7 +407,9 @@ describe("listings._index route", () => {
       mocks.useLoaderData.mockReturnValue({
         listings: [],
         total: 0,
-        stats: { total: 0, active: 0, rented: 0, draft: 0, unavailable: 0, totalEarnings: 0, totalBookings: 0 },
+        stats: { total: 0, active: 0, rented: 0, draft: 0, underReview: 0, paused: 0, rejected: 0, unavailable: 0, totalEarnings: 0, totalBookings: 0 },
+        analyticsOverview: null,
+        analyticsByListing: {},
         error: null,
       });
       render(<OwnerListingsPage />);

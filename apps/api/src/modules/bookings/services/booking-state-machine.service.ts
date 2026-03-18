@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ForbiddenException, Logger } from '@ne
 import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import type { PaymentCommandPayload, PaymentCommandType } from '@/common/payments/payment-command.types';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { BookingStatus } from '@rental-portal/database';
@@ -63,7 +64,7 @@ export class BookingStateMachineService {
 
   private defineTransitions(): StateTransition[] {
     return [
-      // DRAFT → PENDING_OWNER_APPROVAL (instant booking creates this state)
+      // DRAFT → PENDING_OWNER_APPROVAL (request-to-book creates this state)
       {
         from: BookingStatus.DRAFT,
         to: BookingStatus.PENDING_OWNER_APPROVAL,
@@ -539,19 +540,54 @@ export class BookingStateMachineService {
 
     this.logger.log(`Triggering settlement for booking ${bookingId}`);
 
-    // Enqueue settlement job via Bull (persistent, retryable) instead of Redis pub/sub
-    await this.paymentsQueue.add('process-settlement', {
-      bookingId: booking.id,
-      ownerId: booking.listing.ownerId,
-      ownerStripeConnectId: booking.listing.owner.stripeConnectId,
+    const payout = await this.prisma.payout.create({
+      data: {
+        ownerId: booking.listing.ownerId,
+        amount: Number(booking.ownerEarnings),
+        currency: booking.currency,
+        status: 'PENDING',
+        metadata: JSON.stringify({
+          bookingId: booking.id,
+          bookingIds: [booking.id],
+          source: 'booking_state_machine',
+        }),
+      },
+    });
+
+    const command = await this.createPaymentCommand({
+      userId: booking.listing.ownerId,
+      entityType: 'PAYOUT',
+      entityId: payout.id,
       amount: Number(booking.ownerEarnings),
       currency: booking.currency,
+      metadata: {
+        bookingId: booking.id,
+        bookingIds: [booking.id],
+        source: 'booking_state_machine',
+      },
+    });
+
+    await this.paymentsQueue.add('process-payout', {
+      payoutId: payout.id,
+      ownerId: booking.listing.ownerId,
+      ownerStripeConnectId: booking.listing.owner.stripeConnectId,
+      bookingIds: [booking.id],
+      amount: Number(booking.ownerEarnings),
+      currency: booking.currency,
+      commandId: command.id,
       timestamp: new Date().toISOString(),
     }, {
+      jobId: `payout:${payout.id}`,
       attempts: 5,
       backoff: { type: 'exponential', delay: 5000 },
       removeOnComplete: 100,
       removeOnFail: false,
+    });
+
+    await this.updatePaymentCommand(command.id, {
+      status: 'ENQUEUED',
+      jobName: 'process-payout',
+      jobId: `payout:${payout.id}`,
     });
 
     // NOTE: Do NOT transition to SETTLED here. The booking will remain in
@@ -740,15 +776,109 @@ export class BookingStateMachineService {
 
     this.logger.log(`Releasing deposit for booking ${bookingId} — no issues found`);
 
+    const depositHolds = await this.prisma.depositHold.findMany({
+      where: {
+        bookingId,
+        status: { in: ['HELD', 'AUTHORIZED'] },
+      },
+      select: { id: true, amount: true, currency: true },
+    });
+
+    if (depositHolds.length === 0) {
+      this.logger.log(`No releasable deposit hold found for booking ${bookingId}`);
+      return;
+    }
+
+    const command = await this.createPaymentCommand({
+      entityType: 'DEPOSIT_RELEASE',
+      entityId: bookingId,
+      amount: Number(depositHolds[0].amount),
+      currency: depositHolds[0].currency,
+      metadata: {
+        bookingId,
+        depositHoldIds: depositHolds.map((hold) => hold.id),
+        source: 'booking_state_machine',
+      },
+    });
+
     // Enqueue deposit release job via Bull (persistent, retryable) instead of Redis pub/sub
     await this.paymentsQueue.add('release-deposit', {
       bookingId,
+      commandId: command.id,
       timestamp: new Date().toISOString(),
     }, {
+      jobId: `deposit-release:${bookingId}`,
       attempts: 3,
       backoff: { type: 'exponential', delay: 3000 },
       removeOnComplete: 100,
       removeOnFail: false,
+    });
+
+    await this.updatePaymentCommand(command.id, {
+      status: 'ENQUEUED',
+      jobName: 'release-deposit',
+      jobId: `deposit-release:${bookingId}`,
+    });
+  }
+
+  private async createPaymentCommand(input: {
+    userId?: string;
+    entityType: PaymentCommandType;
+    entityId: string;
+    amount: number;
+    currency: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const payload: PaymentCommandPayload = {
+      commandType: input.entityType,
+      status: 'PENDING',
+      amount: input.amount,
+      currency: input.currency,
+      queueName: 'payments',
+      requestedAt: new Date().toISOString(),
+      metadata: input.metadata,
+    };
+
+    return this.prisma.auditLog.create({
+      data: {
+        userId: input.userId,
+        action: `${input.entityType}_COMMAND_REQUESTED`,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        newValues: JSON.stringify(payload),
+      },
+    });
+  }
+
+  private async updatePaymentCommand(commandId: string, patch: Partial<PaymentCommandPayload>) {
+    const existing = await this.prisma.auditLog.findUnique({
+      where: { id: commandId },
+      select: { newValues: true },
+    });
+
+    let current: Partial<PaymentCommandPayload> = {};
+    if (existing?.newValues) {
+      try {
+        current = JSON.parse(existing.newValues) as Partial<PaymentCommandPayload>;
+      } catch {
+        current = {};
+      }
+    }
+
+    const mergedMetadata =
+      patch.metadata && current.metadata
+        ? { ...current.metadata, ...patch.metadata }
+        : patch.metadata ?? current.metadata;
+
+    await this.prisma.auditLog.update({
+      where: { id: commandId },
+      data: {
+        newValues: JSON.stringify({
+          ...current,
+          ...patch,
+          metadata: mergedMetadata,
+        }),
+      },
     });
   }
 

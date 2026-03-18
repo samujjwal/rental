@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
 import { Cron, CronExpression, Interval, SchedulerRegistry } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import type { PaymentCommandPayload, PaymentCommandType } from '@/common/payments/payment-command.types';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { IEmbeddingService, EMBEDDING_SERVICE } from '@/common/interfaces/embedding.interface';
 import { BookingStatus } from '@rental-portal/database';
@@ -288,44 +289,88 @@ export class SchedulerService implements OnModuleDestroy {
           const platformFeeRate = 0.10; // 10% platform fee
           const payoutAmount = Math.round(Number(payment.amount) * (1 - platformFeeRate));
 
-          // Update booking status to SETTLED
-          await this.prisma.$transaction(async (tx: any) => {
-            await tx.booking.update({
-              where: { id: booking.id },
-              data: { status: BookingStatus.SETTLED },
-            });
-
-            await tx.bookingStateHistory.create({
-              data: {
+          const payout = await this.prisma.payout.create({
+            data: {
+              ownerId: owner.id,
+              amount: payoutAmount,
+              currency: payment.currency,
+              status: 'PENDING',
+              metadata: JSON.stringify({
                 bookingId: booking.id,
-                fromStatus: BookingStatus.COMPLETED,
-                toStatus: BookingStatus.SETTLED,
-                changedBy: 'SYSTEM',
-                metadata: JSON.stringify({
-                  source: 'auto_settlement_cron',
-                  payoutAmount,
-                  currency: payment.currency,
-                }),
-              },
-            });
+                bookingIds: [booking.id],
+                source: 'auto_settlement_cron',
+              }),
+            },
           });
 
-          // Queue payout to owner via Stripe Connect
+          const payoutCommand = await this.createPaymentCommand({
+            userId: owner.id,
+            entityType: 'PAYOUT',
+            entityId: payout.id,
+            amount: payoutAmount,
+            currency: payment.currency,
+            metadata: {
+              bookingId: booking.id,
+              bookingIds: [booking.id],
+              source: 'auto_settlement_cron',
+            },
+          });
+
           const cronTraceId = `cron:autoSettle:${booking.id}`;
-          await this.paymentsQueue.add('process-settlement', withTraceCtx({
-            bookingId: booking.id,
+          await this.paymentsQueue.add('process-payout', withTraceCtx({
+            payoutId: payout.id,
+            bookingIds: [booking.id],
             ownerId: owner.id,
             ownerStripeConnectId: (owner as any).stripeConnectId || '',
             amount: payoutAmount,
             currency: payment.currency,
+            commandId: payoutCommand.id,
             timestamp: new Date().toISOString(),
-          }, cronTraceId));
+          }, cronTraceId), {
+            jobId: `payout:${payout.id}`,
+          });
 
-          // Queue deposit release back to renter
-          await this.paymentsQueue.add('release-deposit', withTraceCtx({
-            bookingId: booking.id,
-            timestamp: new Date().toISOString(),
-          }, cronTraceId));
+          await this.updatePaymentCommand(payoutCommand.id, {
+            status: 'ENQUEUED',
+            jobName: 'process-payout',
+            jobId: `payout:${payout.id}`,
+          });
+
+          const depositHold = await this.prisma.depositHold.findFirst({
+            where: {
+              bookingId: booking.id,
+              status: { in: ['HELD', 'AUTHORIZED'] },
+            },
+            select: { id: true, amount: true, currency: true },
+          });
+
+          if (depositHold) {
+            const depositCommand = await this.createPaymentCommand({
+              entityType: 'DEPOSIT_RELEASE',
+              entityId: booking.id,
+              amount: Number(depositHold.amount),
+              currency: depositHold.currency,
+              metadata: {
+                bookingId: booking.id,
+                depositHoldIds: [depositHold.id],
+                source: 'auto_settlement_cron',
+              },
+            });
+
+            await this.paymentsQueue.add('release-deposit', withTraceCtx({
+              bookingId: booking.id,
+              commandId: depositCommand.id,
+              timestamp: new Date().toISOString(),
+            }, cronTraceId), {
+              jobId: `deposit-release:${booking.id}`,
+            });
+
+            await this.updatePaymentCommand(depositCommand.id, {
+              status: 'ENQUEUED',
+              jobName: 'release-deposit',
+              jobId: `deposit-release:${booking.id}`,
+            });
+          }
 
           this.logger.log(`Settled booking ${booking.id}, payout ${payoutAmount} ${payment.currency} to owner ${owner.id}`);
         } catch (innerError) {
@@ -340,6 +385,67 @@ export class SchedulerService implements OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Error in auto-settlement cron: ${error.message}`);
     }
+  }
+
+  private async createPaymentCommand(input: {
+    userId?: string;
+    entityType: PaymentCommandType;
+    entityId: string;
+    amount: number;
+    currency: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const payload: PaymentCommandPayload = {
+      commandType: input.entityType,
+      status: 'PENDING',
+      amount: input.amount,
+      currency: input.currency,
+      queueName: 'payments',
+      requestedAt: new Date().toISOString(),
+      metadata: input.metadata,
+    };
+
+    return this.prisma.auditLog.create({
+      data: {
+        userId: input.userId,
+        action: `${input.entityType}_COMMAND_REQUESTED`,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        newValues: JSON.stringify(payload),
+      },
+    });
+  }
+
+  private async updatePaymentCommand(commandId: string, patch: Partial<PaymentCommandPayload>) {
+    const existing = await this.prisma.auditLog.findUnique({
+      where: { id: commandId },
+      select: { newValues: true },
+    });
+
+    let current: Partial<PaymentCommandPayload> = {};
+    if (existing?.newValues) {
+      try {
+        current = JSON.parse(existing.newValues) as Partial<PaymentCommandPayload>;
+      } catch {
+        current = {};
+      }
+    }
+
+    const mergedMetadata =
+      patch.metadata && current.metadata
+        ? { ...current.metadata, ...patch.metadata }
+        : patch.metadata ?? current.metadata;
+
+    await this.prisma.auditLog.update({
+      where: { id: commandId },
+      data: {
+        newValues: JSON.stringify({
+          ...current,
+          ...patch,
+          metadata: mergedMetadata,
+        }),
+      },
+    });
   }
 
   /**

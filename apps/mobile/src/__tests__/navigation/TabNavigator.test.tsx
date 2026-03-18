@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -77,10 +76,12 @@ describe('TabNavigator', () => {
   });
 
   it('renders all 5 tab icons', () => {
-    const { getAllByText } = renderWithNavigation();
-    // Tab icons are rendered by the Ionicons mock as 'Ionicons' text nodes.
-    // Each tab has one icon; there are 5 tabs, so at least 5 occurrences.
-    expect(getAllByText('Ionicons').length).toBeGreaterThanOrEqual(5);
+    const { queryAllByTestId } = renderWithNavigation();
+    expect(queryAllByTestId('tab-icon-HomeTab').length).toBeGreaterThan(0);
+    expect(queryAllByTestId('tab-icon-SearchTab').length).toBeGreaterThan(0);
+    expect(queryAllByTestId('tab-icon-BookingsTab').length).toBeGreaterThan(0);
+    expect(queryAllByTestId('tab-icon-MessagesTab').length).toBeGreaterThan(0);
+    expect(queryAllByTestId('tab-icon-ProfileTab').length).toBeGreaterThan(0);
   });
 
   it('renders SearchScreen as default screen (Search-first for authenticated users)', () => {

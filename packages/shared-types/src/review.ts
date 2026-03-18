@@ -64,6 +64,18 @@ export interface ReviewStats {
 export interface ReviewListResponse {
   reviews: Review[];
   total: number;
+  stats?: {
+    totalReviews: number;
+    averageRating: number;
+    ratings: {
+      1: number;
+      2: number;
+      3: number;
+      4: number;
+      5: number;
+    };
+    pending: number;
+  };
 }
 
 /** Review response (owner reply to review) */

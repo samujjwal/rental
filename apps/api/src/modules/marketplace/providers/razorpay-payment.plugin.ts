@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { PaymentProviderPlugin } from '../services/payment-orchestration.service';
+import { PaymentProviderPlugin } from '../services/payment-provider.interface';
 
 /**
  * Razorpay Payment Provider Plugin

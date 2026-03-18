@@ -184,6 +184,14 @@ export interface EscrowReleasedEvent {
   releasedTo: string;
 }
 
+export interface EscrowFrozenEvent {
+  escrowId: string;
+  bookingId: string;
+  amount: number;
+  currency: string;
+  disputeId: string;
+}
+
 export interface TrustScoreUpdatedEvent {
   userId: string;
   scoreType: string;
@@ -346,6 +354,10 @@ export class EventsService {
 
   emitEscrowReleased(payload: EscrowReleasedEvent) {
     this.eventEmitter.emit('escrow.released', payload);
+  }
+
+  emitEscrowFrozen(payload: EscrowFrozenEvent) {
+    this.eventEmitter.emit('escrow.frozen', payload);
   }
 
   emitTrustScoreUpdated(payload: TrustScoreUpdatedEvent) {

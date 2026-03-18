@@ -86,7 +86,14 @@ async function bootstrap() {
         if (!origin) return callback(null, true);
 
         // Allow specific origins for development
-        const allowedOrigins = ['http://localhost:3401', 'http://localhost:3400'];
+        const allowedOrigins = [
+          'http://localhost:3401',
+          'http://127.0.0.1:3401',
+          'http://localhost:3403',
+          'http://127.0.0.1:3403',
+          'http://localhost:3400',
+          'http://127.0.0.1:3400',
+        ];
         if (allowedOrigins.includes(origin)) {
           callback(null, true);
         } else {

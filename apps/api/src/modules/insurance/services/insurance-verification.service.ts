@@ -30,6 +30,33 @@ export class InsuranceVerificationService {
     this.logger.log(`Insurance policy queued for verification: ${policyId}`);
   }
 
+  private getAuditLogPayload(item: { newValues?: unknown; metadata?: unknown }): Record<string, unknown> {
+    const candidates = [item.newValues, item.metadata];
+
+    for (const candidate of candidates) {
+      if (!candidate) {
+        continue;
+      }
+
+      if (typeof candidate === 'string') {
+        try {
+          const parsed = JSON.parse(candidate);
+          if (parsed && typeof parsed === 'object') {
+            return parsed as Record<string, unknown>;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      if (typeof candidate === 'object') {
+        return candidate as Record<string, unknown>;
+      }
+    }
+
+    return {};
+  }
+
   /**
    * Get verification queue
    */
@@ -42,7 +69,7 @@ export class InsuranceVerificationService {
       take: 100,
     });
 
-    return items.filter((item) => (item.metadata as any)?.status === 'PENDING');
+    return items.filter((item) => this.getAuditLogPayload(item).status === 'PENDING');
   }
 
   /**

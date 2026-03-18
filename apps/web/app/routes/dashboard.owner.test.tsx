@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getUserStats: vi.fn(),
   getUnreadNotifCount: vi.fn(),
   getUnreadMsgCount: vi.fn(),
+  getMyPolicies: vi.fn(),
   useLoaderData: vi.fn(),
   redirect: vi.fn(
     (url: string) =>
@@ -46,6 +47,9 @@ vi.mock("~/lib/api/notifications", () => ({
 vi.mock("~/lib/api/messaging", () => ({
   messagingApi: { getUnreadCount: () => mocks.getUnreadMsgCount() },
 }));
+vi.mock("~/lib/api/insurance", () => ({
+  insuranceApi: { getMyPolicies: () => mocks.getMyPolicies() },
+}));
 vi.mock("~/lib/utils", () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(" "),
   formatCurrency: (v: number) =>
@@ -77,19 +81,23 @@ vi.mock("~/components/layout", () => ({
   PortalPageLayout: ({ children }: any) => <div>{children}</div>,
 }));
 vi.mock("~/config/navigation", () => ({ ownerNavSections: [] }));
-vi.mock("lucide-react", () => ({
-  Package: IconStub,
-  Calendar: IconStub,
-  Banknote: IconStub,
-  MessageCircle: IconStub,
-  AlertCircle: IconStub,
-  Star: IconStub,
-  CheckCircle: IconStub,
-  Clock: IconStub,
-  XCircle: IconStub,
-  Plus: IconStub,
-  ArrowUpRight: IconStub,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...actual,
+    Package: IconStub,
+    Calendar: IconStub,
+    Banknote: IconStub,
+    MessageCircle: IconStub,
+    AlertCircle: IconStub,
+    Star: IconStub,
+    CheckCircle: IconStub,
+    Clock: IconStub,
+    XCircle: IconStub,
+    Plus: IconStub,
+    ArrowUpRight: IconStub,
+  };
+});
 
 import OwnerDashboard, { clientLoader } from "./dashboard.owner";
 
@@ -102,6 +110,10 @@ describe("dashboard.owner route", () => {
     mocks.getUserStats.mockResolvedValue({ averageRating: 0, totalReviews: 0 });
     mocks.getUnreadNotifCount.mockResolvedValue({ count: 0 });
     mocks.getUnreadMsgCount.mockResolvedValue({ count: 0 });
+    mocks.getMyPolicies.mockResolvedValue({
+      data: [],
+      pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+    });
   });
 
   describe("clientLoader", () => {
@@ -196,6 +208,26 @@ describe("dashboard.owner route", () => {
         request: new Request("http://localhost"),
       } as any) as any;
       expect(r.recentBookings).toHaveLength(5);
+    });
+
+    it("maps insurance policies from the API response shape", async () => {
+      mocks.requireUser.mockResolvedValue({ id: "u1", role: "owner" });
+      mocks.getMyPolicies.mockResolvedValue({
+        data: [
+          {
+            id: "policy-1",
+            endDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+          },
+        ],
+        pagination: { total: 1, page: 1, limit: 10, totalPages: 1 },
+      });
+
+      const r = await clientLoader({
+        request: new Request("http://localhost"),
+      } as any) as any;
+
+      expect(r.hasInsurance).toBe(true);
+      expect(r.expiringInsurancePolicies).toHaveLength(1);
     });
   });
 

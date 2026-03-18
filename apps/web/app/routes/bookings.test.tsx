@@ -10,6 +10,7 @@ const IconStub = vi.hoisted(() => (props: any) => (
 const mocks = vi.hoisted(() => ({
   getMyBookings: vi.fn(),
   getOwnerBookings: vi.fn(),
+  getAvailableTransitions: vi.fn(),
   getUser: vi.fn(),
   useLoaderData: vi.fn(),
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
@@ -38,6 +39,8 @@ vi.mock("~/lib/api/bookings", () => ({
   bookingsApi: {
     getMyBookings: (...args: any[]) => mocks.getMyBookings(...args),
     getOwnerBookings: (...args: any[]) => mocks.getOwnerBookings(...args),
+    getAvailableTransitions: (...args: any[]) =>
+      mocks.getAvailableTransitions(...args),
   },
 }));
 
@@ -172,6 +175,7 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
 describe("bookings route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getAvailableTransitions.mockResolvedValue({ availableTransitions: [] });
   });
 
   describe("clientLoader", () => {
@@ -186,22 +190,32 @@ describe("bookings route", () => {
     it("loads renter bookings by default", async () => {
       mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
       mocks.getMyBookings.mockResolvedValue([makeBooking()]);
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["CANCEL"],
+      });
       const result = await clientLoader({
         request: new Request("http://localhost/bookings"),
       } as any) as any;
       expect(result.bookings).toHaveLength(1);
       expect(result.view).toBe("renter");
       expect(mocks.getMyBookings).toHaveBeenCalled();
+      expect(result.bookings[0].availableTransitions).toEqual(["CANCEL"]);
     });
 
     it("loads owner bookings for owner view", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
       mocks.getOwnerBookings.mockResolvedValue([makeBooking()]);
+      mocks.getAvailableTransitions.mockResolvedValue({
+        availableTransitions: ["OWNER_APPROVE"],
+      });
       const result = await clientLoader({
         request: new Request("http://localhost/bookings?view=owner"),
       } as any) as any;
       expect(result.view).toBe("owner");
       expect(mocks.getOwnerBookings).toHaveBeenCalled();
+      expect(result.bookings[0].availableTransitions).toEqual([
+        "OWNER_APPROVE",
+      ]);
     });
 
     it("forces renter view for non-owner requesting owner view", async () => {
@@ -290,6 +304,28 @@ describe("bookings route", () => {
       expect(screen.getByText(/Camera/)).toBeInTheDocument();
     });
 
+    it("renders payment failure guidance and retry action", () => {
+      mocks.useLoaderData.mockReturnValue({
+        bookings: [
+          makeBooking({
+            status: "PAYMENT_FAILED",
+            paymentStatus: "FAILED",
+          }),
+        ],
+        view: "renter",
+        status: null,
+        canViewOwner: false,
+        error: null,
+      });
+      render(<BookingsPage />);
+      expect(
+        screen.getByText(/Retry payment to keep the booking active before it expires/i)
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Retry Payment/i })
+      ).toBeInTheDocument();
+    });
+
     it("renders error alert", () => {
       mocks.useLoaderData.mockReturnValue({
         bookings: [],
@@ -327,6 +363,26 @@ describe("bookings route", () => {
       render(<BookingsPage />);
       // Should show "My Listings" toggle for owners
       expect(screen.getByText("My Listings")).toBeInTheDocument();
+    });
+
+    it("shows owner return-inspection guidance", () => {
+      mocks.useLoaderData.mockReturnValue({
+        bookings: [
+          makeBooking({
+            status: "AWAITING_RETURN_INSPECTION",
+            ownerId: "user-1",
+            renterId: "renter-2",
+            paymentStatus: "PAID",
+            availableTransitions: ["APPROVE_RETURN", "REJECT_RETURN"],
+          }),
+        ],
+        view: "owner",
+        status: null,
+        canViewOwner: true,
+        error: null,
+      });
+      render(<BookingsPage />);
+      expect(screen.getByText(/Inspect the return/i)).toBeInTheDocument();
     });
   });
 });

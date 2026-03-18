@@ -3,7 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
-import { UserRole } from '@rental-portal/database';
+import { PropertyStatus, UserRole, VerificationStatus } from '@rental-portal/database';
 import { buildTestEmail, createUserWithRole, cleanupCoreRelationalData } from './e2e-helpers';
 
 describe('Listing Lifecycle (e2e)', () => {
@@ -118,6 +118,14 @@ describe('Listing Lifecycle (e2e)', () => {
   // ── Pause listing ──
   describe('POST /listings/:id/pause', () => {
     it('should pause a listing as owner', async () => {
+      await prisma.listing.update({
+        where: { id: listingId },
+        data: {
+          status: PropertyStatus.AVAILABLE,
+          verificationStatus: VerificationStatus.VERIFIED,
+        },
+      });
+
       await request(app.getHttpServer())
         .post(`/listings/${listingId}/pause`)
         .set('Authorization', `Bearer ${ownerToken}`)
@@ -135,6 +143,14 @@ describe('Listing Lifecycle (e2e)', () => {
   // ── Activate listing ──
   describe('POST /listings/:id/activate', () => {
     it('should re-activate a paused listing', async () => {
+      await prisma.listing.update({
+        where: { id: listingId },
+        data: {
+          status: PropertyStatus.UNAVAILABLE,
+          verificationStatus: VerificationStatus.VERIFIED,
+        },
+      });
+
       await request(app.getHttpServer())
         .post(`/listings/${listingId}/activate`)
         .set('Authorization', `Bearer ${ownerToken}`)

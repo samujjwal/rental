@@ -1,6 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLoaderData, Link, redirect } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -33,9 +33,12 @@ import {
   RouteErrorBoundary,
 } from "~/components/ui";
 import { PortalPageLayout } from "~/components/layout";
+import { RecentActivity } from "~/components/dashboard/RecentActivity";
+import { DashboardCustomizer } from "~/components/dashboard/DashboardCustomizer";
 import { cn } from "~/lib/utils";
 import { formatCurrency } from "~/lib/utils";
 import { ownerNavSections } from "~/config/navigation";
+import { useDashboardPreferences } from "~/hooks/useDashboardPreferences";
 import { notificationsApi } from "~/lib/api/notifications";
 import { messagingApi } from "~/lib/api/messaging";
 import { insuranceApi } from "~/lib/api/insurance";
@@ -81,7 +84,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       usersApi.getUserStats(),
       notificationsApi.getUnreadCount(),
       messagingApi.getUnreadCount(),
-      insuranceApi.getMyPolicies({ status: 'ACTIVE' }),
+      insuranceApi.getMyPolicies({ status: "ACTIVE" }),
     ]);
 
     const settled = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -96,9 +99,12 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     } as any);
     const unreadNotifs = settled(results[4], { count: 0 });
     const unreadMsgs = settled(results[5], { count: 0 });
-    const rawPolicies = settled(results[6], { policies: [], total: 0 } as any);
+    const rawPolicies = settled(results[6], {
+      data: [],
+      pagination: { total: 0, page: 1, limit: 0, totalPages: 0 },
+    } as any);
 
-    const failedSections = results.slice(0, 6)
+    const failedSections = results
       .map((r, i) =>
         r.status === "rejected"
           ? [
@@ -108,6 +114,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
               "stats",
               "notifications",
               "messages",
+              "insurance",
             ][i]
           : null
       )
@@ -116,7 +123,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     // Detect soon-to-expire insurance policies (within 30 days)
     const now = Date.now();
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-    const activePolicies: InsurancePolicy[] = Array.isArray(rawPolicies?.policies) ? rawPolicies.policies : [];
+    const activePolicies: InsurancePolicy[] = Array.isArray(rawPolicies?.data)
+      ? rawPolicies.data
+      : [];
     const expiringPolicies = activePolicies.filter((p: InsurancePolicy) => {
       const endMs = new Date(p.endDate).getTime();
       return !Number.isNaN(endMs) && endMs - now < thirtyDays && endMs > now;
@@ -484,6 +493,279 @@ export default function OwnerDashboardRoute() {
     }),
   }));
 
+  const customizableSections = useMemo(
+    () => [
+      {
+        id: "owner-overview",
+        title: "Overview metrics",
+        description: "Active listings, earnings, bookings, and rating health.",
+        className: "xl:col-span-3",
+        content: (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <Link to="/listings" className="block">
+              <StatCard
+                icon={Package}
+                label={t("dashboard.stats.activeListings", "Active Listings")}
+                value={`${stats.activeListings}/${stats.totalListings}`}
+              />
+            </Link>
+            <StatCard
+              icon={Banknote}
+              label={t("dashboard.stats.pendingEarnings", "Pending Earnings")}
+              value={formatCurrency(pendingEarnings)}
+              variant="success"
+            />
+            <Link to="/bookings?view=owner" className="block">
+              <StatCard
+                icon={Calendar}
+                label={t("dashboard.stats.activeBookings")}
+                value={stats.activeBookings}
+                variant="info"
+              />
+            </Link>
+            <StatCard
+              icon={Star}
+              label={t("dashboard.stats.averageRating")}
+              value={averageRating.toFixed(1)}
+              trend={`${stats.totalReviews} reviews`}
+              variant="warning"
+            />
+          </div>
+        ),
+      },
+      {
+        id: "owner-recent-bookings",
+        title: "Recent bookings",
+        description: "Monitor the newest requests, returns, and active rentals.",
+        className: "xl:col-span-2",
+        content: (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                {t("dashboard.recentBookings", "Recent Bookings")}
+              </CardTitle>
+              <Link
+                to="/bookings"
+                className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
+              >
+                {t("common.viewAll")}
+                <ArrowUpRight className="w-4 h-4 ml-1" />
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {recentBookings.length > 0 ? (
+                  recentBookings.map((booking: Booking) => (
+                    <BookingCard key={booking.id} booking={booking} />
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">
+                      {t("bookings.empty")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ),
+      },
+      {
+        id: "owner-earnings-summary",
+        title: "Earnings summary",
+        description: "Track settled revenue, pending payout, and completed rentals.",
+        className: "xl:col-span-1",
+        content: (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {t("dashboard.earningsSummary", "Earnings Summary")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center pb-3 border-b">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.totalEarned", "Total Earned")}
+                  </span>
+                  <span className="text-xl font-bold text-success">
+                    {formatCurrency(totalEarnings)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pb-3 border-b">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.pending", "Pending")}
+                  </span>
+                  <span className="text-lg font-semibold text-warning">
+                    {formatCurrency(pendingEarnings)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">
+                    {t("dashboard.stats.completedRentals", "Completed Rentals")}
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {stats.completedBookings}
+                  </span>
+                </div>
+              </div>
+              <Link
+                to="/dashboard/owner/earnings"
+                className="mt-6 w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-center block"
+              >
+                {t("dashboard.viewEarningsDetails", "View Earnings Details")}
+              </Link>
+            </CardContent>
+          </Card>
+        ),
+      },
+      {
+        id: "owner-listings-preview",
+        title: "Listings preview",
+        description: "Pick up draft work, review health, and open edits faster.",
+        className: "xl:col-span-2",
+        content: (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>{t("dashboard.myListings")}</CardTitle>
+              <div className="flex gap-3">
+                <Link
+                  to="/listings"
+                  className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
+                >
+                  {t("common.viewAll")}
+                  <ArrowUpRight className="w-4 h-4 ml-1" />
+                </Link>
+                <Link
+                  to="/listings/new"
+                  className="inline-flex items-center justify-center h-9 px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  {t("listings.create.newListing", "New Listing")}
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {hasDraft ? (
+                <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span className="text-sm text-amber-800 font-medium">
+                      {t("listings.draftExists", "You have an unsaved draft listing")}
+                    </span>
+                  </div>
+                  <Link
+                    to="/listings/new"
+                    className="text-sm text-amber-700 font-semibold underline hover:text-amber-900"
+                  >
+                    {t("listings.resumeDraft", "Resume Draft")}
+                  </Link>
+                </div>
+              ) : null}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {listings.length > 0 ? (
+                  listings.map((listing: Listing) => (
+                    <ListingCard key={listing.id} listing={listing} />
+                  ))
+                ) : (
+                  <div className="col-span-2 text-center py-8">
+                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-4">
+                      {t("listings.empty", "No listings yet")}
+                    </p>
+                    <Link
+                      to="/listings/new"
+                      className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                    >
+                      <Plus className="w-5 h-5 mr-2" />
+                      {t(
+                        "listings.create.firstListing",
+                        "Create Your First Listing"
+                      )}
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ),
+      },
+      {
+        id: "owner-activity-feed",
+        title: "Recent activity",
+        description: "A live feed of booking, payment, and listing events.",
+        className: "xl:col-span-1",
+        content: <RecentActivity limit={8} showViewAll={false} emptyState="compact" />,
+      },
+      {
+        id: "owner-quick-actions",
+        title: "Quick actions",
+        description: "Jump to the next operational task without leaving the page.",
+        className: "xl:col-span-1",
+        content: (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {t("dashboard.quickActions", "Quick Actions")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Link
+                  to="/listings/new"
+                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                >
+                  <Plus className="w-5 h-5 mr-3 text-primary" />
+                  {t("listings.create.title")}
+                </Link>
+                <Link
+                  to="/dashboard/owner/calendar"
+                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                >
+                  <Calendar className="w-5 h-5 mr-3 text-primary" />
+                  {t("dashboard.viewCalendar", "View Calendar")}
+                </Link>
+                <Link
+                  to="/messages"
+                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
+                >
+                  <MessageCircle className="w-5 h-5 mr-3 text-primary" />
+                  {t("dashboard.viewMessages", "View Messages")}
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        ),
+      },
+    ],
+    [
+      averageRating,
+      hasDraft,
+      listings,
+      pendingEarnings,
+      recentBookings,
+      stats.activeBookings,
+      stats.activeListings,
+      stats.completedBookings,
+      stats.totalListings,
+      stats.totalReviews,
+      t,
+      totalEarnings,
+    ]
+  );
+  const {
+    orderedSections,
+    hiddenIds,
+    pinnedIds,
+    togglePinned,
+    toggleHidden,
+    resetPreferences,
+  } = useDashboardPreferences("owner-dashboard-layout", customizableSections);
+  const visibleSections = orderedSections.filter(
+    (section) => !hiddenIds.has(section.id)
+  );
+
   return (
     <PortalPageLayout
       title={t("dashboard.ownerPortal", "Owner Portal")}
@@ -492,47 +774,25 @@ export default function OwnerDashboardRoute() {
       banner={banner}
       contentClassName="space-y-8"
       actions={
-        <Link
-          to="/listings/new"
-          className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("listings.create.newListing", "New Listing")}
-        </Link>
+        <div className="flex items-center gap-2">
+          <DashboardCustomizer
+            sections={customizableSections}
+            pinnedIds={pinnedIds}
+            hiddenIds={hiddenIds}
+            onTogglePinned={togglePinned}
+            onToggleHidden={toggleHidden}
+            onReset={resetPreferences}
+          />
+          <Link
+            to="/listings/new"
+            className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("listings.create.newListing", "New Listing")}
+          </Link>
+        </div>
       }
     >
-      {/* Statistics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Link to="/listings" className="block">
-          <StatCard
-            icon={Package}
-            label={t("dashboard.stats.activeListings", "Active Listings")}
-            value={`${stats.activeListings}/${stats.totalListings}`}
-          />
-        </Link>
-        <StatCard
-          icon={Banknote}
-          label={t("dashboard.stats.pendingEarnings", "Pending Earnings")}
-          value={formatCurrency(pendingEarnings)}
-          variant="success"
-        />
-        <Link to="/bookings?view=owner" className="block">
-          <StatCard
-            icon={Calendar}
-            label={t("dashboard.stats.activeBookings")}
-            value={stats.activeBookings}
-            variant="info"
-          />
-        </Link>
-        <StatCard
-          icon={Star}
-          label={t("dashboard.stats.averageRating")}
-          value={averageRating.toFixed(1)}
-          trend={`${stats.totalReviews} reviews`}
-          variant="warning"
-        />
-      </div>
-
       {/* Pending Actions */}
       {stats.pendingBookings > 0 && (
         <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 flex items-start">
@@ -599,188 +859,12 @@ export default function OwnerDashboardRoute() {
           </Link>
         </div>
       )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Recent Bookings */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>
-                {t("dashboard.recentBookings", "Recent Bookings")}
-              </CardTitle>
-              <Link
-                to="/bookings"
-                className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
-              >
-                {t("common.viewAll")}
-                <ArrowUpRight className="w-4 h-4 ml-1" />
-              </Link>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {recentBookings.length > 0 ? (
-                  recentBookings.map((booking: Booking) => (
-                    <BookingCard key={booking.id} booking={booking} />
-                  ))
-                ) : (
-                  <div className="text-center py-8">
-                    <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">
-                      {t("bookings.empty")}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* My Listings */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("dashboard.myListings")}</CardTitle>
-              <div className="flex gap-3">
-                <Link
-                  to="/listings"
-                  className="text-sm text-primary hover:text-primary/90 font-medium flex items-center"
-                >
-                  {t("common.viewAll")}
-                  <ArrowUpRight className="w-4 h-4 ml-1" />
-                </Link>
-                <Link
-                  to="/listings/new"
-                  className="inline-flex items-center justify-center h-9 px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  {t("listings.create.newListing", "New Listing")}
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Draft listing callout */}
-              {hasDraft && (
-                <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                    <span className="text-sm text-amber-800 font-medium">
-                      {t("listings.draftExists", "You have an unsaved draft listing")}
-                    </span>
-                  </div>
-                  <Link
-                    to="/listings/new"
-                    className="text-sm text-amber-700 font-semibold underline hover:text-amber-900"
-                  >
-                    {t("listings.resumeDraft", "Resume Draft")}
-                  </Link>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {listings.length > 0 ? (
-                  listings.map((listing: Listing) => (
-                    <ListingCard key={listing.id} listing={listing} />
-                  ))
-                ) : (
-                  <div className="col-span-2 text-center py-8">
-                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground mb-4">
-                      {t("listings.empty", "No listings yet")}
-                    </p>
-                    <Link
-                      to="/listings/new"
-                      className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                    >
-                      <Plus className="w-5 h-5 mr-2" />
-                      {t(
-                        "listings.create.firstListing",
-                        "Create Your First Listing"
-                      )}
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar Content */}
-        <div className="space-y-6">
-          {/* Earnings Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {t("dashboard.earningsSummary", "Earnings Summary")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-3 border-b">
-                  <span className="text-muted-foreground">
-                    {t("dashboard.stats.totalEarned", "Total Earned")}
-                  </span>
-                  <span className="text-xl font-bold text-success">
-                    {formatCurrency(totalEarnings)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-3 border-b">
-                  <span className="text-muted-foreground">
-                    {t("dashboard.stats.pending", "Pending")}
-                  </span>
-                  <span className="text-lg font-semibold text-warning">
-                    {formatCurrency(pendingEarnings)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">
-                    {t("dashboard.stats.completedRentals", "Completed Rentals")}
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    {stats.completedBookings}
-                  </span>
-                </div>
-              </div>
-              <Link
-                to="/dashboard/owner/earnings"
-                className="mt-6 w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-center block"
-              >
-                {t("dashboard.viewEarningsDetails", "View Earnings Details")}
-              </Link>
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {t("dashboard.quickActions", "Quick Actions")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Link
-                  to="/listings/new"
-                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                >
-                  <Plus className="w-5 h-5 mr-3 text-primary" />
-                  {t("listings.create.title")}
-                </Link>
-                <Link
-                  to="/dashboard/owner/calendar"
-                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                >
-                  <Calendar className="w-5 h-5 mr-3 text-primary" />
-                  {t("dashboard.viewCalendar", "View Calendar")}
-                </Link>
-                <Link
-                  to="/messages"
-                  className="flex items-center w-full px-4 py-3 text-left text-foreground hover:bg-accent rounded-md transition-colors"
-                >
-                  <MessageCircle className="w-5 h-5 mr-3 text-primary" />
-                  {t("dashboard.viewMessages", "View Messages")}
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {visibleSections.map((section) => (
+          <div key={section.id} className={section.className}>
+            {section.content}
+          </div>
+        ))}
       </div>
     </PortalPageLayout>
   );

@@ -44,7 +44,7 @@ vi.mock("~/components/ui/error-state", () => ({
 
 import { clientLoader } from "./organizations.$id.members";
 
-const VALID_UUID = "a1b2c3d4-e5f6-1234-a5b6-c7d8e9f0a1b2";
+const VALID_ID = "ckx1234567890abcdefghijkl";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -55,14 +55,14 @@ describe("organizations.$id.members clientLoader", () => {
   it("redirects unauthenticated users", async () => {
     mocks.getUser.mockResolvedValue(null);
     const r = await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/members"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/members"),
     } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe("/auth/login");
   });
 
-  it("redirects on invalid UUID", async () => {
+  it("redirects on invalid organization id", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     const r = await clientLoader({
       params: { id: "not-a-uuid" },
@@ -76,8 +76,8 @@ describe("organizations.$id.members clientLoader", () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     mocks.getMyOrganizations.mockResolvedValue({ organizations: [{ id: "other-org" }] });
     const r = await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/members"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/members"),
     } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe("/organizations");
@@ -86,9 +86,9 @@ describe("organizations.$id.members clientLoader", () => {
   it("returns organization with members for authorized user", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     mocks.getMyOrganizations.mockResolvedValue({
-      organizations: [{ id: VALID_UUID }],
+      organizations: [{ id: VALID_ID }],
     });
-    mocks.getOrganization.mockResolvedValue({ id: VALID_UUID, name: "My Org" });
+    mocks.getOrganization.mockResolvedValue({ id: VALID_ID, name: "My Org" });
     mocks.getMembers.mockResolvedValue({
       members: [
         { userId: "u1", role: "OWNER", name: "Owner" },
@@ -96,8 +96,8 @@ describe("organizations.$id.members clientLoader", () => {
       ],
     });
     const r = (await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/members"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/members"),
     } as any)) as any;
     expect(r.organization.members).toHaveLength(2);
     expect(r.canManageMembers).toBe(true);
@@ -106,11 +106,11 @@ describe("organizations.$id.members clientLoader", () => {
 
   it("admin bypasses membership check", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "admin" });
-    mocks.getOrganization.mockResolvedValue({ id: VALID_UUID, name: "Org" });
+    mocks.getOrganization.mockResolvedValue({ id: VALID_ID, name: "Org" });
     mocks.getMembers.mockResolvedValue({ members: [] });
     const r = (await clientLoader({
-      params: { id: VALID_UUID },
-      request: new Request("http://localhost/organizations/" + VALID_UUID + "/members"),
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/members"),
     } as any)) as any;
     expect(r.canManageMembers).toBe(true);
   });

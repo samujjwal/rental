@@ -97,6 +97,8 @@ pnpm run test:chaos
 
 # Web and mobile end-to-end suites
 pnpm run test:e2e:web
+pnpm run test:e2e:web:isolated
+pnpm run test:e2e:web:isolated:core
 pnpm run test:e2e:mobile
 
 # Load tests
@@ -105,6 +107,35 @@ pnpm run test:load -- api
 
 - API server on http://localhost:3000
 - API docs on http://localhost:3000/api/docs
+
+### Option 4: Run The Isolated Validation Stack
+
+Use this path when you want deterministic local verification without disturbing the default `3400/3401` stack.
+
+```bash
+# Start the isolated API + web preview pair
+pnpm run dev:isolated
+
+# Faster restart when builds are already fresh
+pnpm run dev:isolated:skip-build
+
+# Run isolated Playwright suites against the validated stack
+pnpm run test:e2e:web:isolated
+pnpm run test:e2e:web:isolated:core
+pnpm run test:e2e:web:isolated:comprehensive
+```
+
+Default isolated ports:
+
+- API: http://127.0.0.1:3402/api
+- API health: http://127.0.0.1:3402/api/health
+- Web preview: http://127.0.0.1:3403
+
+Important notes:
+
+- The isolated runner sets `ALLOW_DEV_LOGIN=true`, `STRIPE_TEST_BYPASS=true`, `DISABLE_THROTTLE=true`, and the local `CORS_ORIGINS` needed for the `127.0.0.1:3403 -> 3402` browser path.
+- The web preview is rebuilt against `VITE_API_URL=http://127.0.0.1:3402/api` so client-side route loaders do not silently fall back to `http://localhost:3400/api`.
+- You can override ports safely, for example: `API_PORT=3412 WEB_PORT=3413 pnpm run dev:isolated:skip-build`.
 
 ## 📚 API Documentation
 

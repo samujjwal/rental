@@ -6,6 +6,8 @@ import { cn } from "~/lib/utils";
 import {
   Menu,
   X,
+  ChevronDown,
+  ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "~/components/theme";
@@ -20,6 +22,8 @@ export interface SidebarItem {
 export interface SidebarSection {
   title?: string;
   items: SidebarItem[];
+  defaultCollapsed?: boolean;
+  collapsible?: boolean;
 }
 
 interface DashboardSidebarProps {
@@ -31,6 +35,24 @@ export function DashboardSidebar({ sections, className }: DashboardSidebarProps)
   const location = useLocation();
   const { t } = useTranslation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  
+  // Track collapsed state for each section
+  const [collapsedSections, setCollapsedSections] = useState<Record<number, boolean>>(() => {
+    const initial: Record<number, boolean> = {};
+    sections.forEach((section, index) => {
+      if (section.collapsible && section.defaultCollapsed) {
+        initial[index] = true;
+      }
+    });
+    return initial;
+  });
+
+  const toggleSection = (index: number) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
 
   // Close drawer on route change
   useEffect(() => {
@@ -61,56 +83,78 @@ export function DashboardSidebar({ sections, className }: DashboardSidebarProps)
 
   const navContent = (
     <nav className="space-y-6">
-      {sections.map((section, sectionIndex) => (
-        <div key={sectionIndex}>
-          {section.title && (
-            <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              {section.title}
-            </h3>
-          )}
-          <ul className="space-y-1">
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.href || 
-                (item.href !== "/dashboard/renter" && item.href !== "/dashboard/owner" && location.pathname.startsWith(item.href));
-              
-              return (
-                <li key={item.href}>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      "flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+      {sections.map((section, sectionIndex) => {
+        const isCollapsed = collapsedSections[sectionIndex];
+        const hasTitle = !!section.title;
+        const isCollapsible = section.collapsible;
+        
+        return (
+          <div key={sectionIndex}>
+            {hasTitle && (
+              <button
+                onClick={() => isCollapsible && toggleSection(sectionIndex)}
+                className={cn(
+                  "w-full flex items-center justify-between px-3 text-xs font-semibold uppercase tracking-wider mb-2",
+                  isCollapsible && "cursor-pointer hover:text-foreground transition-colors"
+                )}
+                disabled={!isCollapsible}
+              >
+                <span className="text-muted-foreground">{section.title}</span>
+                {isCollapsible && (
+                  <span className="text-muted-foreground">
+                    {isCollapsed ? (
+                      <ChevronRight className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
                     )}
-                  >
-                    <span className="flex items-center">
-                      <Icon className="w-5 h-5 mr-3" />
-                      {item.label}
-                    </span>
-                    {item.badge !== undefined && (
-                      <span
-                        className={cn(
-                          "px-2 py-0.5 text-xs rounded-full",
-                          isActive
-                            ? "bg-primary-foreground/20 text-primary-foreground"
-                            : "bg-primary/10 text-primary"
-                        )}
-                      >
-                        {item.badge}
+                  </span>
+                )}
+              </button>
+            )}
+            <ul className={cn("space-y-1", isCollapsed && "hidden")}>
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.href || 
+                  (item.href !== "/dashboard/renter" && item.href !== "/dashboard/owner" && location.pathname.startsWith(item.href));
+                
+                return (
+                  <li key={item.href}>
+                    <Link
+                      to={item.href}
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      )}
+                    >
+                      <span className="flex items-center">
+                        <Icon className="w-5 h-5 mr-3" />
+                        {item.label}
                       </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          {sectionIndex < sections.length - 1 && (
-            <div className="border-b my-4" />
-          )}
-        </div>
-      ))}
+                      {item.badge !== undefined && (
+                        <span
+                          className={cn(
+                            "px-2 py-0.5 text-xs rounded-full",
+                            isActive
+                              ? "bg-primary-foreground/20 text-primary-foreground"
+                              : "bg-primary/10 text-primary"
+                          )}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+            {sectionIndex < sections.length - 1 && (
+              <div className="border-b my-4" />
+            )}
+          </div>
+        );
+      })}
       {/* Theme Toggle */}
       <div className="border-t pt-4 px-3">
         <ThemeToggle size="sm" />

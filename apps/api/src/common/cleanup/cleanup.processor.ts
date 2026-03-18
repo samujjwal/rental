@@ -13,6 +13,8 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { PrismaService } from '@/common/prisma/prisma.service';
 
+import { AuditArchivalService } from '@/common/audit/audit-archival.service';
+
 interface CleanupJob {
   olderThanDays?: number;
   batchSize?: number;
@@ -22,7 +24,10 @@ interface CleanupJob {
 export class CleanupProcessor {
   private readonly logger = new Logger(CleanupProcessor.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditArchival: AuditArchivalService,
+  ) {}
 
   @Process('expire-sessions')
   async handleExpireSessions(job: Job<CleanupJob>): Promise<{ deleted: number }> {
@@ -37,24 +42,20 @@ export class CleanupProcessor {
   }
 
   @Process('cleanup-audit-logs')
-  async handleCleanupAuditLogs(job: Job<CleanupJob>): Promise<{ archived: number }> {
+  async handleCleanupAuditLogs(job: Job<CleanupJob>): Promise<{ archived: number; batches: number; errors: number }> {
     const olderThanDays = job.data.olderThanDays || 90;
-    const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+    const batchSize = job.data.batchSize || 10000;
 
-    this.logger.log(`Archiving audit logs older than ${olderThanDays} days`);
+    this.logger.log(`Archiving audit logs older than ${olderThanDays} days to S3`);
 
-    // Count before deletion for reporting
-    const count = await this.prisma.auditLog.count({
-      where: { createdAt: { lt: cutoff } },
-    });
+    // Use the audit archival service to actually archive to S3
+    const result = await this.auditArchival.archiveOldLogs(olderThanDays, batchSize);
 
-    if (count > 0) {
-      // In production, archive to cold storage before deleting
-      // For now, just log the count
-      this.logger.log(`Found ${count} audit logs eligible for archival (cutoff: ${cutoff.toISOString()})`);
-    }
+    this.logger.log(
+      `Audit archival complete: ${result.archived} logs in ${result.batches} batches, ${result.errors} errors`
+    );
 
-    return { archived: count };
+    return result;
   }
 
   @Process('expire-deposits')

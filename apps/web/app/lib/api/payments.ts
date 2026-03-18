@@ -62,11 +62,34 @@ export interface PayoutResponse {
   accountLast4?: string;
 }
 
+export interface BookingPaymentStatusResponse {
+  bookingId: string;
+  paymentIntentId: string | null;
+  bookingStatus: string;
+  paymentStatus: string;
+  providerStatus: string | null;
+  actionRequired: boolean;
+  failureReason: string | null;
+  confirmationState:
+    | "confirmed"
+    | "processing"
+    | "action_required"
+    | "failed"
+    | "pending";
+  updatedAt: string | null;
+}
+
 export const paymentsApi = {
   async createPaymentIntent(
     bookingId: string
   ): Promise<CreatePaymentIntentResponse> {
     return api.post<CreatePaymentIntentResponse>(`/payments/intents/${bookingId}`);
+  },
+
+  async getBookingPaymentStatus(
+    bookingId: string
+  ): Promise<BookingPaymentStatusResponse> {
+    return api.get<BookingPaymentStatusResponse>(`/payments/bookings/${bookingId}/status`);
   },
 
   async getPaymentHistory(userId: string): Promise<Transaction[]> {

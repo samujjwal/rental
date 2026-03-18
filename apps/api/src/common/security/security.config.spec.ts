@@ -31,7 +31,14 @@ describe('setupSecurity', () => {
 
     expect(app.enableCors).toHaveBeenCalledWith(
       expect.objectContaining({
-        origin: ['http://localhost:3401', 'http://localhost:3400'],
+        origin: [
+          'http://localhost:3401',
+          'http://127.0.0.1:3401',
+          'http://localhost:3403',
+          'http://127.0.0.1:3403',
+          'http://localhost:3400',
+          'http://127.0.0.1:3400',
+        ],
         methods: expect.arrayContaining(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']),
         credentials: true,
         maxAge: 3600,

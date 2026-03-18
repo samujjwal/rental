@@ -63,6 +63,7 @@ vi.mock("~/components/ui", () => ({
 
 /* ------------------------------------------------------------------ */
 const validId = "11111111-1111-1111-8111-111111111111";
+const validCuid = "ckx1234567890abcdefghijkl";
 
 function makeFormReq(fields: Record<string, string>, files?: { name: string; file: File }[]) {
   const fd = new FormData();
@@ -99,7 +100,7 @@ describe("clientLoader", () => {
     expect((r as Response).headers.get("Location")).toBe("/auth/login");
   });
 
-  it("redirects on invalid UUID", async () => {
+  it("redirects on invalid booking id", async () => {
     mocks.getUser.mockResolvedValue(authUser);
     const r = await clientLoader({
       request: new Request("http://localhost/disputes/new/bad"),
@@ -116,6 +117,26 @@ describe("clientLoader", () => {
       params: { bookingId: validId },
     } as any);
     expect(r).toEqual({ booking });
+  });
+
+  it("returns booking for owner participants too", async () => {
+    mocks.getUser.mockResolvedValue({ ...authUser, id: "owner1", role: "owner" });
+    mocks.getBookingById.mockResolvedValue(booking);
+    const r = await clientLoader({
+      request: new Request("http://localhost/disputes/new/" + validId),
+      params: { bookingId: validId },
+    } as any);
+    expect(r).toEqual({ booking });
+  });
+
+  it("accepts valid CUID booking ids", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue({ ...booking, id: validCuid });
+    const r = await clientLoader({
+      request: new Request("http://localhost/disputes/new/" + validCuid),
+      params: { bookingId: validCuid },
+    } as any);
+    expect(r).toEqual({ booking: { ...booking, id: validCuid } });
   });
 
   it("redirects non-participant", async () => {
@@ -241,6 +262,31 @@ describe("clientAction", () => {
         title: "Refund please",
         description: "Item not as described",
         amount: 1000,
+      })
+    );
+  });
+
+  it("allows owners to create disputes for their booking", async () => {
+    mocks.getUser.mockResolvedValue({ id: "owner1", email: "owner@test.com", role: "owner" });
+    mocks.getBookingById.mockResolvedValue(booking);
+    mocks.createDispute.mockResolvedValue({});
+    const r = await clientAction({
+      request: makeFormReq({
+        type: "MISSING_ITEMS",
+        title: "Accessory missing",
+        description: "The charger was not returned",
+      }),
+      params: { bookingId: validId },
+    } as any);
+    expect(r).toBeInstanceOf(Response);
+    expect((r as Response).headers.get("Location")).toBe(
+      `/bookings/${validId}?disputeCreated=true`
+    );
+    expect(mocks.createDispute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookingId: validId,
+        type: "MISSING_ITEMS",
+        title: "Accessory missing",
       })
     );
   });

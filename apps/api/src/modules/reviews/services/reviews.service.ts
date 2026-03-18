@@ -433,13 +433,20 @@ export class ReviewsService {
   ): Promise<{
     reviews: ReviewResponse[];
     total: number;
+    stats: {
+      totalReviews: number;
+      averageRating: number;
+      ratings: Record<number, number>;
+      pending: number;
+    };
   }> {
-    const where: any = type === 'received' ? { revieweeId: userId } : { reviewerId: userId };
+    const baseWhere: any = type === 'received' ? { revieweeId: userId } : { reviewerId: userId };
+    const where: any = { ...baseWhere };
     if (rating && rating >= 1 && rating <= 5) {
       where.rating = rating;
     }
 
-    const [reviews, total] = await Promise.all([
+    const [reviews, total, totalReviews, ratingStats, avgRating, pending] = await Promise.all([
       this.prisma.review.findMany({
         where,
         include: {
@@ -473,11 +480,48 @@ export class ReviewsService {
         take: limit,
       }),
       this.prisma.review.count({ where }),
+      this.prisma.review.count({ where: baseWhere }),
+      this.prisma.review.groupBy({
+        by: ['rating'],
+        where: baseWhere,
+        _count: true,
+      }),
+      this.prisma.review.aggregate({
+        where: baseWhere,
+        _avg: { rating: true },
+      }),
+      this.prisma.review.count({
+        where: {
+          ...baseWhere,
+          status: 'DRAFT',
+        },
+      }),
     ]);
+
+    const stats = {
+      totalReviews,
+      averageRating: avgRating._avg.rating || 0,
+      ratings: {
+        1: 0,
+        2: 0,
+        3: 0,
+        4: 0,
+        5: 0,
+      } as Record<number, number>,
+      pending,
+    };
+
+    ratingStats.forEach((stat) => {
+      const currentRating = Math.round(stat.rating ?? 0);
+      if (currentRating >= 1 && currentRating <= 5) {
+        stats.ratings[currentRating] = stat._count;
+      }
+    });
 
     return {
       reviews: reviews as any,
       total,
+      stats,
     };
   }
 

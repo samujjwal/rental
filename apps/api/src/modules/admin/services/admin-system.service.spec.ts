@@ -10,14 +10,44 @@ describe('AdminSystemService', () => {
     role: 'ADMIN',
   };
 
+  const mockQueue = () => ({
+    add: jest.fn(),
+    getActiveCount: jest.fn().mockResolvedValue(0),
+    getWaitingCount: jest.fn().mockResolvedValue(0),
+    getFailedCount: jest.fn().mockResolvedValue(0),
+    getCompletedCount: jest.fn().mockResolvedValue(0),
+    getDelayedCount: jest.fn().mockResolvedValue(0),
+    isPaused: jest.fn().mockResolvedValue(false),
+  });
+
+  const mockSchedulerRegistry = {
+    getCronJobs: jest.fn().mockReturnValue(new Map()),
+    getIntervals: jest.fn().mockReturnValue([]),
+    getTimeouts: jest.fn().mockReturnValue([]),
+  };
+
   beforeEach(() => {
     prisma = {
       user: {
         findUnique: jest.fn(),
       },
+      auditLog: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([{ size: BigInt(1024), count: BigInt(5), name: 'test', rows: BigInt(100) }]),
     };
 
-    service = new AdminSystemService(prisma);
+    service = new AdminSystemService(
+      prisma as any,
+      mockSchedulerRegistry as any,
+      mockQueue() as any,
+      mockQueue() as any,
+      mockQueue() as any,
+      mockQueue() as any,
+      mockQueue() as any,
+      mockQueue() as any,
+    );
   });
 
   describe('verifyAdmin', () => {

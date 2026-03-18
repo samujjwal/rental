@@ -22,17 +22,21 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { bookingsApi } from "~/lib/api/bookings";
+import { paymentsApi } from "~/lib/api/payments";
 import { reviewsApi } from "~/lib/api/reviews";
+import { useAuthStore } from "~/lib/store/auth";
 import { BookingStatus } from "~/lib/shared-types";
 import { redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Booking } from "~/types/booking";
 import { format } from "date-fns";
-import { useAuthStore } from "~/lib/store/auth";
 import { useEffect, useState, useCallback } from "react";
 import { getUser } from "~/utils/auth";
 import { SuccessCelebration } from "~/components/animations/SuccessCelebration";
+import { BookingStateMachine } from "~/components/bookings/BookingStateMachine";
 import { useTranslation } from "react-i18next";
 import { toast } from "~/lib/toast";
+
+type ViewerRole = "owner" | "renter" | "admin";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Booking Details | GharBatai Rentals" }];
@@ -74,17 +78,97 @@ const normalizeStatus = (status: unknown): string => {
   return raw.toLowerCase();
 };
 
+const getFallbackTransitions = (
+  normalizedStatus: string,
+  viewerRole: ViewerRole
+): string[] => {
+  const isOwner = viewerRole === "owner";
+  const isRenter = viewerRole === "renter";
+  const isAdmin = viewerRole === "admin";
+
+  switch (normalizedStatus) {
+    case "pending_owner_approval":
+      if (isOwner || isAdmin) return ["OWNER_APPROVE", "OWNER_REJECT"];
+      if (isRenter) return ["CANCEL"];
+      return [];
+    case "pending_payment":
+      if (isRenter || isAdmin) return ["COMPLETE_PAYMENT", "CANCEL"];
+      return [];
+    case "payment_failed":
+      if (isRenter || isAdmin) return ["RETRY_PAYMENT"];
+      return [];
+    case "confirmed":
+      if (isOwner || isAdmin) return ["START_RENTAL", "CANCEL", "INITIATE_DISPUTE"];
+      if (isRenter) return ["CANCEL", "INITIATE_DISPUTE"];
+      return [];
+    case "active":
+      if (isRenter || isAdmin) return ["REQUEST_RETURN", "INITIATE_DISPUTE"];
+      if (isOwner) return ["INITIATE_DISPUTE"];
+      return [];
+    case "return_requested":
+      if (isOwner || isAdmin) return ["APPROVE_RETURN", "REJECT_RETURN", "INITIATE_DISPUTE"];
+      if (isRenter) return ["INITIATE_DISPUTE"];
+      return [];
+    case "completed":
+    case "settled":
+      if (isOwner || isRenter || isAdmin) return ["INITIATE_DISPUTE"];
+      return [];
+    default:
+      return [];
+  }
+};
+
 const getInitials = (firstName?: string, lastName?: string | null) => {
   const first = firstName?.[0] || "";
   const last = lastName?.[0] || "";
   return (first + last).toUpperCase() || "U";
 };
 
+const getStoredClientAuth = (): { user: { id: string; role: ViewerRole } | null; accessToken: string | null } => {
+  if (typeof window === "undefined") {
+    return { user: null, accessToken: null };
+  }
+
+  try {
+    const raw = localStorage.getItem("auth-storage");
+    if (!raw) {
+      return { user: null, accessToken: null };
+    }
+
+    const parsed = JSON.parse(raw) as {
+      state?: {
+        accessToken?: string;
+        user?: { id?: string; role?: string } | null;
+      };
+    };
+    const accessToken = parsed?.state?.accessToken ?? null;
+    const rawUser = parsed?.state?.user;
+    const normalizedRole = (() => {
+      const role = String(rawUser?.role || "").toUpperCase();
+      if (role === "OWNER" || role === "HOST") return "owner" as const;
+      if (role === "ADMIN" || role === "SUPER_ADMIN") return "admin" as const;
+      return "renter" as const;
+    })();
+
+    if (accessToken) {
+      useAuthStore.getState().setAccessToken(accessToken);
+    }
+
+    return {
+      accessToken,
+      user: rawUser?.id ? { id: rawUser.id, role: normalizedRole } : null,
+    };
+  } catch {
+    return { user: null, accessToken: null };
+  }
+};
+
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   console.log("[bookings.$id clientLoader] START", params.id);
-  const user = await getUser(request);
+  const storedAuth = getStoredClientAuth();
+  const user = storedAuth.user ?? (await getUser(request));
   console.log("[bookings.$id clientLoader] user:", user ? `${user.id} (${user.role})` : "null");
-  if (!user) {
+  if (!user && !storedAuth.accessToken) {
     console.log("[bookings.$id clientLoader] no user → redirect /auth/login");
     throw redirect("/auth/login");
   }
@@ -98,20 +182,46 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
     console.log("[bookings.$id clientLoader] booking:", booking.id, "ownerId:", booking.ownerId, "renterId:", booking.renterId);
+    const activeUser = user ?? storedAuth.user;
     const isParticipant =
-      booking.ownerId === user.id || booking.renterId === user.id || user.role === "admin";
-    console.log("[bookings.$id clientLoader] isParticipant:", isParticipant, "user.id:", user.id);
+      !!activeUser &&
+      (booking.ownerId === activeUser.id ||
+        booking.renterId === activeUser.id ||
+        activeUser.role === "admin");
+    console.log(
+      "[bookings.$id clientLoader] isParticipant:",
+      isParticipant,
+      "user.id:",
+      activeUser?.id ?? "unknown"
+    );
     if (!isParticipant) {
       console.log("[bookings.$id clientLoader] not participant → redirect /bookings");
       throw redirect("/bookings");
     }
-    return { booking };
+    const transitionResponse = await bookingsApi
+      .getAvailableTransitions(bookingId)
+      .catch(() => ({ availableTransitions: [] as string[] }));
+
+    const viewerRole: ViewerRole =
+      booking.ownerId === activeUser?.id
+        ? "owner"
+        : booking.renterId === activeUser?.id
+          ? "renter"
+          : "admin";
+
+    return {
+      booking,
+      viewerRole,
+      availableTransitions: transitionResponse.availableTransitions ?? [],
+    };
   } catch (error) {
     if (error instanceof Response) throw error; // re-throw redirects
     console.error("[bookings.$id clientLoader] catch error:", error);
     throw redirect("/bookings");
   }
 }
+
+clientLoader.hydrate = true;
 
 export async function clientAction({ request, params }: ActionFunctionArgs) {
   const currentUser = await getUser(request);
@@ -298,7 +408,11 @@ const TIMELINE_STEPS = [
 
 export default function BookingDetail() {
   const { t } = useTranslation();
-  const { booking } = useLoaderData<{ booking: Booking }>();
+  const { booking, availableTransitions = [], viewerRole } = useLoaderData<{
+    booking: Booking;
+    availableTransitions?: string[];
+    viewerRole: ViewerRole;
+  }>();
   const actionData = useActionData<{ success?: string; error?: string }>();
 
   // Show toast for action results and close modal on success
@@ -307,6 +421,9 @@ export default function BookingDetail() {
       toast.success(actionData.success);
       setShowCancelModal(false);
       setCancelReason("");
+      setShowReviewModal(false);
+      setReview("");
+      setRating(5);
     }
     if (actionData?.error) toast.error(actionData.error);
   }, [actionData]);
@@ -325,8 +442,76 @@ export default function BookingDetail() {
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [paymentVerifyTimedOut, setPaymentVerifyTimedOut] = useState(false);
+  const [paymentRecoveryState, setPaymentRecoveryState] = useState<
+    "action_required" | "failed" | null
+  >(null);
+  const [paymentRecoveryMessage, setPaymentRecoveryMessage] = useState("");
+
+  // Handle state machine actions
+  const handleStateAction = useCallback((action: string, bookingId: string) => {
+    const intentMap: Record<string, string> = {
+      approve: "confirm",
+      reject: "reject",
+      cancel: "cancel",
+      start: "start",
+      requestReturn: "request_return",
+      review: "review",
+    };
+
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = `/bookings/${bookingId}`;
+    
+    const formData = new FormData();
+    const mappedIntent = intentMap[action];
+    
+    // Add reason if needed for certain actions
+    if (['reject', 'reject_return'].includes(action)) {
+      const reason = prompt(t(`bookings.reasons.${action}`, 'Please provide a reason'));
+      if (!reason) return;
+      formData.append('reason', reason);
+    }
+    
+    // Add review data if needed
+    if (action === 'review') {
+      setShowReviewModal(true);
+      return;
+    }
+    
+    // Handle navigation for payment
+    if (action === 'pay') {
+      navigate(`/checkout/${bookingId}`);
+      return;
+    }
+
+    if (!mappedIntent) {
+      return;
+    }
+
+    formData.append('intent', mappedIntent);
+    
+    // Submit the form
+    for (const [key, value] of formData.entries()) {
+      form.appendChild(createHiddenInput(key, value as string));
+    }
+    
+    document.body.appendChild(form);
+    form.submit();
+  }, [navigate, t]);
+
+  const createHiddenInput = (name: string, value: string) => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    return input;
+  };
 
   const normalizedStatus = normalizeStatus(booking.status);
+  const fallbackTransitions = getFallbackTransitions(normalizedStatus, viewerRole);
+  const transitionSet = new Set(
+    availableTransitions.length > 0 ? availableTransitions : fallbackTransitions
+  );
   const listingTitle = safeText(booking.listing?.title, "Listing");
   const listingId = safeText(booking.listing?.id);
   const listingDescription = safeText(booking.listing?.description, "No description available.");
@@ -355,20 +540,81 @@ export default function BookingDetail() {
     if (paymentSuccess && needsVerification) {
       setIsVerifyingPayment(true);
       setPaymentVerifyTimedOut(false);
-      
-      // Poll for status update
-      const interval = setInterval(() => {
+      setPaymentRecoveryState(null);
+      setPaymentRecoveryMessage("");
+
+      let isActive = true;
+
+      const checkPaymentStatus = async () => {
+        try {
+          const paymentStatus = await paymentsApi.getBookingPaymentStatus(booking.id);
+          if (!isActive) {
+            return true;
+          }
+
+          if (paymentStatus.confirmationState === "confirmed") {
+            setIsVerifyingPayment(false);
+            setPaymentVerifyTimedOut(false);
+            setPaymentRecoveryState(null);
+            setPaymentRecoveryMessage("");
+            setShowCelebration(true);
+            return true;
+          }
+
+          if (paymentStatus.confirmationState === "action_required") {
+            setIsVerifyingPayment(false);
+            setPaymentVerifyTimedOut(false);
+            setPaymentRecoveryState("action_required");
+            setPaymentRecoveryMessage(
+              t(
+                "bookings.details.paymentActionRequiredDesc",
+                "Complete the additional verification requested by your payment provider, then return here to finish confirming the booking."
+              )
+            );
+            return true;
+          }
+
+          if (paymentStatus.confirmationState === "failed") {
+            setIsVerifyingPayment(false);
+            setPaymentVerifyTimedOut(false);
+            setPaymentRecoveryState("failed");
+            setPaymentRecoveryMessage(
+              paymentStatus.failureReason ||
+                t(
+                  "bookings.details.paymentFailedDesc",
+                  "Your payment could not be confirmed. Please retry the payment to keep your booking."
+                )
+            );
+            return true;
+          }
+        } catch {
+          // Fall back to the loader refresh and timeout banner below.
+        }
+
         revalidator.revalidate();
+        return false;
+      };
+
+      void checkPaymentStatus();
+
+      const interval = setInterval(() => {
+        void checkPaymentStatus().then((done) => {
+          if (done) {
+            clearInterval(interval);
+          }
+        });
       }, 2000);
 
       // Stop polling after 30 seconds and surface recovery guidance
       const timeout = setTimeout(() => {
         clearInterval(interval);
+        if (!isActive) return;
         setIsVerifyingPayment(false);
         setPaymentVerifyTimedOut(true);
       }, 30000);
 
       return () => {
+        isActive = false;
         clearInterval(interval);
         clearTimeout(timeout);
       };
@@ -379,22 +625,32 @@ export default function BookingDetail() {
     }
   }, [searchParams, normalizedStatus, booking.paymentStatus, revalidator, isVerifyingPayment]);
 
-  // Get current user from auth store to determine ownership
-  const { user } = useAuthStore();
-  const currentUserId = user?.id || "";
-
-  // Determine user role in this booking
-  const isOwner = booking.ownerId === currentUserId;
+  const isOwner = viewerRole === "owner";
+  const isRenter = viewerRole === "renter";
+  const isAdmin = viewerRole === "admin";
+  const userRole = viewerRole;
+  const messageParticipantId = safeText(isOwner ? booking.renterId : booking.ownerId);
 
   const normalizedPaymentStatus = String(booking.paymentStatus || "").toLowerCase();
-  const canConfirm = isOwner && normalizedStatus === "pending_owner_approval";
-  const canReject = isOwner && normalizedStatus === "pending_owner_approval";
-  const canCancel = ["confirmed", "pending_owner_approval", "pending_payment"].includes(normalizedStatus);
-  const canStart = isOwner && normalizedStatus === "confirmed";
-  const canComplete = isOwner && normalizedStatus === "return_requested";
-  const canRejectReturn = isOwner && normalizedStatus === "return_requested";
-  const canRequestReturn = !isOwner && normalizedStatus === "active";
-  const canReview = ["completed", "settled"].includes(normalizedStatus) && !booking.review;
+  const canConfirm = transitionSet.has("OWNER_APPROVE");
+  const canReject = transitionSet.has("OWNER_REJECT");
+  const canCancel = transitionSet.has("CANCEL");
+  const canStart = transitionSet.has("START_RENTAL");
+  const canComplete = transitionSet.has("APPROVE_RETURN");
+  const canRejectReturn = transitionSet.has("REJECT_RETURN");
+  const canRequestReturn = transitionSet.has("REQUEST_RETURN");
+  const canPay =
+    transitionSet.has("COMPLETE_PAYMENT") || transitionSet.has("RETRY_PAYMENT");
+  const canDispute =
+    transitionSet.has("INITIATE_DISPUTE") ||
+    ((isOwner || isRenter || isAdmin) &&
+      ["confirmed", "active", "return_requested", "completed", "settled"].includes(
+        normalizedStatus
+      ));
+  const canReview =
+    (isOwner || isRenter) &&
+    ["completed", "settled"].includes(normalizedStatus) &&
+    !booking.review;
   const bookingDaysRaw =
     (new Date(String(booking.endDate || "")).getTime() -
       new Date(String(booking.startDate || "")).getTime()) /
@@ -471,6 +727,33 @@ export default function BookingDetail() {
           </div>
         )}
 
+        {paymentRecoveryState === "action_required" && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-4 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">
+                {t(
+                  "bookings.details.paymentActionRequired",
+                  "Additional payment verification is still required"
+                )}
+              </p>
+              <p className="text-sm mt-1">{paymentRecoveryMessage}</p>
+            </div>
+          </div>
+        )}
+
+        {paymentRecoveryState === "failed" && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-4 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">
+                {t("bookings.details.paymentFailedTitle", "Payment confirmation failed")}
+              </p>
+              <p className="text-sm mt-1">{paymentRecoveryMessage}</p>
+            </div>
+          </div>
+        )}
+
         {/* Success/Error Messages */}
         {actionData?.success && (
           <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
@@ -493,80 +776,13 @@ export default function BookingDetail() {
               <h2 className="text-xl font-bold text-foreground mb-6">
                 {t('bookings.details.bookingTimeline', 'Booking Progress')}
               </h2>
-              {/* Horizontal stepper — scrollable on small screens */}
-              <div className="overflow-x-auto pb-2">
-                <div className="flex items-center min-w-max">
-                  {TIMELINE_STEPS.map((step, index) => {
-                    const Icon = step.icon;
-                    const isCompleted = currentStepIndex >= 0 && index < currentStepIndex;
-                    const isCurrent = index === currentStepIndex;
-                    const isPending = currentStepIndex < 0 || index > currentStepIndex;
-
-                    return (
-                      <div key={step.status} className="flex items-center">
-                        {/* Step node */}
-                        <div className="flex flex-col items-center gap-1.5">
-                          <div
-                            className={`flex items-center justify-center w-9 h-9 rounded-full border-2 transition-all ${
-                              isCompleted
-                                ? "bg-primary border-primary text-primary-foreground"
-                                : isCurrent
-                                ? "bg-background border-primary text-primary ring-4 ring-primary/20"
-                                : "bg-muted border-border text-muted-foreground"
-                            }`}
-                          >
-                            {isCompleted ? (
-                              <CheckCircle className="w-4 h-4" />
-                            ) : (
-                              <Icon className="w-4 h-4" />
-                            )}
-                          </div>
-                          <span
-                            className={`text-xs font-medium text-center max-w-[72px] leading-tight ${
-                              isCurrent
-                                ? "text-primary"
-                                : isCompleted
-                                ? "text-foreground"
-                                : "text-muted-foreground"
-                            }`}
-                          >
-                            {step.label}
-                          </span>
-                        </div>
-                        {/* Connector line */}
-                        {index < TIMELINE_STEPS.length - 1 && (
-                          <div
-                            className={`h-0.5 w-10 sm:w-14 mx-1 rounded-full transition-all ${
-                              isCompleted ? "bg-primary" : "bg-border"
-                            }`}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              {currentStepIndex >= 0 ? (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  {t('bookings.details.currentStatus', 'Current status')}:{" "}
-                  <span className="font-medium text-primary">
-                    {TIMELINE_STEPS[currentStepIndex]?.label ?? normalizedStatus.replace(/_/g, " ")}
-                  </span>
-                </p>
-              ) : ["cancelled", "disputed", "refunded", "payment_failed"].includes(normalizedStatus) ? (
-                <div className="mt-4 flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                  <XCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                  <p className="text-sm text-destructive font-medium">
-                    {normalizedStatus === "cancelled"
-                      ? t('bookings.details.cancelledNote', 'This booking was cancelled. No further actions are available.')
-                      : normalizedStatus === "disputed"
-                      ? t('bookings.details.disputedNote', 'A dispute has been filed. Our team will review and contact both parties within 2–3 business days.')
-                      : normalizedStatus === "refunded"
-                      ? t('bookings.details.refundedNote', 'This booking has been refunded. Funds should appear within 5–7 business days.')
-                      : t('bookings.details.paymentFailedNote', 'Payment failed. Use the "Retry Payment" button below to try again before the booking is auto-cancelled.')}
-                  </p>
-                </div>
-              ) : null}
+              <BookingStateMachine
+                currentStatus={booking.status}
+                userRole={userRole}
+                bookingId={booking.id}
+                onStateAction={handleStateAction}
+                showInlineActions={false}
+              />
             </div>
 
             {/* Listing Details */}
@@ -803,7 +1019,13 @@ export default function BookingDetail() {
                 )}
               </div>
               <button
-                onClick={() => navigate(`/messages?booking=${booking.id}`)}
+                onClick={() =>
+                  navigate(
+                    listingId && messageParticipantId
+                      ? `/messages?listing=${listingId}&participant=${messageParticipantId}`
+                      : `/messages?booking=${booking.id}`
+                  )
+                }
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-background"
               >
                 <MessageCircle className="w-4 h-4" />
@@ -858,7 +1080,7 @@ export default function BookingDetail() {
               <h2 className="text-lg font-bold text-foreground mb-4">{t('bookings.details.actions', 'Actions')}</h2>
               <div className="space-y-3">
                 {/* Pay Now / Retry Payment */}
-                {!isOwner && ["pending_payment", "payment_failed"].includes(normalizedStatus) && (
+                {isRenter && canPay && ["pending_payment", "payment_failed"].includes(normalizedStatus) && (
                   <button
                     onClick={() => navigate(`/checkout/${booking.id}`)}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold text-base"
@@ -870,7 +1092,7 @@ export default function BookingDetail() {
                   </button>
                 )}
 
-                {["confirmed", "active", "return_requested", "completed", "settled"].includes(normalizedStatus) && (
+                {canDispute && (
                   <button
                     onClick={() => navigate(`/disputes/new/${booking.id}`)}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50"
@@ -937,16 +1159,32 @@ export default function BookingDetail() {
                 )}
 
                 {canRejectReturn && (
-                  <button
-                    onClick={() => {
-                      setCancelIntent("reject_return");
-                      setShowCancelModal(true);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50"
-                  >
-                    <AlertCircle className="w-4 h-4" />
-                    <span>{t('bookings.actions.reportDamage', 'Report Damage')}</span>
-                  </button>
+                  <>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      <p className="font-semibold">
+                        {t(
+                          "bookings.actions.damageVsDisputeTitle",
+                          "Report Damage vs File a Dispute"
+                        )}
+                      </p>
+                      <p className="mt-1">
+                        {t(
+                          "bookings.actions.damageVsDisputeDesc",
+                          "Use Report Damage when the return condition is the issue. Use File a Dispute for broader problems like missing items, payout disagreements, or unresolved rental issues."
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setCancelIntent("reject_return");
+                        setShowCancelModal(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      <span>{t('bookings.actions.reportDamage', 'Report Damage')}</span>
+                    </button>
+                  </>
                 )}
 
                 {canReview && (
@@ -1135,4 +1373,3 @@ export default function BookingDetail() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

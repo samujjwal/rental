@@ -45,6 +45,7 @@ export function LoginScreen({ navigation }: Props) {
         placeholder="Email"
         autoCapitalize="none"
         keyboardType="email-address"
+        testID="email-input"
         style={styles.input}
       />
       <TextInput
@@ -52,6 +53,7 @@ export function LoginScreen({ navigation }: Props) {
         onChangeText={setPassword}
         placeholder="Password"
         secureTextEntry
+        testID="password-input"
         style={styles.input}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}

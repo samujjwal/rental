@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard,
@@ -15,6 +16,7 @@ import {
   Building,
   Mail,
   TrendingUp,
+  Activity,
   Package,
   Banknote,
   Zap,
@@ -22,6 +24,14 @@ import {
   Heart,
   CheckSquare,
 } from "lucide-react";
+
+type AdminMenuPersona =
+  | "all"
+  | "operations"
+  | "content"
+  | "trust"
+  | "finance"
+  | "platform";
 
 interface MenuItem {
   name: string;
@@ -31,12 +41,29 @@ interface MenuItem {
 
 interface MenuCategory {
   category: string;
+  personas: AdminMenuPersona[];
   items: MenuItem[];
 }
+
+const PERSONA_STORAGE_KEY = "admin-navigation-persona";
+
+const PERSONA_OPTIONS: Array<{
+  value: AdminMenuPersona;
+  label: string;
+  description: string;
+}> = [
+  { value: "all", label: "All access", description: "Show the full admin surface" },
+  { value: "operations", label: "Operations", description: "Bookings, users, and frontline tasks" },
+  { value: "content", label: "Content", description: "Listings, categories, and reviews" },
+  { value: "trust", label: "Trust & Safety", description: "Disputes, fraud, and moderation" },
+  { value: "finance", label: "Finance", description: "Payments, refunds, and payouts" },
+  { value: "platform", label: "Platform", description: "System settings and power tools" },
+];
 
 const menuItems: MenuCategory[] = [
   {
     category: "admin.nav.main",
+    personas: ["all", "operations"],
     items: [
       { name: "admin.nav.dashboard", href: "/admin", icon: LayoutDashboard },
       { name: "admin.nav.analytics", href: "/admin/analytics", icon: BarChart3 },
@@ -44,6 +71,7 @@ const menuItems: MenuCategory[] = [
   },
   {
     category: "admin.nav.userManagement",
+    personas: ["all", "operations"],
     items: [
       { name: "admin.nav.users", href: "/admin/entities/users", icon: Users },
       {
@@ -55,6 +83,7 @@ const menuItems: MenuCategory[] = [
   },
   {
     category: "admin.nav.contentManagement",
+    personas: ["all", "content"],
     items: [
       { name: "admin.nav.listings", href: "/admin/entities/listings", icon: Home },
       { name: "admin.nav.listingApprovals", href: "/admin/listings", icon: CheckSquare },
@@ -70,6 +99,7 @@ const menuItems: MenuCategory[] = [
   },
   {
     category: "admin.nav.bookingsPayments",
+    personas: ["all", "operations", "finance"],
     items: [
       { name: "admin.nav.bookings", href: "/admin/entities/bookings", icon: Calendar },
       { name: "admin.nav.payments", href: "/admin/entities/payments", icon: CreditCard },
@@ -79,6 +109,7 @@ const menuItems: MenuCategory[] = [
   },
   {
     category: "admin.nav.disputesModeration",
+    personas: ["all", "trust", "operations"],
     items: [
       {
         name: "admin.nav.disputes",
@@ -89,6 +120,7 @@ const menuItems: MenuCategory[] = [
   },
   {
     category: "admin.nav.insurance",
+    personas: ["all", "trust"],
     items: [
       {
         name: "admin.nav.insurancePolicies",
@@ -100,6 +132,7 @@ const menuItems: MenuCategory[] = [
   },
   {
     category: "admin.nav.notifications",
+    personas: ["all", "operations"],
     items: [
       {
         name: "admin.nav.notificationsItem",
@@ -110,8 +143,10 @@ const menuItems: MenuCategory[] = [
   },
   {
     category: "admin.nav.system",
+    personas: ["all", "platform"],
     items: [
       { name: "admin.nav.systemSettings", href: "/admin/system", icon: Settings },
+      { name: "Diagnostics", href: "/admin/diagnostics", icon: Activity },
       {
         name: "admin.nav.powerOperations",
         href: "/admin/system/power-operations",
@@ -124,6 +159,42 @@ const menuItems: MenuCategory[] = [
 export function AdminNavigation() {
   const location = useLocation();
   const { t } = useTranslation();
+  const [persona, setPersona] = useState<AdminMenuPersona>("all");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const storedPersona = window.localStorage.getItem(
+      PERSONA_STORAGE_KEY
+    ) as AdminMenuPersona | null;
+    if (storedPersona && PERSONA_OPTIONS.some((option) => option.value === storedPersona)) {
+      setPersona(storedPersona);
+    }
+  }, []);
+
+  const activePersonaOption =
+    PERSONA_OPTIONS.find((option) => option.value === persona) ?? PERSONA_OPTIONS[0];
+
+  const visibleCategories = useMemo(() => {
+    return menuItems.filter((category) => {
+      const matchesPersona = persona === "all" || category.personas.includes(persona);
+      const containsCurrentRoute = category.items.some(
+        (item) =>
+          location.pathname === item.href ||
+          (item.href !== "/admin" && location.pathname.startsWith(item.href + "/"))
+      );
+
+      return matchesPersona || containsCurrentRoute;
+    });
+  }, [location.pathname, persona]);
+
+  const handlePersonaChange = (nextPersona: AdminMenuPersona) => {
+    setPersona(nextPersona);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(PERSONA_STORAGE_KEY, nextPersona);
+    }
+  };
 
   return (
     <aside
@@ -133,9 +204,36 @@ export function AdminNavigation() {
     >
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold text-gray-900">{t("admin.panel")}</h2>
+        <div className="mt-4 rounded-lg border border-border bg-muted/40 p-3">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Menu focus
+          </label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {PERSONA_OPTIONS.map((option) => {
+              const isActive = option.value === persona;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handlePersonaChange(option.value)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isActive
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            {activePersonaOption.description}
+          </p>
+        </div>
       </div>
       <nav className="p-4 space-y-6 flex-1" aria-label="Main admin menu">
-        {menuItems.map((category) => (
+        {visibleCategories.map((category) => (
           <div key={category.category}>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
               {t(category.category)}

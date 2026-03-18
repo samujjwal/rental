@@ -10,6 +10,7 @@ import type { Organization as ApiOrganization } from "~/lib/api/organizations";
 import { getUser } from "~/utils/auth";
 import { APP_PHONE_PLACEHOLDER } from "~/config/locale";
 import { useTranslation } from "react-i18next";
+import { isAppEntityId } from "~/utils/entity-id";
 
 export const ErrorBoundary = RouteErrorBoundary;
 
@@ -25,10 +26,6 @@ type Organization = ApiOrganization & {
   };
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
-
 async function getOrganizationMembershipRole(userId: string, organizationId: string) {
   const members = await organizationsApi.getMembers(organizationId);
   const currentMember = members.members.find((member) => member.userId === userId);
@@ -41,7 +38,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     return redirect("/auth/login");
   }
 
-  if (!isUuid(params.id)) {
+  if (!isAppEntityId(params.id)) {
     return redirect("/organizations");
   }
 
@@ -68,7 +65,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     return redirect("/auth/login");
   }
 
-  if (!isUuid(params.id)) {
+  if (!isAppEntityId(params.id)) {
     return { success: false, error: "Organization not found" };
   }
   const formData = await request.formData();
@@ -607,4 +604,3 @@ export default function OrganizationSettings() {
     </div>
   );
 }
-

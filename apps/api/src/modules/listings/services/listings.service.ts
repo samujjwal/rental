@@ -705,7 +705,7 @@ export class ListingsService {
     const updated = await this.prisma.listing.update({
       where: { id },
       data: {
-        status: PropertyStatus.AVAILABLE,
+        status: PropertyStatus.UNAVAILABLE,
         verificationStatus: VerificationStatus.PENDING,
       },
     });
@@ -739,12 +739,23 @@ export class ListingsService {
 
   async activate(id: string, userId: string): Promise<Property> {
     const listing = await this.findById(id, true);
+    const activatableVerificationStatuses: VerificationStatus[] = [
+      VerificationStatus.VERIFIED,
+      VerificationStatus.APPROVED,
+    ];
 
     if (listing.ownerId !== userId) {
       throw i18nForbidden('listing.unauthorized');
     }
 
     if (listing.status !== PropertyStatus.UNAVAILABLE) {
+      throw i18nBadRequest('listing.cannotActivate');
+    }
+
+    if (
+      listing.verificationStatus &&
+      !activatableVerificationStatuses.includes(listing.verificationStatus)
+    ) {
       throw i18nBadRequest('listing.cannotActivate');
     }
 

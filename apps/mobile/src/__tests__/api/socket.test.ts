@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /* ── socket.io-client mock ── */
 
 const mockOn = jest.fn();

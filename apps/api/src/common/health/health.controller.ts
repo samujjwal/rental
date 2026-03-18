@@ -3,8 +3,8 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import {
   HealthCheck,
   HealthCheckService,
+  HealthIndicatorResult,
   HttpHealthIndicator,
-  PrismaHealthIndicator,
   MemoryHealthIndicator,
   DiskHealthIndicator,
 } from '@nestjs/terminus';
@@ -19,7 +19,6 @@ export class HealthController {
   constructor(
     private health: HealthCheckService,
     private http: HttpHealthIndicator,
-    private prismaHealth: PrismaHealthIndicator,
     private memory: MemoryHealthIndicator,
     private disk: DiskHealthIndicator,
     private prisma: PrismaService,
@@ -35,7 +34,7 @@ export class HealthController {
   check() {
     return this.health.check([
       // Database check
-      () => this.prismaHealth.pingCheck('database', this.prisma as any),
+      () => this.probeDatabase(),
 
       // Memory check - heap should not exceed 300MB
       () => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024),
@@ -56,7 +55,7 @@ export class HealthController {
   @HealthCheck()
   @ApiOperation({ summary: 'Database health check' })
   checkDatabase() {
-    return this.health.check([() => this.prismaHealth.pingCheck('database', this.prisma as any)]);
+    return this.health.check([() => this.probeDatabase()]);
   }
 
   @Get('queues')
@@ -155,7 +154,7 @@ export class HealthController {
   @ApiOperation({ summary: 'Readiness probe for Kubernetes' })
   readiness() {
     return this.health.check([
-      () => this.prismaHealth.pingCheck('database', this.prisma as any),
+      () => this.probeDatabase(),
       async () => {
         try {
           await this.bookingsQueue.isReady();
@@ -165,5 +164,26 @@ export class HealthController {
         }
       },
     ]);
+  }
+
+  private async probeDatabase(): Promise<HealthIndicatorResult> {
+    const startedAt = Date.now();
+
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return {
+        database: {
+          status: 'up',
+          responseTime: Date.now() - startedAt,
+        },
+      };
+    } catch (error) {
+      return {
+        database: {
+          status: 'down',
+          message: error instanceof Error ? error.message : 'Database unavailable',
+        },
+      };
+    }
   }
 }

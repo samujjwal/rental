@@ -35,6 +35,21 @@ const mockPrismaService = {
   dispute: {
     findFirst: jest.fn().mockResolvedValue(null),
   },
+  depositHold: {
+    findMany: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockResolvedValue({}),
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
+  payout: {
+    create: jest.fn().mockResolvedValue({ id: 'payout-1', status: 'PENDING' }),
+    update: jest.fn().mockResolvedValue({ id: 'payout-1' }),
+    findFirst: jest.fn().mockResolvedValue(null),
+  },
+  auditLog: {
+    create: jest.fn().mockResolvedValue({ id: 'audit-1' }),
+    findUnique: jest.fn().mockResolvedValue(null),
+    update: jest.fn().mockResolvedValue({ id: 'audit-1' }),
+  },
   user: {
     findUnique: jest.fn().mockResolvedValue({ id: 'user-1', email: 'test@test.com' }),
   },

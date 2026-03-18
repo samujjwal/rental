@@ -47,7 +47,7 @@ vi.mock("~/lib/store/auth", () => {
 vi.mock("~/types/listing", () => ({}));
 vi.mock("~/types/review", () => ({}));
 
-const validId = "11111111-1111-1111-8111-111111111111";
+const validId = "ckx1234567890abcdefghijkl";
 
 import { clientLoader } from "./profile.$userId";
 

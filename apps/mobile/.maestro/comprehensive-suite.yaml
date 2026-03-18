@@ -1,0 +1,14 @@
+appId: com.gharbatai.mobile
+name: Comprehensive Mobile E2E Suite
+tags:
+  - smoke
+  - regression
+
+---
+
+- runFlow: auth-login.yaml
+- runFlow: auth-signup.yaml
+- runFlow: browse-listings.yaml
+- runFlow: booking-flow.yaml
+- runFlow: profile-settings.yaml
+- runFlow: owner_portal_test.yaml

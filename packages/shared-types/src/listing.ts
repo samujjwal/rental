@@ -122,6 +122,8 @@ export interface Listing {
   views: number;
   featured: boolean;
   verified: boolean;
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'APPROVED' | 'REJECTED' | null;
+  rejectionReason?: string | null;
   categorySlug?: string | null;
   categorySpecificData?: Record<string, unknown>;
   owner: {

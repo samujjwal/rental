@@ -69,14 +69,24 @@ export class PaymentDataService {
     stripePaymentIntentId: string;
   }, tx?: any): Promise<any> {
     const client = tx || this.prisma;
-    return client.payment.create({
-      data: {
+    return client.payment.upsert({
+      where: { paymentIntentId: data.paymentIntentId },
+      create: {
         bookingId: data.bookingId,
         amount: data.amount,
         currency: data.currency,
         status: data.status as any,
         paymentIntentId: data.paymentIntentId,
         stripePaymentIntentId: data.stripePaymentIntentId,
+      },
+      update: {
+        bookingId: data.bookingId,
+        amount: data.amount,
+        currency: data.currency,
+        status: data.status as any,
+        stripePaymentIntentId: data.stripePaymentIntentId,
+        failureReason: null,
+        processedAt: null,
       },
     });
   }

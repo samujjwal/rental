@@ -12,13 +12,17 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
 import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Queue } from 'bull';
 import { StripeService } from '../services/stripe.service';
 import { PayoutsService } from '../services/payouts.service';
 import { LedgerService } from '../services/ledger.service';
 import { PaymentDataService } from '../services/payment-data.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
+import { PaymentCommandLogService } from '../services/payment-command-log.service';
 import {
   StartOnboardingDto,
   AttachPaymentMethodDto,
@@ -40,6 +44,9 @@ export class PaymentsController {
     private readonly payouts: PayoutsService,
     private readonly paymentData: PaymentDataService,
     private readonly prisma: PrismaService,
+    private readonly stateMachine: BookingStateMachineService,
+    private readonly paymentCommandLog: PaymentCommandLogService,
+    @InjectQueue('payments') private readonly paymentsQueue: Queue,
   ) {}
 
   @Post('connect/onboard')
@@ -96,7 +103,14 @@ export class PaymentsController {
     }
 
     const normalizedStatus = String(booking.status || '').toUpperCase();
-    if (!['PENDING_PAYMENT'].includes(normalizedStatus)) {
+    if (normalizedStatus === 'PAYMENT_FAILED') {
+      await this.stateMachine.transition(
+        bookingId,
+        'RETRY_PAYMENT',
+        userId,
+        'RENTER',
+      );
+    } else if (!['PENDING_PAYMENT'].includes(normalizedStatus)) {
       throw i18nBadRequest('booking.notReady');
     }
 
@@ -123,6 +137,71 @@ export class PaymentsController {
     }) as unknown as { paymentIntentId: string; clientSecret: string };
 
     return result;
+  }
+
+  @Get('bookings/:bookingId/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get checkout confirmation status for a booking payment' })
+  @ApiResponse({ status: 200, description: 'Payment confirmation status retrieved' })
+  async getBookingPaymentStatus(
+    @Param('bookingId') bookingId: string,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
+    const booking = await this.paymentData.getBookingForPayment(bookingId);
+    const isAdmin = this.isAdminRole(user.role);
+
+    if (booking.renterId !== user.id && booking.ownerId !== user.id && !isAdmin) {
+      throw i18nForbidden('booking.unauthorizedAction');
+    }
+
+    const payment = await this.paymentData.getLatestPaymentForBooking(bookingId);
+    const paymentIntentId =
+      payment?.paymentIntentId ||
+      payment?.stripePaymentIntentId ||
+      booking.paymentIntentId ||
+      null;
+
+    let providerStatus: string | null = null;
+    let providerFailureReason: string | null = null;
+    const shouldQueryProvider =
+      Boolean(paymentIntentId) &&
+      process.env['STRIPE_TEST_BYPASS'] !== 'true' &&
+      !String(paymentIntentId).startsWith('pi_test_');
+
+    if (shouldQueryProvider && paymentIntentId) {
+      try {
+        const providerState = await this.stripe.getPaymentIntentStatus(paymentIntentId);
+        providerStatus = providerState.status;
+        providerFailureReason = providerState.failureReason ?? null;
+      } catch {
+        providerStatus = null;
+      }
+    }
+
+    const paymentStatus = String(payment?.status || 'PENDING').toUpperCase();
+    const bookingStatus = String(booking.status || '').toUpperCase();
+    const metadata = this.parsePaymentMetadata(payment?.metadata);
+    const actionRequired =
+      Boolean(metadata.requiresAction) ||
+      ['requires_action', 'requires_confirmation'].includes(providerStatus || '');
+
+    return {
+      bookingId,
+      paymentIntentId,
+      bookingStatus,
+      paymentStatus,
+      providerStatus,
+      actionRequired,
+      failureReason: payment?.failureReason || providerFailureReason || null,
+      confirmationState: this.resolveConfirmationState({
+        bookingStatus,
+        paymentStatus,
+        providerStatus,
+        actionRequired,
+      }),
+      updatedAt: payment?.updatedAt ?? null,
+    };
   }
 
   @Post('deposit/hold/:bookingId')
@@ -161,8 +240,8 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Release security deposit' })
-  @ApiResponse({ status: 200, description: 'Deposit released' })
+  @ApiOperation({ summary: 'Queue security deposit release' })
+  @ApiResponse({ status: 200, description: 'Deposit release queued' })
   async releaseDeposit(
     @Param('depositId') depositId: string,
     @CurrentUser() user: { id: string; role: string },
@@ -176,16 +255,37 @@ export class PaymentsController {
       throw i18nForbidden('booking.unauthorizedAction');
     }
 
-    await this.stripe.releaseDeposit(depositId);
+    const command = await this.paymentCommandLog.createCommand({
+      userId: user.id,
+      entityType: 'DEPOSIT_RELEASE',
+      entityId: depositId,
+      amount: toNumber(deposit.amount),
+      currency: deposit.currency,
+      requestedByRole: user.role,
+      metadata: {
+        bookingId: deposit.bookingId,
+        depositId,
+      },
+    });
 
-    await this.ledger.recordDepositRelease(
-      deposit.bookingId,
-      booking.renterId,
-      toNumber(deposit.amount),
-      deposit.currency,
+    await this.paymentsQueue.add(
+      'release-deposit',
+      {
+        bookingId: deposit.bookingId,
+        commandId: command.id,
+        timestamp: new Date().toISOString(),
+      },
+      {
+        jobId: `deposit-release:${depositId}`,
+      },
     );
 
-    return { success: true };
+    await this.paymentCommandLog.markEnqueued(command.id, {
+      jobName: 'release-deposit',
+      jobId: `deposit-release:${depositId}`,
+    });
+
+    return { success: true, status: 'PENDING' };
   }
 
   @Post('customer')
@@ -364,7 +464,7 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Request a refund for a booking' })
-  @ApiResponse({ status: 200, description: 'Refund initiated' })
+  @ApiResponse({ status: 202, description: 'Refund queued for processing' })
   async requestRefund(
     @Param('bookingId') bookingId: string,
     @CurrentUser() user: { id: string; role: string },
@@ -390,25 +490,130 @@ export class PaymentsController {
       throw i18nForbidden('booking.unauthorizedAction');
     }
 
-    const refundAmount = dto.amount ?? undefined;
-    const refundId = await this.stripe.createRefund(
-      payment.stripePaymentIntentId,
-      refundAmount ?? toNumber(payment.amount),
-      payment.currency || 'USD',
-      dto.reason,
+    const refundAmount = dto.amount ?? toNumber(payment.amount);
+    const refundRecord = await this.prisma.refund.create({
+      data: {
+        bookingId,
+        amount: refundAmount,
+        currency: payment.currency || 'USD',
+        status: 'PENDING',
+        refundId: `pending_${bookingId}_${Date.now()}`,
+        reason: dto.reason,
+        metadata: JSON.stringify({
+          requestedBy: user.id,
+          requestedByRole: user.role,
+          paymentIntentId: payment.stripePaymentIntentId,
+        }),
+      },
+    });
+
+    const command = await this.paymentCommandLog.createCommand({
+      userId: user.id,
+      entityType: 'REFUND',
+      entityId: refundRecord.id,
+      amount: refundAmount,
+      currency: payment.currency || 'USD',
+      reason: dto.reason,
+      requestedByRole: user.role,
+      metadata: {
+        bookingId,
+        paymentIntentId: payment.stripePaymentIntentId,
+      },
+    });
+
+    await this.paymentsQueue.add(
+      'process-refund',
+      {
+        bookingId,
+        refundRecordId: refundRecord.id,
+        paymentIntentId: payment.stripePaymentIntentId,
+        amount: refundAmount,
+        currency: payment.currency || 'USD',
+        reason: dto.reason || 'requested_by_customer',
+        commandId: command.id,
+        timestamp: new Date().toISOString(),
+      },
+      {
+        jobId: `refund:${refundRecord.id}`,
+      },
     );
 
-    // Record the refund in the ledger
-    const refundAmountDecimal = refundAmount
-      ? refundAmount
-      : toNumber(payment.amount);
-    await this.ledger.recordRefund(
-      bookingId,
-      payment.booking.renterId,
-      refundAmountDecimal,
-      payment.currency,
-    );
+    await this.paymentCommandLog.markEnqueued(command.id, {
+      jobName: 'process-refund',
+      jobId: `refund:${refundRecord.id}`,
+    });
 
-    return { refundId, amount: refundAmountDecimal };
+    return {
+      refundId: refundRecord.id,
+      amount: refundAmount,
+      status: 'PENDING',
+    };
+  }
+
+  private isAdminRole(role: string | undefined): boolean {
+    return ['ADMIN', 'SUPER_ADMIN', 'SUPPORT_ADMIN', 'FINANCE_ADMIN'].includes(
+      String(role || '').toUpperCase(),
+    );
+  }
+
+  private parsePaymentMetadata(metadata: string | null | undefined): Record<string, unknown> {
+    if (!metadata) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(metadata);
+    } catch {
+      return {};
+    }
+  }
+
+  private resolveConfirmationState(input: {
+    bookingStatus: string;
+    paymentStatus: string;
+    providerStatus: string | null;
+    actionRequired: boolean;
+  }): 'confirmed' | 'processing' | 'action_required' | 'failed' | 'pending' {
+    const {
+      bookingStatus,
+      paymentStatus,
+      providerStatus,
+      actionRequired,
+    } = input;
+
+    if (
+      [
+        'CONFIRMED',
+        'IN_PROGRESS',
+        'AWAITING_RETURN_INSPECTION',
+        'COMPLETED',
+        'SETTLED',
+        'DISPUTED',
+        'REFUNDED',
+      ].includes(bookingStatus)
+    ) {
+      return 'confirmed';
+    }
+
+    if (
+      bookingStatus === 'PAYMENT_FAILED' ||
+      ['FAILED', 'CANCELLED'].includes(paymentStatus) ||
+      ['requires_payment_method', 'canceled'].includes(providerStatus || '')
+    ) {
+      return 'failed';
+    }
+
+    if (actionRequired) {
+      return 'action_required';
+    }
+
+    if (
+      ['SUCCEEDED', 'COMPLETED', 'PROCESSING'].includes(paymentStatus) ||
+      ['succeeded', 'processing'].includes(providerStatus || '')
+    ) {
+      return 'processing';
+    }
+
+    return 'pending';
   }
 }

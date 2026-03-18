@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CleanupProcessor } from './cleanup.processor';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { AuditArchivalService } from '@/common/audit/audit-archival.service';
 
 describe('CleanupProcessor', () => {
   let processor: CleanupProcessor;
@@ -37,17 +38,23 @@ describe('CleanupProcessor', () => {
     $transaction: jest.fn(),
   };
 
+  const mockAuditArchivalService = {
+    archiveOldLogs: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CleanupProcessor,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: AuditArchivalService, useValue: mockAuditArchivalService },
       ],
     }).compile();
 
     processor = module.get<CleanupProcessor>(CleanupProcessor);
     prisma = module.get<PrismaService>(PrismaService);
     jest.clearAllMocks();
+    mockAuditArchivalService.archiveOldLogs.mockReset();
   });
 
   const makeJob = (data: any = {}): any => ({ data });
@@ -75,22 +82,21 @@ describe('CleanupProcessor', () => {
 
   describe('cleanup-audit-logs', () => {
     it('should count audit logs older than default 90 days', async () => {
-      mockPrismaService.auditLog.count.mockResolvedValue(42);
+      mockAuditArchivalService.archiveOldLogs.mockResolvedValue({ archived: 42, batches: 1, errors: 0 });
 
       const result = await processor.handleCleanupAuditLogs(makeJob({}));
 
-      expect(result).toEqual({ archived: 42 });
-      expect(mockPrismaService.auditLog.count).toHaveBeenCalledWith({
-        where: { createdAt: { lt: expect.any(Date) } },
-      });
+      expect(result).toEqual({ archived: 42, batches: 1, errors: 0 });
+      expect(mockAuditArchivalService.archiveOldLogs).toHaveBeenCalledWith(90, 10000);
     });
 
     it('should use custom olderThanDays', async () => {
-      mockPrismaService.auditLog.count.mockResolvedValue(10);
+      mockAuditArchivalService.archiveOldLogs.mockResolvedValue({ archived: 10, batches: 1, errors: 0 });
 
       const result = await processor.handleCleanupAuditLogs(makeJob({ olderThanDays: 30 }));
 
-      expect(result).toEqual({ archived: 10 });
+      expect(result).toEqual({ archived: 10, batches: 1, errors: 0 });
+      expect(mockAuditArchivalService.archiveOldLogs).toHaveBeenCalledWith(30, 10000);
     });
   });
 

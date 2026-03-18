@@ -8,6 +8,10 @@ import { ContentModerationService } from '../../moderation/services/content-mode
 import { EmbeddingService } from '../../ai/services/embedding.service';
 import { ListingVersionService } from './listing-version.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  PropertyStatus,
+  VerificationStatus,
+} from '@rental-portal/database';
 
 describe('ListingsService', () => {
   let service: InstanceType<typeof ListingsService>;
@@ -54,6 +58,9 @@ describe('ListingsService', () => {
           provide: ListingValidationService,
           useValue: {
             validateCategoryData: jest.fn(),
+            validatePropertyCompleteness: jest
+              .fn()
+              .mockReturnValue({ isValid: true, errors: [] }),
           },
         },
         {
@@ -191,6 +198,81 @@ describe('ListingsService', () => {
 
       const result = await service.create(mockOwnerId, mockDto);
       expect(result).toBeDefined();
+    });
+  });
+
+  describe('publish', () => {
+    const baseListing = {
+      id: 'listing-123',
+      ownerId: 'owner-123',
+      title: 'Test Listing',
+      description: 'Test Description',
+      status: PropertyStatus.DRAFT,
+      verificationStatus: VerificationStatus.PENDING,
+      slug: 'test-listing',
+      photos: [],
+    };
+
+    it('submits approved listings into review instead of making them immediately available', async () => {
+      prismaService.listing.findUnique.mockResolvedValue(baseListing);
+      prismaService.listing.update.mockResolvedValue({
+        ...baseListing,
+        status: PropertyStatus.UNAVAILABLE,
+        verificationStatus: VerificationStatus.PENDING,
+      });
+
+      const result = await service.publish('listing-123', 'owner-123');
+
+      expect(prismaService.listing.update).toHaveBeenCalledWith({
+        where: { id: 'listing-123' },
+        data: {
+          status: PropertyStatus.UNAVAILABLE,
+          verificationStatus: VerificationStatus.PENDING,
+        },
+      });
+      expect(result.status).toBe(PropertyStatus.UNAVAILABLE);
+      expect(result.verificationStatus).toBe(VerificationStatus.PENDING);
+    });
+  });
+
+  describe('activate', () => {
+    const pausedListing = {
+      id: 'listing-123',
+      ownerId: 'owner-123',
+      title: 'Test Listing',
+      description: 'Test Description',
+      status: PropertyStatus.UNAVAILABLE,
+      verificationStatus: VerificationStatus.VERIFIED,
+      slug: 'test-listing',
+      photos: [],
+    };
+
+    it('reactivates previously verified listings', async () => {
+      prismaService.listing.findUnique.mockResolvedValue(pausedListing);
+      prismaService.listing.update.mockResolvedValue({
+        ...pausedListing,
+        status: PropertyStatus.AVAILABLE,
+      });
+
+      const result = await service.activate('listing-123', 'owner-123');
+
+      expect(prismaService.listing.update).toHaveBeenCalledWith({
+        where: { id: 'listing-123' },
+        data: { status: PropertyStatus.AVAILABLE },
+      });
+      expect(result.status).toBe(PropertyStatus.AVAILABLE);
+    });
+
+    it('blocks activation while a listing is still under review', async () => {
+      prismaService.listing.findUnique.mockResolvedValue({
+        ...pausedListing,
+        verificationStatus: VerificationStatus.PENDING,
+      });
+
+      await expect(service.activate('listing-123', 'owner-123')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prismaService.listing.update).not.toHaveBeenCalled();
     });
   });
 });

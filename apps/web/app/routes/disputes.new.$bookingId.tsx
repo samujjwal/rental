@@ -26,10 +26,12 @@ import { formatCurrency } from "~/lib/utils";
 import { disputesApi, type CreateDisputeRequest } from "~/lib/api/disputes";
 import { bookingsApi } from "~/lib/api/bookings";
 import { uploadApi } from "~/lib/api/upload";
+import { useAuthStore } from "~/lib/store/auth";
 import { redirect } from "react-router";
 import { getUser } from "~/utils/auth";
 import { RouteErrorBoundary } from "~/components/ui";
 import { useTranslation } from "react-i18next";
+import { isAppEntityId } from "~/utils/entity-id";
 
 export const meta: MetaFunction = () => {
   return [
@@ -38,10 +40,6 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-// Accepts both UUID and CUID/CUID2 formats used by this system
-const ID_PATTERN = /^[a-z0-9_-]{20,}$/i;
-const isValidId = (value: string | undefined): value is string =>
-  Boolean(value && ID_PATTERN.test(value));
 const MAX_EVIDENCE_FILES = 8;
 const MAX_EVIDENCE_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_DISPUTE_TITLE_LENGTH = 120;
@@ -52,19 +50,66 @@ const safeNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const getStoredClientAuth = (): {
+  user: { id: string; role: "owner" | "renter" | "admin" } | null;
+  accessToken: string | null;
+} => {
+  if (typeof window === "undefined") {
+    return { user: null, accessToken: null };
+  }
+
+  try {
+    const raw = localStorage.getItem("auth-storage");
+    if (!raw) {
+      return { user: null, accessToken: null };
+    }
+
+    const parsed = JSON.parse(raw) as {
+      state?: {
+        accessToken?: string;
+        user?: { id?: string; role?: string } | null;
+      };
+    };
+    const accessToken = parsed?.state?.accessToken ?? null;
+    const rawUser = parsed?.state?.user;
+    const role = (() => {
+      const normalized = String(rawUser?.role || "").toUpperCase();
+      if (normalized === "OWNER" || normalized === "HOST") return "owner" as const;
+      if (normalized === "ADMIN" || normalized === "SUPER_ADMIN") return "admin" as const;
+      return "renter" as const;
+    })();
+
+    if (accessToken) {
+      useAuthStore.getState().setAccessToken(accessToken);
+    }
+
+    return {
+      accessToken,
+      user: rawUser?.id ? { id: rawUser.id, role } : null,
+    };
+  } catch {
+    return { user: null, accessToken: null };
+  }
+};
+
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
-  const user = await getUser(request);
-  if (!user) {
+  const storedAuth = getStoredClientAuth();
+  const user = storedAuth.user ?? (await getUser(request));
+  if (!user && !storedAuth.accessToken) {
     return redirect("/auth/login");
   }
 
   const bookingId = params.bookingId;
-  if (!isValidId(bookingId)) return redirect("/bookings");
+  if (!isAppEntityId(bookingId)) return redirect("/bookings");
 
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
+    const activeUser = user ?? storedAuth.user;
     const isParticipant =
-      booking.ownerId === user.id || booking.renterId === user.id || user.role === "admin";
+      !!activeUser &&
+      (booking.ownerId === activeUser.id ||
+        booking.renterId === activeUser.id ||
+        activeUser.role === "admin");
     if (!isParticipant) {
       return redirect("/bookings");
     }
@@ -74,6 +119,8 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   }
 }
 
+clientLoader.hydrate = true;
+
 export async function clientAction({ request, params }: ActionFunctionArgs) {
   const user = await getUser(request);
   if (!user) {
@@ -81,7 +128,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
   }
 
   const bookingId = params.bookingId;
-  if (!isValidId(bookingId)) return { error: "Booking ID is required" };
+  if (!isAppEntityId(bookingId)) return { error: "Booking ID is required" };
 
   const formData = await request.formData();
   const type = formData.get("type") as string;
@@ -200,6 +247,44 @@ const DISPUTE_TYPES = [
   { value: "OTHER", label: "Other", description: "Other dispute reason" },
 ];
 
+const getDisputeGuidance = (bookingStatus: unknown) => {
+  const status = String(bookingStatus || "").toUpperCase();
+
+  if (status === "AWAITING_RETURN_INSPECTION") {
+    return {
+      title: "Return inspection disputes",
+      description:
+        "Use this form for refund, payout, or return disagreements that need operator review. If the returned item is damaged, the owner can also use Report Damage from the booking page to open an inspection-based claim.",
+      accent: "amber" as const,
+    };
+  }
+
+  if (["PENDING_PAYMENT", "PAYMENT_FAILED"].includes(status)) {
+    return {
+      title: "Payment disputes",
+      description:
+        "Choose Payment Issue or Refund Request if the checkout amount, charge, or refund outcome looks wrong. Include screenshots or receipts so the operator can reconcile the payment faster.",
+      accent: "blue" as const,
+    };
+  }
+
+  if (["CONFIRMED", "IN_PROGRESS", "COMPLETED", "SETTLED"].includes(status)) {
+    return {
+      title: "Condition and refund disputes",
+      description:
+        "Use disputes for item condition, missing parts, payment, or refund issues that could not be resolved in chat. Be specific about what happened, when it happened, and what resolution you expect.",
+      accent: "amber" as const,
+    };
+  }
+
+  return {
+    title: "Document the issue clearly",
+    description:
+      "Pick the closest dispute type, describe the issue in a timeline, and attach evidence that helps the operator understand the expected resolution without extra back-and-forth.",
+    accent: "blue" as const,
+  };
+};
+
 export default function DisputeNewRoute() {
   const { t } = useTranslation();
   const { booking } = useLoaderData<typeof clientLoader>();
@@ -213,6 +298,11 @@ export default function DisputeNewRoute() {
   const [description, setDescription] = useState("");
   const [requestedAmount, setRequestedAmount] = useState("");
   const [evidence, setEvidence] = useState<File[]>([]);
+  const disputeGuidance = getDisputeGuidance(booking.status);
+  const guidanceColorClasses =
+    disputeGuidance.accent === "amber"
+      ? "border-amber-200 bg-amber-50 text-amber-900"
+      : "border-blue-200 bg-blue-50 text-blue-900";
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -284,6 +374,16 @@ export default function DisputeNewRoute() {
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
                 {booking.status}
               </span>
+            </div>
+          </div>
+        </div>
+
+        <div className={cn("rounded-lg border p-4 mb-6", guidanceColorClasses)}>
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">{disputeGuidance.title}</p>
+              <p className="text-sm mt-1 opacity-90">{disputeGuidance.description}</p>
             </div>
           </div>
         </div>
@@ -540,4 +640,3 @@ export default function DisputeNewRoute() {
   );
 }
 export { RouteErrorBoundary as ErrorBoundary };
-

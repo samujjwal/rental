@@ -1,6 +1,7 @@
 import { IsString, IsOptional, IsNumber, IsDateString, IsObject, Min, Max, IsArray, IsEnum, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type, Transform } from 'class-transformer';
+import { AgentType } from '@rental-portal/database';
 
 // ─── Liquidity Engine DTOs ───────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ export class CreateCampaignDto {
 // ─── AI Concierge DTOs ──────────────────────────────────────────────────────
 
 export class StartSessionDto {
-  @ApiPropertyOptional({ default: 'GENERAL' }) @IsOptional() @IsString() agentType?: string;
+  @ApiPropertyOptional({ default: 'GENERAL', enum: AgentType }) @IsOptional() @IsEnum(AgentType) agentType?: AgentType;
   @ApiPropertyOptional() @IsOptional() @IsObject() initialContext?: Record<string, any>;
 }
 
@@ -140,7 +141,7 @@ export class AnalyzeRiskDto {
   };
 }
 
-export class RegisterDeviceDto {
+export class MarketplaceRegisterDeviceDto {
   @ApiProperty() @IsString() fingerprint: string;
   @ApiPropertyOptional() @IsOptional() @IsObject() metadata?: {
     userAgent?: string;
@@ -247,7 +248,7 @@ export class UpsertTaxPolicyDto {
   @ApiPropertyOptional() @IsOptional() @IsObject() rules?: Record<string, any>;
 }
 
-export class CalculateTaxDto {
+export class MarketplaceCalculateTaxDto {
   @ApiProperty() @IsString() country: string;
   @ApiPropertyOptional() @IsOptional() @IsString() region?: string;
   @ApiProperty() @Type(() => Number) @IsNumber() amount: number;

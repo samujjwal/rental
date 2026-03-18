@@ -1,7 +1,9 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
+import { useMemo } from "react";
 import { useLoaderData, Link, redirect } from "react-router";
 import { useTranslation } from "react-i18next";
+import { useDashboardState } from "~/hooks/useDashboardState";
 import {
   Package,
   Calendar,
@@ -14,6 +16,12 @@ import {
   Search,
   TrendingUp,
   ArrowRight,
+  CreditCard,
+  MessageSquare,
+  BarChart3,
+  Settings,
+  HelpCircle,
+  User,
 } from "lucide-react";
 import { requireUser } from "~/utils/auth";
 import { bookingsApi } from "~/lib/api/bookings";
@@ -30,11 +38,19 @@ import {
   CardTitle,
   Badge,
   RouteErrorBoundary,
+  ProgressiveDisclosure,
+  CollapsibleSection,
+  ContextualHelp,
+  FirstTimeHelp,
 } from "~/components/ui";
 import { PortalPageLayout } from "~/components/layout";
+import { RecentActivity } from "~/components/dashboard/RecentActivity";
+import { DashboardCustomizer } from "~/components/dashboard/DashboardCustomizer";
+import { MobileDashboardNavigation } from "~/components/mobile";
 import { cn } from "~/lib/utils";
 import { formatCurrency } from "~/lib/utils";
 import { renterNavSections } from "~/config/navigation";
+import { useDashboardPreferences } from "~/hooks/useDashboardPreferences";
 import { notificationsApi } from "~/lib/api/notifications";
 import { messagingApi } from "~/lib/api/messaging";
 
@@ -459,6 +475,10 @@ export default function RenterDashboardRoute() {
     failedSections,
   } = useLoaderData<typeof clientLoader>();
   const totalSpent = safeNumber(stats.totalSpent);
+  
+  // P0.1 FIX: Consolidated state management to prevent race conditions and stale closures
+  // All derived state is computed atomically in a single useMemo
+  const { userActivityLevel, showFirstTimeHelp, personalizedRecommendations } = useDashboardState(recentBookings);
   const banner = error ? (
     <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
       {error}
@@ -490,75 +510,92 @@ export default function RenterDashboardRoute() {
       return item;
     }),
   }));
-
-  return (
-    <PortalPageLayout
-      title={t("dashboard.renterPortal", "Renter Portal")}
-      description="Track your bookings, favorites, and messages in one place"
-      sidebarSections={navWithBadges}
-      banner={banner}
-      contentClassName="space-y-8"
-      actions={
-        <Link
-          to="/search"
-          className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          <Search className="mr-2 h-4 w-4" />
-          {t("nav.browseRentals", "Browse Rentals")}
-        </Link>
-      }
-    >
-      {/* Urgent payment alert */}
-      {urgentPaymentBookingId && (
-        <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-4">
-          <TrendingUp className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="font-semibold text-destructive">
-              {t("dashboard.paymentRequired", "Payment Required")}
-            </p>
-            <p className="text-sm text-destructive/80 mt-0.5">
-              {t("dashboard.paymentRequiredDesc", "A booking is waiting for payment. Complete payment to confirm your reservation.")}
-            </p>
+  const customizableSections = useMemo(
+    () => [
+      {
+        id: "renter-personalized-actions",
+        title: "Quick Actions",
+        description: "Personalized actions based on your activity",
+        className: "xl:col-span-2",
+        content: (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2 text-primary" />
+                {personalizedRecommendations.title}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {personalizedRecommendations.description}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  to={personalizedRecommendations.actionUrl}
+                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-center font-medium"
+                >
+                  {personalizedRecommendations.actionText}
+                </Link>
+                {urgentPaymentBookingId && (
+                  <Link
+                    to={`/checkout/${urgentPaymentBookingId}`}
+                    className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors text-center font-medium"
+                  >
+                    Complete Payment
+                  </Link>
+                )}
+                {stats.upcomingBookings > 0 && (
+                  <Link
+                    to="/bookings"
+                    className="flex-1 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors text-center font-medium"
+                  >
+                    View Upcoming
+                  </Link>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ),
+      },
+      {
+        id: "renter-overview",
+        title: "Overview metrics",
+        description: "Track upcoming reservations, favorites, and completed rentals.",
+        className: "xl:col-span-3",
+        content: (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <StatCard
+              icon={Calendar}
+              label={t("bookings.upcoming", "Upcoming Bookings")}
+              value={stats.upcomingBookings}
+              variant="info"
+            />
+            <StatCard
+              icon={Package}
+              label={t("dashboard.stats.activeBookings")}
+              value={stats.activeBookings}
+            />
+            <StatCard
+              icon={CheckCircle}
+              label={t("dashboard.stats.completedBookings", "Completed Bookings")}
+              value={stats.completedBookings}
+              variant="success"
+            />
+            <StatCard
+              icon={Heart}
+              label={t("dashboard.stats.favorites", "Favorites")}
+              value={stats.favoriteCount}
+              variant="warning"
+            />
           </div>
-          <Link
-            to={`/checkout/${urgentPaymentBookingId}`}
-            className="shrink-0 px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
-          >
-            {t("bookings.details.payNow", "Pay Now")}
-          </Link>
-        </div>
-      )}
-      {/* Statistics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          icon={Calendar}
-          label={t("bookings.upcoming", "Upcoming Bookings")}
-          value={stats.upcomingBookings}
-          variant="info"
-        />
-        <StatCard
-          icon={Package}
-          label={t("dashboard.stats.activeBookings")}
-          value={stats.activeBookings}
-        />
-        <StatCard
-          icon={CheckCircle}
-          label={t("dashboard.stats.completedBookings", "Completed Bookings")}
-          value={stats.completedBookings}
-          variant="success"
-        />
-        <StatCard
-          icon={Heart}
-          label={t("dashboard.stats.favorites", "Favorites")}
-          value={stats.favoriteCount}
-          variant="warning"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* My Bookings */}
+        ),
+      },
+      {
+        id: "renter-bookings",
+        title: "Recent bookings",
+        description: "Stay on top of pickup windows, returns, and booking health.",
+        className: "xl:col-span-2",
+        content: (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{t("dashboard.myBookings")}</CardTitle>
@@ -593,43 +630,14 @@ export default function RenterDashboardRoute() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Recommended for You */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2 text-primary" />
-                {t("dashboard.recommendedForYou", "Recommended for You")}
-              </CardTitle>
-              <Link
-                to="/search"
-                className="text-sm text-primary hover:text-primary/90 font-medium"
-              >
-                {t("dashboard.exploreMore", "Explore More")} →
-              </Link>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {recommendations.length > 0 ? (
-                  recommendations.map((listing) => (
-                    <ListingCard key={listing.id} listing={listing} />
-                  ))
-                ) : (
-                  <div className="col-span-2 text-center py-8">
-                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">
-                      No recommendations available
-                    </p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar Content */}
-        <div className="space-y-6">
-          {/* Spending Summary */}
+        ),
+      },
+      {
+        id: "renter-spending",
+        title: "Spending summary",
+        description: "Watch total spend, active rentals, and completed booking count.",
+        className: "xl:col-span-1",
+        content: (
           <Card>
             <CardHeader>
               <CardTitle>
@@ -665,8 +673,43 @@ export default function RenterDashboardRoute() {
               </div>
             </CardContent>
           </Card>
-
-          {/* My Favorites */}
+        ),
+      },
+      {
+        id: "renter-recommendations",
+        title: "Recommendations",
+        description: "Keep a strong discovery lane on the dashboard.",
+        className: "xl:col-span-2",
+        content: (
+          <ProgressiveDisclosure
+            title="Recommended for You"
+            description="Personalized recommendations based on your activity"
+            defaultExpanded={userActivityLevel === "new"}
+            variant="compact"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {recommendations.length > 0 ? (
+                recommendations.map((listing) => (
+                  <ListingCard key={listing.id} listing={listing} />
+                ))
+              ) : (
+                <div className="col-span-2 text-center py-8">
+                  <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    No recommendations available
+                  </p>
+                </div>
+              )}
+            </div>
+          </ProgressiveDisclosure>
+        ),
+      },
+      {
+        id: "renter-favorites",
+        title: "Favorites",
+        description: "Keep saved listings close to the dashboard.",
+        className: "xl:col-span-1",
+        content: (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>
@@ -715,8 +758,7 @@ export default function RenterDashboardRoute() {
                               {listingTitle}
                             </h4>
                             <p className="text-sm text-muted-foreground">
-                              $
-                              {safeNumber(
+                              ${safeNumber(
                                 (
                                   listing as {
                                     pricePerDay?: unknown;
@@ -743,7 +785,21 @@ export default function RenterDashboardRoute() {
               </div>
             </CardContent>
           </Card>
-          {/* Become an Owner CTA */}
+        ),
+      },
+      {
+        id: "renter-activity-feed",
+        title: "Recent activity",
+        description: "Review payment, booking, and review events in one place.",
+        className: "xl:col-span-1",
+        content: <RecentActivity limit={8} showViewAll={false} emptyState="compact" />,
+      },
+      {
+        id: "renter-owner-cta",
+        title: "Become an owner",
+        description: "Promote the owner conversion path without overwhelming the main flow.",
+        className: "xl:col-span-1",
+        content: (
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
             <CardContent className="p-5">
               <div className="flex items-start gap-3 mb-3">
@@ -768,7 +824,113 @@ export default function RenterDashboardRoute() {
               </Link>
             </CardContent>
           </Card>
+        ),
+      },
+    ],
+    [
+      favorites,
+      recentBookings,
+      recommendations,
+      stats.activeBookings,
+      stats.completedBookings,
+      stats.favoriteCount,
+      stats.upcomingBookings,
+      t,
+      totalSpent,
+    ]
+  );
+  const {
+    orderedSections,
+    hiddenIds,
+    pinnedIds,
+    togglePinned,
+    toggleHidden,
+    resetPreferences,
+  } = useDashboardPreferences("renter-dashboard-layout", customizableSections);
+  const visibleSections = orderedSections.filter(
+    (section) => !hiddenIds.has(section.id)
+  );
+
+  // Mobile navigation items
+  const mobileNavItems = [
+    { icon: Search, label: 'Search', href: '/search' },
+    { icon: Heart, label: 'Favorites', href: '/favorites', badge: favorites.length },
+    { icon: MessageSquare, label: 'Messages', href: '/messages', badge: unreadMessages },
+    { icon: Calendar, label: 'Bookings', href: '/bookings' },
+    { icon: User, label: 'Profile', href: '/profile' },
+  ];
+
+  return (
+    <PortalPageLayout
+      title={t("dashboard.renterPortal", "Renter Portal")}
+      description="Track your bookings, favorites, and messages in one place"
+      sidebarSections={navWithBadges}
+      banner={banner}
+      contentClassName="space-y-8"
+      actions={
+        <div className="flex items-center gap-2">
+          <DashboardCustomizer
+            sections={customizableSections}
+            pinnedIds={pinnedIds}
+            hiddenIds={hiddenIds}
+            onTogglePinned={togglePinned}
+            onToggleHidden={toggleHidden}
+            onReset={resetPreferences}
+          />
+          <Link
+            to="/search"
+            className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <Search className="mr-2 h-4 w-4" />
+            {t("nav.browseRentals", "Browse Rentals")}
+          </Link>
         </div>
+      }
+    >
+      {/* Mobile Navigation - Only visible on mobile */}
+      <MobileDashboardNavigation items={mobileNavItems} className="md:hidden mb-4" />
+      
+      {/* First-time help for new users */}
+      {showFirstTimeHelp && (
+        <FirstTimeHelp
+          title="Welcome to Your Dashboard!"
+          description="This is your personal hub for managing rentals, favorites, and messages. Start by browsing items or create your first booking."
+          action={{
+            label: "Browse Items",
+            onClick: () => window.location.href = "/search"
+          }}
+          onDismiss={() => {
+            // Could persist dismissal in localStorage
+          }}
+        />
+      )}
+      
+      {/* Urgent payment alert */}
+      {urgentPaymentBookingId && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-4">
+          <TrendingUp className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-destructive">
+              {t("dashboard.paymentRequired", "Payment Required")}
+            </p>
+            <p className="text-sm text-destructive/80 mt-0.5">
+              {t("dashboard.paymentRequiredDesc", "A booking is waiting for payment. Complete payment to confirm your reservation.")}
+            </p>
+          </div>
+          <Link
+            to={`/checkout/${urgentPaymentBookingId}`}
+            className="shrink-0 px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
+          >
+            {t("bookings.details.payNow", "Pay Now")}
+          </Link>
+        </div>
+      )}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {visibleSections.map((section) => (
+          <div key={section.id} className={section.className}>
+            {section.content}
+          </div>
+        ))}
       </div>
     </PortalPageLayout>
   );

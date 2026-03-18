@@ -139,6 +139,15 @@ describe('BookingStateMachineService', () => {
       expect(transitions).toContain('OWNER_APPROVE');
       expect(transitions).toContain('OWNER_REJECT');
     });
+
+    it('does not expose START_RENTAL to renters for confirmed bookings', () => {
+      const transitions = service.getAvailableTransitions(
+        BookingStatus.CONFIRMED,
+        'RENTER',
+      );
+
+      expect(transitions).not.toContain('START_RENTAL');
+    });
   });
 
   describe('autoTransitionExpiredBookings', () => {

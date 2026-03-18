@@ -1,0 +1,370 @@
+# Multi-Region Deployment Configuration
+# GharBatai Nepal Rental Portal - Production Infrastructure
+
+# ============================================================================
+# AWS Multi-Region Setup
+# ============================================================================
+
+# Primary Region: ap-south-1 (Mumbai) - Primary user base in Nepal/India region
+# Secondary Region: ap-southeast-1 (Singapore) - DR and Asia-Pacific users
+# Tertiary Region: eu-west-1 (Ireland) - European users and global fallback
+
+version: '3.8'
+
+# ============================================================================
+# API Services - Deployed in all regions
+# ============================================================================
+
+services:
+  api-primary:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 5
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+      placement:
+        constraints:
+          - node.labels.region == ap-south-1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+    environment:
+      - NODE_ENV=production
+      - REGION=ap-south-1
+      - IS_PRIMARY_REGION=true
+      - DATABASE_URL=${DATABASE_URL_PRIMARY}
+      - REDIS_URL=${REDIS_URL_PRIMARY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - AWS_REGION=ap-south-1
+      - S3_BUCKET=gharbatai-ap-south-1
+      - CDN_DOMAIN=cdn-ap-south-1.gharbatai.com
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  api-secondary:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+      placement:
+        constraints:
+          - node.labels.region == ap-southeast-1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+    environment:
+      - NODE_ENV=production
+      - REGION=ap-southeast-1
+      - IS_PRIMARY_REGION=false
+      - DATABASE_URL=${DATABASE_URL_SECONDARY}
+      - REDIS_URL=${REDIS_URL_SECONDARY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - AWS_REGION=ap-southeast-1
+      - S3_BUCKET=gharbatai-ap-southeast-1
+      - CDN_DOMAIN=cdn-ap-southeast-1.gharbatai.com
+      - REPLICATE_FROM=ap-south-1
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  api-tertiary:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+      placement:
+        constraints:
+          - node.labels.region == eu-west-1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+    environment:
+      - NODE_ENV=production
+      - REGION=eu-west-1
+      - IS_PRIMARY_REGION=false
+      - DATABASE_URL=${DATABASE_URL_TERTIARY}
+      - REDIS_URL=${REDIS_URL_TERTIARY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - AWS_REGION=eu-west-1
+      - S3_BUCKET=gharbatai-eu-west-1
+      - CDN_DOMAIN=cdn-eu-west-1.gharbatai.com
+      - REPLICATE_FROM=ap-south-1
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================================
+  # Web Frontend - Static sites deployed to edge locations
+  # ============================================================================
+
+  web-primary:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 3
+      placement:
+        constraints:
+          - node.labels.region == ap-south-1
+    environment:
+      - NODE_ENV=production
+      - API_URL=https://api-ap-south-1.gharbatai.com
+      - REGION=ap-south-1
+    networks:
+      - frontend
+
+  web-secondary:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.labels.region == ap-southeast-1
+    environment:
+      - NODE_ENV=production
+      - API_URL=https://api-ap-southeast-1.gharbatai.com
+      - REGION=ap-southeast-1
+    networks:
+      - frontend
+
+  # ============================================================================
+  # Load Balancer / Reverse Proxy
+  # ============================================================================
+
+  nginx-primary:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/mvp.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.labels.region == ap-south-1
+          - node.labels.loadbalancer == true
+    networks:
+      - frontend
+      - backend
+
+  # ============================================================================
+  # Data Replication Services
+  # ============================================================================
+
+  db-replicator:
+    image: postgres:15-alpine
+    command: |
+      sh -c "
+        # Logical replication from primary to secondaries
+        pg_dump -h primary-db.gharbatai.com -U replicator --schema-only | psql -h secondary-db.gharbatai.com
+        pg_recvlogical -h primary-db.gharbatai.com -U replicator --slot=secondary_slot --start
+      "
+    environment:
+      - PGPASSWORD=${REPLICATOR_PASSWORD}
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.region == ap-southeast-1
+    networks:
+      - backend
+
+  # ============================================================================
+  # Monitoring & Observability (per region)
+  # ============================================================================
+
+  prometheus-primary:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.region == ap-south-1
+          - node.labels.monitoring == true
+    networks:
+      - backend
+
+  grafana-primary:
+    image: grafana/grafana:latest
+    volumes:
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.region == ap-south-1
+          - node.labels.monitoring == true
+    networks:
+      - backend
+
+networks:
+  frontend:
+    driver: overlay
+  backend:
+    driver: overlay
+    encrypted: true
+
+# ============================================================================
+# AWS Global Accelerator & Route53 Configuration
+# ============================================================================
+
+# Terraform/CloudFormation equivalent:
+
+# resource "aws_globalaccelerator_accelerator" "main" {
+#   name            = "gharbatai-global"
+#   ip_address_type = "IPV4"
+#   enabled         = true
+# }
+
+# resource "aws_globalaccelerator_endpoint_group" "primary" {
+#   listener_arn = aws_globalaccelerator_listener.main.id
+#   endpoint_configuration {
+#     endpoint_id = aws_lb.primary.arn
+#     weight      = 100
+#   }
+#   health_check_protocol = "HTTPS"
+#   health_check_path     = "/health"
+#   health_check_port     = 443
+# }
+
+# Route53 Latency-Based Routing:
+# 
+# api.gharbatai.com (Latency-based)
+# ├── ap-south-1 (Mumbai) - Primary
+# │   └── Target: api-ap-south-1.gharbatai.com
+# ├── ap-southeast-1 (Singapore) - Secondary
+# │   └── Target: api-ap-southeast-1.gharbatai.com
+# └── eu-west-1 (Ireland) - Tertiary
+#     └── Target: api-eu-west-1.gharbatai.com
+
+# CDN Configuration (CloudFront):
+# - Origin Groups with failover
+# - Edge caching for static assets
+# - Geographic restrictions if needed
+# - Real-time logs to S3
+
+# Database Setup:
+# Primary: RDS PostgreSQL in ap-south-1 (Multi-AZ)
+# Read Replicas:
+#   - ap-southeast-1 (async replication)
+#   - eu-west-1 (async replication)
+# Backup: Cross-region snapshots to S3
+
+# Redis/ElastiCache:
+# Primary: Cluster in ap-south-1
+# Replicas: Read replicas in ap-southeast-1, eu-west-1
+# Mode: Cluster mode enabled for auto-failover
+
+# S3 Buckets (regional replication):
+# Primary: gharbatai-ap-south-1
+# Replication:
+#   - gharbatai-ap-southeast-1 (CRR)
+#   - gharbatai-eu-west-1 (CRR)
+
+# Event Bus (EventBridge):
+# - Global event bus for cross-region events
+# - Archive and replay capabilities
+# - Event rules for regional routing
+
+# ============================================================================
+# Deployment Strategy
+# ============================================================================
+
+# 1. Blue-Green Deployment per Region
+#    - Deploy new version to "green" environment
+#    - Run health checks and smoke tests
+#    - Switch traffic gradually (canary)
+#    - Monitor error rates
+#    - Complete cutover or rollback
+
+# 2. Canary Deployment
+#    - Route 5% traffic to new version
+#    - Monitor for 10 minutes
+#    - Increase to 25%, 50%, 100%
+#    - Automatic rollback on error threshold
+
+# 3. Database Migrations
+#    - Run migrations in primary region first
+#    - Verify backward compatibility
+#    - Replicate schema changes to secondaries
+#    - Rolling update of application servers
+
+# ============================================================================
+# Disaster Recovery Plan
+# ============================================================================
+
+# RPO (Recovery Point Objective): < 5 minutes
+# RTO (Recovery Time Objective): < 15 minutes
+
+# Automatic Failover:
+# 1. Health checks detect primary region failure
+# 2. Route53 updates to point to secondary region
+# 3. Global Accelerator promotes secondary endpoint
+# 4. Database failover (promote read replica)
+# 5. S3 cross-region replication provides data consistency
+
+# Manual Failback:
+# 1. Verify primary region recovery
+# 2. Sync data from secondary back to primary
+# 3. Gradually shift traffic back
+# 4. Resume normal operations
+
+# Data Consistency:
+# - Last-write-wins for non-critical data
+# - Conflict resolution queue for critical data
+# - Audit log of all conflicts

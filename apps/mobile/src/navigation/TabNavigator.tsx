@@ -1,7 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SearchScreen } from '../screens/SearchScreen';
 import { BookingsScreen } from '../screens/BookingsScreen';
@@ -19,25 +18,14 @@ export type TabParamList = {
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-
-const TAB_ICONS: Record<string, { active: IoniconName; inactive: IoniconName }> = {
-  HomeTab: { active: 'home', inactive: 'home-outline' },
-  SearchTab: { active: 'search', inactive: 'search-outline' },
-  BookingsTab: { active: 'calendar', inactive: 'calendar-outline' },
-  MessagesTab: { active: 'chatbubble', inactive: 'chatbubble-outline' },
-  ProfileTab: { active: 'person', inactive: 'person-outline' },
-};
-
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons = TAB_ICONS[name];
-  if (!icons) return null;
   return (
-    <View style={styles.iconContainer}>
-      <Ionicons
-        name={focused ? icons.active : icons.inactive}
-        size={24}
-        color={focused ? colors.primary : colors.textSecondary}
+    <View style={styles.iconContainer} testID={`tab-icon-${name}`}>
+      <View
+        style={[
+          styles.iconDot,
+          { backgroundColor: focused ? colors.primary : colors.textSecondary },
+        ]}
       />
     </View>
   );
@@ -81,5 +69,10 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
   },
 });

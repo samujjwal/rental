@@ -14,6 +14,7 @@ import {
   Query,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { Request, Response } from 'express';
@@ -49,6 +50,7 @@ import {
 @UseInterceptors(RefreshTokenCookieInterceptor)
 export class AuthController {
   constructor(
+    private readonly configService: ConfigService,
     private readonly authService: AuthService,
     private readonly oauthService: OAuthService,
     private readonly otpService: OtpService,
@@ -87,24 +89,29 @@ export class AuthController {
     @Req() req: Request,
   ) {
     // SECURITY: Multi-layer protection for dev-login
+    // Load configuration values from process.env (populated by ConfigModule and/or dotenv)
+    const nodeEnv = process.env.NODE_ENV;
+    const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === 'true';
+    const devSecret = process.env.DEV_LOGIN_SECRET;
+    const allowedIpsStr = process.env.DEV_LOGIN_ALLOWED_IPS || '';
+    
     // 1. Environment check
-    if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
+    if (nodeEnv !== 'development' && nodeEnv !== 'test') {
       throw new NotFoundException('Development login not available');
     }
     
     // 2. Feature flag check
-    if (process.env.DEV_LOGIN_ENABLED !== 'true') {
+    if (!devLoginEnabled) {
       throw new NotFoundException('Development login not enabled');
     }
     
     // 3. IP whitelist check (optional additional security)
-    const allowedIps = process.env.DEV_LOGIN_ALLOWED_IPS?.split(',').filter(ip => ip.trim()) || [];
+    const allowedIps = allowedIpsStr.split(',').filter(ip => ip.trim()) || [];
     if (allowedIps.length > 0 && !allowedIps.includes(ipAddress)) {
       throw new NotFoundException('Development login not allowed from this IP');
     }
     
     // 4. Secret key verification
-    const devSecret = process.env.DEV_LOGIN_SECRET;
     if (!devSecret || body?.secret !== devSecret) {
       throw new NotFoundException('Invalid development login secret');
     }

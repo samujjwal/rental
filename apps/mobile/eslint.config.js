@@ -58,4 +58,13 @@ export default [
       'no-undef': 'off',
     },
   },
+  {
+    ignores: [
+      'coverage/**',
+      'node_modules/**',
+      'dist/**',
+      'build/**',
+      'expo/**',
+    ],
+  },
 ];

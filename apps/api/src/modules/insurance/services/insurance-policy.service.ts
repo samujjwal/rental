@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { InsuranceStatus } from '@rental-portal/database';
 import { $Enums } from '@rental-portal/database';
-import { InsurancePolicy } from './insurance.service';
+import { InsurancePolicy } from './insurance.types';
 
 @Injectable()
 export class InsurancePolicyService {

@@ -3,7 +3,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard, RolesGuard, Roles } from '@/common/auth';
 import { UserRole } from '@rental-portal/database';
 import { TaxPolicyEngineService } from '../services/tax-policy-engine.service';
-import { UpsertTaxPolicyDto, CalculateTaxDto, UpdatePolicyVersionDto } from '../dto/marketplace.dto';
+import {
+  MarketplaceCalculateTaxDto,
+  UpdatePolicyVersionDto,
+  UpsertTaxPolicyDto,
+} from '../dto/marketplace.dto';
 
 @ApiTags('Marketplace - Tax Policy Engine')
 @Controller('marketplace/tax')
@@ -39,7 +43,7 @@ export class TaxPolicyController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Calculate taxes for a transaction amount' })
   @ApiResponse({ status: 200, description: 'Tax calculation completed' })
-  async calculateTax(@Body() dto: CalculateTaxDto) {
+  async calculateTax(@Body() dto: MarketplaceCalculateTaxDto) {
     return this.taxEngine.calculateTax(dto.country, dto.amount, {
       region: dto.region,
       date: dto.date ? new Date(dto.date) : undefined,

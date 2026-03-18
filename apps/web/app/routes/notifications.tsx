@@ -1,5 +1,5 @@
 import type { MetaFunction } from "react-router";
-import { useLoaderData, useSearchParams, redirect, Link } from "react-router";
+import { useLoaderData, useSearchParams, redirect, useNavigate } from "react-router";
 import { useState } from "react";
 import {
   Bell,
@@ -176,6 +176,7 @@ function NotificationItem({
   onDelete: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const Icon = TYPE_ICONS[notification.type] || Bell;
   const dateLabel = safeDateLabel(notification.createdAt);
   const link = getNotificationLink(notification);
@@ -183,6 +184,13 @@ function NotificationItem({
   const handleClick = () => {
     if (!notification.read) {
       onMarkRead(notification.id);
+    }
+  };
+
+  const handleActivate = () => {
+    handleClick();
+    if (link) {
+      navigate(link);
     }
   };
 
@@ -258,9 +266,20 @@ function NotificationItem({
     >
       <CardContent className="p-4">
         {link ? (
-          <Link to={link} onClick={handleClick} className="block">
+          <div
+            role="link"
+            tabIndex={0}
+            onClick={handleActivate}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleActivate();
+              }
+            }}
+            className="block"
+          >
             {inner}
-          </Link>
+          </div>
         ) : (
           <div onClick={handleClick}>{inner}</div>
         )}

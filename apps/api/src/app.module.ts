@@ -42,6 +42,7 @@ import { PolicyEngineModule } from './modules/policy-engine/policy-engine.module
 import { PricingModule } from './modules/pricing/pricing.module';
 import { ComplianceModule } from './modules/compliance/compliance.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { ActivityModule } from './modules/activity/activity.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { CleanupModule } from './common/cleanup/cleanup.module';
 import { SchedulerModule } from './common/scheduler/scheduler.module';
@@ -57,7 +58,7 @@ import { ConfigCascadeModule } from './common/config/config-cascade.module';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
-      envFilePath: ['../../.env', '.env.local', '.env'],
+      envFilePath: ['apps/api/.env', 'apps/api/.env.local', '.env'],
     }),
 
     // Config cascade: env → org → user preferences
@@ -127,6 +128,7 @@ import { ConfigCascadeModule } from './common/config/config-cascade.module';
     PricingModule,
     ComplianceModule,
     MarketplaceModule,
+    ActivityModule,
     MetricsModule,
     CleanupModule,
     SchedulerModule,

@@ -8,6 +8,8 @@ import { StripeTaxService } from './services/stripe-tax.service';
 import { PaymentEventsService } from './services/payment-events.service';
 import { PaymentProviderFactory } from './services/payment-provider-factory.service';
 import { EscrowService } from './services/escrow.service';
+import { PaymentCommandLogService } from './services/payment-command-log.service';
+import { PaymentCommandReconciliationService } from './services/payment-command-reconciliation.service';
 import { PaymentProcessor } from './processors/payment.processor';
 import { PAYMENT_PROVIDER } from './interfaces/payment-provider.interface';
 import { PaymentsController } from './controllers/payments.controller';
@@ -34,6 +36,8 @@ import { EventsModule } from '@/common/events/events.module';
     PaymentEventsService,
     PaymentProviderFactory,
     EscrowService,
+    PaymentCommandLogService,
+    PaymentCommandReconciliationService,
     PaymentProcessor,
     {
       provide: PAYMENT_PROVIDER,
@@ -47,6 +51,7 @@ import { EventsModule } from '@/common/events/events.module';
     PaymentDataService,
     PaymentProviderFactory,
     EscrowService,
+    PaymentCommandLogService,
     PAYMENT_PROVIDER,
   ],
 })

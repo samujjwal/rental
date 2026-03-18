@@ -73,6 +73,21 @@ export default () => ({
 
   // Security
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '10', 10),
+  DEV_LOGIN_ENABLED: process.env.DEV_LOGIN_ENABLED === 'true',
+  DEV_LOGIN_SECRET: process.env.DEV_LOGIN_SECRET,
+
+  // Stripe keys (root-level export for service injection)
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+  STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
+  STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
+
+  // Development login (dev only)
+  devLogin: {
+    enabled: process.env.DEV_LOGIN_ENABLED === 'true',
+    secret: process.env.DEV_LOGIN_SECRET,
+    allowedIps: process.env.DEV_LOGIN_ALLOWED_IPS || '',
+  },
 
   // Rate limiting
   rateLimit: {

@@ -96,6 +96,8 @@ describe("clientLoader", () => {
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getUserReviews.mockResolvedValue({ reviews: mockReviews, total: 3 });
     const r = (await clientLoader({ request: new Request("http://localhost/reviews") } as any)) as any;
+    expect(r.statsScope).toBe("current_results");
+    expect(r.statsAvailable).toBe(true);
     expect(r.stats.total).toBe(3);
     expect(r.stats.ratings[5]).toBe(2);
     expect(r.stats.ratings[3]).toBe(1);
@@ -111,6 +113,50 @@ describe("clientLoader", () => {
     const r = (await clientLoader({ request: new Request("http://localhost/reviews?rating=5") } as any)) as any;
     expect(mocks.getUserReviews).toHaveBeenCalledWith("u1", "received", 1, 10, 5);
     expect(r.reviews).toHaveLength(2); // two 5-star reviews
+  });
+
+  it("uses global stats from the API when filtered", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    const filtered = mockReviews.filter((review) => review.rating === 5);
+    mocks.getUserReviews.mockResolvedValue({
+      reviews: filtered,
+      total: 2,
+      stats: {
+        totalReviews: 3,
+        averageRating: 4.33,
+        ratings: { 5: 2, 4: 0, 3: 1, 2: 0, 1: 0 },
+        pending: 1,
+      },
+    });
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/reviews?rating=5"),
+    } as any)) as any;
+
+    expect(r.statsScope).toBe("overall");
+    expect(r.statsAvailable).toBe(true);
+    expect(r.stats.total).toBe(3);
+    expect(r.stats.averageRating).toBe(4.33);
+    expect(r.stats.ratings[3]).toBe(1);
+    expect(r.stats.pending).toBe(1);
+  });
+
+  it("does not derive overall stats from a paginated slice when API summary is missing", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getUserReviews.mockResolvedValue({
+      reviews: mockReviews.slice(0, 2),
+      total: 3,
+    });
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/reviews?page=1"),
+    } as any)) as any;
+
+    expect(r.statsScope).toBe("unavailable");
+    expect(r.statsAvailable).toBe(false);
+    expect(r.stats.total).toBe(0);
+    expect(r.stats.averageRating).toBe(0);
+    expect(r.stats.ratings[5]).toBe(0);
   });
 
   it("clamps page between 1 and 1000", async () => {

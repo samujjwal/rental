@@ -20,14 +20,11 @@ import { formatCurrency } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
 import { toast } from "~/lib/toast";
+import { isAppEntityId } from "~/utils/entity-id";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Dispute Details | GharBatai Rentals" }];
 };
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
 
 const STATUS_CONFIG: Record<
   string,
@@ -80,7 +77,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   }
 
   const disputeId = params.id;
-  if (!isUuid(disputeId)) {
+  if (!isAppEntityId(disputeId)) {
     return redirect("/disputes");
   }
 
@@ -89,7 +86,8 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     const initiatorId = dispute.initiator?.id || dispute.initiatorId;
     const defendantId = dispute.defendant?.id || dispute.defendantId;
     const isParticipant = [initiatorId, defendantId].some((id) => id === user.id);
-    if (!isParticipant && user.role !== "admin") {
+    const isAdmin = user.role === "admin" || user.role === "SUPER_ADMIN";
+    if (!isParticipant && !isAdmin) {
       return redirect("/disputes");
     }
     return { dispute };
@@ -105,7 +103,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
   }
 
   const disputeId = params.id;
-  if (!isUuid(disputeId)) {
+  if (!isAppEntityId(disputeId)) {
     return { error: "Dispute ID is required" };
   }
 
@@ -450,4 +448,3 @@ export default function DisputeDetailPage() {
 }
 
 export { RouteErrorBoundary as ErrorBoundary };
-

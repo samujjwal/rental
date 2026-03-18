@@ -2,7 +2,7 @@
 # Browse Listings Flow — E2E Maestro Test
 # Validates listing search, browse, and detail navigation.
 # ============================================================================
-appId: com.gharbatai.rental
+appId: com.gharbatai.mobile
 
 ---
 
@@ -32,12 +32,7 @@ appId: com.gharbatai.rental
 
 # 6. Listing detail screen should show
 - assertVisible:
-    text: "Book|Request|Contact"
+    text: "Book now|Book|Request|Contact"
 
-# 7. Verify price and description are visible
-- assertVisible:
-    id: "listing-price"
-    optional: true
-
-# 8. Go back to search results
+# 7. Go back to search results
 - back

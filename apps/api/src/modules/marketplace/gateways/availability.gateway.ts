@@ -10,7 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { WsJwtAuthGuard } from '@/common/auth';
+import { WsJwtAuthGuard } from '@/modules/auth/guards/ws-jwt-auth.guard';
 import { AvailabilityGraphService } from '../services/availability-graph.service';
 
 interface AuthenticatedSocket extends Socket {

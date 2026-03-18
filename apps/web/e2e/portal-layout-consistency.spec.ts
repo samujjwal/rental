@@ -13,10 +13,28 @@ async function expectPortalShell(page: Page, route: RouteExpectation) {
   await page.goto(route.path, { waitUntil: "domcontentloaded" });
   await expect(page.locator("h1")).toContainText(route.heading);
 
-  for (const label of route.sidebarLinks) {
+  const viewport = page.viewportSize();
+  const isMobileViewport = (viewport?.width ?? 1280) < 1024;
+  if (isMobileViewport) {
+    const drawerToggle = page.getByRole("button", {
+      name: "Open navigation menu",
+    });
+    const headerToggle = page.getByRole("button", { name: "Open menu" });
+    const mobileMenuButton = (await drawerToggle.count()) > 0
+      ? drawerToggle
+      : headerToggle;
+
+    await expect(mobileMenuButton).toBeVisible();
+    await mobileMenuButton.click({ force: true });
     await expect(
-      page.getByRole("link", { name: label, exact: true }).first()
+      page.getByRole("dialog", { name: /Navigation menu/i })
     ).toBeVisible();
+  } else {
+    for (const label of route.sidebarLinks) {
+      await expect(
+        page.getByRole("link", { name: label, exact: true }).first()
+      ).toBeVisible();
+    }
   }
 
   if (route.actionText) {
@@ -25,6 +43,13 @@ async function expectPortalShell(page: Page, route: RouteExpectation) {
 
   if (route.extraCheck) {
     await route.extraCheck(page);
+  }
+
+  const closeMenuButton = page.getByRole("button", {
+    name: /Close navigation menu|Close menu/i,
+  });
+  if (await closeMenuButton.isVisible().catch(() => false)) {
+    await closeMenuButton.click();
   }
 }
 

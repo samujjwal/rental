@@ -244,6 +244,7 @@ export default function OwnerCalendarPage() {
                 <button
                   onClick={goToPrevMonth}
                   className="p-2 hover:bg-muted rounded-lg transition-colors"
+                  aria-label="Previous month"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -253,6 +254,7 @@ export default function OwnerCalendarPage() {
                 <button
                   onClick={goToNextMonth}
                   className="p-2 hover:bg-muted rounded-lg transition-colors"
+                  aria-label="Next month"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>

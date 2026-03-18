@@ -226,36 +226,34 @@ describe("adminApi", () => {
       });
     });
 
-    it("resolveDispute delegates to updateDispute with RESOLVED status", async () => {
+    it("resolveDispute calls PATCH /admin/disputes/:id/resolve", async () => {
       mockApi.patch.mockResolvedValue({ id: "d1" });
       await adminApi.resolveDispute("d1", {
         resolution: "Partial refund",
         notes: "50% refund",
         resolvedAmount: 500,
       });
-      expect(mockApi.patch).toHaveBeenCalledWith("/disputes/d1", {
-        status: "RESOLVED",
-        resolution: "Partial refund",
-        adminNotes: "50% refund",
-        resolvedAmount: 500,
+      expect(mockApi.patch).toHaveBeenCalledWith("/admin/disputes/d1/resolve", {
+        decision: "REFUND",
+        refundAmount: 500,
+        reason: "Partial refund",
+        notes: "50% refund",
       });
     });
 
-    it("assignDispute sets UNDER_REVIEW status", async () => {
+    it("assignDispute calls PATCH /admin/disputes/:id/assign", async () => {
       mockApi.patch.mockResolvedValue({ id: "d1" });
       await adminApi.assignDispute("d1", "admin-123");
-      expect(mockApi.patch).toHaveBeenCalledWith("/disputes/d1", {
-        status: "UNDER_REVIEW",
-        adminNotes: "Assigned to admin-123",
+      expect(mockApi.patch).toHaveBeenCalledWith("/admin/disputes/d1/assign", {
+        adminId: "admin-123",
       });
     });
 
-    it("assignDispute without assigneeId uses default note", async () => {
+    it("assignDispute without assigneeId still calls admin assign endpoint", async () => {
       mockApi.patch.mockResolvedValue({ id: "d1" });
       await adminApi.assignDispute("d1");
-      expect(mockApi.patch).toHaveBeenCalledWith("/disputes/d1", {
-        status: "UNDER_REVIEW",
-        adminNotes: "Assigned for review",
+      expect(mockApi.patch).toHaveBeenCalledWith("/admin/disputes/d1/assign", {
+        adminId: undefined,
       });
     });
   });

@@ -2,7 +2,7 @@
 # Profile & Settings Flow — E2E Maestro Test
 # Validates profile viewing, settings navigation, and logout.
 # ============================================================================
-appId: com.gharbatai.rental
+appId: com.gharbatai.mobile
 
 ---
 
@@ -17,17 +17,11 @@ appId: com.gharbatai.rental
     text: "Profile|Account"
 
 # 3. Navigate to Settings
-- tapOn:
-    text: "Settings"
-    optional: true
-- tapOn:
-    id: "settings-button"
-    optional: true
+- tapOn: "Settings"
 
 # 4. Settings screen shows options
 - assertVisible:
     text: "Settings|Preferences"
-    optional: true
 
 # 5. Go back to Profile
 - back

@@ -24,7 +24,9 @@ const getCategoryName = (category: unknown): string | null => {
   return null;
 };
 
-export function SearchListingCard({ listing }: { listing: Listing }) {
+import React from "react";
+
+export const SearchListingCard = React.memo(function SearchListingCard({ listing }: { listing: Listing }) {
   const listingId = safeText(listing.id);
   const listingTitle = safeText(listing.title, "Listing");
   const ratingValue = listing.rating ?? null;
@@ -96,9 +98,9 @@ export function SearchListingCard({ listing }: { listing: Listing }) {
       </div>
     </Link>
   );
-}
+});
 
-export function SearchListingListItem({ listing }: { listing: Listing }) {
+export const SearchListingListItem = React.memo(function SearchListingListItem({ listing }: { listing: Listing }) {
   const listingId = safeText(listing.id);
   const listingTitle = safeText(listing.title, "Listing");
   const ratingValue = listing.rating ?? null;
@@ -173,9 +175,9 @@ export function SearchListingListItem({ listing }: { listing: Listing }) {
       </div>
     </Link>
   );
-}
+});
 
-export function SearchListingCompactCard({
+export const SearchListingCompactCard = React.memo(function SearchListingCompactCard({
   listing,
   onHighlightChange,
 }: {
@@ -231,4 +233,4 @@ export function SearchListingCompactCard({
       </div>
     </Link>
   );
-}
+});

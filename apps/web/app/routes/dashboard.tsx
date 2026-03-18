@@ -14,6 +14,7 @@ import {
   Package,
   Banknote,
 } from "lucide-react";
+import { RecentActivity } from "~/components/dashboard/RecentActivity";
 import {
   Card,
   CardContent,
@@ -203,23 +204,8 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Recent Activity Placeholder */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("dashboard.recentActivity")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-12">
-            <Home className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">
-              {t("dashboard.noRecentActivity")}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("dashboard.getStartedHint")}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Recent Activity */}
+      <RecentActivity />
     </PortalPageLayout>
   );
 }

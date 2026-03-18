@@ -4,6 +4,8 @@ import type {
   CreateBookingRequest,
   BookingCalculation,
   BookingAvailability,
+  BookingAvailableTransitionsResponse,
+  ConditionReport,
 } from "~/types/booking";
 
 export const bookingsApi = {
@@ -29,6 +31,14 @@ export const bookingsApi = {
 
   async getBookingById(id: string): Promise<Booking> {
     return api.get<Booking>(`/bookings/${id}`);
+  },
+
+  async getAvailableTransitions(
+    id: string
+  ): Promise<BookingAvailableTransitionsResponse> {
+    return api.get<BookingAvailableTransitionsResponse>(
+      `/bookings/${id}/available-transitions`
+    );
   },
 
   async createBooking(data: CreateBookingRequest): Promise<Booking> {
@@ -99,6 +109,27 @@ export const bookingsApi = {
 
   async getBlockedDates(listingId: string): Promise<string[]> {
     return api.get<string[]>(`/bookings/blocked-dates/${listingId}`);
+  },
+
+  async getConditionReports(bookingId: string): Promise<ConditionReport[]> {
+    return api.get<ConditionReport[]>(`/bookings/${bookingId}/condition-reports`);
+  },
+
+  async updateConditionReport(
+    bookingId: string,
+    reportId: string,
+    dto: {
+      notes?: string;
+      damages?: string;
+      signature?: string;
+      photos?: string[];
+      checklistData?: string;
+    }
+  ): Promise<ConditionReport> {
+    return api.patch<ConditionReport>(
+      `/bookings/${bookingId}/condition-reports/${reportId}`,
+      dto
+    );
   },
 
 };

@@ -26,6 +26,7 @@ import { Button, Badge, RouteErrorBoundary } from "~/components/ui";
 import { toast } from "~/lib/toast";
 import { formatCurrency } from "~/lib/utils";
 import { useTranslation } from "react-i18next";
+import { isAppEntityId } from "~/utils/entity-id";
 
 export const meta: MetaFunction = () => {
   return [
@@ -59,9 +60,6 @@ interface FavoriteListing {
   savedAt?: string;
 }
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string): boolean => UUID_PATTERN.test(value);
 const MAX_SEARCH_QUERY_LENGTH = 120;
 const safeNumber = (value: unknown): number => {
   const parsed = Number(value);
@@ -141,7 +139,7 @@ export default function FavoritesPage() {
 
   const handleRemoveFavorite = useCallback(
     async (listingId: string) => {
-      if (!isUuid(listingId)) {
+      if (!isAppEntityId(listingId)) {
         return;
       }
       const confirmed = window.confirm(t("favorites.removeConfirm"));

@@ -96,14 +96,27 @@ export class StripeService implements PaymentProvider {
     private readonly prisma: PrismaService,
   ) {
     const stripeKey = configService.get<string>('STRIPE_SECRET_KEY');
+    const nodeEnv = configService.get<string>('nodeEnv') || process.env.NODE_ENV;
+    
     if (!stripeKey) {
-      throw new Error(
-        'STRIPE_SECRET_KEY is not configured. Stripe payments will not work.',
-      );
+      if (nodeEnv === 'development') {
+        this.logger.warn(
+          'STRIPE_SECRET_KEY not configured — Stripe disabled in development, using placeholder client',
+        );
+        // Create a dummy placeholder Stripe client for development
+        this.stripe = new Stripe('sk_test_dev_placeholder_key', {
+          apiVersion: '2026-01-28.clover',
+        });
+      } else {
+        throw new Error(
+          'STRIPE_SECRET_KEY is not configured. Stripe payments will not work.',
+        );
+      }
+    } else {
+      this.stripe = new Stripe(stripeKey, {
+        apiVersion: '2026-01-28.clover',
+      });
     }
-    this.stripe = new Stripe(stripeKey, {
-      apiVersion: '2026-01-28.clover',
-    });
   }
 
   async createConnectAccount(userId: string, email: string): Promise<string> {
@@ -210,12 +223,20 @@ export class StripeService implements PaymentProvider {
     // The client-side test flow must also skip Stripe.js confirmation and call
     // POST /bookings/:id/bypass-confirm to advance the booking to CONFIRMED.
     if (this.configService.get<string>('STRIPE_TEST_BYPASS') === 'true') {
-      const syntheticPiId = `pi_test_bypass_${bookingId}`;
+      const charSet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      const makeToken = (length: number) =>
+        Array.from({ length })
+          .map(() => charSet.charAt(Math.floor(Math.random() * charSet.length)))
+          .join('');
+
+      const syntheticPiId = `pi_${makeToken(24)}`;
+      const secretSuffix = makeToken(32);
+
       this.logger.warn(
         `[STRIPE_TEST_BYPASS] Returning synthetic PaymentIntent ${syntheticPiId} for booking ${bookingId}`,
       );
       return {
-        clientSecret: `${syntheticPiId}_secret`,
+        clientSecret: `${syntheticPiId}_secret_${secretSuffix}`,
         paymentIntentId: syntheticPiId,
         providerId: this.providerId,
       };
@@ -274,6 +295,20 @@ export class StripeService implements PaymentProvider {
         { idempotencyKey: `capture_${paymentIntentId}` },
       ),
     );
+  }
+
+  async getPaymentIntentStatus(paymentIntentId: string): Promise<{
+    status: string;
+    failureReason?: string | null;
+  }> {
+    const paymentIntent = await withRetry(() =>
+      this.stripe.paymentIntents.retrieve(paymentIntentId),
+    );
+
+    return {
+      status: paymentIntent.status,
+      failureReason: paymentIntent.last_payment_error?.message ?? null,
+    };
   }
 
   async holdDeposit(bookingIdOrParams: string | HoldDepositParams, amount?: number, currency?: string): Promise<string> {
@@ -424,6 +459,10 @@ export class StripeService implements PaymentProvider {
     const resolvedAmount = typeof paymentIntentIdOrParams === 'string' ? amount : paymentIntentIdOrParams.amount;
     const resolvedCurrency = typeof paymentIntentIdOrParams === 'string' ? currency : paymentIntentIdOrParams.currency;
     const resolvedReason = typeof paymentIntentIdOrParams === 'string' ? reason : paymentIntentIdOrParams.reason;
+    const idempotencyKey =
+      typeof paymentIntentIdOrParams === 'string'
+        ? undefined
+        : paymentIntentIdOrParams.idempotencyKey;
 
     if (resolvedAmount == null || resolvedAmount <= 0) {
       throw new BadRequestException('Refund amount is required and must be greater than zero');
@@ -433,7 +472,8 @@ export class StripeService implements PaymentProvider {
     }
 
     // Use deterministic idempotency key to prevent duplicate refunds on network retries
-    const refundIdempotencyKey = `refund_${piId}_${toMinorUnits(resolvedAmount, resolvedCurrency)}`;
+    const refundIdempotencyKey =
+      idempotencyKey || `refund_${piId}_${toMinorUnits(resolvedAmount, resolvedCurrency)}`;
     try {
       const refund = await this.stripe.refunds.create(
         {
@@ -454,6 +494,8 @@ export class StripeService implements PaymentProvider {
     const accountId = typeof accountIdOrParams === 'string' ? accountIdOrParams : accountIdOrParams.accountId;
     const resolvedAmount = typeof accountIdOrParams === 'string' ? amount : accountIdOrParams.amount;
     const resolvedCurrency = typeof accountIdOrParams === 'string' ? currency : accountIdOrParams.currency;
+    const idempotencyKey =
+      typeof accountIdOrParams === 'string' ? undefined : accountIdOrParams.idempotencyKey;
 
     if (resolvedAmount == null || resolvedAmount <= 0) {
       throw new BadRequestException('Payout amount is required and must be greater than zero');
@@ -471,6 +513,7 @@ export class StripeService implements PaymentProvider {
           },
           {
             stripeAccount: accountId,
+            idempotencyKey,
           },
         ),
       );

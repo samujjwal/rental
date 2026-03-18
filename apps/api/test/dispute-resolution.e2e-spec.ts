@@ -146,7 +146,7 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
         .expect(400);
     });
 
-    it('POST /disputes → 403 (Unauthorized user)', async () => {
+    it('POST /disputes → 201 (Owner can initiate dispute as a booking participant)', async () => {
       const disputeData = {
         bookingId: testBooking.id,
         reason: 'PROPERTY_DAMAGE',
@@ -154,12 +154,12 @@ describe('🚨 Dispute Resolution E2E Suite', () => {
         requestedAmount: 50000,
       };
 
-      // Owner tries to initiate dispute (should fail)
+      // Owners are booking participants too, so they can initiate disputes.
       await request(app.getHttpServer())
         .post('/disputes')
         .set('Authorization', `Bearer ${ownerAccessToken}`)
         .send(disputeData)
-        .expect(403);
+        .expect(201);
     });
   });
 

@@ -28,6 +28,21 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+function formatUptime(systemHealth: { uptime?: number; processUptimeSeconds?: number } | null) {
+  if (!systemHealth) {
+    return "0%";
+  }
+
+  if (typeof systemHealth.processUptimeSeconds === "number") {
+    const totalSeconds = systemHealth.processUptimeSeconds;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+  }
+
+  return `${systemHealth.uptime || 0}%`;
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -116,7 +131,7 @@ export default function SystemSettingsPage() {
       status: systemHealth?.services?.database?.status === "healthy" ? "active" : "warning",
       stats: [
         { label: t("admin.apiStatus"), value: systemHealth?.status || "Unknown" },
-        { label: t("admin.uptime"), value: `${systemHealth?.uptime || 0}%` },
+        { label: t("admin.uptime"), value: formatUptime(systemHealth) },
       ],
     },
     {
@@ -234,7 +249,7 @@ export default function SystemSettingsPage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">{t("admin.uptime")}</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {systemHealth.uptime || 0}%
+                  {formatUptime(systemHealth)}
                 </p>
               </div>
               <Activity className="w-8 h-8 text-gray-400" />

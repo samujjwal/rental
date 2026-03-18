@@ -246,11 +246,16 @@ describe('ListingsController', () => {
     });
 
     it('returns listing with mapped properties', async () => {
-      listingsService.findById.mockResolvedValue(mockListing as any);
+      listingsService.findById.mockResolvedValue({
+        ...mockListing,
+        metadata: JSON.stringify({ rejectionReason: 'Add clearer photos' }),
+      } as any);
       const result = await controller.findById('l1', { user: undefined });
       expect(result).toHaveProperty('pricePerDay');
       expect(result).toHaveProperty('location');
       expect(result).toHaveProperty('owner');
+      expect(result).toHaveProperty('verificationStatus', 'VERIFIED');
+      expect(result).toHaveProperty('rejectionReason', 'Add clearer photos');
     });
   });
 

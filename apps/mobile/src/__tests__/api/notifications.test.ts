@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 const mockGetPermissionsAsync = jest.fn();

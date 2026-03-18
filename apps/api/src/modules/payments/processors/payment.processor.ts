@@ -15,6 +15,8 @@ import { EventsService } from '@/common/events/events.service';
 import { StripeService } from '../services/stripe.service';
 import { PayoutStatus } from '@rental-portal/database';
 import { extractTraceCtx, createTracedLogger, TraceCtxPayload } from '@/common/queue/queue-trace.util';
+import { LedgerService } from '../services/ledger.service';
+import { PaymentCommandLogService } from '../services/payment-command-log.service';
 
 interface RetryPaymentJob extends TraceCtxPayload {
   paymentIntentId: string;
@@ -31,10 +33,14 @@ interface EscrowJob {
 }
 
 interface ProcessPayoutJob {
+  payoutId: string;
   ownerId: string;
+  ownerStripeConnectId: string;
   bookingIds: string[];
   amount: number;
   currency: string;
+  commandId?: string;
+  timestamp: string;
 }
 
 interface SettlementJob {
@@ -53,6 +59,7 @@ interface RefundJob {
   amount: number;
   currency: string;
   reason: string;
+  commandId?: string;
   timestamp: string;
 }
 
@@ -67,6 +74,7 @@ interface DepositHoldJob {
 
 interface DepositReleaseJob {
   bookingId: string;
+  commandId?: string;
   timestamp: string;
 }
 
@@ -78,6 +86,8 @@ export class PaymentProcessor {
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
     private readonly stripeService: StripeService,
+    private readonly ledger: LedgerService,
+    private readonly paymentCommandLog: PaymentCommandLogService,
   ) {}
 
   @Process('retry-payment')
@@ -239,20 +249,55 @@ export class PaymentProcessor {
 
   @Process('process-payout')
   async handleProcessPayout(job: Job<ProcessPayoutJob>): Promise<{ processed: boolean }> {
-    const { ownerId, bookingIds, amount, currency } = job.data;
+    const { payoutId, ownerId, ownerStripeConnectId, bookingIds, amount, currency, commandId } = job.data;
     this.logger.log(`Processing payout $${amount} ${currency} for owner ${ownerId}`);
 
     try {
-      // Create payout record
-      const payout = await this.prisma.payout.create({
+      if (commandId) {
+        await this.paymentCommandLog.markProcessing(commandId);
+      }
+
+      await this.prisma.payout.update({
+        where: { id: payoutId },
         data: {
+          status: 'PROCESSING',
+          processedAt: new Date(),
+        },
+      });
+
+      const transferId = await this.stripeService.createPayout({
+        accountId: ownerStripeConnectId,
+        amount,
+        currency,
+        idempotencyKey: `payout:${payoutId}`,
+      });
+
+      const payout = await this.prisma.payout.update({
+        where: { id: payoutId },
+        data: {
+          transferId,
+          status: PayoutStatus.COMPLETED,
+          processedAt: new Date(),
+          paidAt: new Date(),
+        },
+      });
+
+      if (bookingIds[0]) {
+        await this.ledger.recordPayoutWithBooking(
+          bookingIds[0],
           ownerId,
           amount,
           currency,
-          status: 'PROCESSING',
-          metadata: JSON.stringify({ bookingIds }),
-        },
-      });
+          payout.id,
+        );
+      }
+
+      if (commandId) {
+        await this.paymentCommandLog.markCompleted(commandId, {
+          payoutId,
+          transferId,
+        });
+      }
 
       this.events.emitPayoutReleased({
         payoutId: payout.id,
@@ -264,6 +309,17 @@ export class PaymentProcessor {
 
       return { processed: true };
     } catch (error) {
+      await this.prisma.payout.update({
+        where: { id: payoutId },
+        data: { status: PayoutStatus.FAILED },
+      }).catch((): undefined => undefined);
+      if (commandId) {
+        await this.paymentCommandLog.markFailed(
+          commandId,
+          error instanceof Error ? error.message : 'Payout processor failure',
+          { payoutId },
+        ).catch((): undefined => undefined);
+      }
       this.logger.error(`Payout processing failed for owner ${ownerId}:`, error);
       return { processed: false };
     }
@@ -317,29 +373,62 @@ export class PaymentProcessor {
 
   @Process('process-refund')
   async handleRefund(job: Job<RefundJob>): Promise<{ refunded: boolean }> {
-    const { bookingId, refundRecordId, paymentIntentId, amount, currency, reason } = job.data;
+    const { bookingId, refundRecordId, paymentIntentId, amount, currency, reason, commandId } = job.data;
     this.logger.log(`Processing refund for booking ${bookingId}, amount ${amount} ${currency}`);
 
     try {
+      if (commandId) {
+        await this.paymentCommandLog.markProcessing(commandId);
+      }
+
+      await this.prisma.refund.update({
+        where: { id: refundRecordId },
+        data: {
+          status: 'PROCESSING',
+        },
+      });
+
       const stripeRefundId = await this.stripeService.createRefund({
         paymentIntentId,
         amount,
         currency,
         reason,
+        idempotencyKey: `refund:${refundRecordId}`,
       });
 
-      // Update the refund record with the Stripe refund ID
       await this.prisma.refund.update({
         where: { id: refundRecordId },
         data: {
           refundId: stripeRefundId,
-          status: 'COMPLETED',
+          status: 'PROCESSING',
+          metadata: JSON.stringify({
+            stripeRefundId,
+            queuedReason: reason,
+          }),
         },
       });
+
+      if (commandId) {
+        await this.paymentCommandLog.markCompleted(commandId, {
+          refundRecordId,
+          stripeRefundId,
+        });
+      }
 
       this.logger.log(`Refund completed for booking ${bookingId}, stripe refund ${stripeRefundId}`);
       return { refunded: true };
     } catch (error) {
+      await this.prisma.refund.update({
+        where: { id: refundRecordId },
+        data: { status: 'FAILED' },
+      }).catch((): undefined => undefined);
+      if (commandId) {
+        await this.paymentCommandLog.markFailed(
+          commandId,
+          error instanceof Error ? error.message : 'Refund processor failure',
+          { refundRecordId },
+        ).catch((): undefined => undefined);
+      }
       this.logger.error(`Refund failed for booking ${bookingId}:`, error);
       throw error; // Let Bull retry
     }
@@ -397,15 +486,41 @@ export class PaymentProcessor {
 
   @Process('release-deposit')
   async handleDepositRelease(job: Job<DepositReleaseJob>): Promise<{ released: boolean }> {
-    const { bookingId } = job.data;
+    const { bookingId, commandId } = job.data;
     this.logger.log(`Releasing deposit for booking ${bookingId}`);
 
     try {
+      if (commandId) {
+        await this.paymentCommandLog.markProcessing(commandId);
+      }
+
       const holds = await this.prisma.depositHold.findMany({
-        where: { bookingId, status: 'HELD' },
+        where: { bookingId, status: { in: ['HELD', 'AUTHORIZED'] } },
       });
 
       if (holds.length === 0) {
+        const existingHolds = await this.prisma.depositHold.findMany({
+          where: { bookingId },
+          select: { id: true, status: true },
+        });
+
+        if (existingHolds.some((hold) => String(hold.status) === 'RELEASED')) {
+          if (commandId) {
+            await this.paymentCommandLog.markCompleted(commandId, {
+              bookingId,
+              alreadyReleased: true,
+              depositHoldIds: existingHolds.map((hold) => hold.id),
+            });
+          }
+          this.logger.log(`Deposit already released for booking ${bookingId}`);
+          return { released: true };
+        }
+
+        if (commandId) {
+          await this.paymentCommandLog.markFailed(commandId, 'No releasable deposit hold found', {
+            bookingId,
+          });
+        }
         this.logger.warn(`No active deposit holds found for booking ${bookingId}`);
         return { released: false };
       }
@@ -423,6 +538,30 @@ export class PaymentProcessor {
 
       const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
 
+      const existingLedgerEntry = await this.prisma.ledgerEntry.findFirst({
+        where: {
+          bookingId,
+          transactionType: 'DEPOSIT_RELEASE',
+        },
+        select: { id: true },
+      });
+
+      if (!existingLedgerEntry && booking) {
+        await this.ledger.recordDepositRelease(
+          bookingId,
+          booking.renterId,
+          Number(holds[0].amount),
+          booking.currency || holds[0].currency,
+        );
+      }
+
+      if (commandId) {
+        await this.paymentCommandLog.markCompleted(commandId, {
+          bookingId,
+          depositHoldIds: holds.map((hold) => hold.id),
+        });
+      }
+
       this.events.emitEscrowReleased({
         escrowId: holds[0].id,
         bookingId,
@@ -434,6 +573,13 @@ export class PaymentProcessor {
       this.logger.log(`Deposit released for booking ${bookingId}`);
       return { released: true };
     } catch (error) {
+      if (commandId) {
+        await this.paymentCommandLog.markFailed(
+          commandId,
+          error instanceof Error ? error.message : 'Deposit release processor failure',
+          { bookingId },
+        ).catch((): undefined => undefined);
+      }
       this.logger.error(`Deposit release failed for booking ${bookingId}:`, error);
       throw error; // Let Bull retry
     }

@@ -66,6 +66,8 @@ export default [
   route("admin", "routes/admin/_layout.tsx", [
     index("routes/admin/_index.tsx"),
     route("analytics", "routes/admin/analytics.tsx"),
+    route("diagnostics", "routes/admin.diagnostics.tsx"),
+    route("listings", "routes/admin/listings.tsx"),
     route("entities/:entity", "routes/admin/entities/[entity].tsx"),
     route("disputes", "routes/admin/disputes.tsx"),
     route("fraud", "routes/admin/fraud.tsx"),

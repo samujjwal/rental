@@ -42,7 +42,7 @@ vi.mock("~/components/ui", () => ({
 
 import { clientLoader } from "./insurance.upload";
 
-const VALID_UUID = "a1b2c3d4-e5f6-1234-a5b6-c7d8e9f0a1b2";
+const VALID_ID = "ckx1234567890abcdefghijkl";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -53,7 +53,7 @@ describe("insurance.upload clientLoader", () => {
   it("redirects unauthenticated users", async () => {
     mocks.getUser.mockResolvedValue(null);
     const r = await clientLoader({
-      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_UUID}`),
+      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_ID}`),
     } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe("/auth/login");
@@ -62,13 +62,13 @@ describe("insurance.upload clientLoader", () => {
   it("redirects non-owner/non-admin to dashboard", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "renter" });
     const r = await clientLoader({
-      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_UUID}`),
+      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_ID}`),
     } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe("/dashboard");
   });
 
-  it("redirects on invalid UUID", async () => {
+  it("redirects on invalid listing id", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     const r = await clientLoader({
       request: new Request("http://localhost/insurance/upload?listingId=bad-id"),
@@ -79,9 +79,9 @@ describe("insurance.upload clientLoader", () => {
 
   it("redirects when listing belongs to someone else", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
-    mocks.getListingById.mockResolvedValue({ id: VALID_UUID, ownerId: "u2" });
+    mocks.getListingById.mockResolvedValue({ id: VALID_ID, ownerId: "u2" });
     const r = await clientLoader({
-      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_UUID}`),
+      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_ID}`),
     } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe("/listings");
@@ -89,22 +89,22 @@ describe("insurance.upload clientLoader", () => {
 
   it("returns listing data for valid owner", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
-    mocks.getListingById.mockResolvedValue({ id: VALID_UUID, ownerId: "u1" });
+    mocks.getListingById.mockResolvedValue({ id: VALID_ID, ownerId: "u1" });
     mocks.getListingRequirement.mockResolvedValue({ required: true, type: "general" });
     const r = (await clientLoader({
-      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_UUID}`),
+      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_ID}`),
     } as any)) as any;
-    expect(r.listingId).toBe(VALID_UUID);
+    expect(r.listingId).toBe(VALID_ID);
     expect(r.requirement.required).toBe(true);
   });
 
   it("admin can access any listing", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "admin" });
-    mocks.getListingById.mockResolvedValue({ id: VALID_UUID, ownerId: "u2" });
+    mocks.getListingById.mockResolvedValue({ id: VALID_ID, ownerId: "u2" });
     mocks.getListingRequirement.mockResolvedValue({ required: false });
     const r = (await clientLoader({
-      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_UUID}`),
+      request: new Request(`http://localhost/insurance/upload?listingId=${VALID_ID}`),
     } as any)) as any;
-    expect(r.listingId).toBe(VALID_UUID);
+    expect(r.listingId).toBe(VALID_ID);
   });
 });

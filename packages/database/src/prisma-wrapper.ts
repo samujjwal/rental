@@ -361,8 +361,14 @@ export class PrismaWrapper {
     return this.prisma.$disconnect();
   }
 
-  $transaction(fn: any) {
-    return this.prisma.$transaction(fn);
+  $transaction<R>(fn: (tx: any) => Promise<R>): Promise<R>;
+  $transaction(fn: any[], options?: { isolationLevel?: string }): Promise<any[]>;
+  $transaction(fn: any, options?: any): Promise<any> {
+    if (typeof options === 'undefined') {
+      return this.prisma.$transaction(fn);
+    }
+
+    return this.prisma.$transaction(fn, options);
   }
 
   $queryRaw<T = any>(query: any, ...args: any[]) {

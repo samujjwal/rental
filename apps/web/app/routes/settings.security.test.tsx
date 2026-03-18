@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -34,10 +35,10 @@ const mocks: Record<string, unknown> = {
 
 vi.mock("react-router", () => ({
   redirect: (...a: unknown[]) => (mocks.redirect as (...args: unknown[]) => unknown)(...a),
-  Link: ({ children, to, ...p }: { children: unknown; to: string; [k: string]: unknown }) => (
+  Link: ({ children, to, ...p }: { children: ReactNode; to: string; [k: string]: unknown }) => (
     <a href={to} {...(p as Record<string, unknown>)}>{children}</a>
   ),
-  Form: ({ children, ...p }: { children: unknown; [k: string]: unknown }) => (
+  Form: ({ children, ...p }: { children: ReactNode; [k: string]: unknown }) => (
     <form {...(p as Record<string, unknown>)}>{children}</form>
   ),
   useLoaderData: () => (mocks.useLoaderData as () => unknown)(),
@@ -54,12 +55,12 @@ vi.mock("~/lib/api/auth", () => ({
 }));
 
 vi.mock("~/components/ui", () => ({
-  RouteErrorBoundary: ({ children }: { children: unknown }) => <div>{children}</div>,
+  RouteErrorBoundary: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock("~/components/ui/card", () => ({
-  Card: ({ children }: { children: unknown }) => <div>{children}</div>,
-  CardContent: ({ children }: { children: unknown }) => <div>{children}</div>,
+  Card: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  CardContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock("react-i18next", () => ({

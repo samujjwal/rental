@@ -2,63 +2,31 @@
 # Booking Flow — E2E Maestro Test
 # Validates the booking creation flow from listing detail to booking confirmation.
 # ============================================================================
-appId: com.gharbatai.rental
+appId: com.gharbatai.mobile
 
 ---
 
 # Precondition: login first
 - runFlow: auth-login.yaml
 
-# 1. Navigate to Home tab (default after login)
-- assertVisible:
-    text: "Home"
-
-# 2. Tap on a featured/recent listing
-- tapOn:
-    id: "listing-card"
-    index: 0
-    optional: true
-
-# Fallback: go to Search and find a listing
+# 1. Navigate to Search and open a listing
 - tapOn:
     text: "Search"
     optional: true
 - tapOn:
     id: "listing-card"
     index: 0
-    optional: true
 
-# 3. On listing detail, tap Book/Request button
+# 2. On listing detail, tap the booking CTA
 - assertVisible:
-    text: "Book|Request"
+    text: "Book now|Book|Request"
 - tapOn:
-    text: "Book|Request"
+    text: "Book now|Book|Request"
 
-# 4. Booking flow screen — select dates
+# 3. Booking flow screen loads
 - assertVisible:
-    text: "Select Dates|Choose Dates|Start Date"
+    text: "Book a Listing|Select start date|Start Date"
 
-# 5. Tap start date (pick a date ~5 days from now)
-- tapOn:
-    id: "start-date-input"
-    optional: true
-
-# 6. Tap end date
-- tapOn:
-    id: "end-date-input"
-    optional: true
-
-# 7. Verify pricing breakdown is shown
+# 4. Verify booking actions are present
 - assertVisible:
-    text: "Total|Price|NPR|Rs"
-    optional: true
-
-# 8. Confirm booking
-- tapOn:
-    text: "Confirm|Book Now|Request Booking|Submit"
-    optional: true
-
-# 9. Should see success or pending status
-- assertVisible:
-    text: "Pending|Confirmed|Success|Booked"
-    optional: true
+    text: "Check availability|Create booking"

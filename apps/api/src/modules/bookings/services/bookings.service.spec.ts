@@ -674,4 +674,66 @@ describe('BookingsService', () => {
       await expect(service.create('renter-1', createDto)).rejects.toThrow(BadRequestException);
     });
   });
+
+  describe('startRental', () => {
+    const bookingRecord = {
+      id: 'booking-1',
+      status: BookingStatus.CONFIRMED,
+      renterId: 'renter-1',
+      ownerId: 'owner-1',
+      startDate: new Date('2030-01-01T10:00:00.000Z'),
+      endDate: new Date('2030-01-02T10:00:00.000Z'),
+      basePrice: 100,
+      serviceFee: 5,
+      securityDeposit: 0,
+      depositAmount: 0,
+      totalPrice: 115,
+      payments: [],
+      reviews: [],
+      renter: {
+        id: 'renter-1',
+        firstName: 'Renter',
+        lastName: 'One',
+        profilePhotoUrl: null,
+        averageRating: 4.5,
+        totalReviews: 10,
+      },
+      listing: {
+        id: 'listing-1',
+        ownerId: 'owner-1',
+        title: 'Tent',
+        photos: [],
+        owner: {
+          id: 'owner-1',
+          firstName: 'Owner',
+          lastName: 'One',
+          profilePhotoUrl: null,
+          averageRating: 4.8,
+        },
+      },
+    };
+
+    it('allows the owner to start a confirmed rental', async () => {
+      mockPrismaService.booking.findUnique.mockResolvedValue(bookingRecord);
+      mockStateMachine.transition.mockResolvedValue({ success: true });
+
+      await service.startRental('booking-1', 'owner-1');
+
+      expect(mockStateMachine.transition).toHaveBeenCalledWith(
+        'booking-1',
+        'START_RENTAL',
+        'owner-1',
+        'OWNER',
+      );
+    });
+
+    it('rejects renter attempts to start the rental', async () => {
+      mockPrismaService.booking.findUnique.mockResolvedValue(bookingRecord);
+
+      await expect(service.startRental('booking-1', 'renter-1')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockStateMachine.transition).not.toHaveBeenCalled();
+    });
+  });
 });

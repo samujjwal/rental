@@ -23,6 +23,7 @@ vi.mock("react-router", () => ({
   useLoaderData: () => mocks.useLoaderData(),
   redirect: mocks.redirect,
   Link: ({ children, to }: any) => <a href={to}>{children}</a>,
+  useLocation: () => ({ pathname: "/" }),
 }));
 vi.mock("~/utils/auth", () => ({
   requireUser: (...a: any[]) => mocks.requireUser(...a),
@@ -60,6 +61,10 @@ vi.mock("~/components/ui", () => ({
   CardTitle: ({ children }: any) => <h3>{children}</h3>,
   Badge: ({ children }: any) => <span>{children}</span>,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
+  ProgressiveDisclosure: ({ children }: any) => <div>{children}</div>,
+  CollapsibleSection: ({ children }: any) => <div>{children}</div>,
+  ContextualHelp: ({ children }: any) => <div>{children}</div>,
+  FirstTimeHelp: ({ title }: any) => <div>{title}</div>,
 }));
 vi.mock("~/components/ui/skeleton", () => ({ PageSkeleton: () => <div /> }));
 vi.mock("~/components/layout", () => ({
@@ -72,19 +77,23 @@ vi.mock("~/components/favorites", () => ({
   CompactFavoriteButton: () => <button />,
 }));
 vi.mock("~/config/navigation", () => ({ renterNavSections: [] }));
-vi.mock("lucide-react", () => ({
-  Package: IconStub,
-  Calendar: IconStub,
-  Heart: IconStub,
-  Star: IconStub,
-  Clock: IconStub,
-  CheckCircle: IconStub,
-  XCircle: IconStub,
-  MapPin: IconStub,
-  Search: IconStub,
-  TrendingUp: IconStub,
-  ArrowRight: IconStub,
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...actual,
+    Package: IconStub,
+    Calendar: IconStub,
+    Heart: IconStub,
+    Star: IconStub,
+    Clock: IconStub,
+    CheckCircle: IconStub,
+    XCircle: IconStub,
+    MapPin: IconStub,
+    Search: IconStub,
+    TrendingUp: IconStub,
+    ArrowRight: IconStub,
+  };
+});
 
 import RenterDashboard, { clientLoader } from "./dashboard.renter";
 

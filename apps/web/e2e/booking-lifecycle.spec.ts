@@ -284,6 +284,9 @@ async function gotoBooking(page: Page, bookingId: string) {
 async function clickActionButton(page: Page, text: string) {
   const btn = page.locator(`button:has-text("${text}")`).first();
   await btn.waitFor({ state: "visible", timeout: 8_000 });
+  await btn.evaluate((element) => {
+    element.scrollIntoView({ block: "center", inline: "nearest" });
+  });
   await btn.click();
 }
 

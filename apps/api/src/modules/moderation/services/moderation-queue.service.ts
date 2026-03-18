@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { ModerationFlag } from './content-moderation.service';
+import { ModerationFlag } from './moderation.types';
 
 interface QueueItem {
   entityType: string;

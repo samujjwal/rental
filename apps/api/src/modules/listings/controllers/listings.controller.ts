@@ -225,7 +225,12 @@ export class ListingsController {
       bookingsCount: listing.totalBookings || 0,
       views: listing.views || listing.viewCount || 0,
       featured: listing.featured || false,
-      verified: listing.verificationStatus === 'VERIFIED',
+      verified: ['VERIFIED', 'APPROVED'].includes(listing.verificationStatus),
+      verificationStatus: listing.verificationStatus || null,
+      rejectionReason:
+        typeof metadata.rejectionReason === 'string'
+          ? metadata.rejectionReason
+          : null,
       instantBooking:
         listing.bookingMode === 'INSTANT_BOOK' || listing.instantBookable,
       deliveryOptions: metadata.deliveryOptions || {

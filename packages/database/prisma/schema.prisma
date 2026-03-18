@@ -359,7 +359,8 @@ model Review {
   status              ReviewStatus @default(PUBLISHED)
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
-  booking             Booking?     @relation(fields: [bookingId], references: [id])
+  // SetNull preserves reviews for integrity even if the booking is hard-deleted (G9 fix).
+  booking             Booking?     @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   listing             Listing?     @relation("ReviewListing", fields: [listingId], references: [id])
   reviewee            User         @relation("ReviewReceived", fields: [revieweeId], references: [id])
   reviewer            User         @relation("ReviewGiven", fields: [reviewerId], references: [id])
@@ -392,7 +393,8 @@ model Payment {
   metadata              String?
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
-  booking               Booking       @relation(fields: [bookingId], references: [id])
+  // Restrict prevents hard-deleting a booking that has payment records (G9 fix).
+  booking               Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
 
   @@index([bookingId, status])
   @@map("payments")
@@ -410,7 +412,8 @@ model Refund {
   metadata    String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  booking     Booking      @relation(fields: [bookingId], references: [id])
+  // Restrict prevents hard-deleting a booking that has refund records (G9 fix).
+  booking     Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
 
   @@index([bookingId])
   @@map("refunds")
@@ -431,7 +434,8 @@ model DepositHold {
   metadata        String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-  booking         Booking       @relation(fields: [bookingId], references: [id])
+  // Restrict prevents hard-deleting a booking that has deposit holds (G9 fix).
+  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
 
   @@index([bookingId])
   @@map("deposit_holds")
@@ -472,7 +476,8 @@ model LedgerEntry {
   referenceId     String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
-  booking         Booking?          @relation(fields: [bookingId], references: [id])
+  // SetNull preserves ledger entries for accounting even if the booking is hard-deleted (G9 fix).
+  booking         Booking?          @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   @@index([bookingId])
   @@index([accountId, accountType])
@@ -826,7 +831,8 @@ model InsurancePolicy {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   claims         InsuranceClaim[]
-  booking        Booking?         @relation(fields: [bookingId], references: [id])
+  // SetNull preserves insurance policies for regulatory compliance if a booking is hard-deleted (G9 fix).
+  booking        Booking?         @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   property       Listing          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   user           User             @relation("InsurancePolicyOwner", fields: [userId], references: [id])
 
@@ -856,7 +862,8 @@ model InsuranceClaim {
   reviewedAt      DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  booking         Booking?        @relation(fields: [bookingId], references: [id])
+  // SetNull preserves insurance claims for regulatory compliance if a booking is hard-deleted (G9 fix).
+  booking         Booking?        @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   policy          InsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
   property        Listing?        @relation("PropertyClaims", fields: [propertyId], references: [id])
 

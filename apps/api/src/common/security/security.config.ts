@@ -7,7 +7,11 @@ export function setupSecurity(app: INestApplication): void {
   app.enableCors({
     origin: process.env.CORS_ORIGINS?.split(',') || [
       'http://localhost:3401',
+      'http://127.0.0.1:3401',
+      'http://localhost:3403',
+      'http://127.0.0.1:3403',
       'http://localhost:3400',
+      'http://127.0.0.1:3400',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],

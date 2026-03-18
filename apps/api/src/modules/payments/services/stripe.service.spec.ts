@@ -12,7 +12,7 @@ jest.mock('stripe', () => {
   const MockStripeConstructor = jest.fn().mockImplementation(() => ({
     accounts: { create: jest.fn(), retrieve: jest.fn() },
     accountLinks: { create: jest.fn() },
-    paymentIntents: { create: jest.fn(), capture: jest.fn(), cancel: jest.fn() },
+    paymentIntents: { create: jest.fn(), capture: jest.fn(), cancel: jest.fn(), retrieve: jest.fn() },
     refunds: { create: jest.fn() },
     payouts: { create: jest.fn() },
     customers: { create: jest.fn(), update: jest.fn() },
@@ -150,6 +150,24 @@ describe('StripeService', () => {
         }),
       );
       expect(res).toBe('pi_deposit');
+    });
+  });
+
+  describe('getPaymentIntentStatus', () => {
+    it('returns provider status and failure reason', async () => {
+      const stripeInstance = (service as any).stripe;
+      stripeInstance.paymentIntents.retrieve.mockResolvedValue({
+        status: 'succeeded',
+        last_payment_error: null,
+      });
+
+      const result = await service.getPaymentIntentStatus('pi_123');
+
+      expect(stripeInstance.paymentIntents.retrieve).toHaveBeenCalledWith('pi_123');
+      expect(result).toEqual({
+        status: 'succeeded',
+        failureReason: null,
+      });
     });
   });
 

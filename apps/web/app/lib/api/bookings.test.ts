@@ -45,6 +45,15 @@ describe("bookingsApi", () => {
     expect(result.id).toBe("b1");
   });
 
+  it("getAvailableTransitions", async () => {
+    mockApi.get.mockResolvedValue({ availableTransitions: ["CANCEL"] });
+    const result = await bookingsApi.getAvailableTransitions("b1");
+    expect(mockApi.get).toHaveBeenCalledWith(
+      "/bookings/b1/available-transitions"
+    );
+    expect(result.availableTransitions).toEqual(["CANCEL"]);
+  });
+
   it("createBooking", async () => {
     const data = { listingId: "l1", startDate: "2026-03-01", endDate: "2026-03-05" };
     mockApi.post.mockResolvedValue({ id: "b2" });

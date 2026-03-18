@@ -1,11 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bull';
 import { PaymentsController } from './payments.controller';
 import { StripeService } from '../services/stripe.service';
 import { PayoutsService } from '../services/payouts.service';
 import { LedgerService } from '../services/ledger.service';
 import { PaymentDataService } from '../services/payment-data.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
+import { PaymentCommandLogService } from '../services/payment-command-log.service';
 
 describe('PaymentsController', () => {
   let module: TestingModule;
@@ -14,6 +17,9 @@ describe('PaymentsController', () => {
   let ledger: jest.Mocked<LedgerService>;
   let payouts: jest.Mocked<PayoutsService>;
   let paymentData: jest.Mocked<PaymentDataService>;
+  let stateMachine: jest.Mocked<BookingStateMachineService>;
+  let paymentCommands: jest.Mocked<PaymentCommandLogService>;
+  let paymentsQueue: { add: jest.Mock };
   let prisma: any;
 
   beforeEach(async () => {
@@ -27,6 +33,7 @@ describe('PaymentsController', () => {
             createAccountLink: jest.fn(),
             getAccountStatus: jest.fn(),
             createPaymentIntent: jest.fn(),
+            getPaymentIntentStatus: jest.fn(),
             holdDeposit: jest.fn(),
             releaseDeposit: jest.fn(),
             createCustomer: jest.fn(),
@@ -69,8 +76,28 @@ describe('PaymentsController', () => {
           },
         },
         {
+          provide: BookingStateMachineService,
+          useValue: {
+            transition: jest.fn(),
+          },
+        },
+        {
+          provide: PaymentCommandLogService,
+          useValue: {
+            createCommand: jest.fn(),
+            markEnqueued: jest.fn(),
+          },
+        },
+        {
+          provide: getQueueToken('payments'),
+          useValue: {
+            add: jest.fn(),
+          },
+        },
+        {
           provide: PrismaService,
           useValue: {
+            refund: { create: jest.fn() },
             listing: { findUnique: jest.fn() },
             user: { findUnique: jest.fn() },
             booking: { findUnique: jest.fn() },
@@ -94,6 +121,9 @@ describe('PaymentsController', () => {
     ledger = module.get(LedgerService) as jest.Mocked<LedgerService>;
     payouts = module.get(PayoutsService) as jest.Mocked<PayoutsService>;
     paymentData = module.get(PaymentDataService) as jest.Mocked<PaymentDataService>;
+    stateMachine = module.get(BookingStateMachineService) as jest.Mocked<BookingStateMachineService>;
+    paymentCommands = module.get(PaymentCommandLogService) as jest.Mocked<PaymentCommandLogService>;
+    paymentsQueue = module.get(getQueueToken('payments'));
     prisma = module.get(PrismaService);
   });
 
@@ -151,6 +181,32 @@ describe('PaymentsController', () => {
       expect(result.paymentIntentId).toBe('pi_123');
     });
 
+    it('retries payment-failed bookings before creating the intent', async () => {
+      paymentData.getBookingForPayment.mockResolvedValue({
+        renterId: 'u1',
+        status: 'PAYMENT_FAILED',
+        totalPrice: 1000,
+        currency: 'NPR',
+        renter: { stripeCustomerId: 'cus_123' },
+      } as any);
+      stateMachine.transition.mockResolvedValue({
+        success: true,
+        newState: 'PENDING_PAYMENT',
+        message: 'Retry started',
+      } as any);
+      stripe.createPaymentIntent.mockResolvedValue({ paymentIntentId: 'pi_123', clientSecret: 'cs' } as any);
+
+      const result = await controller.createPaymentIntent('b1', 'u1');
+
+      expect(stateMachine.transition).toHaveBeenCalledWith(
+        'b1',
+        'RETRY_PAYMENT',
+        'u1',
+        'RENTER',
+      );
+      expect(result.paymentIntentId).toBe('pi_123');
+    });
+
     it('throws ForbiddenException for non-renter', async () => {
       paymentData.getBookingForPayment.mockResolvedValue({
         renterId: 'other-user',
@@ -165,6 +221,81 @@ describe('PaymentsController', () => {
         status: 'APPROVED',
       } as any);
       await expect(controller.createPaymentIntent('b1', 'u1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getBookingPaymentStatus', () => {
+    it('returns confirmed when booking is already confirmed', async () => {
+      paymentData.getBookingForPayment.mockResolvedValue({
+        id: 'b1',
+        renterId: 'u1',
+        ownerId: 'owner-1',
+        status: 'CONFIRMED',
+        paymentIntentId: 'pi_123',
+      } as any);
+      paymentData.getLatestPaymentForBooking.mockResolvedValue({
+        paymentIntentId: 'pi_123',
+        status: 'SUCCEEDED',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      } as any);
+
+      const result = await controller.getBookingPaymentStatus('b1', {
+        id: 'u1',
+        role: 'RENTER',
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          bookingId: 'b1',
+          bookingStatus: 'CONFIRMED',
+          paymentStatus: 'SUCCEEDED',
+          confirmationState: 'confirmed',
+        }),
+      );
+    });
+
+    it('returns processing when provider succeeded but booking is still syncing', async () => {
+      paymentData.getBookingForPayment.mockResolvedValue({
+        id: 'b1',
+        renterId: 'u1',
+        ownerId: 'owner-1',
+        status: 'PENDING_PAYMENT',
+        paymentIntentId: 'pi_123',
+      } as any);
+      paymentData.getLatestPaymentForBooking.mockResolvedValue({
+        paymentIntentId: 'pi_123',
+        status: 'PENDING',
+      } as any);
+      stripe.getPaymentIntentStatus.mockResolvedValue({
+        status: 'succeeded',
+        failureReason: null,
+      } as any);
+
+      const result = await controller.getBookingPaymentStatus('b1', {
+        id: 'u1',
+        role: 'RENTER',
+      });
+
+      expect(stripe.getPaymentIntentStatus).toHaveBeenCalledWith('pi_123');
+      expect(result).toEqual(
+        expect.objectContaining({
+          confirmationState: 'processing',
+          providerStatus: 'succeeded',
+        }),
+      );
+    });
+
+    it('throws ForbiddenException for non-participants', async () => {
+      paymentData.getBookingForPayment.mockResolvedValue({
+        id: 'b1',
+        renterId: 'u1',
+        ownerId: 'owner-1',
+        status: 'PENDING_PAYMENT',
+      } as any);
+
+      await expect(
+        controller.getBookingPaymentStatus('b1', { id: 'stranger', role: 'USER' }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -199,14 +330,22 @@ describe('PaymentsController', () => {
 
   // ── releaseDeposit ──
   describe('releaseDeposit', () => {
-    it('releases deposit and records in ledger', async () => {
+    it('queues deposit release and records a command', async () => {
       paymentData.getDepositWithBooking.mockResolvedValue({
         deposit: { bookingId: 'b1', amount: 500, currency: 'NPR' },
         booking: { renterId: 'u1', ownerId: 'owner1' },
       } as any);
+      paymentCommands.createCommand.mockResolvedValue({ id: 'cmd-1' } as any);
       const result = await controller.releaseDeposit('dep1', { id: 'owner1', role: 'OWNER' });
-      expect(stripe.releaseDeposit).toHaveBeenCalledWith('dep1');
-      expect(result).toEqual({ success: true });
+      expect(paymentCommands.createCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ entityType: 'DEPOSIT_RELEASE', entityId: 'dep1' }),
+      );
+      expect(paymentsQueue.add).toHaveBeenCalledWith(
+        'release-deposit',
+        expect.objectContaining({ bookingId: 'b1', commandId: 'cmd-1' }),
+        expect.objectContaining({ jobId: 'deposit-release:dep1' }),
+      );
+      expect(result).toEqual({ success: true, status: 'PENDING' });
     });
 
     it('allows admin to release deposit', async () => {
@@ -214,8 +353,9 @@ describe('PaymentsController', () => {
         deposit: { bookingId: 'b1', amount: 500, currency: 'NPR' },
         booking: { renterId: 'u1', ownerId: 'owner1' },
       } as any);
+      paymentCommands.createCommand.mockResolvedValue({ id: 'cmd-1' } as any);
       const result = await controller.releaseDeposit('dep1', { id: 'admin1', role: 'ADMIN' });
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({ success: true, status: 'PENDING' });
     });
 
     it('throws ForbiddenException when user is not owner or admin', async () => {
@@ -348,7 +488,7 @@ describe('PaymentsController', () => {
 
   // ── requestRefund ──
   describe('requestRefund', () => {
-    it('creates refund and records in ledger', async () => {
+    it('creates a durable refund command and queues processing', async () => {
       ledger.getBookingLedger.mockResolvedValue([{}] as any);
       paymentData.getLatestPaymentForBooking.mockResolvedValue({
         stripePaymentIntentId: 'pi_123',
@@ -356,11 +496,18 @@ describe('PaymentsController', () => {
         currency: 'NPR',
         booking: { renterId: 'u1' },
       } as any);
-      stripe.createRefund.mockResolvedValue('re_123');
+      prisma.refund.create.mockResolvedValue({ id: 'refund-1' });
+      paymentCommands.createCommand.mockResolvedValue({ id: 'cmd-1' } as any);
 
       const result = await controller.requestRefund('b1', { id: 'u1', role: 'USER' } as any, { reason: 'defective' } as any);
-      expect(result.refundId).toBe('re_123');
-      expect(ledger.recordRefund).toHaveBeenCalled();
+      expect(result).toEqual({ refundId: 'refund-1', amount: 1000, status: 'PENDING' });
+      expect(prisma.refund.create).toHaveBeenCalled();
+      expect(paymentCommands.createCommand).toHaveBeenCalled();
+      expect(paymentsQueue.add).toHaveBeenCalledWith(
+        'process-refund',
+        expect.objectContaining({ refundRecordId: 'refund-1', paymentIntentId: 'pi_123' }),
+        expect.objectContaining({ jobId: 'refund:refund-1' }),
+      );
     });
 
     it('throws NotFoundException when no booking ledger', async () => {
@@ -399,13 +546,14 @@ describe('PaymentsController', () => {
         currency: 'NPR',
         booking: { renterId: 'other-user' },
       } as any);
-      stripe.createRefund.mockResolvedValue('re_123');
+      prisma.refund.create.mockResolvedValue({ id: 'refund-1' });
+      paymentCommands.createCommand.mockResolvedValue({ id: 'cmd-1' } as any);
       const result = await controller.requestRefund(
         'b1',
         { id: 'admin1', role: 'ADMIN' } as any,
         { reason: 'defective' } as any,
       );
-      expect(result.refundId).toBe('re_123');
+      expect(result.refundId).toBe('refund-1');
     });
   });
 });

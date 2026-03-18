@@ -81,4 +81,18 @@ describe("admin/entities/[entity]", () => {
     } as any);
     expect(m.requireAdmin).toHaveBeenCalled();
   });
+
+  it("loads for valid entity (reviews)", async () => {
+    await clientLoader({
+      request: new Request("http://l/admin/entities/reviews"),
+    } as any);
+    expect(m.requireAdmin).toHaveBeenCalled();
+  });
+
+  it("loads for valid entity (insurance)", async () => {
+    await clientLoader({
+      request: new Request("http://l/admin/entities/insurance"),
+    } as any);
+    expect(m.requireAdmin).toHaveBeenCalled();
+  });
 });

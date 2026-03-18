@@ -15,6 +15,13 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 @Injectable()
 export class AiConciergeService {
   private readonly logger = new Logger(AiConciergeService.name);
+  private readonly supportedAgentTypes = new Set([
+    'GENERAL',
+    'BOOKING_ASSISTANT',
+    'HOST_ADVISOR',
+    'DISPUTE_GUIDE',
+    'CONCIERGE',
+  ]);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -31,12 +38,15 @@ export class AiConciergeService {
     initialContext: Record<string, any> = {},
   ) {
     const sessionId = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const normalizedAgentType = this.supportedAgentTypes.has(agentType)
+      ? agentType
+      : 'GENERAL';
 
     const conversation = await this.prisma.aiConversation.create({
       data: {
         userId,
         sessionId,
-        agentType: agentType as any,
+        agentType: normalizedAgentType as any,
         context: initialContext,
         status: 'ACTIVE',
         messageCount: 0,
@@ -46,7 +56,7 @@ export class AiConciergeService {
     this.eventEmitter.emit('ai.session.started', {
       conversationId: conversation.id,
       userId,
-      agentType,
+      agentType: normalizedAgentType,
     });
 
     return conversation;

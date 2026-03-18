@@ -419,8 +419,9 @@ export class AuthService {
 
     const isValid = Boolean(session);
     if (isValid) {
-      // Cache valid sessions for 5 minutes
-      await this.cacheService.set(cacheKey, true, 300);
+      // Cache valid sessions for 30 seconds (B4 fix: was 300s, leaving a 5-minute
+      // window after token revocation where revoked tokens still passed validation).
+      await this.cacheService.set(cacheKey, true, 30);
     }
 
     return isValid;

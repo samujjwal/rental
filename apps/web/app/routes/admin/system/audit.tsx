@@ -66,6 +66,9 @@ function getEntityLink(entity: unknown, entityId?: string) {
     booking: "/admin/entities/bookings",
     dispute: "/admin/disputes",
     payment: "/admin/entities/payments",
+    payout: "/admin/entities/payments",
+    refund: "/admin/entities/payments",
+    deposit_release: "/admin/entities/payments",
     organization: "/admin/entities/organizations",
   };
 
@@ -184,6 +187,7 @@ export default function AuditLogsPage() {
                   <tr>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.when")}</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.action")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.entityColumn")}</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.adminColumn")}</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("admin.ip")}</th>
@@ -198,7 +202,40 @@ export default function AuditLogsPage() {
                           {safeDateTimeLabel(log.createdAt)}
                         </td>
                         <td className="px-4 py-3 font-medium text-foreground">
-                          {log.action}
+                          <div>{log.action}</div>
+                          {log.command?.failureReason ? (
+                            <div className="text-xs text-destructive mt-1">{log.command.failureReason}</div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          {log.command?.status ? (
+                            <div className="space-y-1">
+                              <span
+                                className={[
+                                  "inline-flex rounded-full px-2 py-1 text-xs font-medium",
+                                  log.command.attentionRequired
+                                    ? "bg-amber-100 text-amber-900"
+                                    : log.command.status === "COMPLETED"
+                                      ? "bg-emerald-100 text-emerald-900"
+                                      : log.command.status === "FAILED"
+                                        ? "bg-red-100 text-red-900"
+                                        : "bg-slate-100 text-slate-900",
+                                ].join(" ")}
+                              >
+                                {log.command.status}
+                              </span>
+                              <div className="text-xs text-muted-foreground">
+                                {typeof log.command.amount === "number"
+                                  ? `${log.command.amount} ${log.command.currency || ""}`.trim()
+                                  : null}
+                              </div>
+                              {log.command.attentionRequired ? (
+                                <div className="text-xs text-amber-700">Needs review</div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           {link ? (

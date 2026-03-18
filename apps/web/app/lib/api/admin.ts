@@ -186,10 +186,33 @@ export interface SystemHealth {
   services: {
     database: { status: string; latency: number };
     redis: { status: string; latency: number };
-    elasticsearch: { status: string; latency: number };
-    storage: { status: string; latency: number };
+    elasticsearch?: { status: string; latency: number };
+    storage?: { status: string; latency: number };
+    queues?: { status: string; latency: number; totalBacklog?: number };
+    scheduler?: { status: string; latency: number; cronJobs?: number; intervals?: number };
   };
   uptime: number;
+  processUptimeSeconds?: number;
+  queues?: Array<{
+    name: string;
+    status: string;
+    latency: number;
+    active: number;
+    waiting: number;
+    completed: number;
+    failed: number;
+    delayed: number;
+    paused: number;
+  }>;
+  scheduler?: {
+    cronJobs: Array<{
+      name: string;
+      running: boolean;
+      nextRun: string | null;
+      lastRun: string | null;
+    }>;
+    intervals: string[];
+  };
   memory: {
     used: number;
     total: number;
@@ -222,6 +245,17 @@ export interface AuditLogEntry {
   ipAddress: string;
   userAgent: string;
   createdAt: string;
+  command?: {
+    commandType?: string;
+    status?: string;
+    amount?: number;
+    currency?: string;
+    failureReason?: string;
+    attentionRequired?: boolean;
+    reason?: string | null;
+    ageMinutes?: number;
+    metadata?: Record<string, unknown>;
+  } | null;
 }
 
 export interface AuditLogsResponse {
@@ -483,18 +517,17 @@ export const adminApi = {
     id: string,
     data: { resolution: string; notes?: string; resolvedAmount?: number }
   ): Promise<AdminDispute> {
-    return this.updateDispute(id, {
-      status: "RESOLVED",
-      resolution: data.resolution,
-      adminNotes: data.notes,
-      resolvedAmount: data.resolvedAmount,
+    return api.patch<AdminDispute>(`/admin/disputes/${id}/resolve`, {
+      decision: (data.resolvedAmount ?? 0) > 0 ? "REFUND" : "DISMISS",
+      refundAmount: data.resolvedAmount,
+      reason: data.resolution,
+      notes: data.notes,
     });
   },
 
   async assignDispute(id: string, assigneeId?: string): Promise<AdminDispute> {
-    return this.updateDispute(id, {
-      status: "UNDER_REVIEW",
-      adminNotes: assigneeId ? `Assigned to ${assigneeId}` : "Assigned for review",
+    return api.patch<AdminDispute>(`/admin/disputes/${id}/assign`, {
+      adminId: assigneeId,
     });
   },
 
@@ -531,6 +564,9 @@ export const adminApi = {
     nodeVersion: string;
     uptime: number;
     connections: number;
+    queueBacklog?: number;
+    scheduledJobs?: number;
+    activeIntervals?: number;
   }> {
     return api.get("/admin/system/overview");
   },

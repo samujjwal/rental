@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
-import { useLoaderData, Link, redirect } from "react-router";
-import { useState } from "react";
+import { useLoaderData, Link, redirect, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   User,
@@ -22,6 +22,7 @@ import type { Listing } from "~/types/listing";
 import type { Review } from "~/types/review";
 import { format } from "date-fns";
 import { RouteErrorBoundary } from "~/components/ui";
+import { isAppEntityId } from "~/utils/entity-id";
 
 export const meta: MetaFunction<typeof clientLoader> = ({ data }) => {
   const firstName = data?.user?.firstName || "";
@@ -34,9 +35,6 @@ export const meta: MetaFunction<typeof clientLoader> = ({ data }) => {
   ];
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
 const safeNumber = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -54,9 +52,47 @@ const safeInitial = (value: unknown): string => {
   return text.charAt(0).toUpperCase();
 };
 
+const getStoredAuthUserId = (): string | null => {
+  const storeUserId = useAuthStore.getState().user?.id;
+  if (storeUserId) {
+    return storeUserId;
+  }
+
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const persistedAuth = localStorage.getItem("auth-storage");
+    if (persistedAuth) {
+      const parsed = JSON.parse(persistedAuth) as {
+        state?: { user?: { id?: unknown } };
+      };
+      if (typeof parsed.state?.user?.id === "string") {
+        return parsed.state.user.id;
+      }
+    }
+
+    const rawUser = localStorage.getItem("user");
+    if (!rawUser) {
+      return null;
+    }
+
+    const parsedUser = JSON.parse(rawUser) as { id?: unknown };
+    return typeof parsedUser.id === "string" ? parsedUser.id : null;
+  } catch {
+    return null;
+  }
+};
+
 export async function clientLoader({ params }: LoaderFunctionArgs) {
   const userId = params.userId;
-  if (!isUuid(userId)) {
+  if (!isAppEntityId(userId)) {
+    throw redirect("/");
+  }
+
+  const currentUserId = getStoredAuthUserId();
+  if (currentUserId && currentUserId === userId) {
     throw redirect("/");
   }
 
@@ -234,9 +270,17 @@ export default function ProfileRoute() {
   const { t } = useTranslation();
   const { user, listings, reviews, stats } = useLoaderData<typeof clientLoader>();
   const { user: currentUser } = useAuthStore();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"listings" | "reviews">(
     "listings"
   );
+
+  useEffect(() => {
+    const activeUserId = currentUser?.id ?? getStoredAuthUserId();
+    if (activeUserId && activeUserId === user.id) {
+      navigate("/", { replace: true });
+    }
+  }, [currentUser?.id, navigate, user.id]);
 
   const memberSince = user.createdAt
     ? safeDateLabel(user.createdAt, "MMMM yyyy")
@@ -417,4 +461,3 @@ export default function ProfileRoute() {
   );
 }
 export { RouteErrorBoundary as ErrorBoundary };
-

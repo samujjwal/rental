@@ -257,23 +257,30 @@ describe('Settlement Chain (e2e)', () => {
       // Run the auto-settle cron job
       await schedulerService.autoSettleBookings();
 
-      // Verify: booking status transitioned to SETTLED
+      // Auto-settlement now persists payout commands first and leaves the
+      // booking in COMPLETED until payout confirmation arrives.
       const settledBooking = await prisma.booking.findUnique({
         where: { id: booking.id },
       });
-      expect(settledBooking?.status).toBe(BookingStatus.SETTLED);
+      expect(settledBooking?.status).toBe(BookingStatus.COMPLETED);
 
-      // Verify: state history recorded
-      const stateHistory = await prisma.bookingStateHistory.findFirst({
+      const payout = await prisma.payout.findFirst({
         where: {
-          bookingId: booking.id,
-          fromStatus: BookingStatus.COMPLETED,
-          toStatus: BookingStatus.SETTLED,
+          ownerId,
+          status: 'PENDING',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(payout).toBeDefined();
+
+      const payoutCommand = await prisma.auditLog.findFirst({
+        where: {
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          entityType: 'PAYOUT',
+          entityId: payout?.id,
         },
       });
-      expect(stateHistory).toBeDefined();
-      expect(stateHistory?.changedBy).toBe('SYSTEM');
-      expect(stateHistory?.metadata).toContain('auto_settlement_cron');
+      expect(payoutCommand).toBeDefined();
     });
 
     it('should NOT settle a COMPLETED booking less than 48 hours old', async () => {

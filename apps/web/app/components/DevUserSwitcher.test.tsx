@@ -130,6 +130,7 @@ describe('DevUserSwitcher', () => {
       expect(mockAuthApi.devLogin).toHaveBeenCalledWith({
         email: 'admin@rental-portal.com',
         role: 'ADMIN',
+        secret: 'e2e-test-secret-12345',
       });
     });
   });

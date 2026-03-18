@@ -5,6 +5,7 @@ import { listingsApi } from "~/lib/api/listings";
 import { geoApi } from "~/lib/api/geo";
 import type { ListingSearchParams } from "~/types/listing";
 import type { Listing } from "~/types/listing";
+import type { FilterPreset } from "~/components/ui/FilterPresets";
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "~/lib/utils";
@@ -16,6 +17,7 @@ import {
   Badge,
   CardGridSkeleton,
   EmptyStatePresets,
+  FilterPresets,
   RouteErrorBoundary,
   Alert,
 } from "~/components/ui";
@@ -102,7 +104,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       : undefined;
   })();
   const normalizedQuery =
-    url.searchParams.get("query")?.trim().slice(0, MAX_SEARCH_QUERY_LENGTH) || undefined;
+    (url.searchParams.get("query") ?? url.searchParams.get("q"))
+      ?.trim()
+      .slice(0, MAX_SEARCH_QUERY_LENGTH) || undefined;
   const normalizedLocation =
     url.searchParams.get("location")?.trim().slice(0, MAX_SEARCH_LOCATION_LENGTH) || undefined;
   const conditionParam = url.searchParams.get("condition");
@@ -190,17 +194,27 @@ export default function SearchPage() {
     useLoaderData<typeof clientLoader>();
   const { t } = useTranslation();
   const [urlSearchParams, setSearchParams] = useSearchParams();
-  const [showFilters, setShowFilters] = useState(() =>
-    typeof window !== "undefined" && window.innerWidth >= 1280
-  );
+  const [showFilters, setShowFilters] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
 
-  // Keep filter sidebar open/closed when window is resized across xl breakpoint
+  // Initialize and handle responsive behavior without causing layout shifts
   useEffect(() => {
-    const update = () => {
-      if (window.innerWidth >= 1280) setShowFilters(true);
+    const checkDesktop = () => window.innerWidth >= 1280;
+    
+    // Set initial state
+    setIsDesktop(checkDesktop());
+    setShowFilters(checkDesktop());
+
+    // Stable resize handler - uses CSS for transitions rather than state changes
+    const handleResize = () => {
+      const desktop = checkDesktop();
+      setIsDesktop(desktop);
+      // Only update showFilters on initial load or major breakpoint crossing
+      // Don't toggle on every resize to prevent layout thrashing
     };
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+
+    window.addEventListener("resize", handleResize, { passive: true });
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
   const [mapBounds, setMapBounds] = useState<SearchBounds | null>(null);
   const [highlightedListingId, setHighlightedListingId] = useState<string | undefined>();
@@ -434,6 +448,7 @@ export default function SearchPage() {
   const activeFiltersCount = Array.from(urlSearchParams.entries()).filter(
     ([key]) => key !== "page" && key !== "limit"
   ).length;
+  const currentFilters = Object.fromEntries(urlSearchParams.entries());
 
   type LegacyLocation = { lat?: number; lon?: number };
   const getListingCoordinates = (listing: Listing) => {
@@ -671,6 +686,15 @@ export default function SearchPage() {
                 {t("search.clearFilters", "Clear all")}
               </button>
             )}
+
+            <FilterPresets
+              currentFilters={currentFilters}
+              storageKey="search"
+                onApplyPreset={(filters: FilterPreset["filters"]) => {
+                setLocationValue(filters.location || "");
+                setSearchParams({ ...filters, page: "1" });
+              }}
+            />
           </div>
 
           <div className="flex items-center gap-4">
@@ -741,8 +765,14 @@ export default function SearchPage() {
         </div>
 
         <div className={cn("flex gap-6", viewMode === "map" && "flex-1")}>
-          {/* Filters Sidebar — overlay on mobile, inline on desktop */}
-          {showFilters && (
+          {/* Filters Sidebar — CSS-based responsive behavior for stability */}
+          <aside
+            className={cn(
+              "transition-all duration-300 ease-in-out overflow-hidden",
+              "xl:w-64 xl:block xl:opacity-100",
+              showFilters ? "w-64 opacity-100 block" : "w-0 opacity-0 hidden xl:w-64 xl:opacity-100 xl:block"
+            )}
+          >
             <SearchFiltersSidebar
               categories={categories}
               searchParams={searchParams}
@@ -773,7 +803,7 @@ export default function SearchPage() {
               onClearAll={clearFilters}
               onClose={() => setShowFilters(false)}
             />
-          )}
+          </aside>
 
           {/* Results Section - Split view with map */}
           <main className={cn("flex-1", viewMode === "map" && "flex gap-6")}>
@@ -1026,4 +1056,3 @@ function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: num
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusKm * c;
 }
-

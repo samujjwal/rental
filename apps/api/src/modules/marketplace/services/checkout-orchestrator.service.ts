@@ -301,7 +301,10 @@ export class CheckoutOrchestratorService {
       taxAmount = taxResult.totalTax;
       taxBreakdown = taxResult.breakdown;
     } catch (error) {
-      const taxRequired = this.configService.get<boolean>('TAX_CALC_REQUIRED', false);
+      // Default true so that misconfigured environments fail loudly rather than
+      // silently billing customers without tax — the platform can be exposed to
+      // tax liability otherwise (B7 fix: was incorrectly defaulting to false).
+      const taxRequired = this.configService.get<boolean>('TAX_CALC_REQUIRED', true);
       if (taxRequired) {
         throw new BadRequestException(
           `Tax calculation is required but failed: ${error.message}`,

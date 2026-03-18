@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /* ── global fetch mock ── */
 const mockFetch = jest.fn();
 (global as any).fetch = mockFetch;

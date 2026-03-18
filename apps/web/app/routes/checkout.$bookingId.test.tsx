@@ -49,6 +49,7 @@ vi.mock("~/components/ui", () => ({
 }));
 
 const validId = "11111111-1111-1111-8111-111111111111";
+const validCuid = "ckx1234567890abcdefghijkl";
 
 function makeFormReq(fields: Record<string, string>) {
   const fd = new FormData();
@@ -56,18 +57,64 @@ function makeFormReq(fields: Record<string, string>) {
   return { formData: () => Promise.resolve(fd) } as unknown as Request;
 }
 
-import { clientAction } from "./checkout.$bookingId";
+const loadRouteModule = async () => import("./checkout.$bookingId");
 
 const authUser = { id: "u1", role: "renter" };
 const booking = { id: validId, renterId: "u1", ownerId: "o1", status: "PENDING_PAYMENT", totalAmount: 5000 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.resetModules();
+  vi.stubEnv("VITE_STRIPE_PUBLISHABLE_KEY", "pk_test_123");
+});
+
+/* ================================================================== */
+/*  clientLoader                                                       */
+/* ================================================================== */
+describe("clientLoader", () => {
+  it("loads checkout for pending payment bookings", async () => {
+    const { clientLoader } = await loadRouteModule();
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue(booking);
+    mocks.createPaymentIntent.mockResolvedValue({
+      clientSecret: "cs_test_abcdefghijklmnopqrstuvwxyz",
+    });
+
+    const result = (await clientLoader({
+      request: new Request("http://localhost/checkout/" + validId),
+      params: { bookingId: validId },
+    } as any)) as any;
+
+    expect(result.booking.id).toBe(validId);
+    expect(result.clientSecret).toBe("cs_test_abcdefghijklmnopqrstuvwxyz");
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith(validId);
+  });
+
+  it("allows retry checkout for payment-failed bookings", async () => {
+    const { clientLoader } = await loadRouteModule();
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue({ ...booking, status: "PAYMENT_FAILED" });
+    mocks.createPaymentIntent.mockResolvedValue({
+      clientSecret: "cs_test_retry_abcdefghijklmnopqrstuvwxyz",
+    });
+
+    const result = (await clientLoader({
+      request: new Request("http://localhost/checkout/" + validId),
+      params: { bookingId: validId },
+    } as any)) as any;
+
+    expect(result.booking.status).toBe("PAYMENT_FAILED");
+    expect(result.clientSecret).toBe("cs_test_retry_abcdefghijklmnopqrstuvwxyz");
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith(validId);
+  });
+});
 
 /* ================================================================== */
 /*  clientAction                                                       */
 /* ================================================================== */
 describe("clientAction", () => {
   it("redirects unauthenticated", async () => {
+    const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(null);
     const r = await clientAction({ request: makeFormReq({ intent: "confirm-payment" }), params: { bookingId: validId } } as any);
     expect(r).toBeInstanceOf(Response);
@@ -75,18 +122,21 @@ describe("clientAction", () => {
   });
 
   it("rejects invalid bookingId UUID", async () => {
+    const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     const r = await clientAction({ request: makeFormReq({ intent: "confirm-payment" }), params: { bookingId: "bad" } } as any);
     expect((r as any).error).toMatch(/booking id/i);
   });
 
   it("rejects unknown intent", async () => {
+    const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     const r = await clientAction({ request: makeFormReq({ intent: "hack" }), params: { bookingId: validId } } as any);
     expect((r as any).error).toBe("Invalid action");
   });
 
   it("blocks non-renter non-admin", async () => {
+    const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue({ id: "stranger", role: "renter" });
     mocks.getBookingById.mockResolvedValue(booking);
     const r = await clientAction({ request: makeFormReq({ intent: "confirm-payment" }), params: { bookingId: validId } } as any);
@@ -94,6 +144,7 @@ describe("clientAction", () => {
   });
 
   it("blocks confirm-payment on wrong status", async () => {
+    const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getBookingById.mockResolvedValue({ ...booking, status: "COMPLETED" });
     const r = await clientAction({ request: makeFormReq({ intent: "confirm-payment" }), params: { bookingId: validId } } as any);
@@ -101,6 +152,7 @@ describe("clientAction", () => {
   });
 
   it("redirects on successful confirm-payment", async () => {
+    const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getBookingById.mockResolvedValue(booking);
     const r = await clientAction({ request: makeFormReq({ intent: "confirm-payment" }), params: { bookingId: validId } } as any);
@@ -108,7 +160,22 @@ describe("clientAction", () => {
     expect((r as Response).headers.get("Location")).toBe(`/bookings/${validId}?payment=success`);
   });
 
+  it("accepts CUID booking ids", async () => {
+    const { clientAction } = await loadRouteModule();
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue({ ...booking, id: validCuid });
+    const r = await clientAction({
+      request: makeFormReq({ intent: "confirm-payment" }),
+      params: { bookingId: validCuid },
+    } as any);
+    expect(r).toBeInstanceOf(Response);
+    expect((r as Response).headers.get("Location")).toBe(
+      `/bookings/${validCuid}?payment=success`
+    );
+  });
+
   it("redirects on cancel", async () => {
+    const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getBookingById.mockResolvedValue(booking);
     const r = await clientAction({ request: makeFormReq({ intent: "cancel" }), params: { bookingId: validId } } as any);
@@ -117,6 +184,7 @@ describe("clientAction", () => {
   });
 
   it("handles API error", async () => {
+    const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getBookingById.mockRejectedValue(new Error("Booking not found"));
     const r = await clientAction({ request: makeFormReq({ intent: "confirm-payment" }), params: { bookingId: validId } } as any);

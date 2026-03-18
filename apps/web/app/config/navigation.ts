@@ -61,6 +61,8 @@ export const ownerNavSections: SidebarSection[] = [
   },
   {
     title: "Insights",
+    collapsible: true,
+    defaultCollapsed: true,
     items: [
       { href: "/dashboard/owner/performance", label: "Performance", icon: BarChart3 },
       { href: "/dashboard/owner/insights", label: "Insights", icon: BarChart3 },

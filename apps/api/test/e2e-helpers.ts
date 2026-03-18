@@ -22,6 +22,10 @@ type RegisterUserInput = {
   phoneNumber?: string;
 };
 
+type RegisterUserOptions = {
+  acceptedStatuses?: number[];
+};
+
 type CreateUserWithRoleInput = RegisterUserInput & {
   app: INestApplication;
   prisma: PrismaService;
@@ -59,7 +63,10 @@ export const registerUser = async (
     lastName = 'User',
     phoneNumber = '+1234567890',
   }: RegisterUserInput,
+  options: RegisterUserOptions = {},
 ): Promise<RegisterResponse> => {
+  const acceptedStatuses = options.acceptedStatuses ?? [201];
+
   const response = await request(app.getHttpServer()).post('/auth/register').send({
     email,
     password,
@@ -68,7 +75,7 @@ export const registerUser = async (
     phoneNumber,
   });
 
-  if (response.status !== 201) {
+  if (!acceptedStatuses.includes(response.status)) {
     throw new Error(
       `registerUser failed (${email}): status=${response.status}, body=${JSON.stringify(response.body)}`,
     );
@@ -111,6 +118,8 @@ export const createUserWithRole = async ({
     firstName,
     lastName,
     phoneNumber,
+  }, {
+    acceptedStatuses: [200, 201],
   });
 
   let userId = registered.user?.id;
@@ -136,11 +145,13 @@ export const createUserWithRole = async ({
     },
   });
 
+  const freshSession = await loginUser(app, email, password);
+
   return {
     userId,
     user: { id: userId },
-    accessToken: assertAccessToken(registered.accessToken, `createUserWithRole(${email})`),
-    refreshToken: registered.refreshToken,
+    accessToken: assertAccessToken(freshSession.accessToken, `createUserWithRole(${email})`),
+    refreshToken: freshSession.refreshToken,
   };
 };
 
@@ -151,6 +162,7 @@ export const cleanupCoreRelationalData = async (prisma: PrismaService): Promise<
   await prisma.conversationParticipant.deleteMany({});
   await prisma.conversation.deleteMany({});
   await prisma.bookingStateHistory.deleteMany({});
+  await prisma.auditLog.deleteMany({});
   await prisma.disputeResolution.deleteMany({});
   await prisma.disputeTimelineEvent.deleteMany({});
   await prisma.disputeResponse.deleteMany({});
@@ -160,6 +172,7 @@ export const cleanupCoreRelationalData = async (prisma: PrismaService): Promise<
   await prisma.insurancePolicy.deleteMany({});
   await prisma.conditionReport.deleteMany({});
   await prisma.refund.deleteMany({});
+  await prisma.payout.deleteMany({});
   await prisma.depositHold.deleteMany({});
   await prisma.payment.deleteMany({});
   await prisma.ledgerEntry.deleteMany({});

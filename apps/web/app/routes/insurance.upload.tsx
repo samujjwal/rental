@@ -9,6 +9,7 @@ import { listingsApi } from "~/lib/api/listings";
 import { insuranceApi } from "~/lib/api/insurance";
 import { RouteErrorBoundary } from "~/components/ui";
 import { useTranslation } from "react-i18next";
+import { isAppEntityId } from "~/utils/entity-id";
 
 interface InsuranceRequirement {
   required: boolean;
@@ -17,9 +18,6 @@ interface InsuranceRequirement {
   minimumCoverage?: number;
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isUuid = (value: string | null): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
 const MAX_POLICY_FIELD_LENGTH = 120;
 const MAX_PROVIDER_FIELD_LENGTH = 120;
 const MAX_TYPE_FIELD_LENGTH = 80;
@@ -37,7 +35,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const listingId = url.searchParams.get("listingId");
 
-  if (!isUuid(listingId)) {
+  if (!isAppEntityId(listingId)) {
     return redirect("/listings");
   }
   try {
@@ -179,8 +177,7 @@ export default function InsuranceUpload() {
     try {
       await insuranceApi.uploadPolicy(data);
 
-      // Success - redirect to listings
-      navigate("/listings?status=pending_insurance");
+      navigate("/listings");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -466,4 +463,3 @@ export default function InsuranceUpload() {
   );
 }
 export { RouteErrorBoundary as ErrorBoundary };
-

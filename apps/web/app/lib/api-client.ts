@@ -47,6 +47,8 @@ class ApiClient {
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
+        const authStore = useAuthStore.getState();
+        const hadAccessToken = Boolean(authStore.accessToken);
 
         // Handle rate limiting (429)
         if (error.response?.status === 429) {
@@ -100,7 +102,6 @@ class ApiClient {
             return this.client(originalRequest);
           } catch (refreshError) {
             // Refresh failed, logout user
-            const authStore = useAuthStore.getState();
             authStore.clearAuth();
 
             // Show session expired message
@@ -108,7 +109,13 @@ class ApiClient {
               toast.error("Session expired. Please login again.");
             }
 
-            requestNavigation("/auth/login", { replace: true });
+            // Avoid forcing a login navigation when the request was never
+            // authenticated in the first place. This prevents direct protected
+            // route loads from bouncing to /auth/login before client auth state
+            // has hydrated from local storage.
+            if (hadAccessToken) {
+              requestNavigation("/auth/login", { replace: true });
+            }
             return Promise.reject(refreshError);
           }
         }

@@ -212,6 +212,7 @@ export function SearchScreen({ navigation, route }: Props) {
           placeholderTextColor={colors.textMuted}
           returnKeyType="search"
           onSubmitEditing={handleSearch}
+          testID="search-input"
         />
         <Pressable style={styles.searchButton} onPress={handleSearch}>
           <Text style={styles.searchButtonText}>{'\uD83D\uDD0D'}</Text>
