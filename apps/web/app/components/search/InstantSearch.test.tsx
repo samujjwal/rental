@@ -39,14 +39,14 @@ describe('InstantSearch', () => {
         {
           id: '1',
           title: 'Test Listing 1',
-          pricePerDay: 50,
+          basePrice: 50,
           images: ['image1.jpg'],
           location: { city: 'New York', state: 'NY' },
         },
         {
           id: '2',
           title: 'Test Listing 2',
-          pricePerDay: 75,
+          basePrice: 75,
           images: [],
           location: { city: 'Los Angeles', state: 'CA' },
         },
