@@ -168,7 +168,7 @@ export const DEFAULT_TIMEZONE = getDefaultTimezone();
 export const PLATFORM_COUNTRY_CODE = getPlatformCountryCode();
 
 /** @deprecated Use env var or read from CountryConfig table */
-export const PLATFORM_COUNTRY = process.env?.PLATFORM_COUNTRY_NAME || '';
+export const PLATFORM_COUNTRY = (typeof process !== 'undefined' && process.env?.PLATFORM_COUNTRY_NAME) || '';
 
 /** @deprecated Use getPhoneCountryCode() or read from CountryConfig table */
 export const PHONE_COUNTRY_CODE = getPhoneCountryCode();
