@@ -36,6 +36,12 @@ function normalizeStoredRole(role?: string | null): AuthUser["role"] {
   return "renter";
 }
 
+function getRuntimeApiUrl(): string {
+  const serverApiUrl =
+    typeof process !== "undefined" && process.env ? process.env.API_URL : undefined;
+  return serverApiUrl || import.meta.env.VITE_API_URL || "http://localhost:3400/api";
+}
+
 // QueryClient factory — must NOT be module-level in SSR to avoid cross-request data leaks
 function makeQueryClient() {
   return new QueryClient({
@@ -66,50 +72,27 @@ export const links: LinksFunction = () => [
 ];
 
 export async function clientLoader({ request }: { request: Request }) {
-  const storedAuth = (() => {
-    if (typeof window === "undefined") {
-      return { user: null as AuthUser | null, accessToken: null as string | null, refreshToken: null as string | null };
-    }
+  // Use the Zustand in-memory store as the only permitted client-side auth projection.
+  // Direct localStorage reads are intentionally removed — tokens must not be accessed
+  // outside the store's own persist hydration boundary.
+  const storeState = typeof window !== "undefined" ? useAuthStore.getState() : null;
 
-    try {
-      const raw = localStorage.getItem("auth-storage");
-      if (!raw) {
-        return { user: null, accessToken: null, refreshToken: null };
-      }
+  const storeUser = storeState?.user
+    ? { ...storeState.user, role: normalizeStoredRole(storeState.user.role) }
+    : null;
 
-      const parsed = JSON.parse(raw) as {
-        state?: { user?: AuthUser | null; accessToken?: string; refreshToken?: string };
-      };
-      const accessToken = parsed?.state?.accessToken ?? null;
-      const refreshToken = parsed?.state?.refreshToken ?? null;
-      const user = parsed?.state?.user
-        ? {
-            ...parsed.state.user,
-            role: normalizeStoredRole(parsed.state.user.role),
-          }
-        : null;
-
-      if (accessToken) {
-        useAuthStore.getState().setAccessToken(accessToken);
-      }
-
-      return { user, accessToken, refreshToken };
-    } catch {
-      return { user: null, accessToken: null, refreshToken: null };
-    }
-  })();
-
-  const user = storedAuth.user ?? (await getUser(request));
+  const user = storeUser ?? (await getUser(request));
   const session = await getSession(request);
-  const accessToken = storedAuth.accessToken ?? session.get("accessToken");
-  const refreshToken = storedAuth.refreshToken ?? session.get("refreshToken");
+  const accessToken = storeState?.accessToken ?? session.get("accessToken");
+  // Refresh token must never be read from localStorage; session cookie is authoritative.
+  const refreshToken = session.get("refreshToken") ?? null;
 
   return {
     user,
     accessToken,
     refreshToken,
     ENV: {
-      API_URL: import.meta.env.VITE_API_URL || "http://localhost:3400/api",
+      API_URL: getRuntimeApiUrl(),
     },
   };
 }
@@ -155,6 +138,17 @@ function RootContent() {
   const setAuth = useAuthStore((state) => state.setAuth);
   const navigate = useNavigate();
   const revalidator = useRevalidator();
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const runtimeEnv = loaderData.ENV;
+    (window as Window & { __APP_ENV__?: typeof runtimeEnv }).__APP_ENV__ = runtimeEnv;
+    // F-42 fix: Do NOT write the API URL into a dataset attribute; it would be
+    // trivially readable by any injected script.  Use window.__APP_ENV__ instead.
+  }, [loaderData.ENV]);
 
   useAuthInit();
   useKeyboardShortcuts();
@@ -204,7 +198,10 @@ function RootContent() {
         );
 
         // New tokens should invalidate any stale loaders.
-        revalidator.revalidate();
+        // F-48 fix: only trigger revalidation when idle to prevent loop.
+        if (revalidator.state === 'idle') {
+          revalidator.revalidate();
+        }
       }
     }
   }, [loaderData, setAuth, revalidator]);

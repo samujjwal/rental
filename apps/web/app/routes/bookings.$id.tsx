@@ -29,12 +29,21 @@ import { BookingStatus } from "~/lib/shared-types";
 import { redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Booking } from "~/types/booking";
 import { format } from "date-fns";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { getUser } from "~/utils/auth";
 import { SuccessCelebration } from "~/components/animations/SuccessCelebration";
 import { BookingStateMachine } from "~/components/bookings/BookingStateMachine";
 import { useTranslation } from "react-i18next";
 import { toast } from "~/lib/toast";
+import { Dialog, DialogFooter, UnifiedButton } from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
+import {
+  STATUS_COLORS,
+  PAYMENT_STATUS_COLORS,
+  TIMELINE_STEPS,
+} from "~/features/bookings/detail/booking-status-config";
+import { useBookingModals } from "~/features/bookings/detail/useBookingModals";
+import { useBookingActions } from "~/features/bookings/detail/useBookingActions";
 
 type ViewerRole = "owner" | "renter" | "admin";
 
@@ -130,19 +139,10 @@ const getStoredClientAuth = (): { user: { id: string; role: ViewerRole } | null;
   }
 
   try {
-    const raw = localStorage.getItem("auth-storage");
-    if (!raw) {
-      return { user: null, accessToken: null };
-    }
+    // F-39 fix: Use useAuthStore.getState() as the single source of truth
+    // instead of directly parsing the localStorage persistence key.
+    const { user: rawUser, accessToken } = useAuthStore.getState();
 
-    const parsed = JSON.parse(raw) as {
-      state?: {
-        accessToken?: string;
-        user?: { id?: string; role?: string } | null;
-      };
-    };
-    const accessToken = parsed?.state?.accessToken ?? null;
-    const rawUser = parsed?.state?.user;
     const normalizedRole = (() => {
       const role = String(rawUser?.role || "").toUpperCase();
       if (role === "OWNER" || role === "HOST") return "owner" as const;
@@ -150,12 +150,8 @@ const getStoredClientAuth = (): { user: { id: string; role: ViewerRole } | null;
       return "renter" as const;
     })();
 
-    if (accessToken) {
-      useAuthStore.getState().setAccessToken(accessToken);
-    }
-
     return {
-      accessToken,
+      accessToken: accessToken ?? null,
       user: rawUser?.id ? { id: rawUser.id, role: normalizedRole } : null,
     };
   } catch {
@@ -163,39 +159,52 @@ const getStoredClientAuth = (): { user: { id: string; role: ViewerRole } | null;
   }
 };
 
+const getBookingDetailLoadError = (error: unknown): string => {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading this booking again.";
+  }
+
+  return getActionableErrorMessage(error, "Unable to load this booking right now.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading this booking again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading this booking timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not reach the booking service. Try again in a moment.",
+  });
+};
+
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
-  console.log("[bookings.$id clientLoader] START", params.id);
   const storedAuth = getStoredClientAuth();
   const user = storedAuth.user ?? (await getUser(request));
-  console.log("[bookings.$id clientLoader] user:", user ? `${user.id} (${user.role})` : "null");
   if (!user && !storedAuth.accessToken) {
-    console.log("[bookings.$id clientLoader] no user → redirect /auth/login");
     throw redirect("/auth/login");
   }
 
   const bookingId = params.id;
   if (!isUuid(bookingId)) {
-    console.log("[bookings.$id clientLoader] invalid uuid → redirect /bookings");
     throw redirect("/bookings");
   }
 
+  const activeUser = user ?? storedAuth.user;
+
   try {
     const booking = await bookingsApi.getBookingById(bookingId);
-    console.log("[bookings.$id clientLoader] booking:", booking.id, "ownerId:", booking.ownerId, "renterId:", booking.renterId);
-    const activeUser = user ?? storedAuth.user;
     const isParticipant =
       !!activeUser &&
       (booking.ownerId === activeUser.id ||
         booking.renterId === activeUser.id ||
         activeUser.role === "admin");
-    console.log(
-      "[bookings.$id clientLoader] isParticipant:",
-      isParticipant,
-      "user.id:",
-      activeUser?.id ?? "unknown"
-    );
     if (!isParticipant) {
-      console.log("[bookings.$id clientLoader] not participant → redirect /bookings");
       throw redirect("/bookings");
     }
     const transitionResponse = await bookingsApi
@@ -216,8 +225,12 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     };
   } catch (error) {
     if (error instanceof Response) throw error; // re-throw redirects
-    console.error("[bookings.$id clientLoader] catch error:", error);
-    throw redirect("/bookings");
+    return {
+      booking: null,
+      viewerRole: activeUser?.role ?? "renter",
+      availableTransitions: [],
+      error: getBookingDetailLoadError(error),
+    };
   }
 }
 
@@ -363,82 +376,59 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
         return { error: "Invalid action" };
     }
   } catch (error: unknown) {
+    const responseMessage =
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+        ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+        : null;
+
     return {
-      error:
-        (error &&
-          typeof error === "object" &&
-          "response" in error &&
-          (error as { response?: { data?: { message?: string } } }).response
-            ?.data?.message) ||
-        "Action failed",
+      error: responseMessage || getActionableErrorMessage(error, "Action failed", {
+        [ApiErrorType.CONFLICT]: "This booking changed while you were working. We refreshed the state. Please review the latest status and try again.",
+        [ApiErrorType.TIMEOUT_ERROR]: "This action is taking longer than expected. Refresh the booking to confirm the latest state before retrying.",
+        [ApiErrorType.OFFLINE]: "You are offline. Reconnect and try the booking action again.",
+        [ApiErrorType.NETWORK_ERROR]: "We could not reach the server. Try again in a moment.",
+        [ApiErrorType.UNKNOWN_ERROR]: "Action failed",
+      }),
     };
   }
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  pending_owner_approval: "bg-yellow-100 text-yellow-800",
-  pending_payment: "bg-orange-100 text-orange-800",
-  pending: "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-blue-100 text-blue-800",
-  active: "bg-green-100 text-green-800",
-  return_requested: "bg-amber-100 text-amber-800",
-  completed: "bg-muted text-foreground",
-  settled: "bg-muted text-foreground",
-  cancelled: "bg-red-100 text-red-800",
-  payment_failed: "bg-red-100 text-red-800",
-  disputed: "bg-red-100 text-red-800",
-  refunded: "bg-blue-100 text-blue-800",
-};
-
-const PAYMENT_STATUS_COLORS: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  paid: "bg-green-100 text-green-800",
-  refunded: "bg-blue-100 text-blue-800",
-  failed: "bg-red-100 text-red-800",
-};
-
-const TIMELINE_STEPS = [
-  { status: "pending_owner_approval", label: "Booking Requested", icon: Clock },
-  { status: "pending_payment", label: "Pending Payment", icon: Clock },
-  { status: "confirmed", label: "Confirmed", icon: CheckCircle },
-  { status: "active", label: "In Progress", icon: Package },
-  { status: "return_requested", label: "Return Requested", icon: FileText },
-  { status: "completed", label: "Completed", icon: CheckCircle },
-];
 
 export default function BookingDetail() {
   const { t } = useTranslation();
-  const { booking, availableTransitions = [], viewerRole } = useLoaderData<{
-    booking: Booking;
+  const { booking, availableTransitions = [], viewerRole, error } = useLoaderData<{
+    booking: Booking | null;
     availableTransitions?: string[];
     viewerRole: ViewerRole;
+    error?: string;
   }>();
   const actionData = useActionData<{ success?: string; error?: string }>();
-
-  // Show toast for action results and close modal on success
-  useEffect(() => {
-    if (actionData?.success) {
-      toast.success(actionData.success);
-      setShowCancelModal(false);
-      setCancelReason("");
-      setShowReviewModal(false);
-      setReview("");
-      setRating(5);
-    }
-    if (actionData?.error) toast.error(actionData.error);
-  }, [actionData]);
   const navigate = useNavigate();
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [cancelIntent, setCancelIntent] = useState<"cancel" | "reject" | "reject_return">("cancel");
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [rating, setRating] = useState(5);
-  const [review, setReview] = useState("");
   const navigation = useNavigation();
   const isSubmitting = navigation.state === 'submitting';
-
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
+
+  const {
+    showCancelModal, setShowCancelModal,
+    cancelReason, setCancelReason,
+    cancelIntent, setCancelIntent,
+    showReviewModal, setShowReviewModal,
+    rating, setRating,
+    review, setReview,
+    resetModals,
+  } = useBookingModals();
+
+  const { handleStateAction } = useBookingActions({
+    navigate,
+    setCancelIntent,
+    setShowCancelModal,
+    setShowReviewModal,
+  });
+
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [paymentVerifyTimedOut, setPaymentVerifyTimedOut] = useState(false);
@@ -447,94 +437,25 @@ export default function BookingDetail() {
   >(null);
   const [paymentRecoveryMessage, setPaymentRecoveryMessage] = useState("");
 
-  // Handle state machine actions
-  const handleStateAction = useCallback((action: string, bookingId: string) => {
-    const intentMap: Record<string, string> = {
-      approve: "confirm",
-      reject: "reject",
-      cancel: "cancel",
-      start: "start",
-      requestReturn: "request_return",
-      review: "review",
-    };
-
-    const form = document.createElement('form');
-    form.method = 'post';
-    form.action = `/bookings/${bookingId}`;
-    
-    const formData = new FormData();
-    const mappedIntent = intentMap[action];
-    
-    // Add reason if needed for certain actions
-    if (['reject', 'reject_return'].includes(action)) {
-      const reason = prompt(t(`bookings.reasons.${action}`, 'Please provide a reason'));
-      if (!reason) return;
-      formData.append('reason', reason);
-    }
-    
-    // Add review data if needed
-    if (action === 'review') {
-      setShowReviewModal(true);
-      return;
-    }
-    
-    // Handle navigation for payment
-    if (action === 'pay') {
-      navigate(`/checkout/${bookingId}`);
-      return;
-    }
-
-    if (!mappedIntent) {
-      return;
-    }
-
-    formData.append('intent', mappedIntent);
-    
-    // Submit the form
-    for (const [key, value] of formData.entries()) {
-      form.appendChild(createHiddenInput(key, value as string));
-    }
-    
-    document.body.appendChild(form);
-    form.submit();
-  }, [navigate, t]);
-
-  const createHiddenInput = (name: string, value: string) => {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = name;
-    input.value = value;
-    return input;
-  };
-
-  const normalizedStatus = normalizeStatus(booking.status);
-  const fallbackTransitions = getFallbackTransitions(normalizedStatus, viewerRole);
-  const transitionSet = new Set(
-    availableTransitions.length > 0 ? availableTransitions : fallbackTransitions
-  );
-  const listingTitle = safeText(booking.listing?.title, "Listing");
-  const listingId = safeText(booking.listing?.id);
-  const listingDescription = safeText(booking.listing?.description, "No description available.");
-  const listingCity = safeText(booking.listing?.location?.city, "Location unavailable");
-  const renterFirstName = safeText(booking.renter?.firstName, "Renter");
-  const renterLastName = safeText(booking.renter?.lastName);
-  const ownerFirstName = safeText(booking.owner?.firstName, "Owner");
-  const ownerLastName = safeText(booking.owner?.lastName);
-  const reviewRating = safeNumber(booking.review?.rating);
-  const reviewComment = safeText(booking.review?.comment, "No review comment provided.");
-  const pricing = booking.pricing || {
-    subtotal: safeNumber(booking.subtotal),
-    serviceFee: safeNumber(booking.serviceFee),
-    deliveryFee: safeNumber(booking.deliveryFee),
-    securityDeposit: safeNumber(booking.securityDeposit),
-    totalAmount: safeNumber(booking.totalPrice ?? booking.totalAmount),
-  };
-
-  // Check for successful payment redirect
+  // Show toast for action results and reset modals on success
   useEffect(() => {
+    if (actionData?.success) {
+      toast.success(actionData.success);
+      resetModals();
+      revalidator.revalidate();
+    }
+    if (actionData?.error) toast.error(actionData.error);
+  }, [actionData, revalidator, resetModals]);
+
+  useEffect(() => {
+    if (!booking) {
+      return;
+    }
+
+    const normalizedBookingStatus = normalizeStatus(booking.status);
     const paymentSuccess = searchParams.get("payment") === "success";
     const needsVerification =
-      normalizedStatus === "pending_payment" ||
+      normalizedBookingStatus === "pending_payment" ||
       String(booking.paymentStatus).toUpperCase() === "PENDING";
 
     if (paymentSuccess && needsVerification) {
@@ -595,19 +516,28 @@ export default function BookingDetail() {
         return false;
       };
 
-      void checkPaymentStatus();
+      let pollTimeout: ReturnType<typeof setTimeout> | null = null;
 
-      const interval = setInterval(() => {
-        void checkPaymentStatus().then((done) => {
-          if (done) {
-            clearInterval(interval);
-          }
-        });
-      }, 2000);
+      const clearPollTimeout = () => {
+        if (pollTimeout !== null) {
+          clearTimeout(pollTimeout);
+          pollTimeout = null;
+        }
+      };
 
-      // Stop polling after 30 seconds and surface recovery guidance
+      const pollPaymentStatus = async () => {
+        const done = await checkPaymentStatus();
+        if (!done && isActive) {
+          pollTimeout = setTimeout(() => {
+            void pollPaymentStatus();
+          }, 2000);
+        }
+      };
+
+      void pollPaymentStatus();
+
       const timeout = setTimeout(() => {
-        clearInterval(interval);
+        clearPollTimeout();
         if (!isActive) return;
         setIsVerifyingPayment(false);
         setPaymentVerifyTimedOut(true);
@@ -615,15 +545,68 @@ export default function BookingDetail() {
 
       return () => {
         isActive = false;
-        clearInterval(interval);
+        clearPollTimeout();
         clearTimeout(timeout);
       };
-    } else if (normalizedStatus === "confirmed" && isVerifyingPayment) {
+    } else if (normalizedBookingStatus === "confirmed" && isVerifyingPayment) {
       setIsVerifyingPayment(false);
       setPaymentVerifyTimedOut(false);
       setShowCelebration(true);
     }
-  }, [searchParams, normalizedStatus, booking.paymentStatus, revalidator, isVerifyingPayment]);
+  }, [booking, searchParams, revalidator, isVerifyingPayment, t]);
+
+  if (!booking) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="bg-card rounded-lg shadow-md p-8 text-center space-y-4">
+            <AlertCircle className="w-10 h-10 mx-auto text-muted-foreground" />
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold text-foreground">Booking unavailable</h1>
+              <p className="text-sm text-muted-foreground">
+                {error || "Unable to load this booking right now."}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <UnifiedButton type="button" onClick={() => revalidator.revalidate()}>
+                Try Again
+              </UnifiedButton>
+              <UnifiedButton
+                type="button"
+                variant="outline"
+                onClick={() => navigate("/bookings")}
+              >
+                Back to Bookings
+              </UnifiedButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const normalizedStatus = normalizeStatus(booking.status);
+  const fallbackTransitions = getFallbackTransitions(normalizedStatus, viewerRole);
+  const transitionSet = new Set(
+    availableTransitions.length > 0 ? availableTransitions : fallbackTransitions
+  );
+  const listingTitle = safeText(booking.listing?.title, "Listing");
+  const listingId = safeText(booking.listing?.id);
+  const listingDescription = safeText(booking.listing?.description, "No description available.");
+  const listingCity = safeText(booking.listing?.location?.city, "Location unavailable");
+  const renterFirstName = safeText(booking.renter?.firstName, "Renter");
+  const renterLastName = safeText(booking.renter?.lastName);
+  const ownerFirstName = safeText(booking.owner?.firstName, "Owner");
+  const ownerLastName = safeText(booking.owner?.lastName);
+  const reviewRating = safeNumber(booking.review?.rating);
+  const reviewComment = safeText(booking.review?.comment, "No review comment provided.");
+  const pricing = booking.pricing || {
+    subtotal: safeNumber(booking.subtotal),
+    serviceFee: safeNumber(booking.serviceFee),
+    deliveryFee: safeNumber(booking.deliveryFee),
+    securityDeposit: safeNumber(booking.securityDeposit),
+    totalAmount: safeNumber(booking.totalPrice ?? booking.totalAmount),
+  };
 
   const isOwner = viewerRole === "owner";
   const isRenter = viewerRole === "renter";
@@ -1105,56 +1088,60 @@ export default function BookingDetail() {
                 {canConfirm && (
                   <Form method="post">
                     <input type="hidden" name="intent" value="confirm" />
-                    <button
+                    <UnifiedButton
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base"
+                      loading={isSubmitting}
+                      className="w-full font-semibold text-base"
                     >
-                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                            {!isSubmitting ? <CheckCircle className="w-5 h-5" /> : null}
                       <span>{t('bookings.actions.confirmBooking', 'Confirm Booking')}</span>
-                    </button>
+                          </UnifiedButton>
                   </Form>
                 )}
 
                 {canStart && (
                   <Form method="post">
                     <input type="hidden" name="intent" value="start" />
-                    <button
+                    <UnifiedButton
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base"
+                      loading={isSubmitting}
+                      className="w-full font-semibold text-base"
                     >
-                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                      {!isSubmitting ? <CheckCircle className="w-5 h-5" /> : null}
                       <span>{t('bookings.actions.startRental', 'Start Rental')}</span>
-                    </button>
+                    </UnifiedButton>
                   </Form>
                 )}
 
                 {canRequestReturn && (
                   <Form method="post">
                     <input type="hidden" name="intent" value="request_return" />
-                    <button
+                    <UnifiedButton
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base"
+                      loading={isSubmitting}
+                      className="w-full font-semibold text-base"
                     >
-                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+                      {!isSubmitting ? <FileText className="w-5 h-5" /> : null}
                       <span>{t('bookings.actions.requestReturn', 'Request Return')}</span>
-                    </button>
+                    </UnifiedButton>
                   </Form>
                 )}
 
                 {canComplete && (
                   <Form method="post">
                     <input type="hidden" name="intent" value="complete" />
-                    <button
+                    <UnifiedButton
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base"
+                      loading={isSubmitting}
+                      className="w-full font-semibold text-base"
                     >
-                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                      {!isSubmitting ? <CheckCircle className="w-5 h-5" /> : null}
                       <span>{t('bookings.actions.approveReturn', 'Approve Return')}</span>
-                    </button>
+                    </UnifiedButton>
                   </Form>
                 )}
 
@@ -1250,124 +1237,157 @@ export default function BookingDetail() {
       </div>
 
       {/* Cancel Modal */}
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-foreground mb-4">
-              {cancelIntent === "reject" ? t('bookings.actions.declineBooking', 'Decline Booking') : cancelIntent === "reject_return" ? t('bookings.actions.reportDamage', 'Report Damage') : t('bookings.details.cancelBooking')}
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              {cancelIntent === "reject_return"
-                ? t('bookings.reportDamagePrompt', 'Please describe the damage or issue found during return inspection:')
-                : t('bookings.cancelReasonPrompt', 'Please provide a reason for this action:')}
-            </p>
-            <Form method="post">
-              <input type="hidden" name="intent" value={cancelIntent} />
-              <textarea
-                name="reason"
-                value={cancelReason}
-                onChange={(e) =>
-                  setCancelReason(e.target.value.slice(0, MAX_BOOKING_REASON_LENGTH))
-                }
-                rows={4}
-                className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-4"
-                placeholder={t('bookings.cancelPlaceholder', 'Enter cancellation reason...')}
-                required
-              />
-              <div className="flex justify-end gap-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCancelModal(false);
-                    setCancelReason("");
-                  }}
-                  className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-background"
-                >
-                  {t('bookings.keepBooking', 'Keep Booking')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={!cancelReason.trim() || isSubmitting}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? t('bookings.processing', 'Processing...') : cancelIntent === "reject" ? t('bookings.actions.declineBooking', 'Decline Booking') : cancelIntent === "reject_return" ? t('bookings.actions.reportDamage', 'Report Damage') : t('bookings.details.cancelBooking')}
-                </button>
-              </div>
-            </Form>
+      <Dialog
+        open={showCancelModal}
+        onClose={() => {
+          if (isSubmitting) {
+            return;
+          }
+          setShowCancelModal(false);
+          setCancelReason("");
+        }}
+        title={
+          cancelIntent === "reject"
+            ? t('bookings.actions.declineBooking', 'Decline Booking')
+            : cancelIntent === "reject_return"
+              ? t('bookings.actions.reportDamage', 'Report Damage')
+              : t('bookings.details.cancelBooking')
+        }
+        description={
+          cancelIntent === "reject_return"
+            ? t('bookings.reportDamagePrompt', 'Please describe the damage or issue found during return inspection:')
+            : t('bookings.cancelReasonPrompt', 'Please provide a reason for this action:')
+        }
+        size="md"
+      >
+        <Form method="post">
+          <input type="hidden" name="intent" value={cancelIntent} />
+          <textarea
+            name="reason"
+            value={cancelReason}
+            onChange={(e) =>
+              setCancelReason(e.target.value.slice(0, MAX_BOOKING_REASON_LENGTH))
+            }
+            rows={4}
+            className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            placeholder={t('bookings.cancelPlaceholder', 'Enter cancellation reason...')}
+            required
+            disabled={isSubmitting}
+          />
+          <div className="mt-2 text-right text-xs text-muted-foreground">
+            {cancelReason.trim().length}/{MAX_BOOKING_REASON_LENGTH}
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <UnifiedButton
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowCancelModal(false);
+                setCancelReason("");
+              }}
+              disabled={isSubmitting}
+            >
+              {t('bookings.keepBooking', 'Keep Booking')}
+            </UnifiedButton>
+            <UnifiedButton
+              type="submit"
+              variant="destructive"
+              disabled={!cancelReason.trim() || isSubmitting}
+              loading={isSubmitting}
+            >
+              {cancelIntent === "reject"
+                ? t('bookings.actions.declineBooking', 'Decline Booking')
+                : cancelIntent === "reject_return"
+                  ? t('bookings.actions.reportDamage', 'Report Damage')
+                  : t('bookings.details.cancelBooking')}
+            </UnifiedButton>
+          </DialogFooter>
+        </Form>
+      </Dialog>
 
       {/* Review Modal */}
-      {showReviewModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Form method="post" className="bg-card rounded-lg p-6 max-w-md w-full mx-4">
-            <input type="hidden" name="intent" value="review" />
-            <h3 className="text-xl font-bold text-foreground mb-4">
-              {t('bookings.details.leaveReview')}
-            </h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-foreground mb-2">
-                {t('reviews.rating')}
-              </label>
-              <div className="flex items-center gap-2">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setRating(star)}
-                    className="focus:outline-none"
-                    aria-label={`Rate ${star} star(s)`}
-                  >
-                    <Star
-                      className={`w-8 h-8 ${
-                        star <= rating
-                          ? "fill-yellow-400 text-yellow-400"
-                          : "text-muted"
-                      }`}
-                    />
-                  </button>
-                ))}
-                <span className="ml-2 text-muted-foreground">{rating} {t('bookings.details.outOf', 'out of')} 5</span>
-              </div>
-              <input type="hidden" name="rating" value={rating} />
+      <Dialog
+        open={showReviewModal}
+        onClose={() => {
+          if (isSubmitting) {
+            return;
+          }
+          setShowReviewModal(false);
+          setReview("");
+          setRating(5);
+        }}
+        title={t('bookings.details.leaveReview')}
+        description={t('reviews.reviewPrompt', 'Share your experience with this rental.')}
+        size="md"
+      >
+        <Form method="post">
+          <input type="hidden" name="intent" value="review" />
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-foreground mb-2">
+              {t('reviews.rating')}
+            </label>
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRating(star)}
+                  className="focus:outline-none"
+                  aria-label={`Rate ${star} star(s)`}
+                  disabled={isSubmitting}
+                >
+                  <Star
+                    className={`w-8 h-8 ${
+                      star <= rating
+                        ? "fill-yellow-400 text-yellow-400"
+                        : "text-muted"
+                    }`}
+                  />
+                </button>
+              ))}
+              <span className="ml-2 text-muted-foreground">{rating} {t('bookings.details.outOf', 'out of')} 5</span>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-foreground mb-2">
-                {t('reviews.comment', 'Review')}
-              </label>
-              <textarea
-                name="comment"
-                value={review}
-                onChange={(e) =>
-                  setReview(e.target.value.slice(0, MAX_REVIEW_COMMENT_LENGTH))
-                }
-                rows={4}
-                className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Share your experience..."
-                required
-              />
+            <input type="hidden" name="rating" value={rating} />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-foreground mb-2">
+              {t('reviews.comment', 'Review')}
+            </label>
+            <textarea
+              name="comment"
+              value={review}
+              onChange={(e) =>
+                setReview(e.target.value.slice(0, MAX_REVIEW_COMMENT_LENGTH))
+              }
+              rows={4}
+              className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Share your experience..."
+              required
+              disabled={isSubmitting}
+            />
+            <div className="mt-2 text-right text-xs text-muted-foreground">
+              {review.trim().length}/{MAX_REVIEW_COMMENT_LENGTH}
             </div>
-            <div className="flex justify-end gap-4">
-              <button
-                type="button"
-                onClick={() => setShowReviewModal(false)}
-                className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-background"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting || !review.trim()}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {t('reviews.submitReview')}
-              </button>
-            </div>
-          </Form>
-        </div>
-      )}
+          </div>
+          <DialogFooter>
+            <UnifiedButton
+              type="button"
+              variant="outline"
+              onClick={() => setShowReviewModal(false)}
+              disabled={isSubmitting}
+            >
+              {t('common.cancel')}
+            </UnifiedButton>
+            <UnifiedButton
+              type="submit"
+              disabled={isSubmitting || !review.trim()}
+              loading={isSubmitting}
+            >
+              {t('reviews.submitReview')}
+            </UnifiedButton>
+          </DialogFooter>
+        </Form>
+      </Dialog>
     </div>
   );
 }

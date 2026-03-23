@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ForbiddenException } from '@nestjs/common';
 import { BookingsController } from './bookings.controller';
+import { BookingsDevController } from './bookings-dev.controller';
 import { BookingsService } from '../services/bookings.service';
 import { BookingStateMachineService } from '../services/booking-state-machine.service';
 import { BookingCalculationService } from '../services/booking-calculation.service';
@@ -11,6 +13,7 @@ import { ContextResolverService } from '../../policy-engine/services/context-res
 describe('BookingsController', () => {
   let module: TestingModule;
   let controller: BookingsController;
+  let devController: BookingsDevController;
   let bookingsService: jest.Mocked<BookingsService>;
   let stateMachine: jest.Mocked<BookingStateMachineService>;
   let calculation: jest.Mocked<BookingCalculationService>;
@@ -28,7 +31,7 @@ describe('BookingsController', () => {
 
   beforeEach(async () => {
     module = await Test.createTestingModule({
-      controllers: [BookingsController],
+      controllers: [BookingsController, BookingsDevController],
       providers: [
         {
           provide: BookingsService,
@@ -54,6 +57,7 @@ describe('BookingsController', () => {
           provide: BookingStateMachineService,
           useValue: {
             getAvailableTransitions: jest.fn(),
+            transition: jest.fn(),
           },
         },
         {
@@ -74,7 +78,7 @@ describe('BookingsController', () => {
           useValue: {
             listing: { findUnique: jest.fn() },
             user: { findUnique: jest.fn() },
-            booking: { findUnique: jest.fn() },
+            booking: { findUnique: jest.fn(), updateMany: jest.fn() },
           },
         },
         {
@@ -94,6 +98,7 @@ describe('BookingsController', () => {
     }).compile();
 
     controller = module.get(BookingsController);
+    devController = module.get(BookingsDevController);
     bookingsService = module.get(BookingsService) as jest.Mocked<BookingsService>;
     stateMachine = module.get(BookingStateMachineService) as jest.Mocked<BookingStateMachineService>;
     calculation = module.get(BookingCalculationService) as jest.Mocked<BookingCalculationService>;
@@ -180,6 +185,61 @@ describe('BookingsController', () => {
       bookingsService.cancelBooking.mockResolvedValue(mockBooking as any);
       await controller.cancel('b1', 'u1', { reason: 'Changed plans' } as any);
       expect(bookingsService.cancelBooking).toHaveBeenCalledWith('b1', 'u1', 'Changed plans');
+    });
+  });
+
+  describe('bypassConfirm', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalStripeTestBypass = process.env.STRIPE_TEST_BYPASS;
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development';
+      process.env.STRIPE_TEST_BYPASS = 'true';
+      prisma.booking.findUnique.mockResolvedValue({
+        id: 'b1',
+        renterId: 'u1',
+        listing: { ownerId: 'u2' },
+      });
+      stateMachine.transition.mockResolvedValue({ success: true } as any);
+    });
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalNodeEnv;
+      process.env.STRIPE_TEST_BYPASS = originalStripeTestBypass;
+    });
+
+    it('allows the booking renter to confirm through the bypass endpoint', async () => {
+      await devController.bypassConfirm('b1', 'u1', 'USER');
+
+      expect(stateMachine.transition).toHaveBeenCalledWith('b1', 'COMPLETE_PAYMENT', 'u1', 'RENTER');
+    });
+
+    it('rejects non-renters', async () => {
+      await expect(devController.bypassConfirm('b1', 'u3', 'USER')).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('devReset', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalStripeTestBypass = process.env.STRIPE_TEST_BYPASS;
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development';
+      process.env.STRIPE_TEST_BYPASS = 'true';
+      prisma.booking.updateMany.mockResolvedValue({ count: 2 });
+    });
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalNodeEnv;
+      process.env.STRIPE_TEST_BYPASS = originalStripeTestBypass;
+    });
+
+    it('requires an admin role', async () => {
+      await expect(devController.devReset('USER')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('allows admins to reset non-final bookings', async () => {
+      await expect(devController.devReset('ADMIN')).resolves.toEqual({ cancelled: 2 });
     });
   });
 

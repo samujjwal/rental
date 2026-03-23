@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /* ------------------------------------------------------------------ */
@@ -48,7 +49,7 @@ function makeFormReq(fields: Record<string, string>) {
   return { formData: () => Promise.resolve(fd) } as unknown as Request;
 }
 
-import { clientAction } from "./become-owner";
+import { clientAction, getBecomeOwnerError } from "./become-owner";
 
 const authUser = { id: "u1", role: "renter" };
 
@@ -99,5 +100,37 @@ describe("clientAction", () => {
       request: makeFormReq({ intent: "upgrade-owner", agreement: "true" }),
     } as any);
     expect((r as any).success).toBe(false);
+  });
+
+  it("uses actionable offline copy when upgrade fails offline", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.upgradeToOwner.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "upgrade-owner", agreement: "true" }),
+    } as any);
+
+    expect((r as any).success).toBe(false);
+    expect((r as any).message).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("uses timeout-specific copy when the owner upgrade stalls", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.upgradeToOwner.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "upgrade-owner", agreement: "true" }),
+    } as any);
+
+    expect((r as any).success).toBe(false);
+    expect((r as any).message).toBe("Upgrade request timed out. Try again.");
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getBecomeOwnerError(new Error("upgrade unavailable"))).toBe("upgrade unavailable");
   });
 });

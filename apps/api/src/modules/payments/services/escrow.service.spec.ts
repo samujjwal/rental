@@ -38,6 +38,12 @@ describe('EscrowService', () => {
 
   beforeEach(async () => {
     prisma = {
+      $transaction: jest.fn().mockImplementation(async (callback: any) =>
+        callback({
+          escrowTransaction: prisma.escrowTransaction,
+          ledgerEntry: prisma.ledgerEntry,
+        }),
+      ),
       booking: { findUnique: jest.fn() },
       escrowTransaction: {
         findFirst: jest.fn(),
@@ -45,6 +51,9 @@ describe('EscrowService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+      },
+      ledgerEntry: {
+        create: jest.fn().mockResolvedValue({ id: 'ledger-1' }),
       },
     };
 
@@ -187,6 +196,10 @@ describe('EscrowService', () => {
 
   describe('freezeEscrow', () => {
     it('should freeze escrow for dispute', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue({
+        ...mockEscrow,
+        status: 'FUNDED',
+      });
       prisma.escrowTransaction.update.mockResolvedValue({
         ...mockEscrow,
         status: 'DISPUTED',

@@ -108,37 +108,38 @@ export class EscrowService {
    * in the accounting ledger for reconciliation.
    */
   async fundEscrow(escrowId: string, externalId?: string): Promise<EscrowState> {
-    const escrow = await this.prisma.escrowTransaction.update({
-      where: { id: escrowId },
-      data: {
-        status: 'FUNDED',
-        capturedAt: new Date(),
-        externalId,
-      },
-    });
-
-    this.logger.log(`Escrow ${escrowId} funded: ${escrow.amount} ${escrow.currency}`);
-
-    // Write ledger entry for the escrow hold (DB5 fix).
-    // CREDIT to LIABILITY account represents funds held in trust.
-    try {
-      await this.prisma.ledgerEntry.create({
+    // Atomically update escrow status AND write the ledger entry so the two
+    // records are never out of sync (F-21 fix).
+    const escrow = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.escrowTransaction.update({
+        where: { id: escrowId },
         data: {
-          bookingId: escrow.bookingId,
-          accountId: escrow.id,
+          status: 'FUNDED',
+          capturedAt: new Date(),
+          externalId,
+        },
+      });
+
+      // CREDIT to LIABILITY account represents funds held in trust.
+      await tx.ledgerEntry.create({
+        data: {
+          bookingId: updated.bookingId,
+          accountId: updated.id,
           accountType: 'LIABILITY',
           side: 'CREDIT',
           transactionType: 'DEPOSIT_HOLD',
-          amount: escrow.amount,
-          currency: escrow.currency,
-          description: `Escrow funded for booking ${escrow.bookingId}`,
+          amount: updated.amount,
+          currency: updated.currency,
+          description: `Escrow funded for booking ${updated.bookingId}`,
           status: 'POSTED',
           referenceId: escrowId,
         },
       });
-    } catch (err) {
-      this.logger.error(`Failed to write ledger entry for escrow funded ${escrowId}`, err);
-    }
+
+      return updated;
+    });
+
+    this.logger.log(`Escrow ${escrowId} funded: ${escrow.amount} ${escrow.currency}`);
 
     // Emit event safely — don't let listener errors crash the process
     try {
@@ -189,23 +190,23 @@ export class EscrowService {
     const remaining = totalAmount - toRelease;
     const newStatus = remaining > 0 ? 'PARTIALLY_RELEASED' : 'RELEASED';
 
-    await this.prisma.escrowTransaction.update({
-      where: { id: escrowId },
-      data: {
-        status: newStatus,
-        releasedAt: new Date(),
-        metadata: {
-          ...(escrow.metadata as object || {}),
-          releasedAmount: toRelease,
-          remainingAmount: remaining,
+    // Atomically update escrow status AND write the ledger entry (F-21 fix).
+    await this.prisma.$transaction(async (tx) => {
+      await tx.escrowTransaction.update({
+        where: { id: escrowId },
+        data: {
+          status: newStatus,
+          releasedAt: new Date(),
+          metadata: {
+            ...(escrow.metadata as object || {}),
+            releasedAmount: toRelease,
+            remainingAmount: remaining,
+          },
         },
-      },
-    });
+      });
 
-    // Write ledger entry for the escrow release (DB5 fix).
-    // DEBIT to LIABILITY account reverses the escrow hold; CREDIT to ASSET = host earnings.
-    try {
-      await this.prisma.ledgerEntry.create({
+      // DEBIT to LIABILITY account reverses the escrow hold; CREDIT to ASSET = host earnings.
+      await tx.ledgerEntry.create({
         data: {
           bookingId: escrow.bookingId,
           accountId: escrow.id,
@@ -219,9 +220,7 @@ export class EscrowService {
           referenceId: escrowId,
         },
       });
-    } catch (err) {
-      this.logger.error(`Failed to write ledger entry for escrow release ${escrowId}`, err);
-    }
+    });
 
     // Emit event safely — don't let listener errors crash the process
     try {
@@ -250,8 +249,25 @@ export class EscrowService {
 
   /**
    * Freeze escrow during a dispute.
+   * Only allowed from FUNDED or PARTIALLY_RELEASED states (F-23 fix).
    */
   async freezeEscrow(escrowId: string, disputeId: string): Promise<EscrowState> {
+    const existing = await this.prisma.escrowTransaction.findUnique({
+      where: { id: escrowId },
+      select: { status: true },
+    });
+
+    if (!existing) {
+      throw new BadRequestException(`Escrow ${escrowId} not found`);
+    }
+
+    if (!['FUNDED', 'PARTIALLY_RELEASED'].includes(existing.status)) {
+      throw new BadRequestException(
+        `Cannot freeze escrow ${escrowId} — current status is '${existing.status}'. ` +
+        `Only FUNDED or PARTIALLY_RELEASED escrows can be frozen.`,
+      );
+    }
+
     const escrow = await this.prisma.escrowTransaction.update({
       where: { id: escrowId },
       data: {
@@ -285,35 +301,35 @@ export class EscrowService {
    * Refund escrow to renter.
    */
   async refundEscrow(escrowId: string, reason?: string): Promise<EscrowState> {
-    const escrow = await this.prisma.escrowTransaction.update({
-      where: { id: escrowId },
-      data: {
-        status: 'REFUNDED',
-        releasedAt: new Date(),
-        metadata: { refundReason: reason },
-      },
-    });
-
-    // Write ledger entry for the escrow refund (DB5 fix).
-    // DEBIT to LIABILITY account reverses the hold; funds returned to renter.
-    try {
-      await this.prisma.ledgerEntry.create({
+    // Atomically update escrow status AND write the ledger entry (F-21 fix).
+    const escrow = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.escrowTransaction.update({
+        where: { id: escrowId },
         data: {
-          bookingId: escrow.bookingId,
-          accountId: escrow.id,
+          status: 'REFUNDED',
+          releasedAt: new Date(),
+          metadata: { refundReason: reason },
+        },
+      });
+
+      // DEBIT to LIABILITY account reverses the hold; funds returned to renter.
+      await tx.ledgerEntry.create({
+        data: {
+          bookingId: updated.bookingId,
+          accountId: updated.id,
           accountType: 'LIABILITY',
           side: 'DEBIT',
           transactionType: 'REFUND',
-          amount: escrow.amount,
-          currency: escrow.currency,
-          description: `Escrow refunded to renter for booking ${escrow.bookingId}`,
+          amount: updated.amount,
+          currency: updated.currency,
+          description: `Escrow refunded to renter for booking ${updated.bookingId}`,
           status: 'POSTED',
           referenceId: escrowId,
         },
       });
-    } catch (err) {
-      this.logger.error(`Failed to write ledger entry for escrow refund ${escrowId}`, err);
-    }
+
+      return updated;
+    });
 
     // Emit event safely — don't let listener errors crash the process
     try {

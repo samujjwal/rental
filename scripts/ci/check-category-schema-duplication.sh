@@ -1,33 +1,31 @@
 #!/usr/bin/env bash
 # CI Guardrail: Detect duplicate category schema definitions
-# Only DB-backed definitions should be canonical.
-# Flag if both static frontend and backend registries are still present.
+# The backend CATEGORY_TEMPLATES registry is the canonical source.
+# The web static category-fields.ts migration is COMPLETE and the file has been
+# deleted. This check BLOCKS CI if the file is re-introduced.
 set -euo pipefail
 
-WARNINGS=0
+ERRORS=0
 
-# Check for static frontend category field registry
+# Enforce that the deprecated static frontend registry does not exist.
+# All callers have been migrated to GET /categories/slug/:slug/fields.
 if [ -f "apps/web/app/lib/category-fields.ts" ]; then
-  LINES=$(wc -l < "apps/web/app/lib/category-fields.ts" | tr -d ' ')
-  if [ "$LINES" -gt 10 ]; then
-    echo "⚠️  WARNING: Static category field registry still active in apps/web/app/lib/category-fields.ts ($LINES lines)"
-    echo "   This should be replaced by server-driven category schema from API."
-    WARNINGS=$((WARNINGS + 1))
-  fi
+  echo "❌ ERROR: Deprecated static category field registry has been re-introduced at"
+  echo "   apps/web/app/lib/category-fields.ts"
+  echo "   This file was deleted after migration. All callers must use:"
+  echo "     listingsApi.getCategoryFieldDefinitions(slug)  →  GET /categories/slug/:slug/fields"
+  ERRORS=$((ERRORS + 1))
 fi
 
 # Check for static backend category templates
 if grep -q "CATEGORY_TEMPLATES" apps/api/src/modules/categories/services/category-template.service.ts 2>/dev/null; then
-  echo "⚠️  WARNING: Static CATEGORY_TEMPLATES registry still active in backend."
-  echo "   This should be migrated to DB-backed CategoryAttributeDefinition."
-  WARNINGS=$((WARNINGS + 1))
+  echo "✅ Backend CATEGORY_TEMPLATES registry active (canonical source)"
 fi
 
-if [ $WARNINGS -gt 0 ]; then
+if [ $ERRORS -gt 0 ]; then
   echo ""
-  echo "⚠️  $WARNINGS category schema duplication warning(s) found."
-  echo "   These are tracked for migration but do not block CI."
-  exit 0  # Warning only, not blocking
+  echo "❌ $ERRORS category schema duplication error(s) found. Fix before merging."
+  exit 1
 fi
 
-echo "✅ No duplicate category schema sources detected."
+echo "✅ Category schema duplication check passed."

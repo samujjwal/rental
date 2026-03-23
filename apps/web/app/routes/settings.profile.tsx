@@ -1,5 +1,5 @@
 import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, Link, redirect, useLoaderData, useActionData } from "react-router";
+import { Form, Link, redirect, useLoaderData, useActionData, useNavigation, useRevalidator } from "react-router";
 import { useRef, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
@@ -28,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -44,6 +45,74 @@ const safeInitial = (value: unknown): string => {
   const name = typeof value === "string" ? value.trim() : "";
   return (name[0] || "U").toUpperCase();
 };
+const getResponseMessage = (error: unknown): string | undefined =>
+  error && typeof error === "object" && "response" in error
+    ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+    : undefined;
+const hasTransportContext = (error: unknown): boolean =>
+  Boolean(
+    error &&
+      typeof error === "object" &&
+      ("response" in error || "code" in error || "isAxiosError" in error)
+  );
+
+export function getProfileSettingsLoadError(error: unknown): string {
+  const responseMessage = getResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading your profile again.";
+  }
+
+  return getActionableErrorMessage(error, "Unable to load your profile settings right now.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading your profile again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading your profile settings timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not load your profile settings right now. Try again in a moment.",
+  });
+}
+
+export function getProfilePhotoUploadError(
+  error: unknown,
+  fallbackMessage = "Failed to upload photo"
+): string {
+  const responseMessage = getResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  const directMessage =
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+      ? String((error as { message: string }).message).trim()
+      : "";
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try uploading your photo again.";
+  }
+
+  const actionableMessage = getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try uploading your photo again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Uploading the photo timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not upload the photo right now. Try again in a moment.",
+  });
+
+  const genericMessages = new Set([
+    "conflict",
+    "network error",
+    "timeout",
+    fallbackMessage.toLowerCase(),
+  ]);
+
+  if (directMessage && !genericMessages.has(directMessage.toLowerCase())) {
+    return directMessage;
+  }
+
+  return actionableMessage;
+}
 
 const profileSchema = z.object({
   firstName: z
@@ -80,9 +149,13 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
         totalListings: stats.listingsCount ?? 0,
         averageRating: stats.averageRating ?? null,
       },
+      error: null,
     };
   } catch (error) {
-    return redirect("/auth/login");
+    return {
+      user: null,
+      error: getProfileSettingsLoadError(error),
+    };
   }
 }
 
@@ -131,10 +204,14 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       return {
         success: false,
         error:
-          error && typeof error === "object" && "response" in error
-            ? (error as { response?: { data?: { message?: string } } }).response
-                ?.data?.message || "Failed to update password"
-            : "Failed to update password",
+          getResponseMessage(error) ||
+          (hasTransportContext(error)
+            ? getActionableErrorMessage(error, "Failed to update password", {
+                [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+                [ApiErrorType.TIMEOUT_ERROR]: "Updating your password timed out. Try again.",
+                [ApiErrorType.CONFLICT]: "Your password state changed elsewhere. Refresh and try again.",
+              })
+            : "Failed to update password"),
       };
     }
   }
@@ -153,10 +230,14 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       return {
         success: false,
         error:
-          error && typeof error === "object" && "response" in error
-            ? (error as { response?: { data?: { message?: string } } }).response
-                ?.data?.message || "Failed to delete account"
-            : "Failed to delete account",
+          getResponseMessage(error) ||
+          (hasTransportContext(error)
+            ? getActionableErrorMessage(error, "Failed to delete account", {
+                [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+                [ApiErrorType.TIMEOUT_ERROR]: "Deleting the account timed out. Try again.",
+                [ApiErrorType.CONFLICT]: "Account state changed while you were working. Refresh and try again.",
+              })
+            : "Failed to delete account"),
       };
     }
   }
@@ -185,10 +266,14 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     return {
       success: false,
       error:
-        error && typeof error === "object" && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message || "Failed to update profile"
-          : "Failed to update profile",
+        getResponseMessage(error) ||
+        (hasTransportContext(error)
+          ? getActionableErrorMessage(error, "Failed to update profile", {
+              [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+              [ApiErrorType.TIMEOUT_ERROR]: "Saving your profile timed out. Try again.",
+              [ApiErrorType.CONFLICT]: "Your profile changed elsewhere. Refresh and try again.",
+            })
+          : "Failed to update profile"),
     };
   }
 }
@@ -208,8 +293,13 @@ interface User {
 
 export default function ProfileSettings() {
   const { t } = useTranslation();
-  const { user: loaderUser } = useLoaderData<{ user: User }>();
+  const { user: loaderUser, error: loaderError } = useLoaderData<{
+    user: User | null;
+    error?: string | null;
+  }>();
   const actionData = useActionData<typeof clientAction>();
+  const navigation = useNavigation();
+  const { revalidate } = useRevalidator();
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(
     loaderUser?.profilePhotoUrl || null
   );
@@ -221,6 +311,7 @@ export default function ProfileSettings() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { updateUser } = useAuthStore();
+  const isSubmitting = navigation.state === "submitting";
 
   // Sync auth store when profile is successfully updated
   useEffect(() => {
@@ -243,7 +334,26 @@ export default function ProfileSettings() {
   });
 
   if (!loaderUser) {
-    return <div>{t("common.loading")}</div>;
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+            <h1 className="text-2xl font-semibold text-foreground">Profile settings unavailable</h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {loaderError || "Unable to load your profile settings right now."}
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <UnifiedButton type="button" onClick={() => revalidate()}>
+                Try Again
+              </UnifiedButton>
+              <UnifiedButton type="button" variant="outline" asChild>
+                <Link to="/settings/security">Go to Security Settings</Link>
+              </UnifiedButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const handlePhotoSelect = async (file?: File) => {
@@ -268,11 +378,9 @@ export default function ProfileSettings() {
     } catch (error: unknown) {
       setPhotoStatus({
         type: "error",
-        message:
-          error && typeof error === "object" && "response" in error
-            ? (error as { response?: { data?: { message?: string } } }).response
-                ?.data?.message || "Failed to upload photo"
-            : "Failed to upload photo",
+        message: hasTransportContext(error)
+          ? getProfilePhotoUploadError(error)
+          : getProfilePhotoUploadError(error),
       });
     } finally {
       setUploadingPhoto(false);
@@ -369,6 +477,7 @@ export default function ProfileSettings() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto || isSubmitting}
                       className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors"
                       aria-label="Upload profile photo"
                     >
@@ -379,7 +488,8 @@ export default function ProfileSettings() {
                     <UnifiedButton
                       variant="outline"
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingPhoto}
+                      loading={uploadingPhoto}
+                      disabled={uploadingPhoto || isSubmitting}
                     >
                       {uploadingPhoto ? t("settings.profileSettings.uploading") : t("settings.profileSettings.changePhoto")}
                     </UnifiedButton>
@@ -424,6 +534,7 @@ export default function ProfileSettings() {
                           name="firstName"
                           type="text"
                           maxLength={50}
+                          disabled={isSubmitting}
                           className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                         />
                         {errors.firstName && (
@@ -443,6 +554,7 @@ export default function ProfileSettings() {
                           name="lastName"
                           type="text"
                           maxLength={50}
+                          disabled={isSubmitting}
                           className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                         />
                       </div>
@@ -460,6 +572,7 @@ export default function ProfileSettings() {
                           name="email"
                           type="email"
                           maxLength={320}
+                          disabled={isSubmitting}
                           className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                         />
                       </div>
@@ -488,6 +601,7 @@ export default function ProfileSettings() {
                           name="phoneNumber"
                           type="tel"
                           maxLength={20}
+                          disabled={isSubmitting}
                           className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                         />
                       </div>
@@ -499,7 +613,7 @@ export default function ProfileSettings() {
                     </div>
 
                     <div className="flex items-center justify-end pt-4 border-t border-border">
-                      <UnifiedButton type="submit" className="flex items-center gap-2">
+                      <UnifiedButton type="submit" className="flex items-center gap-2" loading={isSubmitting} disabled={isSubmitting}>
                         <Save className="w-5 h-5" />
                         {t("settings.profileSettings.save")}
                       </UnifiedButton>
@@ -564,6 +678,7 @@ export default function ProfileSettings() {
                         type="password"
                         name="currentPassword"
                         maxLength={128}
+                        disabled={isSubmitting}
                         className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                       />
                     </div>
@@ -576,6 +691,7 @@ export default function ProfileSettings() {
                         type="password"
                         name="newPassword"
                         maxLength={128}
+                        disabled={isSubmitting}
                         className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                       />
                     </div>
@@ -588,6 +704,7 @@ export default function ProfileSettings() {
                         type="password"
                         name="confirmPassword"
                         maxLength={128}
+                        disabled={isSubmitting}
                         className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                       />
                     </div>
@@ -596,6 +713,8 @@ export default function ProfileSettings() {
                         type="submit"
                         variant="primary"
                         leftIcon={<Key className="w-5 h-5" />}
+                        loading={isSubmitting}
+                        disabled={isSubmitting}
                       >
                         {t("settings.profileSettings.updatePassword")}
                       </UnifiedButton>
@@ -627,6 +746,7 @@ export default function ProfileSettings() {
                       value={deleteConfirmation}
                       onChange={(event) => setDeleteConfirmation(event.target.value)}
                       maxLength={20}
+                      disabled={isSubmitting}
                       className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                       autoComplete="off"
                     />
@@ -634,7 +754,8 @@ export default function ProfileSettings() {
                   <UnifiedButton
                     variant="destructive"
                     type="submit"
-                    disabled={deleteConfirmation.trim().toUpperCase() !== "DELETE"}
+                    loading={isSubmitting}
+                    disabled={isSubmitting || deleteConfirmation.trim().toUpperCase() !== "DELETE"}
                   >
                     {t("settings.profileSettings.deleteAccount")}
                   </UnifiedButton>

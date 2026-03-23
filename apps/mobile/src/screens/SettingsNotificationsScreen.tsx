@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Switch } from "react-native";
 import { mobileClient } from "../api/client";
+import { registerForPushNotifications } from "../api/notifications";
 import type { NotificationPreferences } from '~/types';
 
 const DEFAULT_PREFS: NotificationPreferences = {
@@ -50,10 +51,17 @@ export function SettingsNotificationsScreen() {
   }, []);
 
   const togglePref = (key: PrefKey) => {
+    const newValue = !prefs[key];
     setPrefs((prev) => ({
       ...prev,
-      [key]: !prev[key],
+      [key]: newValue,
     }));
+
+    // When the user enables push notifications, request OS permission and
+    // register the device token with the backend right away — not just on save.
+    if (key === 'push' && newValue) {
+      void registerForPushNotifications();
+    }
   };
 
   const handleSave = async () => {

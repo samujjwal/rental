@@ -42,20 +42,8 @@ export interface Booking {
   securityDeposit: number;
   totalAmount: number;
   totalPrice?: number;
-  status:
-    | 'DRAFT'
-    | 'PENDING'
-    | 'PENDING_PAYMENT'
-    | 'PENDING_OWNER_APPROVAL'
-    | 'CONFIRMED'
-    | 'IN_PROGRESS'
-    | 'CANCELLED'
-    | 'PAYMENT_FAILED'
-    | 'DISPUTED'
-    | 'COMPLETED'
-    | 'AWAITING_RETURN_INSPECTION'
-    | 'REFUNDED'
-    | 'SETTLED';
+  /** Use BookingStatus enum to stay in sync with the Prisma schema. */
+  status: BookingStatus;
   paymentStatus: 'PENDING' | 'PAID' | 'REFUNDED' | 'FAILED';
   deliveryMethod: 'pickup' | 'delivery' | 'shipping';
   deliveryAddress: string | null;

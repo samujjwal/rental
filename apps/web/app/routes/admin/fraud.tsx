@@ -5,6 +5,7 @@ import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { fraudApi } from "~/lib/api/fraud";
 import { Badge, UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -13,6 +14,13 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+
+export function getAdminFraudLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load fraud data", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading fraud data timed out. Try again.",
+  });
+}
 interface RiskFlag {
   type: string;
 }
@@ -39,8 +47,8 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   try {
     const riskUsers = (await fraudApi.getHighRiskUsers(50)) as RiskUser[];
     return { riskUsers, error: null };
-  } catch {
-    return { riskUsers: [], error: "Failed to load fraud data" };
+  } catch (error: unknown) {
+    return { riskUsers: [], error: getAdminFraudLoadError(error) };
   }
 }
 

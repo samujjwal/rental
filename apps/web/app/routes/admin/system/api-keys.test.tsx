@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /* ── hoisted stubs ─────────────────────────────────────────────────────── */
@@ -44,7 +45,7 @@ vi.mock("lucide-react", () => ({
 }));
 
 /* ── import after mocks ───────────────────────────────────────────────── */
-import { clientLoader, clientAction } from "../system/api-keys";
+import { clientLoader, clientAction, getAdminApiKeysError } from "../system/api-keys";
 
 /* ── helpers ───────────────────────────────────────────────────────────── */
 function req(url = "http://localhost/admin/system/api-keys") {
@@ -87,7 +88,25 @@ describe("admin/system/api-keys", () => {
     it("uses generic message when error has no message", async () => {
       m.getApiKeys.mockRejectedValue("string-error");
       const res = await clientLoader({ request: req() } as any);
-      expect(res.error).toBe("Failed to load API keys");
+      expect(res.error).toBe("An unexpected error occurred. Please try again.");
+    });
+
+    it("uses actionable offline copy on loader failure", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.getApiKeys.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const res = await clientLoader({ request: req() } as any);
+
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
     });
   });
 
@@ -147,6 +166,27 @@ describe("admin/system/api-keys", () => {
         expect(res.success).toBe(false);
         expect(res.error).toBe("Limit reached");
       });
+
+      it("uses actionable offline copy on create failure", async () => {
+        const previousOnline = navigator.onLine;
+        Object.defineProperty(navigator, "onLine", {
+          configurable: true,
+          value: false,
+        });
+        m.createApiKey.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+        const res = await clientAction({
+          request: form({ intent: "create", name: "k", scopes: ["admin"], expiresInDays: "7" }),
+        } as any);
+
+        expect(res.success).toBe(false);
+        expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+        Object.defineProperty(navigator, "onLine", {
+          configurable: true,
+          value: previousOnline,
+        });
+      });
     });
 
     /* revoke */
@@ -174,7 +214,7 @@ describe("admin/system/api-keys", () => {
           request: form({ intent: "revoke", keyId: VALID_UUID }),
         } as any);
         expect(res.success).toBe(false);
-        expect(res.error).toMatch(/revoke/i);
+        expect(res.error).toBe("oops");
       });
     });
 
@@ -204,6 +244,12 @@ describe("admin/system/api-keys", () => {
         expect(res.success).toBe(false);
         expect(res.error).toBe("Expired");
       });
+    });
+
+    it("preserves backend response messages in helper", () => {
+      expect(
+        getAdminApiKeysError({ response: { data: { message: "Quota exceeded" } } }, "fallback")
+      ).toBe("Quota exceeded");
     });
   });
 });

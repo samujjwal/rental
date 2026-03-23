@@ -3,6 +3,10 @@ import { NotificationsService } from './notifications.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { PushNotificationService } from './push-notification.service';
+import { EmailService } from './resend.service';
+import { SmsService } from './twilio.service';
+import { getQueueToken } from '@nestjs/bull';
+import { NotificationType } from '@rental-portal/database';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
@@ -46,6 +50,24 @@ describe('NotificationsService', () => {
           useValue: {
             sendPushNotification: jest.fn().mockResolvedValue(undefined),
             registerDeviceToken: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendEmail: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: SmsService,
+          useValue: {
+            sendSms: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: getQueueToken('notifications'),
+          useValue: {
+            add: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -122,6 +144,43 @@ describe('NotificationsService', () => {
       const result = await service.getUserNotifications('user-123');
 
       expect(result.notifications[0].data).toEqual({ bookingId: 'booking-42' });
+    });
+
+    it('should respect disabled email preferences when sending', async () => {
+      const mockUser = {
+        id: 'user-123',
+        email: 'test@example.com',
+        phone: '+1234567890',
+        phoneVerified: true,
+        userPreferences: { preferences: JSON.stringify({ email: false }) },
+      };
+
+      prismaService.user.findUnique.mockResolvedValue(mockUser);
+      prismaService.notification.create.mockResolvedValue({
+        id: 'notif-2',
+        title: 'Booking update',
+        message: 'Your booking changed',
+        type: NotificationType.BOOKING_CONFIRMED,
+        userId: 'user-123',
+        read: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        data: JSON.stringify({ priority: 'NORMAL' }),
+      });
+
+      const sendEmailNotification = jest
+        .spyOn(service as any, 'sendEmailNotification')
+        .mockResolvedValue(undefined);
+
+      await service.sendNotification({
+        userId: 'user-123',
+        type: NotificationType.BOOKING_CONFIRMED,
+        title: 'Booking update',
+        message: 'Your booking changed',
+        channels: ['EMAIL'],
+      });
+
+      expect(sendEmailNotification).not.toHaveBeenCalled();
     });
   });
 });

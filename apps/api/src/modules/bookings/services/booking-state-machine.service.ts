@@ -766,7 +766,7 @@ export class BookingStateMachineService {
 
     // Check for open disputes
     const hasDispute = await this.prisma.dispute.findFirst({
-      where: { bookingId, status: { notIn: ['RESOLVED', 'WITHDRAWN'] } },
+      where: { bookingId, status: { notIn: ['RESOLVED', 'WITHDRAWN', 'CLOSED'] } },
     });
 
     if (hasDispute) {

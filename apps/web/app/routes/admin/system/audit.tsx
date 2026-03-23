@@ -7,6 +7,7 @@ import { adminApi, type AuditLogEntry } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
 import { formatDateTime } from "~/lib/utils";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -19,6 +20,13 @@ const safeDateTimeLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
   return Number.isNaN(date.getTime()) ? "Unknown date" : formatDateTime(date);
 };
+
+export function getAuditLogsLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load audit logs", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading audit logs timed out. Try again.",
+  });
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -51,10 +59,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       total: 0,
       page,
       limit,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load audit logs",
+      error: getAuditLogsLoadError(error),
     };
   }
 }

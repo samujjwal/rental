@@ -1,6 +1,6 @@
 import type { MetaFunction } from "react-router";
-import { useLoaderData, useSearchParams, redirect, useNavigate } from "react-router";
-import { useState } from "react";
+import { useLoaderData, useSearchParams, useRevalidator, redirect, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
 import {
   Bell,
   Check,
@@ -35,8 +35,10 @@ import {
   Pagination,
   RouteErrorBoundary,
 } from "~/components/ui";
+import { EmptyStatePresets } from "~/components/ui/empty-state";
 import { cn } from "~/lib/utils";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -44,6 +46,32 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "View your notifications" },
   ];
 };
+
+export function getNotificationsLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load notifications", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading notifications timed out. Try again.",
+  });
+}
+
+export function getNotificationsActionError(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  const responseMessage =
+    error && typeof error === "object" && "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "The notification request timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not reach the notification service. Try again in a moment.",
+    })
+  );
+}
 
 export async function clientLoader({ request }: { request: Request }) {
   const user = await getUser(request);
@@ -93,7 +121,7 @@ export async function clientLoader({ request }: { request: Request }) {
       page: 1,
       unreadCount: 0,
       portalRole,
-      error: "Failed to load notifications",
+      error: getNotificationsLoadError(error),
     };
   }
 }
@@ -170,10 +198,12 @@ function NotificationItem({
   notification,
   onMarkRead,
   onDelete,
+  actionDisabled,
 }: {
   notification: Notification;
   onMarkRead: (id: string) => void;
   onDelete: (id: string) => void;
+  actionDisabled?: boolean;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -240,6 +270,7 @@ function NotificationItem({
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMarkRead(notification.id); }}
             className="rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title={t("notifications.markRead")}
+            disabled={actionDisabled}
           >
             <Check className="h-4 w-4" />
           </button>
@@ -248,6 +279,7 @@ function NotificationItem({
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(notification.id); }}
           className="rounded-md p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
           title={t("notifications.deleteNotification")}
+          disabled={actionDisabled}
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -292,9 +324,19 @@ export default function NotificationsPage() {
   const { notifications, totalPages, page, unreadCount, portalRole, error } =
     useLoaderData<typeof clientLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const revalidator = useRevalidator();
   const { t } = useTranslation();
   const [localNotifications, setLocalNotifications] = useState(notifications);
   const [localUnread, setLocalUnread] = useState(unreadCount);
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const [markAllPending, setMarkAllPending] = useState(false);
+
+  useEffect(() => {
+    setLocalNotifications(notifications);
+    setLocalUnread(unreadCount);
+    setPendingIds([]);
+    setMarkAllPending(false);
+  }, [notifications, unreadCount]);
 
   const handlePageChange = (newPage: number) => {
     const params = new URLSearchParams(searchParams);
@@ -303,29 +345,49 @@ export default function NotificationsPage() {
   };
 
   const handleMarkRead = async (id: string) => {
+    if (pendingIds.includes(id)) {
+      return;
+    }
+    setPendingIds((prev) => [...prev, id]);
     try {
       await notificationsApi.markAsRead(id);
       setLocalNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n))
       );
       setLocalUnread((prev) => Math.max(0, prev - 1));
-    } catch {
-      toast.error(t("notifications.markReadFailed"));
+    } catch (error) {
+      toast.error(
+        getNotificationsActionError(error, t("notifications.markReadFailed"))
+      );
+    } finally {
+      setPendingIds((prev) => prev.filter((pendingId) => pendingId !== id));
     }
   };
 
   const handleMarkAllRead = async () => {
+    if (markAllPending || localUnread === 0) {
+      return;
+    }
+    setMarkAllPending(true);
     try {
       await notificationsApi.markAllAsRead();
       setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setLocalUnread(0);
       toast.success(t("notifications.allMarkedRead"));
-    } catch {
-      toast.error(t("notifications.markAllReadFailed"));
+    } catch (error) {
+      toast.error(
+        getNotificationsActionError(error, t("notifications.markAllReadFailed"))
+      );
+    } finally {
+      setMarkAllPending(false);
     }
   };
 
   const handleDelete = async (id: string) => {
+    if (pendingIds.includes(id)) {
+      return;
+    }
+    setPendingIds((prev) => [...prev, id]);
     try {
       await notificationsApi.deleteNotification(id);
       const removed = localNotifications.find((n) => n.id === id);
@@ -333,9 +395,20 @@ export default function NotificationsPage() {
       if (removed && !removed.read) {
         setLocalUnread((prev) => Math.max(0, prev - 1));
       }
-    } catch {
-      toast.error(t("notifications.deleteFailed"));
+    } catch (error) {
+      toast.error(
+        getNotificationsActionError(error, t("notifications.deleteFailed"))
+      );
+    } finally {
+      setPendingIds((prev) => prev.filter((pendingId) => pendingId !== id));
     }
+  };
+
+  const clearUnreadFilter = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("unread");
+    params.delete("page");
+    setSearchParams(params);
   };
 
   const handleFilterUnread = () => {
@@ -363,7 +436,19 @@ export default function NotificationsPage() {
       banner={
         error ? (
           <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-4 text-destructive text-sm">
-            {error}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <span>{error}</span>
+              <div className="flex items-center gap-2">
+                <UnifiedButton variant="outline" size="sm" onClick={() => revalidator.revalidate()}>
+                  {t("errors.tryAgain", "Try Again")}
+                </UnifiedButton>
+                {isFilteringUnread ? (
+                  <UnifiedButton variant="ghost" size="sm" onClick={clearUnreadFilter}>
+                    {t("notifications.showAll")}
+                  </UnifiedButton>
+                ) : null}
+              </div>
+            </div>
           </div>
         ) : null
       }
@@ -380,6 +465,7 @@ export default function NotificationsPage() {
             variant={isFilteringUnread ? "primary" : "outline"}
             size="sm"
             onClick={handleFilterUnread}
+            disabled={markAllPending}
           >
             {isFilteringUnread
               ? t("notifications.showAll")
@@ -391,6 +477,8 @@ export default function NotificationsPage() {
               size="sm"
               onClick={handleMarkAllRead}
               leftIcon={<CheckCheck className="h-4 w-4" />}
+              loading={markAllPending}
+              disabled={markAllPending}
             >
               {t("notifications.markAllRead")}
             </UnifiedButton>
@@ -401,16 +489,22 @@ export default function NotificationsPage() {
       {/* Notifications List */}
       {localNotifications.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Bell className="mb-4 h-12 w-12 text-muted-foreground/40" />
-            <h3 className="text-lg font-semibold text-foreground">
-              {t("notifications.empty")}
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {isFilteringUnread
-                ? t("notifications.emptyUnread")
-                : t("notifications.emptyAll")}
-            </p>
+          <CardContent className="p-6">
+            {isFilteringUnread ? (
+              <EmptyStatePresets.NoNotificationsFiltered
+                onShowAll={clearUnreadFilter}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Bell className="mb-4 h-12 w-12 text-muted-foreground/40" />
+                <h3 className="text-lg font-semibold text-foreground">
+                  {t("notifications.empty")}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t("notifications.emptyAll")}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -421,6 +515,7 @@ export default function NotificationsPage() {
               notification={notification}
               onMarkRead={handleMarkRead}
               onDelete={handleDelete}
+              actionDisabled={markAllPending || pendingIds.includes(notification.id)}
             />
           ))}
         </div>

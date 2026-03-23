@@ -23,25 +23,20 @@ type BookingWithRelations = Prisma.BookingGetPayload<{
     listing: { include: { owner: { select: { id: true; firstName: true; lastName: true; profilePhotoUrl: true; averageRating: true } }; category: true } };
   };
 }>;
+import { Inject } from '@nestjs/common';
 import { AvailabilityService } from '@/modules/listings/services/availability.service';
 import { BookingStateMachineService } from './booking-state-machine.service';
-import { BookingCalculationService } from './booking-calculation.service';
-import { FraudDetectionService } from '@/modules/fraud-detection/services/fraud-detection.service';
-import { InsuranceService } from '@/modules/insurance/services/insurance.service';
-import { ContentModerationService } from '@/modules/moderation/services/content-moderation.service';
+import { BookingValidationService } from './booking-validation.service';
 import { PolicyEngineService } from '@/modules/policy-engine/services/policy-engine.service';
 import { ContextResolverService } from '@/modules/policy-engine/services/context-resolver.service';
-import { BookingPricingService } from './booking-pricing.service';
-import { FxService } from '@/common/fx/fx.service';
-import { ConfigService } from '@nestjs/config';
-import { ComplianceService } from '@/modules/compliance/compliance.service';
-
-/**
- * Controls whether safety-check service failures block the booking (fail-closed)
- * or allow it to proceed with flagging (fail-open). Default: fail-closed.
- * Set SAFETY_CHECKS_FAIL_OPEN=true ONLY in non-production environments.
- */
-const CRITICAL_SAFETY_CHECKS = ['fraud', 'compliance', 'insurance'] as const;
+import {
+  BOOKING_ELIGIBILITY_PORT,
+  type BookingEligibilityPort,
+} from '../ports/booking-eligibility.port';
+import {
+  BOOKING_PRICING_PORT,
+  type BookingPricingPort,
+} from '../ports/booking-pricing.port';
 
 export interface CreateBookingDto {
   listingId: string;
@@ -71,30 +66,14 @@ export class BookingsService {
     private readonly cacheService: CacheService,
     private readonly availabilityService: AvailabilityService,
     private readonly stateMachine: BookingStateMachineService,
-    private readonly calculation: BookingCalculationService,
-    private readonly fraudDetection: FraudDetectionService,
-    private readonly insuranceService: InsuranceService,
-    private readonly moderationService: ContentModerationService,
+    private readonly bookingValidator: BookingValidationService,
+    @Inject(BOOKING_ELIGIBILITY_PORT)
+    private readonly eligibilityChecks: BookingEligibilityPort,
     private readonly policyEngine: PolicyEngineService,
     private readonly contextResolver: ContextResolverService,
-    private readonly bookingPricing: BookingPricingService,
-    private readonly fxService: FxService,
-    private readonly complianceService: ComplianceService,
-    private readonly configService: ConfigService,
+    @Inject(BOOKING_PRICING_PORT)
+    private readonly pricing: BookingPricingPort,
   ) {}
-
-  /**
-   * Determines if safety check failures should block the booking.
-   * Default: true (fail-closed). Set SAFETY_CHECKS_FAIL_OPEN=true to allow degraded mode.
-   */
-  private shouldBlockOnSafetyFailure(checkName: string): boolean {
-    const failOpen = this.configService.get<string>('SAFETY_CHECKS_FAIL_OPEN', 'false');
-    if (failOpen === 'true') {
-      return false; // Degraded mode: allow booking with flagging
-    }
-    // In fail-closed mode, critical checks always block; non-critical checks flag only
-    return (CRITICAL_SAFETY_CHECKS as readonly string[]).includes(checkName);
-  }
 
   async create(renterId: string, dto: CreateBookingDto): Promise<Booking> {
     const startDate =
@@ -102,71 +81,15 @@ export class BookingsService {
     const endDate =
       dto.endDate instanceof Date ? dto.endDate : new Date(dto.endDate as unknown as string);
 
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      throw i18nBadRequest('booking.invalidDates');
-    }
-
-    if (endDate <= startDate) {
-      throw i18nBadRequest('booking.endBeforeStart');
-    }
-
-    // Past-date validation: start date must be today or in the future
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const bookingStartDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-    if (bookingStartDay < todayStart) {
-      throw i18nBadRequest('booking.startInPast');
-    }
-
-    // Validate listing exists and is bookable
-    const listing = await this.prisma.listing.findUnique({
-      where: { id: dto.listingId },
-      include: { owner: true },
-    });
-
-    if (!listing) {
-      throw i18nNotFound('listing.notFound');
-    }
-
-    if (listing.status !== 'AVAILABLE') {
-      throw i18nBadRequest('booking.unavailable');
-    }
-
-    if (listing.ownerId === renterId) {
-      throw i18nBadRequest('booking.cannotBookOwn');
-    }
-
-    // P2-7: Validate guest count against listing capacity
-    if (dto.guestCount && listing.maxGuests && dto.guestCount > listing.maxGuests) {
-      throw new BadRequestException({
-        message: `Guest count ${dto.guestCount} exceeds listing capacity of ${listing.maxGuests}`,
-        guestCount: dto.guestCount,
-        maxGuests: listing.maxGuests,
-      });
-    }
-
-    // P1-6: Cross-check Availability table for BLOCKED periods
+    // Delegate date, listing, and blocked-period validation to BookingValidationService
+    this.bookingValidator.validateDates(startDate, endDate);
+    const listing = await this.bookingValidator.validateListing(
+      dto.listingId,
+      renterId,
+      dto.guestCount,
+    );
     try {
-      const blockedPeriods = await this.prisma.availability.findMany({
-        where: {
-          propertyId: dto.listingId,
-          status: 'BLOCKED',
-          OR: [
-            { AND: [{ startDate: { lte: startDate } }, { endDate: { gte: startDate } }] },
-            { AND: [{ startDate: { lte: endDate } }, { endDate: { gte: endDate } }] },
-            { AND: [{ startDate: { gte: startDate } }, { endDate: { lte: endDate } }] },
-          ],
-        },
-      });
-      if (blockedPeriods.length > 0) {
-        throw new BadRequestException({
-          message: 'Listing is blocked for the selected dates',
-          blockedPeriods: blockedPeriods.map(p => ({
-            startDate: p.startDate,
-            endDate: p.endDate,
-          })),
-        });
-      }
+      await this.bookingValidator.checkBlockedPeriods(dto.listingId, startDate, endDate);
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
       this.logger.warn('Availability table check failed, relying on booking conflict check', err);
@@ -175,137 +98,38 @@ export class BookingsService {
     // Track which safety checks were skipped due to service failures
     const safetyChecksSkipped: string[] = [];
 
-    // Compliance check: verify renter and listing meet jurisdiction requirements
-    try {
-      const renterCompliance = await this.complianceService.evaluateCompliance(
-        renterId,
-        'USER',
-        listing.country,
-        listing.state,
-        listing.city,
-      );
-      if (!renterCompliance.overallCompliant && renterCompliance.missingChecks.length > 0) {
-        const blockingChecks = renterCompliance.missingChecks;
-        this.logger.warn(`Renter ${renterId} missing compliance: ${blockingChecks.join(', ')}`);
-        if (this.shouldBlockOnSafetyFailure('compliance')) {
-          throw new BadRequestException({
-            message: 'Compliance requirements not met',
-            missingChecks: blockingChecks,
-          });
-        }
-        // Fail-open: log but allow booking without full compliance
-        this.logger.warn('Compliance requirements missing — proceeding in degraded mode');
-        safetyChecksSkipped.push('compliance');
-      }
-    } catch (error) {
-      if (error instanceof BadRequestException) throw error;
-      if (this.shouldBlockOnSafetyFailure('compliance')) {
-        this.logger.error('Compliance check service unavailable — blocking booking (fail-closed)', error);
-        throw new BadRequestException({
-          message: 'Unable to verify compliance requirements. Please try again later.',
-          code: 'SAFETY_CHECK_UNAVAILABLE',
-          check: 'compliance',
-        });
-      }
-      this.logger.warn('Compliance check failed, proceeding with booking (degraded mode)', error);
-      safetyChecksSkipped.push('compliance');
-    }
-
-    // Insurance requirement check
-    try {
-      const insuranceReq = await this.insuranceService.checkInsuranceRequirement(dto.listingId);
-      if (insuranceReq.required) {
-        const hasInsurance = await this.insuranceService.hasValidInsurance(dto.listingId);
-        if (!hasInsurance) {
-          if (this.shouldBlockOnSafetyFailure('insurance')) {
-            throw new BadRequestException({
-              message: 'Insurance is required for this listing',
-              reason: insuranceReq.reason || 'Category or value requires insurance coverage',
-              insuranceRequired: true,
-            });
-          }
-          // Fail-open: log but allow booking without insurance
-          this.logger.warn(`Insurance required but missing for listing ${dto.listingId} — proceeding in degraded mode`);
-          safetyChecksSkipped.push('insurance');
-        }
-      }
-    } catch (error) {
-      if (error instanceof BadRequestException) throw error;
-      if (this.shouldBlockOnSafetyFailure('insurance')) {
-        this.logger.error(`Insurance check service unavailable for listing ${dto.listingId} — blocking booking (fail-closed)`, error);
-        throw new BadRequestException({
-          message: 'Unable to verify insurance requirements. Please try again later.',
-          code: 'SAFETY_CHECK_UNAVAILABLE',
-          check: 'insurance',
-        });
-      }
-      this.logger.warn(`Insurance check failed for listing ${dto.listingId}, proceeding (degraded mode)`, error);
-      safetyChecksSkipped.push('insurance');
-    }
-
-    // Moderate booking message if provided
-    if (dto.message) {
-      try {
-        const moderation = await this.moderationService.moderateMessage(dto.message);
-        if (moderation.status === 'REJECTED' || moderation.status === 'FLAGGED') {
-          throw new BadRequestException({
-            message: 'Your message contains content that violates our policies',
-            flags: moderation.flags,
-          });
-        }
-      } catch (error) {
-        if (error instanceof BadRequestException) throw error;
-        if (this.shouldBlockOnSafetyFailure('moderation')) {
-          this.logger.error('Moderation service unavailable — blocking booking (fail-closed)', error);
-          throw new BadRequestException({
-            message: 'Unable to verify message content. Please try again later.',
-            code: 'SAFETY_CHECK_UNAVAILABLE',
-            check: 'moderation',
-          });
-        }
-        this.logger.warn('Message moderation check failed, proceeding (degraded mode)', error);
-        safetyChecksSkipped.push('moderation');
-      }
-    }
-
-    // Calculate pricing first (outside transaction)
-    const pricing = await this.calculation.calculatePrice(
+    // Calculate pricing first; totalPrice is needed by the fraud risk scorer.
+    const pricing = await this.pricing.quote(
       dto.listingId,
       startDate,
       endDate,
     );
 
-    // Check for fraud (comprehensive booking-level check including velocity, value, duration analysis)
-    // Skip in test mode (STRIPE_TEST_BYPASS=true) to allow rapid test booking creation
-    const stripeTestBypass = this.configService.get<string>('STRIPE_TEST_BYPASS') === 'true';
-    if (!stripeTestBypass) {
-      let fraudCheck: Awaited<ReturnType<typeof this.fraudDetection.performBookingFraudCheck>> | null = null;
-      try {
-        fraudCheck = await this.fraudDetection.performBookingFraudCheck({
-          userId: renterId,
-          listingId: dto.listingId,
-          totalPrice: pricing.total,
-          startDate,
-          endDate,
-        });
-      } catch (error) {
-        if (this.shouldBlockOnSafetyFailure('fraud')) {
-          this.logger.error('Fraud detection service unavailable — blocking booking (fail-closed)', error);
-          throw new BadRequestException({
-            message: 'Unable to verify booking safety. Please try again later.',
-            code: 'SAFETY_CHECK_UNAVAILABLE',
-            check: 'fraud',
-          });
-        }
-        this.logger.warn('Fraud check failed, proceeding with booking (degraded mode)', error);
-        safetyChecksSkipped.push('fraud');
-      }
-      // Intentional block: fraud check completed but explicitly denied the booking
-      if (fraudCheck && !fraudCheck.allowBooking) {
-        this.logger.warn(`Booking rejected for user ${renterId}: fraud score ${fraudCheck.riskScore}, flags: ${fraudCheck.flags.map(f => f.type).join(',')}`);
-        throw i18nForbidden('auth.forbidden');
-      }
+    // Run all safety checks (compliance, insurance, moderation, fraud) through
+    // the eligibility port. This keeps safety orchestration out of BookingsService.
+    const eligibility = await this.eligibilityChecks.evaluate({
+      renterId,
+      listingId: dto.listingId,
+      message: dto.message,
+      totalPrice: pricing.total,
+      startDate,
+      endDate,
+      listing: {
+        country: listing.country,
+        state: listing.state,
+        city: listing.city,
+        currency: listing.currency,
+      },
+    });
+
+    if (!eligibility.allowed) {
+      throw new BadRequestException({
+        message: eligibility.rejection!.reason,
+        ...eligibility.rejection!.details,
+      });
     }
+
+    safetyChecksSkipped.push(...eligibility.skippedChecks);
 
     // Calculate tax via PolicyEngine (jurisdiction-aware)
     let listingAddress: Record<string, string> | null = null;
@@ -532,11 +356,9 @@ export class BookingsService {
       ),
     );
     try {
-      await this.bookingPricing.calculateAndPersist(booking.id, {
+      await this.pricing.persistBreakdown(booking.id, {
         basePrice: pricing.breakdown.basePrice,
         nights: days,
-        serviceFeeRate: this.calculation.getServiceFeeRate(),
-        platformFeeRate: this.calculation.getPlatformFeeRate(),
         securityDeposit: pricing.depositAmount,
         taxRate:
           taxBreakdown.totalTax > 0
@@ -559,14 +381,7 @@ export class BookingsService {
       listing.currency !== platformCurrency
     ) {
       try {
-        const fxRate = await this.fxService.getRate(platformCurrency, listing.currency);
-        await this.bookingPricing.captureFxRate({
-          bookingId: booking.id,
-          baseCurrency: platformCurrency,
-          targetCurrency: listing.currency,
-          rate: fxRate.rate,
-          rateSource: fxRate.source,
-        });
+        await this.pricing.captureExchangeRate(booking.id, platformCurrency, listing.currency);
       } catch (err) {
         this.logger.warn(
           `Failed to capture FX rate for booking ${booking.id}`,
@@ -928,7 +743,7 @@ export class BookingsService {
     }
 
     // Calculate refund
-    const refund = await this.calculation.calculateRefund(bookingId, new Date());
+    const refund = await this.pricing.calculateRefund(bookingId, new Date());
 
     // State machine transition handles refund process via triggerRefundProcess()
     await this.stateMachine.transition(

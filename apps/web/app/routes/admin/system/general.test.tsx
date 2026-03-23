@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
@@ -37,7 +38,7 @@ vi.mock("lucide-react", () => ({
   Save: IconStub, CheckCircle: IconStub, XCircle: IconStub, Loader2: IconStub,
 }));
 
-import { clientLoader, clientAction } from "../system/general";
+import { clientLoader, clientAction, getGeneralSettingsError } from "../system/general";
 
 function form(fields: Record<string, string>) {
   const fd = new FormData();
@@ -81,6 +82,24 @@ describe("admin/system/general", () => {
       const res = await clientLoader({ request: new Request("http://l/") } as any);
       expect(res.settings).toBeDefined();
       expect(res.error).toBe("down");
+    });
+
+    it("uses actionable offline copy on loader failure", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.getSettings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const res = await clientLoader({ request: new Request("http://l/") } as any);
+
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
     });
   });
 
@@ -146,6 +165,31 @@ describe("admin/system/general", () => {
       const res = await clientAction({ request: form(validSave) } as any);
       expect(res.success).toBe(false);
       expect(res.error).toBe("DB down");
+    });
+
+    it("uses actionable offline copy when save fails offline", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.updateSettings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const res = await clientAction({ request: form(validSave) } as any);
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
+    });
+
+    it("preserves backend response messages in helper", () => {
+      expect(
+        getGeneralSettingsError({ response: { data: { message: "Validation failed" } } }, "fallback")
+      ).toBe("Validation failed");
     });
   });
 });

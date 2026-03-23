@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
@@ -39,7 +40,7 @@ vi.mock("lucide-react", () => ({
   Eye: IconStub, EyeOff: IconStub,
 }));
 
-import { clientLoader, clientAction } from "../system/email";
+import { clientLoader, clientAction, getAdminEmailError } from "../system/email";
 
 function form(fields: Record<string, string>) {
   const fd = new FormData();
@@ -82,6 +83,24 @@ describe("admin/system/email", () => {
       expect(res.settings).toBeDefined();
       expect(res.error).toBe("oops");
     });
+
+    it("uses actionable offline copy on loader failure", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.getSettings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const res = await clientLoader({ request: new Request("http://l/") } as any);
+
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
+    });
   });
 
   /* action */
@@ -118,6 +137,27 @@ describe("admin/system/email", () => {
         } as any);
         expect(res.success).toBe(false);
         expect(res.error).toBe("Bounced");
+      });
+
+      it("uses actionable offline copy when test email request fails offline", async () => {
+        const previousOnline = navigator.onLine;
+        Object.defineProperty(navigator, "onLine", {
+          configurable: true,
+          value: false,
+        });
+        m.sendTestEmail.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+        const res = await clientAction({
+          request: form({ intent: "test", testEmailRecipient: "a@b.com" }),
+        } as any);
+
+        expect(res.success).toBe(false);
+        expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+        Object.defineProperty(navigator, "onLine", {
+          configurable: true,
+          value: previousOnline,
+        });
       });
     });
 
@@ -184,8 +224,14 @@ describe("admin/system/email", () => {
         m.updateSettings.mockRejectedValue(new Error("boom"));
         const res = await clientAction({ request: form(validSave) } as any);
         expect(res.success).toBe(false);
-        expect(res.error).toMatch(/update/i);
+        expect(res.error).toBe("boom");
       });
+    });
+
+    it("preserves backend response messages in helper", () => {
+      expect(
+        getAdminEmailError({ response: { data: { message: "SMTP rejected credentials" } } }, "fallback")
+      ).toBe("SMTP rejected credentials");
     });
   });
 });

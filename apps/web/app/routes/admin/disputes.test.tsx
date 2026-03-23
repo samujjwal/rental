@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -11,17 +12,20 @@ const mocks = vi.hoisted(() => ({
   assignDispute: vi.fn(),
   updateDispute: vi.fn(),
   resolveDispute: vi.fn(),
+  getDisputeById: vi.fn(),
   respondToDispute: vi.fn(),
   requireAdmin: vi.fn(),
   useLoaderData: vi.fn(),
   useActionData: vi.fn(),
   useNavigation: vi.fn(() => ({ state: "idle" })),
+  useRevalidator: vi.fn(() => ({ revalidate: vi.fn(), state: "idle" })),
 }));
 
 vi.mock("react-router", () => ({
   useLoaderData: () => mocks.useLoaderData(),
   useActionData: () => mocks.useActionData(),
   useNavigation: () => mocks.useNavigation(),
+  useRevalidator: () => mocks.useRevalidator(),
   Link: ({ children, to, ...props }: any) => (
     <a href={to} {...props}>{children}</a>
   ),
@@ -40,6 +44,7 @@ vi.mock("~/lib/api/admin", () => ({
 
 vi.mock("~/lib/api/disputes", () => ({
   disputesApi: {
+    getDisputeById: (...args: any[]) => mocks.getDisputeById(...args),
     respondToDispute: (...args: any[]) => mocks.respondToDispute(...args),
   },
 }));
@@ -52,6 +57,8 @@ vi.mock("~/components/ui", () => ({
   UnifiedButton: ({ children, ...props }: any) => (
     <button {...props}>{children}</button>
   ),
+  Dialog: ({ open, children }: any) => (open ? <div>{children}</div> : null),
+  DialogFooter: ({ children }: any) => <div>{children}</div>,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 
@@ -62,7 +69,11 @@ vi.mock("lucide-react", () => ({
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 
-import AdminDisputes, { clientLoader, clientAction } from "../admin/disputes";
+import AdminDisputes, {
+  clientLoader,
+  clientAction,
+  getAdminDisputesError,
+} from "../admin/disputes";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -115,6 +126,26 @@ describe("admin/disputes route", () => {
         request: new Request("http://localhost/admin/disputes"),
       } as any);
       expect(result.error).toBe("Forbidden");
+    });
+
+    it("uses actionable offline copy on loader failure", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      mocks.getDisputes.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const result = await clientLoader({
+        request: new Request("http://localhost/admin/disputes"),
+      } as any);
+
+      expect(result.error).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
     });
 
     it("calls requireAdmin", async () => {
@@ -321,6 +352,37 @@ describe("admin/disputes route", () => {
         }),
       } as any);
       expect(result.success).toBe(false);
+    });
+
+    it("uses actionable offline copy for action failures", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      mocks.updateDisputeStatus.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const result = await clientAction({
+        request: makeFormData({
+          intent: "set-status",
+          disputeId: validId,
+          status: "UNDER_REVIEW",
+        }),
+      } as any);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
+    });
+
+    it("preserves backend response messages in helper", () => {
+      expect(
+        getAdminDisputesError({ response: { data: { message: "Escalation limit reached" } } }, "fallback")
+      ).toBe("Escalation limit reached");
     });
   });
 

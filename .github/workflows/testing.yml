@@ -2,6 +2,10 @@ name: Extended Quality Checks
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/testing.yml'
   schedule:
     - cron: '0 0 * * 0'
 
@@ -114,7 +118,6 @@ jobs:
 
       - name: Run security audit
         run: pnpm run audit:security
-        continue-on-error: true
 
       - name: Upload security audit artifacts
         if: always()
@@ -174,12 +177,28 @@ jobs:
           WEB_PID=$!
           trap 'kill $WEB_PID 2>/dev/null || true' EXIT
           for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3000 >/dev/null 2>&1; then
+            if curl -fsS http://127.0.0.1:3401 >/dev/null 2>&1; then
               break
             fi
             sleep 2
           done
-          npx @axe-core/cli http://127.0.0.1:3000 --exit > axe-results.txt
+          # Scan multiple routes — not just the homepage — to catch a11y regressions
+          # on the listing creation, search, and auth flows.
+          ROUTES=(
+            "http://127.0.0.1:3401"
+            "http://127.0.0.1:3401/listings"
+            "http://127.0.0.1:3401/auth/login"
+            "http://127.0.0.1:3401/auth/signup"
+          )
+          FAILED=0
+          for route in "${ROUTES[@]}"; do
+            echo "--- Scanning: $route ---"
+            npx @axe-core/cli "$route" --exit >> axe-results.txt 2>&1 || FAILED=1
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Accessibility violations found. See axe-results.txt artifact."
+            exit 1
+          fi
 
       - name: Upload accessibility report
         if: always()

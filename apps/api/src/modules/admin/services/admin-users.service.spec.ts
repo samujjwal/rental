@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
 import { AdminUsersService } from './admin-users.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { CacheService } from '@/common/cache/cache.service';
 
 describe('AdminUsersService', () => {
   let service: AdminUsersService;
@@ -33,12 +34,22 @@ describe('AdminUsersService', () => {
               count: jest.fn(),
               update: jest.fn(),
             },
+            session: {
+              deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
             listing: {
               updateMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             auditLog: {
               create: jest.fn().mockResolvedValue({ id: 'audit-1' }),
             },
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            del: jest.fn().mockResolvedValue(undefined),
+            deletePattern: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

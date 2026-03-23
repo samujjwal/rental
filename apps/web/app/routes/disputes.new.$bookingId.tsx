@@ -32,6 +32,7 @@ import { getUser } from "~/utils/auth";
 import { RouteErrorBoundary } from "~/components/ui";
 import { useTranslation } from "react-i18next";
 import { isAppEntityId } from "~/utils/entity-id";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -50,6 +51,56 @@ const safeNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+export function getCreateDisputeError(
+  error: unknown,
+  fallbackMessage = "Failed to create dispute. Please try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+
+  if (typeof responseMessage === "string" && responseMessage.length > 0) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try creating the dispute again.";
+  }
+
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.CONFLICT]: "A dispute for this booking is already in progress. Refresh and review the booking timeline.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try creating the dispute again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Creating the dispute timed out. Try again.",
+  });
+}
+
+export function getDisputeEvidenceUploadError(
+  error: unknown,
+  fallbackMessage = "Unable to upload dispute evidence right now. Try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+
+  if (typeof responseMessage === "string" && responseMessage.length > 0) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try uploading dispute evidence again.";
+  }
+
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try uploading dispute evidence again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Uploading dispute evidence timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not upload dispute evidence right now. Try again in a moment.",
+  });
+}
+
 const getStoredClientAuth = (): {
   user: { id: string; role: "owner" | "renter" | "admin" } | null;
   accessToken: string | null;
@@ -59,19 +110,9 @@ const getStoredClientAuth = (): {
   }
 
   try {
-    const raw = localStorage.getItem("auth-storage");
-    if (!raw) {
-      return { user: null, accessToken: null };
-    }
+    // F-39 fix: Use useAuthStore.getState() as the single source of truth.
+    const { user: rawUser, accessToken } = useAuthStore.getState();
 
-    const parsed = JSON.parse(raw) as {
-      state?: {
-        accessToken?: string;
-        user?: { id?: string; role?: string } | null;
-      };
-    };
-    const accessToken = parsed?.state?.accessToken ?? null;
-    const rawUser = parsed?.state?.user;
     const role = (() => {
       const normalized = String(rawUser?.role || "").toUpperCase();
       if (normalized === "OWNER" || normalized === "HOST") return "owner" as const;
@@ -79,12 +120,8 @@ const getStoredClientAuth = (): {
       return "renter" as const;
     })();
 
-    if (accessToken) {
-      useAuthStore.getState().setAccessToken(accessToken);
-    }
-
     return {
-      accessToken,
+      accessToken: accessToken ?? null,
       user: rawUser?.id ? { id: rawUser.id, role } : null,
     };
   } catch {
@@ -182,17 +219,22 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
 
     let evidenceUrls: string[] | undefined;
     if (evidenceFiles.length > 0) {
-      const uploads = await Promise.all(
-        evidenceFiles.map((file) => {
-          if (file.type.startsWith("image/")) {
-            return uploadApi.uploadImage(file);
-          }
-          if (file.type === "application/pdf") {
-            return uploadApi.uploadDocument(file);
-          }
-          return Promise.reject(new Error("Unsupported evidence file type"));
-        })
-      );
+      let uploads;
+      try {
+        uploads = await Promise.all(
+          evidenceFiles.map((file) => {
+            if (file.type.startsWith("image/")) {
+              return uploadApi.uploadImage(file);
+            }
+            if (file.type === "application/pdf") {
+              return uploadApi.uploadDocument(file);
+            }
+            return Promise.reject(new Error("Unsupported evidence file type"));
+          })
+        );
+      } catch (error: unknown) {
+        return { error: getDisputeEvidenceUploadError(error) };
+      }
       evidenceUrls = uploads.map((file) => file.url);
     }
 
@@ -207,14 +249,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
 
     return redirect(`/bookings/${bookingId}?disputeCreated=true`);
   } catch (error: unknown) {
-    return {
-      error:
-        error && typeof error === "object" && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message ||
-            "Failed to create dispute. Please try again."
-          : "Failed to create dispute. Please try again.",
-    };
+    return { error: getCreateDisputeError(error) };
   }
 }
 

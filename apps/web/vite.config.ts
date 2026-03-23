@@ -47,7 +47,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      "process.env.SESSION_SECRET": JSON.stringify(env.SESSION_SECRET),
+      // VITE_WS_URL is a public URL (no secrets) — safe to inline for client-side WebSocket hooks.
+      // SESSION_SECRET is intentionally NOT included here: inlining it via Vite define embeds
+      // the secret as a string literal in client bundles, making it extractable by anyone who
+      // inspects the JS. auth.ts reads process.env.SESSION_SECRET directly in SSR loaders,
+      // which works correctly without any Vite injection.
+      "import.meta.env.VITE_WS_URL": JSON.stringify(env.VITE_WS_URL ?? ""),
     },
     test: {
       // Exclude e2e tests from vitest - those are run by Playwright

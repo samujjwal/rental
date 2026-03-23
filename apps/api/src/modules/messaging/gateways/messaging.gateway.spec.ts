@@ -279,7 +279,7 @@ describe('MessagingGateway', () => {
       const result = await gateway.handleMarkRead(client, { messageId: 'm1' });
 
       expect(result).toEqual({ success: true });
-      expect(gateway.server.to).toHaveBeenCalledWith('sender-sock');
+      expect(gateway.server.to).toHaveBeenCalledWith('user:sender-1');
       expect(toEmit).toHaveBeenCalledWith('message_read', {
         messageId: 'm1',
         conversationId: 'conv-1',

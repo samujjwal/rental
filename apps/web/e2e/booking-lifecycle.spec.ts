@@ -41,6 +41,7 @@ interface ListingItem {
   id: string;
   title: string;
   bookingType?: "INSTANT_BOOK" | "REQUEST";
+  instantBooking?: boolean;
   status?: string;
 }
 
@@ -139,6 +140,39 @@ async function loginAndGo(
   return payload;
 }
 
+async function gotoAppPath(page: Page, path: string): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(`${BASE_URL}${path}`, { waitUntil: "domcontentloaded" });
+      if (page.url().includes(path)) {
+        return;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        !message.includes('interrupted by another navigation') &&
+        !message.includes('NS_BINDING_ABORTED') &&
+        !message.includes('Frame load interrupted') &&
+        !message.includes('NS_ERROR_FAILURE')
+      ) {
+        throw error;
+      }
+      lastError = error;
+    }
+
+    await page.waitForLoadState('domcontentloaded').catch(() => null);
+    await page.waitForTimeout(250);
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  throw new Error(`Failed to navigate to ${path}`);
+}
+
 /** Authed API call helper (uses an already-obtained token). */
 async function apiPost(
   page: Page,
@@ -165,15 +199,49 @@ async function apiGet(page: Page, path: string, token: string) {
 /** Find the first approved & published listing that can be booked. */
 async function findBookableListing(
   page: Page,
-  token: string
+  token: string,
+  options?: { requireOwnerApproval?: boolean }
 ): Promise<ListingItem | null> {
   const res = await apiGet(page, "/listings?limit=20&status=PUBLISHED", token);
   if (!res.ok()) return null;
   const data = (await res.json()) as { data?: ListingItem[]; items?: ListingItem[]; listings?: ListingItem[] };
   const items = data.data ?? data.items ?? data.listings ?? (data as unknown as ListingItem[]);
   if (!Array.isArray(items) || items.length === 0) return null;
-  // Always use the first listing - the beforeAll/afterAll cleanup ensures no date conflicts.
-  return items[0];
+  const availableItems = items.filter((item) => item.status === 'AVAILABLE');
+  const candidates = availableItems.length > 0 ? availableItems : items;
+
+  if (options?.requireOwnerApproval) {
+    const requestListing = candidates.find((item) => item.instantBooking !== true);
+    if (requestListing) {
+      return requestListing;
+    }
+  }
+
+  // Default to the first listing - the beforeAll/afterAll cleanup ensures no date conflicts.
+  return candidates[0];
+}
+
+async function findOwnerBookableListing(
+  page: Page,
+  ownerToken: string,
+  options?: { requireOwnerApproval?: boolean }
+): Promise<ListingItem | null> {
+  const res = await apiGet(page, '/listings/my-listings', ownerToken);
+  if (!res.ok()) return null;
+
+  const items = (await res.json()) as ListingItem[];
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const availableItems = items.filter((item) => item.status === 'AVAILABLE');
+  const candidates = availableItems.length > 0 ? availableItems : items;
+
+  if (options?.requireOwnerApproval) {
+    const requestListing = candidates.find((item) => item.instantBooking !== true);
+    if (requestListing) {
+      return requestListing;
+    }
+  }
+
+  return candidates[0];
 }
 
 /** Cancel all non-completed bookings visible to the given token. */
@@ -205,26 +273,34 @@ async function createBookingViaApi(
   daysFromNow = -1
 ): Promise<BookingItem> {
   // Each invocation gets a unique non-overlapping 2-day window starting 700+ days out.
-  // 700-day base clears all existing non-cancellable blocking bookings (max ~641 days).
-  // Full _runSeed (0-4999) + per-slot 7-day spacing prevents cross-run date conflicts.
-  const baseOffset = daysFromNow >= 0 ? daysFromNow : 700 + _runSeed + (_bookingSlot++ * 7);
-  const start = new Date();
-  start.setDate(start.getDate() + baseOffset);
-  start.setHours(10, 0, 0, 0);
+  // Retry across later windows because long-lived seeded listings can accumulate
+  // blocked ranges from prior runs or other lifecycle states that are not fully reset.
+  const baseOffset = daysFromNow >= 0 ? daysFromNow : 700 + _runSeed + _bookingSlot++ * 7;
+  const attempts = daysFromNow >= 0 ? 1 : 6;
+  let lastError = 'booking setup did not run';
 
-  const end = new Date(start);
-  end.setDate(end.getDate() + 2);
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const start = new Date();
+    start.setDate(start.getDate() + baseOffset + attempt * 7);
+    start.setHours(10, 0, 0, 0);
 
-  const res = await apiPost(page, "/bookings", token, {
-    listingId,
-    startDate: start.toISOString(),
-    endDate: end.toISOString(),
-  });
+    const end = new Date(start);
+    end.setDate(end.getDate() + 2);
 
-  if (!res.ok()) {
-    throw new Error(`createBooking failed: ${res.status()} ${await res.text()}`);
+    const res = await apiPost(page, "/bookings", token, {
+      listingId,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+    });
+
+    if (res.ok()) {
+      return res.json() as Promise<BookingItem>;
+    }
+
+    lastError = `${res.status()} ${await res.text()}`;
   }
-  return res.json() as Promise<BookingItem>;
+
+  throw new Error(`createBooking failed: ${lastError}`);
 }
 
 /** Drive the booking through a sequence of API state transitions.
@@ -331,7 +407,10 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       // Force-cancel ALL non-final bookings via dev-reset (test-mode only) to clear
       // accumulated date blocks from prior runs that cancelAllActiveBookings cannot reach
       // (IN_PROGRESS, AWAITING_RETURN_INSPECTION, DISPUTED states).
-      await apiPost(page, "/bookings/dev-reset", "", {}).catch(() => null);
+      const adminLogin = await devLogin(page, "ADMIN").catch(() => null);
+      if (adminLogin) {
+        await apiPost(page, "/bookings/dev-reset", adminLogin.accessToken, {}).catch(() => null);
+      }
       // Also cancel visible bookings via the normal per-user endpoint for belt-and-suspenders.
       const renterLogin = await devLogin(page, "USER").catch(() => null);
       const ownerLogin = await devLogin(page, "HOST").catch(() => null);
@@ -379,9 +458,7 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
     test("non-UUID booking id redirects to /bookings", async ({ page }) => {
       await loginAndGo(page, "USER", "/dashboard");
-      await page.goto(`${BASE_URL}/bookings/not-a-uuid`, {
-        waitUntil: "domcontentloaded",
-      });
+      await gotoAppPath(page, "/bookings/not-a-uuid");
       await expect(page).toHaveURL(/\/bookings$/, { timeout: 8_000 });
     });
 
@@ -406,27 +483,30 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
       const renterPayload = await devLogin(page, "USER");
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
-
-      // Create a booking as the renter
-      const booking = await createBookingViaApi(
-        page,
-        renterPayload.accessToken,
-        listing.id
-      ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
-
-      // Try to access this booking as the OWNER - owner IS a participant (listing owner)
-      // so they should be able to view it. Skip this test as the non-participant
-      // scenario cannot be cleanly reproduced with current test user setup.
-      // We instead verify the booking detail loads correctly for the owner.
       const ownerCtx = await browser.newContext();
       const ownerPage = await ownerCtx.newPage();
       let ownerPayload: DevLoginResponse;
       try {
         await ownerPage.goto(BASE_URL, { waitUntil: "domcontentloaded" });
         ownerPayload = await devLogin(ownerPage, "HOST");
+
+        const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+          requireOwnerApproval: true,
+        });
+        if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+
+        // Create a booking as the renter on a listing owned by owner@test.com
+        const booking = await createBookingViaApi(
+          page,
+          renterPayload.accessToken,
+          listing.id
+        ).catch(() => null);
+        if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
+
+        // Try to access this booking as the OWNER - owner IS a participant (listing owner)
+        // so they should be able to view it. Skip this test as the non-participant
+        // scenario cannot be cleanly reproduced with current test user setup.
+        // We instead verify the booking detail loads correctly for the owner.
         await injectAuth(ownerPage, ownerPayload);
         await ownerPage.goto(`${BASE_URL}/bookings/${booking.id}`, {
           waitUntil: "domcontentloaded",
@@ -434,12 +514,12 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         // Owner (listing owner) should be able to view the booking - NOT redirected
         // The booking detail page should load correctly
         await expect(ownerPage).not.toHaveURL(/auth\/login/, { timeout: 5_000 });
+
+        // Clean up
+        await apiPost(page, `/bookings/${booking.id}/cancel`, renterPayload.accessToken, { reason: "test cleanup" }).catch(() => null);
       } finally {
         await ownerCtx.close();
       }
-
-      // Clean up
-      await apiPost(page, `/bookings/${booking.id}/cancel`, renterPayload.accessToken, { reason: "test cleanup" }).catch(() => null);
     });
   });
 
@@ -454,9 +534,7 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const listing = await findBookableListing(page, payload.accessToken);
       if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
-      await page.goto(`${BASE_URL}/listings/${listing.id}`, {
-        waitUntil: "domcontentloaded",
-      });
+      await gotoAppPath(page, `/listings/${listing.id}`);
 
       // Price/availability panel should be visible
       const panel = page.locator(
@@ -472,9 +550,7 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const listing = await findBookableListing(page, payload.accessToken);
       if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
-      await page.goto(`${BASE_URL}/listings/${listing.id}`, {
-        waitUntil: "domcontentloaded",
-      });
+      await gotoAppPath(page, `/listings/${listing.id}`);
 
       // Either "Book Now" (instant) or "Request to Book" (request) must exist
       const bookBtn = page.locator(
@@ -512,7 +588,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       }
 
       // ---------- Find a bookable listing ----------
-      const listing = await findBookableListing(page, renterPayload.accessToken);
+      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+        requireOwnerApproval: true,
+      });
       if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // ---------- Step 1: Renter creates booking ----------
@@ -617,7 +695,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
+      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+        requireOwnerApproval: true,
+      });
       if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const booking = await createBookingViaApi(
@@ -658,7 +738,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
+      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+        requireOwnerApproval: true,
+      });
       if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const booking = await createBookingViaApi(
@@ -704,7 +786,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
+      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+        requireOwnerApproval: true,
+      });
       if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const booking = await createBookingViaApi(
@@ -1934,9 +2018,7 @@ test.describe("Booking Lifecycle — Full E2E", () => {
     }) => {
       await loginAndGo(page, "USER", "/dashboard");
       const unknownId = "aaaaaaaa-bbbb-4ccc-8ddd-ffffffffffff";
-      await page.goto(`${BASE_URL}/disputes/new/${unknownId}`, {
-        waitUntil: "domcontentloaded",
-      });
+      await gotoAppPath(page, `/disputes/new/${unknownId}`);
       await expect(page).toHaveURL(/\/bookings/, { timeout: 8_000 });
     });
 
@@ -1944,9 +2026,7 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       page,
     }) => {
       await loginAndGo(page, "USER", "/dashboard");
-      await page.goto(`${BASE_URL}/disputes/new/not-a-uuid`, {
-        waitUntil: "domcontentloaded",
-      });
+      await gotoAppPath(page, "/disputes/new/not-a-uuid");
       await expect(page).toHaveURL(/\/bookings/, { timeout: 8_000 });
     });
 

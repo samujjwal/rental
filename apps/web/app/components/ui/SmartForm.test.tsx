@@ -141,7 +141,7 @@ describe('SmartForm', () => {
     });
   });
 
-  it('toggles password visibility', () => {
+  it('toggles password visibility', async () => {
     const schema = createTestSchema();
     const fields = createTestFields();
 
@@ -153,16 +153,24 @@ describe('SmartForm', () => {
       />
     );
 
-    const passwordInput = getFieldByLabel('Password');
-    expect(passwordInput).toHaveAttribute('type', 'password');
+    await waitFor(() => {
+      const passwordInput = getFieldByLabel('Password');
+      expect(passwordInput).toHaveAttribute('type', 'password');
+    });
 
-    const toggleButton = screen
-      .getAllByRole('button')
-      .find((button) => button.getAttribute('type') === 'button');
+    // Get the password input and its parent container
+    const passwordInput = getFieldByLabel('Password') as HTMLInputElement;
+    const passwordWrapper = passwordInput.closest('div.relative') || passwordInput.parentElement;
+    
+    // Find the toggle button within the password field container
+    const toggleButton = passwordWrapper?.querySelector('button[type="button"]');
     expect(toggleButton).toBeDefined();
+    
     fireEvent.click(toggleButton!);
 
-    expect(passwordInput).toHaveAttribute('type', 'text');
+    await waitFor(() => {
+      expect(passwordInput).toHaveAttribute('type', 'text');
+    });
   });
 
   it('submits valid form data', async () => {

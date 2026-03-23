@@ -33,7 +33,7 @@ describe("paymentsApi", () => {
     mockApi.get.mockResolvedValue({
       transactions: [{ id: "t1", type: "PAYMENT", amount: 500 }],
     });
-    const result = await paymentsApi.getPaymentHistory("u1");
+    const result = await paymentsApi.getPaymentHistory();
     expect(mockApi.get).toHaveBeenCalledWith("/payments/transactions");
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("t1");
@@ -41,13 +41,13 @@ describe("paymentsApi", () => {
 
   it("getPaymentHistory handles empty transactions", async () => {
     mockApi.get.mockResolvedValue({ transactions: undefined });
-    const result = await paymentsApi.getPaymentHistory("u1");
+    const result = await paymentsApi.getPaymentHistory();
     expect(result).toEqual([]);
   });
 
   it("getOwnerEarnings fetches earnings", async () => {
     mockApi.get.mockResolvedValue({ amount: 5000, currency: "NPR" });
-    const result = await paymentsApi.getOwnerEarnings("u1");
+    const result = await paymentsApi.getOwnerEarnings();
     expect(mockApi.get).toHaveBeenCalledWith("/payments/earnings");
     expect(result.amount).toBe(5000);
   });

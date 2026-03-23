@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /* ------------------------------------------------------------------ */
@@ -59,10 +60,12 @@ vi.mock("~/lib/utils", () => ({
   cn: (...a: string[]) => a.filter(Boolean).join(" "),
 }));
 vi.mock("~/components/ui", () => ({
-  UnifiedButton: ({ children, ...p }: any) => (
-    <button {...p}>{children}</button>
+  UnifiedButton: ({ children, loading, ...p }: any) => (
+    <button {...p}>{loading ? <span data-testid="loading-spinner" /> : null}{children}</button>
   ),
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
+  Dialog: ({ open, children }: any) => (open ? <div>{children}</div> : null),
+  DialogFooter: ({ children }: any) => <div>{children}</div>,
   Card: ({ children }: any) => <div>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,
   CardHeader: ({ children }: any) => <div>{children}</div>,
@@ -84,11 +87,20 @@ function makeFormReq(fields: Record<string, string>) {
   return { formData: () => Promise.resolve(fd) } as unknown as Request;
 }
 
-import { clientLoader, clientAction } from "./dashboard.owner.earnings";
+import {
+  clientLoader,
+  clientAction,
+  getOwnerEarningsError,
+  getOwnerEarningsLoadError,
+} from "./dashboard.owner.earnings";
 
 const ownerUser = { id: "u1", role: "owner" };
 
 beforeEach(() => vi.clearAllMocks());
+
+beforeEach(() => {
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+});
 
 /* ================================================================== */
 /*  clientLoader                                                       */
@@ -126,7 +138,7 @@ describe("clientLoader", () => {
 
   it("handles partial failures gracefully", async () => {
     mocks.getUser.mockResolvedValue(ownerUser);
-    mocks.getBalance.mockRejectedValue(new Error("fail"));
+    mocks.getBalance.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
     mocks.getEarnings.mockResolvedValue({ amount: 0, currency: "USD" });
     mocks.getTransactions.mockResolvedValue({ transactions: [] });
     mocks.getPayouts.mockResolvedValue({ payouts: [] });
@@ -134,7 +146,81 @@ describe("clientLoader", () => {
     const r = (await clientLoader({
       request: new Request("http://localhost/dashboard/owner/earnings"),
     } as any)) as any;
-    expect(r.error).toBeTruthy();
+    expect(r.error).toBe(
+      "Earnings request timed out. Try again. Some sections could not be loaded: balance."
+    );
+  });
+
+  it("uses actionable offline copy on partial loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getBalance.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    mocks.getEarnings.mockResolvedValue({ amount: 0, currency: "USD" });
+    mocks.getTransactions.mockResolvedValue({ transactions: [] });
+    mocks.getPayouts.mockResolvedValue({ payouts: [] });
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/dashboard/owner/earnings"),
+    } as any)) as any;
+
+    expect(r.error).toBe(
+      "You appear to be offline. Reconnect and try again. Some sections could not be loaded: balance."
+    );
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("preserves backend messages on partial loader failure", async () => {
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getBalance.mockRejectedValue({
+      response: { data: { message: "Payout ledger is recalculating" } },
+    });
+    mocks.getEarnings.mockResolvedValue({ amount: 0, currency: "USD" });
+    mocks.getTransactions.mockResolvedValue({ transactions: [] });
+    mocks.getPayouts.mockResolvedValue({ payouts: [] });
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/dashboard/owner/earnings"),
+    } as any)) as any;
+
+    expect(r.error).toBe("Payout ledger is recalculating");
+  });
+
+  it("uses actionable offline copy on full loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getBalance.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    mocks.getEarnings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    mocks.getTransactions.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    mocks.getPayouts.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/dashboard/owner/earnings"),
+    } as any)) as any;
+
+    expect(r.error).toBe(
+      "You appear to be offline. Reconnect and try again. Some sections could not be loaded: balance, earnings, transactions, payouts."
+    );
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("uses timeout-specific copy on full loader failure", async () => {
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getBalance.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    mocks.getEarnings.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    mocks.getTransactions.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    mocks.getPayouts.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/dashboard/owner/earnings"),
+    } as any)) as any;
+
+    expect(r.error).toBe(
+      "Earnings request timed out. Try again. Some sections could not be loaded: balance, earnings, transactions, payouts."
+    );
   });
 });
 
@@ -211,6 +297,84 @@ describe("clientAction", () => {
     expect((r as any).success).toBe(true);
     expect(mocks.requestPayout).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 100 })
+    );
+  });
+
+  it("preserves backend payout error messages", async () => {
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getEarnings.mockResolvedValue({ amount: 5000 });
+    mocks.requestPayout.mockRejectedValue({
+      response: { data: { message: "Bank account verification required" } },
+    });
+    const r = await clientAction({
+      request: makeFormReq({ intent: "requestPayout", amount: "100" }),
+    } as any);
+    expect((r as any).success).toBe(false);
+    expect((r as any).error).toBe("Bank account verification required");
+  });
+
+  it("uses actionable offline copy for payout failures", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getEarnings.mockResolvedValue({ amount: 5000 });
+    mocks.requestPayout.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "requestPayout", amount: "100" }),
+    } as any);
+
+    expect((r as any).success).toBe(false);
+    expect((r as any).error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("uses timeout-specific copy for payout failures", async () => {
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getEarnings.mockResolvedValue({ amount: 5000 });
+    mocks.requestPayout.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "requestPayout", amount: "100" }),
+    } as any);
+
+    expect((r as any).success).toBe(false);
+    expect((r as any).error).toBe("Earnings request timed out. Try again.");
+  });
+
+  it("uses conflict-specific copy for payout failures without backend messages", async () => {
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getEarnings.mockResolvedValue({ amount: 5000 });
+    mocks.requestPayout.mockRejectedValue(
+      new AxiosError("Conflict", undefined, undefined, undefined, {
+        status: 409,
+        statusText: "Conflict",
+        headers: {},
+        config: { headers: {} } as any,
+        data: {},
+      } as any)
+    );
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "requestPayout", amount: "100" }),
+    } as any);
+
+    expect((r as any).success).toBe(false);
+    expect((r as any).error).toBe("Your payout balance changed. Refresh and try again.");
+  });
+
+  it("preserves backend response messages in helper", () => {
+    expect(
+      getOwnerEarningsError({ response: { data: { message: "Payout queue paused" } } }, "fallback")
+    ).toBe("Payout queue paused");
+  });
+
+  it("uses timeout-specific loader helper copy", () => {
+    expect(
+      getOwnerEarningsLoadError(new AxiosError("timeout", "ECONNABORTED"), ["balance"])
+    ).toBe(
+      "Earnings request timed out. Try again. Some sections could not be loaded: balance."
     );
   });
 });

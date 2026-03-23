@@ -10,3 +10,16 @@ export function escapeHtml(str: string | undefined | null): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;');
 }
+
+/**
+ * Sanitize plain-text user input before persistence.
+ * Removes HTML tags and normalizes whitespace so profile fields cannot store
+ * executable markup while still preserving readable text.
+ */
+export function sanitizePlainText(str: string | undefined | null): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

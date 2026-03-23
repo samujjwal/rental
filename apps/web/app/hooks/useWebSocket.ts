@@ -1,8 +1,37 @@
+/**
+ * @deprecated This hook uses the native browser WebSocket API and is NOT connected
+ * to the Socket.IO-based backend (`/messaging` namespace). It will not receive
+ * messages from the server in production. Use `useMessaging` (or the Socket.IO
+ * client in `apps/web/app/lib/socket.ts`) instead.
+ *
+ * Kept for reference; do not add new usages.
+ */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { toast } from '~/lib/toast';
 import { useAuthStore } from '~/lib/store/auth';
 
+// VITE_WS_URL is injected at build time via vite.config.ts define block.
+// Falls back to localhost for local development only.
+const WS_BASE_URL: string =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_WS_URL as string | undefined) ||
+  'ws://localhost:3001';
+
 const DEFAULT_PROTOCOLS: string[] = [];
+
+export function getWebSocketConnectionError(options?: {
+  isOffline?: boolean;
+  exhaustedRetries?: boolean;
+}): string {
+  if (options?.isOffline) {
+    return 'You appear to be offline. Reconnect to resume real-time updates.';
+  }
+
+  if (options?.exhaustedRetries) {
+    return 'We could not reconnect to real-time updates. Try again in a moment.';
+  }
+
+  return 'We could not connect to real-time updates right now.';
+}
 
 export interface WebSocketMessage {
   type: string;
@@ -36,7 +65,7 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
   
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const messageQueueRef = useRef<WebSocketMessage[]>([]);
 
@@ -48,6 +77,36 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
   } = config;
   const protocols = config.protocols ?? DEFAULT_PROTOCOLS;
 
+  const resolveConnectionError = useCallback(
+    (exhaustedRetries = false) =>
+      getWebSocketConnectionError({
+        isOffline: typeof navigator !== 'undefined' && navigator.onLine === false,
+        exhaustedRetries,
+      }),
+    []
+  );
+
+  const clearReconnectTimeout = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearHeartbeatTimeout = useCallback(() => {
+    if (heartbeatTimeoutRef.current) {
+      clearTimeout(heartbeatTimeoutRef.current);
+      heartbeatTimeoutRef.current = null;
+    }
+  }, []);
+
+  const dispatchBookingUpdate = useCallback((detail: Record<string, unknown>) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('booking:update', { detail }));
+  }, []);
+
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
@@ -57,12 +116,10 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
       setConnectionStatus('connecting');
       setError(null);
 
-      // Add authentication token to URL if available
-      const wsUrl = accessToken 
-        ? `${url}?token=${encodeURIComponent(accessToken)}`
-        : url;
-
-      const ws = new WebSocket(wsUrl, protocols);
+      // F-07 fix: Never embed the auth token in the WebSocket URL (it would
+      // appear in server logs and browser history).  Connect to the plain URL
+      // and pass auth as the first message after the handshake instead.
+      const ws = new WebSocket(url, protocols);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -70,6 +127,11 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
         setConnectionStatus('connected');
         setError(null);
         reconnectAttemptsRef.current = 0;
+
+        // Send auth token as first message (not in URL)
+        if (accessToken) {
+          ws.send(JSON.stringify({ type: 'auth', token: accessToken }));
+        }
 
         // Send queued messages
         if (messageQueueRef.current.length > 0) {
@@ -79,15 +141,20 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
           messageQueueRef.current = [];
         }
 
-        // Start heartbeat
-        if (heartbeatIntervalRef.current) {
-          clearInterval(heartbeatIntervalRef.current);
-        }
-        heartbeatIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
-          }
-        }, heartbeatInterval);
+        clearReconnectTimeout();
+
+        const queueHeartbeat = () => {
+          clearHeartbeatTimeout();
+          heartbeatTimeoutRef.current = setTimeout(() => {
+            heartbeatTimeoutRef.current = null;
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+              queueHeartbeat();
+            }
+          }, heartbeatInterval);
+        };
+
+        queueHeartbeat();
 
         toast.success('Real-time updates connected');
       };
@@ -130,50 +197,53 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
         setConnectionStatus('disconnected');
 
         // Clear heartbeat
-        if (heartbeatIntervalRef.current) {
-          clearInterval(heartbeatIntervalRef.current);
-          heartbeatIntervalRef.current = null;
-        }
+        clearHeartbeatTimeout();
 
         // Attempt reconnection if not a normal closure
         if (event.code !== 1000 && reconnectAttemptsRef.current < maxReconnectAttempts) {
           setConnectionStatus('reconnecting');
           reconnectAttemptsRef.current++;
-          
+          const reconnectDelay = reconnectInterval * reconnectAttemptsRef.current;
+
           reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectTimeoutRef.current = null;
             connect();
-          }, reconnectInterval);
+          }, reconnectDelay);
         } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+          const message = resolveConnectionError(true);
           setConnectionStatus('error');
-          setError('Failed to connect after multiple attempts');
-          toast.error('Real-time updates unavailable');
+          setError(message);
+          toast.error(message);
         }
       };
 
       ws.onerror = (event) => {
         console.error('WebSocket error:', event);
         setIsConnected(false);
-        setError('Connection error');
+        setError(resolveConnectionError());
         setConnectionStatus('error');
       };
 
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
-      setError('Failed to create connection');
+      setError(resolveConnectionError());
       setConnectionStatus('error');
     }
-  }, [url, protocols, accessToken, reconnectInterval, maxReconnectAttempts, heartbeatInterval]);
+  }, [
+    accessToken,
+    clearHeartbeatTimeout,
+    clearReconnectTimeout,
+    heartbeatInterval,
+    maxReconnectAttempts,
+    protocols,
+    reconnectInterval,
+    resolveConnectionError,
+    url,
+  ]);
 
   const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = null;
-    }
+    clearReconnectTimeout();
+    clearHeartbeatTimeout();
 
     if (wsRef.current) {
       wsRef.current.close(1000, 'User disconnected');
@@ -183,7 +253,7 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
     setIsConnected(false);
     setConnectionStatus('disconnected');
     reconnectAttemptsRef.current = 0;
-  }, []);
+  }, [clearHeartbeatTimeout, clearReconnectTimeout]);
 
   const sendMessage = useCallback((type: string, data: any) => {
     const message: WebSocketMessage = {
@@ -223,11 +293,12 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
         toast.info(`Booking ${bookingId} status updated to ${status}`);
     }
 
-    // Trigger page refresh if needed
-    if (typeof window !== 'undefined' && window.location.pathname.includes('/bookings/')) {
-      window.location.reload();
-    }
-  }, []);
+    dispatchBookingUpdate({
+      bookingId,
+      status,
+      previousStatus,
+    });
+  }, [dispatchBookingUpdate]);
 
   const handleMessageNotification = useCallback((data: any) => {
     const { messageId, senderName, message } = data;
@@ -273,14 +344,10 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-      }
+      clearReconnectTimeout();
+      clearHeartbeatTimeout();
     };
-  }, []);
+  }, [clearHeartbeatTimeout, clearReconnectTimeout]);
 
   return {
     isConnected,
@@ -294,7 +361,7 @@ export function useWebSocket(config: WebSocketConfig): UseWebSocketReturn {
 // Hook for booking-specific real-time updates
 export function useBookingWebSocket(bookingId: string) {
   const config: WebSocketConfig = {
-    url: `${process.env.WS_URL || 'ws://localhost:3001'}/bookings/${bookingId}`,
+    url: `${WS_BASE_URL}/bookings/${bookingId}`,
     reconnectInterval: 5000,
     maxReconnectAttempts: 10,
     heartbeatInterval: 30000
@@ -306,7 +373,7 @@ export function useBookingWebSocket(bookingId: string) {
 // Hook for global notifications
 export function useNotificationWebSocket() {
   const config: WebSocketConfig = {
-    url: `${process.env.WS_URL || 'ws://localhost:3001'}/notifications`,
+    url: `${WS_BASE_URL}/notifications`,
     reconnectInterval: 5000,
     maxReconnectAttempts: 10,
     heartbeatInterval: 30000
@@ -318,8 +385,8 @@ export function useNotificationWebSocket() {
 // Hook for messaging
 export function useMessagingWebSocket(conversationId?: string) {
   const wsUrl = conversationId 
-    ? `${process.env.WS_URL || 'ws://localhost:3001'}/messages/${conversationId}`
-    : `${process.env.WS_URL || 'ws://localhost:3001'}/messages`;
+    ? `${WS_BASE_URL}/messages/${conversationId}`
+    : `${WS_BASE_URL}/messages`;
 
   const config: WebSocketConfig = {
     url: wsUrl,

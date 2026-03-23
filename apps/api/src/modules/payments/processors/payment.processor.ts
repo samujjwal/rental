@@ -17,6 +17,7 @@ import { PayoutStatus } from '@rental-portal/database';
 import { extractTraceCtx, createTracedLogger, TraceCtxPayload } from '@/common/queue/queue-trace.util';
 import { LedgerService } from '../services/ledger.service';
 import { PaymentCommandLogService } from '../services/payment-command-log.service';
+import { BookingStateMachineService } from '../../bookings/services/booking-state-machine.service';
 
 interface RetryPaymentJob extends TraceCtxPayload {
   paymentIntentId: string;
@@ -78,6 +79,14 @@ interface DepositReleaseJob {
   timestamp: string;
 }
 
+interface DepositCaptureJob {
+  bookingId: string;
+  amount: number;
+  currency: string;
+  commandId?: string;
+  timestamp: string;
+}
+
 @Processor('payments')
 export class PaymentProcessor {
   private readonly logger = new Logger(PaymentProcessor.name);
@@ -88,6 +97,7 @@ export class PaymentProcessor {
     private readonly stripeService: StripeService,
     private readonly ledger: LedgerService,
     private readonly paymentCommandLog: PaymentCommandLogService,
+    private readonly bookingStateMachine: BookingStateMachineService,
   ) {}
 
   @Process('retry-payment')
@@ -129,11 +139,15 @@ export class PaymentProcessor {
           },
         });
 
-        // Transition booking to payment failed
-        await this.prisma.booking.update({
-          where: { id: bookingId },
-          data: { status: 'PAYMENT_FAILED' },
-        });
+        // Transition booking through the state machine (F-12 fix — never
+        // bypass the state machine with direct Prisma writes).
+        await this.bookingStateMachine.transition(
+          bookingId,
+          'FAIL_PAYMENT',
+          'system',
+          'SYSTEM',
+          { reason: 'Max retry attempts reached', maxAttempts },
+        );
 
         this.events.emitPaymentFailed({
           paymentId: payment.id,
@@ -582,6 +596,71 @@ export class PaymentProcessor {
       }
       this.logger.error(`Deposit release failed for booking ${bookingId}:`, error);
       throw error; // Let Bull retry
+    }
+  }
+
+  @Process('capture-deposit')
+  async handleDepositCapture(job: Job<DepositCaptureJob>): Promise<{ captured: boolean }> {
+    const { bookingId, amount, commandId } = job.data;
+    this.logger.log(`Capturing deposit for booking ${bookingId}, amount ${amount}`);
+
+    try {
+      if (commandId) {
+        await this.paymentCommandLog.markProcessing(commandId);
+      }
+
+      const hold = await this.prisma.depositHold.findFirst({
+        where: { bookingId, status: 'AUTHORIZED' },
+      });
+
+      if (!hold) {
+        const existingHolds = await this.prisma.depositHold.findMany({
+          where: { bookingId },
+          select: { id: true, status: true },
+        });
+
+        if (existingHolds.some((depositHold) => String(depositHold.status) === 'CAPTURED')) {
+          if (commandId) {
+            await this.paymentCommandLog.markCompleted(commandId, {
+              bookingId,
+              alreadyCaptured: true,
+              depositHoldIds: existingHolds.map((depositHold) => depositHold.id),
+            });
+          }
+          this.logger.log(`Deposit already captured for booking ${bookingId}`);
+          return { captured: true };
+        }
+
+        if (commandId) {
+          await this.paymentCommandLog.markFailed(commandId, 'No capturable deposit hold found', {
+            bookingId,
+          });
+        }
+        this.logger.warn(`No authorized deposit hold found for booking ${bookingId}`);
+        return { captured: false };
+      }
+
+      await this.stripeService.captureDeposit(hold.id, amount);
+
+      if (commandId) {
+        await this.paymentCommandLog.markCompleted(commandId, {
+          bookingId,
+          depositHoldId: hold.id,
+          capturedAmount: amount,
+        });
+      }
+
+      return { captured: true };
+    } catch (error) {
+      if (commandId) {
+        await this.paymentCommandLog.markFailed(
+          commandId,
+          error instanceof Error ? error.message : 'Deposit capture processor failure',
+          { bookingId },
+        ).catch((): undefined => undefined);
+      }
+      this.logger.error(`Deposit capture failed for booking ${bookingId}:`, error);
+      throw error;
     }
   }
 }

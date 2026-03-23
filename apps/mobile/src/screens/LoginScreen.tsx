@@ -1,9 +1,12 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import React, { useState, useEffect } from "react";
+import { Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { useAuth } from "../api/authContext";
+import { useBiometricAuth, offerBiometricEnrollment } from "../hooks/useBiometricAuth";
+import { authStore } from "../api/authStore";
+import { mobileClient } from "../api/client";
 
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
@@ -14,6 +17,34 @@ export function LoginScreen({ navigation }: Props) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { isAvailable, isEnabled, biometricLabel, authenticate, enable } = useBiometricAuth();
+
+  // Auto-prompt biometric on mount if it's enabled and a stored token exists
+  useEffect(() => {
+    if (!isAvailable || !isEnabled) return;
+    let cancelled = false;
+
+    async function tryBiometricUnlock() {
+      const token = await authStore.getToken();
+      if (!token || cancelled) return;
+
+      const success = await authenticate();
+      if (success && !cancelled) {
+        try {
+          // Validate the stored token is still accepted by the server
+          await mobileClient.getProfile();
+          if (!cancelled) navigation.replace("Main");
+        } catch {
+          // Token is expired or revoked; let the user log in with password
+        }
+      }
+    }
+
+    tryBiometricUnlock();
+    return () => { cancelled = true; };
+  // Only run once after biometric state is initialized
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEnabled, isAvailable]);
 
   const handleLogin = async () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -28,6 +59,8 @@ export function LoginScreen({ navigation }: Props) {
     setError("");
     try {
       await signIn({ email, password });
+      // Offer biometric enrollment after first successful password login
+      await offerBiometricEnrollment(biometricLabel, enable);
       navigation.replace("Main");
     } catch (err) {
       setError("Login failed. Please check your credentials.");
@@ -36,9 +69,39 @@ export function LoginScreen({ navigation }: Props) {
     }
   };
 
+  const handleBiometricLogin = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const success = await authenticate();
+      if (success) {
+        // Validate the stored token against the server before navigating
+        await mobileClient.getProfile();
+        navigation.replace("Main");
+      } else {
+        setError(`${biometricLabel} authentication failed. Use your password instead.`);
+      }
+    } catch {
+      setError("Your session has expired. Please sign in with your password.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.heading}>Welcome back</Text>
+      {isAvailable && isEnabled ? (
+        <Pressable
+          style={[styles.biometricButton, loading && styles.primaryButtonDisabled]}
+          onPress={handleBiometricLogin}
+          disabled={loading}
+          accessibilityLabel={`Sign in with ${biometricLabel}`}
+          accessibilityRole="button"
+        >
+          <Text style={styles.biometricButtonText}>Sign in with {biometricLabel}</Text>
+        </Pressable>
+      ) : null}
       <TextInput
         value={email}
         onChangeText={setEmail}
@@ -56,7 +119,7 @@ export function LoginScreen({ navigation }: Props) {
         testID="password-input"
         style={styles.input}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
       <Pressable style={[styles.primaryButton, loading && styles.primaryButtonDisabled]} onPress={handleLogin} disabled={loading} accessibilityLabel={loading ? "Signing in" : "Sign In"} accessibilityRole="button">
         <Text style={styles.primaryButtonText}>{loading ? "Signing in..." : "Sign In"}</Text>
       </Pressable>
@@ -81,6 +144,19 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#111827",
     marginBottom: 16,
+  },
+  biometricButton: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#2563EB",
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  biometricButtonText: {
+    color: "#2563EB",
+    fontWeight: "600",
   },
   input: {
     borderWidth: 1,

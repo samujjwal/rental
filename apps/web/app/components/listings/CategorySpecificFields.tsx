@@ -1,19 +1,22 @@
 /**
  * Dynamic form fields that change based on the selected category.
  * Renders input controls (text, number, select, boolean, multiselect) from
- * the category field definitions in ~/lib/category-fields.ts.
+ * server-provided category field definitions.
+ * The parent route is responsible for fetching CategoryField[] from the API.
  */
 
 import { useMemo } from "react";
 import {
-  getCategoryFields,
-  groupCategoryFields,
-  type CategoryField,
-} from "~/lib/category-fields";
+  groupCategoryFieldDefinitions,
+  type CategoryFieldDefinition as CategoryField,
+} from "~/lib/api/listings";
 
 interface CategorySpecificFieldsProps {
-  /** Current category slug (e.g. "car", "apartment", "clothing-costumes") */
-  categorySlug: string | undefined | null;
+  /** Pre-loaded field definitions for the selected category.
+   * Pass an empty array (or omit) when no category has been selected yet.
+   * The parent is responsible for fetching these from the API.
+   */
+  fields: CategoryField[];
   /** Current values keyed by field key */
   values: Record<string, unknown>;
   /** Called when a field value changes */
@@ -23,13 +26,12 @@ interface CategorySpecificFieldsProps {
 }
 
 export function CategorySpecificFields({
-  categorySlug,
+  fields,
   values,
   onChange,
   errors,
 }: CategorySpecificFieldsProps) {
-  const fields = useMemo(() => getCategoryFields(categorySlug), [categorySlug]);
-  const groups = useMemo(() => groupCategoryFields(fields), [fields]);
+  const groups = useMemo(() => groupCategoryFieldDefinitions(fields), [fields]);
 
   if (fields.length === 0) return null;
 

@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -52,7 +53,11 @@ vi.mock("~/lib/utils", () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(" "),
 }));
 
-import { clientLoader, clientAction } from "./organizations.new";
+import {
+  clientLoader,
+  clientAction,
+  getCreateOrganizationError,
+} from "./organizations.new";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -151,5 +156,92 @@ describe("clientAction", () => {
     const r = await clientAction({ request: actionRequest(fd) } as any);
     // Should redirect to the new org page
     expect(r).toBeInstanceOf(Response);
+  });
+
+  it("preserves backend validation messages", async () => {
+    mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+    mocks.createOrganization.mockRejectedValue({
+      response: { data: { message: "Organization slug already exists" } },
+    });
+    const fd = buildFormData({
+      intent: "create-organization",
+      name: "Good Org",
+      businessType: "LLC",
+      email: "org@test.com",
+    });
+    const r = (await clientAction({ request: actionRequest(fd) } as any)) as any;
+    expect(r.error).toBe("Organization slug already exists");
+  });
+
+  it("uses actionable offline copy on request failure", async () => {
+    mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+    mocks.createOrganization.mockRejectedValue(new Error("Network Error"));
+    const online = window.navigator.onLine;
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    const fd = buildFormData({
+      intent: "create-organization",
+      name: "Good Org",
+      businessType: "LLC",
+      email: "org@test.com",
+    });
+    const r = (await clientAction({ request: actionRequest(fd) } as any)) as any;
+    expect(r.error).toBe(
+      "You appear to be offline. Reconnect and try creating the organization again."
+    );
+
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: online,
+    });
+  });
+
+  it("uses timeout-specific copy on request failure", async () => {
+    mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+    mocks.createOrganization.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const fd = buildFormData({
+      intent: "create-organization",
+      name: "Good Org",
+      businessType: "LLC",
+      email: "org@test.com",
+    });
+    const r = (await clientAction({ request: actionRequest(fd) } as any)) as any;
+    expect(r.error).toBe("Creating the organization is taking too long. Try again.");
+  });
+
+  it("uses conflict-specific copy without a backend message", async () => {
+    mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+    mocks.createOrganization.mockRejectedValue(
+      new AxiosError("Conflict", undefined, undefined, undefined, {
+        status: 409,
+        statusText: "Conflict",
+        headers: {},
+        config: { headers: {} } as any,
+        data: {},
+      } as any)
+    );
+
+    const fd = buildFormData({
+      intent: "create-organization",
+      name: "Good Org",
+      businessType: "LLC",
+      email: "org@test.com",
+    });
+    const r = (await clientAction({ request: actionRequest(fd) } as any)) as any;
+    expect(r.error).toBe(
+      "An organization with these details already exists. Review the form and try again."
+    );
+  });
+});
+
+describe("getCreateOrganizationError", () => {
+  it("preserves plain thrown errors", () => {
+    expect(getCreateOrganizationError(new Error("Permission denied"), "fallback")).toBe(
+      "Permission denied"
+    );
   });
 });

@@ -27,6 +27,7 @@ vi.mock("react-router", () => ({
 }));
 
 const mockApiGet = vi.fn();
+const mockFetch = vi.fn();
 vi.mock("~/lib/api-client", () => ({
   api: { get: (...args: any[]) => mockApiGet(...args) },
 }));
@@ -58,11 +59,45 @@ function makeRequest(url = "http://localhost/test", cookie?: string) {
   return new Request(url, { headers });
 }
 
+async function withoutBrowserGlobals<T>(callback: () => Promise<T>): Promise<T> {
+  const descriptors = {
+    window: Object.getOwnPropertyDescriptor(globalThis, "window"),
+    document: Object.getOwnPropertyDescriptor(globalThis, "document"),
+    navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator"),
+  };
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: undefined,
+  });
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: undefined,
+  });
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: undefined,
+  });
+
+  try {
+    return await callback();
+  } finally {
+    for (const [key, descriptor] of Object.entries(descriptors)) {
+      if (descriptor) {
+        Object.defineProperty(globalThis, key, descriptor);
+      } else {
+        delete (globalThis as Record<string, unknown>)[key];
+      }
+    }
+  }
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe("auth utils", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("fetch", mockFetch);
     // Default: getSession returns an empty session
     mockGetSession.mockResolvedValue(makeSession());
     mockCommitSession.mockResolvedValue("session-cookie");
@@ -132,25 +167,39 @@ describe("auth utils", () => {
       mockGetSession.mockResolvedValue(
         makeSession({ accessToken: "tok", refreshToken: "ref" })
       );
-      mockApiGet.mockResolvedValue({
-        id: "u1",
-        name: "Test",
-        role: "ADMIN",
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          id: "u1",
+          name: "Test",
+          role: "ADMIN",
+        }),
       });
 
       const auth = await loadAuth();
-      const user = await auth.getUser(makeRequest());
+      const user = await withoutBrowserGlobals(() => auth.getUser(makeRequest()));
       expect(user).toMatchObject({ id: "u1", name: "Test", role: "admin" });
+      expect(mockFetch).toHaveBeenCalledWith("http://localhost:3400/api/auth/me", {
+        headers: {
+          Authorization: "Bearer tok",
+          "Content-Type": "application/json",
+        },
+      });
     });
 
     it("normalizes HOST role to owner", async () => {
       mockGetSession.mockResolvedValue(
         makeSession({ accessToken: "tok" })
       );
-      mockApiGet.mockResolvedValue({ id: "u2", role: "HOST" });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ id: "u2", role: "HOST" }),
+      });
 
       const auth = await loadAuth();
-      const user = await auth.getUser(makeRequest());
+      const user = await withoutBrowserGlobals(() => auth.getUser(makeRequest()));
       expect(user?.role).toBe("owner");
     });
 
@@ -158,10 +207,14 @@ describe("auth utils", () => {
       mockGetSession.mockResolvedValue(
         makeSession({ accessToken: "tok" })
       );
-      mockApiGet.mockResolvedValue({ id: "u3", role: "USER" });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ id: "u3", role: "USER" }),
+      });
 
       const auth = await loadAuth();
-      const user = await auth.getUser(makeRequest());
+      const user = await withoutBrowserGlobals(() => auth.getUser(makeRequest()));
       expect(user?.role).toBe("renter");
     });
 
@@ -169,10 +222,10 @@ describe("auth utils", () => {
       mockGetSession.mockResolvedValue(
         makeSession({ accessToken: "tok" })
       );
-      mockApiGet.mockRejectedValue({ response: { status: 401 } });
+      mockFetch.mockResolvedValue({ ok: false, status: 401 });
 
       const auth = await loadAuth();
-      const user = await auth.getUser(makeRequest());
+      const user = await withoutBrowserGlobals(() => auth.getUser(makeRequest()));
       expect(user).toBeNull();
     });
 
@@ -180,10 +233,10 @@ describe("auth utils", () => {
       mockGetSession.mockResolvedValue(
         makeSession({ accessToken: "tok" })
       );
-      mockApiGet.mockRejectedValue(new Error("network"));
+      mockFetch.mockRejectedValue(new Error("network"));
 
       const auth = await loadAuth();
-      const user = await auth.getUser(makeRequest());
+      const user = await withoutBrowserGlobals(() => auth.getUser(makeRequest()));
       expect(user).toBeNull();
     });
   });
@@ -214,10 +267,14 @@ describe("auth utils", () => {
       mockGetSession.mockResolvedValue(
         makeSession({ accessToken: "tok" })
       );
-      mockApiGet.mockResolvedValue({ id: "u1", role: "OWNER" });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ id: "u1", role: "OWNER" }),
+      });
 
       const auth = await loadAuth();
-      const user = await auth.requireUser(makeRequest());
+      const user = await withoutBrowserGlobals(() => auth.requireUser(makeRequest()));
       expect(user).toMatchObject({ id: "u1", role: "owner" });
     });
 
@@ -240,10 +297,14 @@ describe("auth utils", () => {
       mockGetSession.mockResolvedValue(
         makeSession({ accessToken: "tok" })
       );
-      mockApiGet.mockResolvedValue({ id: "a1", role: "ADMIN" });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ id: "a1", role: "ADMIN" }),
+      });
 
       const auth = await loadAuth();
-      const user = await auth.requireAdmin(makeRequest());
+      const user = await withoutBrowserGlobals(() => auth.requireAdmin(makeRequest()));
       expect(user.role).toBe("admin");
     });
 
@@ -251,11 +312,15 @@ describe("auth utils", () => {
       mockGetSession.mockResolvedValue(
         makeSession({ accessToken: "tok" })
       );
-      mockApiGet.mockResolvedValue({ id: "u1", role: "USER" });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ id: "u1", role: "USER" }),
+      });
 
       const auth = await loadAuth();
       try {
-        await auth.requireAdmin(makeRequest());
+        await withoutBrowserGlobals(() => auth.requireAdmin(makeRequest()));
         expect.fail("should have thrown");
       } catch (e) {
         const resp = e as Response;

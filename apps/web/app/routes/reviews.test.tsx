@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -22,6 +23,7 @@ vi.mock("react-router", () => ({
   useLoaderData: () => ({}),
   useSearchParams: () => [new URLSearchParams(), vi.fn()],
   useActionData: () => null,
+  useRevalidator: () => ({ revalidate: vi.fn() }),
 }));
 vi.mock("~/utils/auth", () => ({ getUser: (...a: any[]) => mocks.getUser(...a) }));
 vi.mock("~/lib/api/reviews", () => ({
@@ -39,6 +41,11 @@ vi.mock("~/components/ui", () => ({
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
   UnifiedButton: ({ children, ...p }: any) => <button {...p}>{children}</button>,
 }));
+vi.mock("~/components/ui/empty-state", () => ({
+  EmptyStatePresets: {
+    NoReviewsFiltered: () => <div data-testid="empty-reviews-filtered" />,
+  },
+}));
 vi.mock("~/components/ui/skeleton", () => ({
   Skeleton: () => <div />,
 }));
@@ -55,7 +62,7 @@ function makeFormReq(fields: Record<string, string>, url = "http://localhost/rev
   } as unknown as Request;
 }
 
-import { clientLoader, clientAction } from "./reviews";
+import { clientLoader, clientAction, getReviewsError } from "./reviews";
 
 const authUser = { id: "u1", email: "u@test.com", role: "renter" };
 const mockReviews = [
@@ -173,6 +180,19 @@ describe("clientLoader", () => {
     expect(r.reviews).toEqual([]);
     expect(r.error).toBeTruthy();
   });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getUserReviews.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = (await clientLoader({ request: new Request("http://localhost/reviews") } as any)) as any;
+
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
 });
 
 /* ================================================================== */
@@ -223,5 +243,25 @@ describe("clientAction", () => {
     } as any);
     expect((r as any).success).toBe(false);
     expect((r as any).message).toBe("Not found");
+  });
+
+  it("uses actionable offline copy on delete failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.deleteReview.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "delete", reviewId: validId, view: "given" }),
+    } as any);
+
+    expect((r as any).success).toBe(false);
+    expect((r as any).message).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getReviewsError(new Error("reviews unavailable"), "fallback")).toBe("reviews unavailable");
   });
 });

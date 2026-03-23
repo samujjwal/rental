@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AxiosError } from "axios";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
 const m = vi.hoisted(() => ({
@@ -40,7 +41,7 @@ vi.mock("lucide-react", () => ({
   AlertTriangle: IconStub, RefreshCw: IconStub,
 }));
 
-import { clientLoader, clientAction } from "../system/backups";
+import { clientLoader, clientAction, getAdminBackupsError } from "../system/backups";
 
 function form(fields: Record<string, string>) {
   const fd = new FormData();
@@ -69,6 +70,16 @@ describe("admin/system/backups", () => {
       const res = await clientLoader({ request: new Request("http://l/") } as any);
       expect(res.backups).toEqual([]);
       expect(res.error).toBe("fail");
+    });
+
+    it("returns actionable offline loader copy", async () => {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.getBackups.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+      const res = await clientLoader({ request: new Request("http://l/") } as any);
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
     });
   });
 
@@ -140,7 +151,26 @@ describe("admin/system/backups", () => {
         request: form({ intent: "restore", backupId: VALID_UUID, confirmed: "true" }),
       } as any);
       expect(res.success).toBe(false);
-      expect(res.error).toMatch(/restore/i);
+      expect(res.error).toBe("oops");
+    });
+
+    it("returns actionable offline action copy", async () => {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.createBackup.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+      const res = await clientAction({ request: form({ intent: "create", type: "full" }) } as any);
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+    });
+  });
+
+  describe("error helper", () => {
+    it("preserves backend response messages", () => {
+      expect(
+        getAdminBackupsError({ response: { data: { message: "Quota exceeded" } } }, "Failed to create backup")
+      ).toBe("Quota exceeded");
     });
   });
 });

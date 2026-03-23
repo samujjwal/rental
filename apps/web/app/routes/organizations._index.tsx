@@ -7,10 +7,18 @@ import { organizationsApi } from "~/lib/api/organizations";
 import type { Organization } from "~/lib/api/organizations";
 import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 const ORG_CREATE_PATH = "/organizations/create";
 
 export const ErrorBoundary = RouteErrorBoundary;
+
+export function getOrganizationsIndexLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load organizations", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading organizations timed out. Try again.",
+  });
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -27,10 +35,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       organizations: [],
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load organizations",
+      error: getOrganizationsIndexLoadError(error),
     };
   }
 }

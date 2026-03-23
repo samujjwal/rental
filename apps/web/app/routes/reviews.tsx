@@ -1,5 +1,5 @@
 import type { MetaFunction } from "react-router";
-import { useLoaderData, Link, useSearchParams, useActionData, redirect } from "react-router";
+import { useLoaderData, Link, useSearchParams, useActionData, useRevalidator, redirect } from "react-router";
 import {
   Star,
   User,
@@ -18,9 +18,11 @@ import {
   RouteErrorBoundary,
 } from "~/components/ui";
 import { UnifiedButton } from "~/components/ui";
+import { EmptyStatePresets } from "~/components/ui/empty-state";
 import { cn } from "~/lib/utils";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 import type { Review } from "~/types/review";
 import type { ReviewListResponse } from "~/types/review";
@@ -55,6 +57,13 @@ const EMPTY_STATS = {
   ratings: EMPTY_RATINGS,
   pending: 0,
 };
+
+export function getReviewsError(error: unknown, fallbackMessage: string): string {
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Review request timed out. Try again.",
+  });
+}
 const buildFallbackStats = (reviews: Review[], total: number) => ({
   total,
   averageRating: reviews.length > 0
@@ -167,10 +176,7 @@ export async function clientLoader({ request }: { request: Request }) {
       statsScope: "unavailable" as const,
       statsAvailable: false,
       view,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load reviews",
+      error: getReviewsError(error, "Failed to load reviews"),
       page: 1,
       total: 0,
       limit: 10,
@@ -206,10 +212,7 @@ export async function clientAction({ request }: { request: Request }) {
   } catch (error: unknown) {
     return {
       success: false,
-      message:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Action failed",
+      message: getReviewsError(error, "Action failed"),
     };
   }
 }
@@ -347,8 +350,15 @@ export default function ReviewsPage() {
   } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const revalidator = useRevalidator();
 
   const currentRating = searchParams.get("rating");
+  const clearFilters = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("rating");
+    params.delete("page");
+    setSearchParams(params);
+  };
 
   const handleViewChange = (newView: string) => {
     const params = new URLSearchParams(searchParams);
@@ -395,23 +405,28 @@ export default function ReviewsPage() {
         })
       : resultsLabel;
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page header */}
         <h1 className="text-2xl font-bold text-foreground mb-6">{t("reviews.title")}</h1>
+        {error && (
+          <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-destructive">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <span>{error}</span>
+              <div className="flex items-center gap-2">
+                <UnifiedButton variant="outline" onClick={() => revalidator.revalidate()}>
+                  {t("errors.tryAgain", "Try Again")}
+                </UnifiedButton>
+                {currentRating ? (
+                  <UnifiedButton variant="ghost" onClick={clearFilters}>
+                    {t("search.clearFilters", "Clear filter")}
+                  </UnifiedButton>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
         {/* Success/Error Messages */}
         {actionData?.success && (
           <div className="mb-6 p-4 bg-success/10 border border-success/30 rounded-lg flex items-center gap-2 text-success">
@@ -552,17 +567,26 @@ export default function ReviewsPage() {
             ))
           ) : (
             <Card>
-              <CardContent className="p-12 text-center">
-                <Star className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">{t("reviews.noReviews")}</h3>
-                <p className="text-muted-foreground mb-4">
-                  {view === "received"
-                    ? t("reviews.noReceivedReviewsDesc")
-                    : t("reviews.noGivenReviewsDesc")}
-                </p>
-                <Link to="/bookings">
-                  <UnifiedButton>{t("reviews.viewBookings")}</UnifiedButton>
-                </Link>
+              <CardContent className="p-6">
+                {currentRating ? (
+                  <EmptyStatePresets.NoReviewsFiltered
+                    filterLabel={t("reviews.ratingFilterLabel", "{{rating}}-star reviews", { rating: currentRating })}
+                    onClearFilter={clearFilters}
+                  />
+                ) : (
+                  <div className="p-12 text-center">
+                    <Star className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-foreground mb-2">{t("reviews.noReviews")}</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {view === "received"
+                        ? t("reviews.noReceivedReviewsDesc")
+                        : t("reviews.noGivenReviewsDesc")}
+                    </p>
+                    <Link to="/bookings">
+                      <UnifiedButton>{t("reviews.viewBookings")}</UnifiedButton>
+                    </Link>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -55,6 +56,9 @@ vi.mock("~/lib/api/auth", () => ({
 }));
 
 vi.mock("~/components/ui", () => ({
+  UnifiedButton: ({ children, loading, ...p }: { children: ReactNode; loading?: boolean; [k: string]: unknown }) => (
+    <button {...(p as Record<string, unknown>)}>{loading ? <span data-testid="loading-spinner" /> : null}{children}</button>
+  ),
   RouteErrorBoundary: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
@@ -73,7 +77,7 @@ vi.mock("react-i18next", () => ({
 /* ------------------------------------------------------------------ */
 /*  Import route under test                                            */
 /* ------------------------------------------------------------------ */
-import { clientLoader } from "./settings.security";
+import { clientLoader, clientAction } from "./settings.security";
 import SettingsSecurityPage from "./settings.security";
 
 const authUser = { id: "u1", email: "security@test.com", role: "renter" };
@@ -97,6 +101,96 @@ describe("settings.security — clientLoader", () => {
     const req = { headers: new Headers() } as unknown as Request;
     const result = await clientLoader({ request: req, params: {}, context: {} } as Parameters<typeof clientLoader>[0]);
     expect(result).toEqual({ user: authUser });
+  });
+});
+
+describe("settings.security — clientAction", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns validation error when fields are missing", async () => {
+    (mocks.getUser as ReturnType<typeof vi.fn>).mockResolvedValueOnce(authUser);
+    const result = await clientAction({
+      request: { formData: async () => new FormData() } as unknown as Request,
+      params: {},
+      context: {},
+    } as Parameters<typeof clientAction>[0]);
+    expect(result).toEqual({ error: "All fields are required." });
+  });
+
+  it("preserves backend response messages", async () => {
+    (mocks.getUser as ReturnType<typeof vi.fn>).mockResolvedValueOnce(authUser);
+    const { authApi } = await import("~/lib/api/auth");
+    vi.mocked(authApi.changePassword).mockRejectedValueOnce({
+      response: { data: { message: "Current password is incorrect" } },
+    });
+    const fd = new FormData();
+    fd.set("currentPassword", "old-password");
+    fd.set("newPassword", "new-password-123");
+    fd.set("confirmPassword", "new-password-123");
+    const result = await clientAction({
+      request: { formData: async () => fd } as unknown as Request,
+      params: {},
+      context: {},
+    } as Parameters<typeof clientAction>[0]);
+    expect(result).toEqual({ error: "Current password is incorrect" });
+  });
+
+  it("uses actionable offline copy for transport failures", async () => {
+    Object.defineProperty(window.navigator, "onLine", { configurable: true, value: false });
+    (mocks.getUser as ReturnType<typeof vi.fn>).mockResolvedValueOnce(authUser);
+    const { authApi } = await import("~/lib/api/auth");
+    vi.mocked(authApi.changePassword).mockRejectedValueOnce(new AxiosError("Network Error", "ERR_NETWORK"));
+    const fd = new FormData();
+    fd.set("currentPassword", "old-password");
+    fd.set("newPassword", "new-password-123");
+    fd.set("confirmPassword", "new-password-123");
+    const result = await clientAction({
+      request: { formData: async () => fd } as unknown as Request,
+      params: {},
+      context: {},
+    } as Parameters<typeof clientAction>[0]);
+    expect(result).toEqual({ error: "You appear to be offline. Reconnect and try again." });
+    Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
+  });
+
+  it("uses timeout-specific copy for stalled password changes", async () => {
+    (mocks.getUser as ReturnType<typeof vi.fn>).mockResolvedValueOnce(authUser);
+    const { authApi } = await import("~/lib/api/auth");
+    vi.mocked(authApi.changePassword).mockRejectedValueOnce(new AxiosError("timeout", "ECONNABORTED"));
+    const fd = new FormData();
+    fd.set("currentPassword", "old-password");
+    fd.set("newPassword", "new-password-123");
+    fd.set("confirmPassword", "new-password-123");
+    const result = await clientAction({
+      request: { formData: async () => fd } as unknown as Request,
+      params: {},
+      context: {},
+    } as Parameters<typeof clientAction>[0]);
+    expect(result).toEqual({ error: "Changing your password timed out. Try again." });
+  });
+
+  it("uses conflict-specific copy without a backend message", async () => {
+    (mocks.getUser as ReturnType<typeof vi.fn>).mockResolvedValueOnce(authUser);
+    const { authApi } = await import("~/lib/api/auth");
+    vi.mocked(authApi.changePassword).mockRejectedValueOnce(
+      new AxiosError("Conflict", undefined, undefined, undefined, {
+        status: 409,
+        statusText: "Conflict",
+        headers: {},
+        config: { headers: {} } as any,
+        data: {},
+      } as any)
+    );
+    const fd = new FormData();
+    fd.set("currentPassword", "old-password");
+    fd.set("newPassword", "new-password-123");
+    fd.set("confirmPassword", "new-password-123");
+    const result = await clientAction({
+      request: { formData: async () => fd } as unknown as Request,
+      params: {},
+      context: {},
+    } as Parameters<typeof clientAction>[0]);
+    expect(result).toEqual({ error: "Your password state changed elsewhere. Refresh and try again." });
   });
 });
 
@@ -164,6 +258,21 @@ describe("SettingsSecurityPage", () => {
     });
     render(<SettingsSecurityPage />);
     expect(screen.getByText("Passwords do not match.")).toBeInTheDocument();
+  });
+
+  it("associates password update errors with the password fields", () => {
+    (mocks.useActionData as ReturnType<typeof vi.fn>).mockReturnValue({
+      error: "Passwords do not match.",
+    });
+    render(<SettingsSecurityPage />);
+    expect(screen.getByLabelText("Current Password")).toHaveAttribute(
+      "aria-describedby",
+      "security-settings-password-error"
+    );
+    expect(screen.getByLabelText("Confirm New Password")).toHaveAttribute(
+      "aria-describedby",
+      "security-settings-password-error"
+    );
   });
 
   it("shows loading state while submitting", () => {

@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useLoaderData, Link, Form, useNavigation, useActionData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Database,
   RefreshCw,
@@ -16,9 +16,10 @@ import {
   Zap,
 } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary, Dialog, DialogFooter } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
 import { APP_LOCALE } from "~/config/locale";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -37,6 +38,24 @@ const humanizeWord = (value: unknown, fallback = "Unknown"): string => {
   return safe.charAt(0).toUpperCase() + safe.slice(1);
 };
 
+export function getAdminDatabaseError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "The database request timed out. Try again.",
+    })
+  );
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -54,10 +73,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     return {
       health: null,
       dbInfo: null,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load database info",
+      error: getAdminDatabaseError(error, "Failed to load database info"),
     };
   }
 }
@@ -83,13 +99,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          (error &&
-            typeof error === "object" &&
-            "response" in error &&
-            (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message) ||
-          "Failed to run vacuum",
+        error: getAdminDatabaseError(error, "Failed to run vacuum"),
       };
     }
   }
@@ -101,13 +111,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          (error &&
-            typeof error === "object" &&
-            "response" in error &&
-            (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message) ||
-          "Failed to run analysis",
+        error: getAdminDatabaseError(error, "Failed to run analysis"),
       };
     }
   }
@@ -119,13 +123,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          (error &&
-            typeof error === "object" &&
-            "response" in error &&
-            (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message) ||
-          "Failed to clear cache",
+        error: getAdminDatabaseError(error, "Failed to clear cache"),
       };
     }
   }
@@ -148,6 +146,7 @@ export default function DatabasePage() {
   const { health, dbInfo, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const [showConfirm, setShowConfirm] = useState<string | null>(null);
 
   const isSubmitting = navigation.state === "submitting";
@@ -157,12 +156,21 @@ export default function DatabasePage() {
   const actionError =
     typeof actionData?.error === "string" ? actionData.error : null;
 
+  useEffect(() => {
+    if (actionData?.success) {
+      setShowConfirm(null);
+    }
+  }, [actionData]);
+
   if (error) {
     return (
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingDbInfo")}</h3>
           <p className="text-red-600">{error}</p>
+          <UnifiedButton className="mt-4" variant="outline" onClick={() => revalidator.revalidate()}>
+            {t("common.retry", "Retry")}
+          </UnifiedButton>
         </div>
       </div>
     );
@@ -321,42 +329,14 @@ export default function DatabasePage() {
             <p className="text-sm text-gray-600 mb-4">
               {t("admin.vacuumDesc")}
             </p>
-            {showConfirm === "vacuum" ? (
-              <div className="flex items-center gap-2">
-                <Form method="post">
-                  <input type="hidden" name="intent" value="vacuum" />
-                  <input type="hidden" name="confirmed" value="true" />
-                  <UnifiedButton
-                    type="submit"
-                    size="sm"
-                    variant="primary"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting && formIntent === "vacuum" ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      t("admin.confirm")
-                    )}
-                  </UnifiedButton>
-                </Form>
-                <UnifiedButton
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowConfirm(null)}
-                >
-                  {t("admin.cancel")}
-                </UnifiedButton>
-              </div>
-            ) : (
-              <UnifiedButton
-                variant="outline"
-                onClick={() => setShowConfirm("vacuum")}
-                className="w-full"
-              >
-                <Zap className="w-4 h-4 mr-2" />
-                {t("admin.runVacuum")}
-              </UnifiedButton>
-            )}
+            <UnifiedButton
+              variant="outline"
+              onClick={() => setShowConfirm("vacuum")}
+              className="w-full"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              {t("admin.runVacuum")}
+            </UnifiedButton>
           </div>
 
           {/* Analyze */}
@@ -368,42 +348,14 @@ export default function DatabasePage() {
             <p className="text-sm text-gray-600 mb-4">
               {t("admin.analyzeDesc")}
             </p>
-            {showConfirm === "analyze" ? (
-              <div className="flex items-center gap-2">
-                <Form method="post">
-                  <input type="hidden" name="intent" value="analyze" />
-                  <input type="hidden" name="confirmed" value="true" />
-                  <UnifiedButton
-                    type="submit"
-                    size="sm"
-                    variant="primary"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting && formIntent === "analyze" ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      t("admin.confirm")
-                    )}
-                  </UnifiedButton>
-                </Form>
-                <UnifiedButton
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowConfirm(null)}
-                >
-                  {t("admin.cancel")}
-                </UnifiedButton>
-              </div>
-            ) : (
-              <UnifiedButton
-                variant="outline"
-                onClick={() => setShowConfirm("analyze")}
-                className="w-full"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                {t("admin.runAnalyze")}
-              </UnifiedButton>
-            )}
+            <UnifiedButton
+              variant="outline"
+              onClick={() => setShowConfirm("analyze")}
+              className="w-full"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              {t("admin.runAnalyze")}
+            </UnifiedButton>
           </div>
 
           {/* Clear Cache */}
@@ -415,45 +367,66 @@ export default function DatabasePage() {
             <p className="text-sm text-gray-600 mb-4">
               {t("admin.clearCacheDesc")}
             </p>
-            {showConfirm === "clearCache" ? (
-              <div className="flex items-center gap-2">
-                <Form method="post">
-                  <input type="hidden" name="intent" value="clearCache" />
-                  <input type="hidden" name="confirmed" value="true" />
-                  <UnifiedButton
-                    type="submit"
-                    size="sm"
-                    variant="destructive"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting && formIntent === "clearCache" ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      t("admin.confirm")
-                    )}
-                  </UnifiedButton>
-                </Form>
-                <UnifiedButton
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowConfirm(null)}
-                >
-                  {t("admin.cancel")}
-                </UnifiedButton>
-              </div>
-            ) : (
-              <UnifiedButton
-                variant="destructive"
-                onClick={() => setShowConfirm("clearCache")}
-                className="w-full"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                {t("admin.clearCacheLabel")}
-              </UnifiedButton>
-            )}
+            <UnifiedButton
+              variant="destructive"
+              onClick={() => setShowConfirm("clearCache")}
+              className="w-full"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              {t("admin.clearCacheLabel")}
+            </UnifiedButton>
           </div>
         </div>
       </div>
+
+      <Dialog
+        open={showConfirm !== null}
+        onClose={() => {
+          if (!isSubmitting) {
+            setShowConfirm(null);
+          }
+        }}
+        title={
+          showConfirm === "vacuum"
+            ? t("admin.vacuumDatabase")
+            : showConfirm === "analyze"
+              ? t("admin.analyzeTables")
+              : t("admin.clearCacheLabel")
+        }
+        description={
+          showConfirm === "vacuum"
+            ? t("admin.vacuumDesc")
+            : showConfirm === "analyze"
+              ? t("admin.analyzeDesc")
+              : t("admin.clearCacheDesc")
+        }
+      >
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+          {t("admin.maintenanceCaution")}
+        </div>
+        <Form method="post">
+          <input type="hidden" name="intent" value={showConfirm ?? ""} />
+          <input type="hidden" name="confirmed" value="true" />
+          <DialogFooter>
+            <UnifiedButton
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirm(null)}
+              disabled={isSubmitting}
+            >
+              {t("admin.cancel")}
+            </UnifiedButton>
+            <UnifiedButton
+              type="submit"
+              variant={showConfirm === "clearCache" ? "destructive" : "primary"}
+              loading={isSubmitting && !!showConfirm}
+              disabled={isSubmitting || !showConfirm}
+            >
+              {t("admin.confirm")}
+            </UnifiedButton>
+          </DialogFooter>
+        </Form>
+      </Dialog>
 
       {/* Connection Info */}
       {dbInfo && (

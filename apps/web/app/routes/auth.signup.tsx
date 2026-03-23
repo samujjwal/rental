@@ -13,6 +13,7 @@ import { APP_PHONE_PLACEHOLDER } from "~/config/locale";
 import { cn } from "~/lib/utils";
 import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { getUser } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -20,6 +21,45 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "Create a new account" },
   ];
 };
+
+export function getSignupError(
+  error: unknown,
+  fallbackMessage = "Registration failed. Please try again."
+): string {
+  const hasTransportContext = Boolean(
+    error &&
+      typeof error === "object" &&
+      ("response" in error || "code" in error || "isAxiosError" in error)
+  );
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try creating your account again.";
+  }
+
+  if (hasTransportContext) {
+    return getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.CONFLICT]: "An account with these details already exists. Review the form and try again.",
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try creating your account again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Account creation timed out. Try again.",
+    });
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallbackMessage;
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -91,14 +131,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       redirectTo: "/dashboard",
     });
   } catch (error: unknown) {
-    return {
-      error:
-        error && typeof error === "object" && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message ||
-            "Registration failed. Please try again."
-          : "Registration failed. Please try again.",
-    };
+    return { error: getSignupError(error) };
   }
 }
 
@@ -143,6 +176,15 @@ export default function Signup() {
   };
 
   const passwordStrength = getPasswordStrength(password);
+  const actionErrorId = actionData?.error ? "signup-form-error" : undefined;
+  const roleErrorId = errors.role ? "signup-role-error" : undefined;
+  const firstNameErrorId = errors.firstName ? "signup-first-name-error" : undefined;
+  const lastNameErrorId = errors.lastName ? "signup-last-name-error" : undefined;
+  const emailErrorId = errors.email ? "signup-email-error" : undefined;
+  const phoneErrorId = errors.phone ? "signup-phone-error" : undefined;
+  const passwordStrengthId = password ? "signup-password-strength" : undefined;
+  const passwordErrorId = errors.password ? "signup-password-error" : undefined;
+  const confirmPasswordErrorId = errors.confirmPassword ? "signup-confirm-password-error" : undefined;
 
   const inputClasses = cn(
     "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
@@ -179,7 +221,7 @@ export default function Signup() {
             {/* Error Message */}
             {actionData?.error && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <p className="text-sm text-destructive">{actionData.error}</p>
+                <p id="signup-form-error" className="text-sm text-destructive">{actionData.error}</p>
               </div>
             )}
 
@@ -194,6 +236,8 @@ export default function Signup() {
                     {...register("role")}
                     type="radio"
                     value="renter"
+                    aria-invalid={!!errors.role}
+                    aria-describedby={roleErrorId || actionErrorId}
                     className="sr-only"
                   />
                   <span className="text-sm font-medium">{t('auth.signup.rentItems', 'Rent items')}</span>
@@ -203,13 +247,15 @@ export default function Signup() {
                     {...register("role")}
                     type="radio"
                     value="owner"
+                    aria-invalid={!!errors.role}
+                    aria-describedby={roleErrorId || actionErrorId}
                     className="sr-only"
                   />
                   <span className="text-sm font-medium">{t('auth.signup.listItems', 'List items')}</span>
                 </label>
               </div>
               {errors.role && (
-                <p className="text-sm text-destructive">
+                <p id="signup-role-error" className="text-sm text-destructive">
                   {errors.role.message}
                 </p>
               )}
@@ -230,11 +276,13 @@ export default function Signup() {
                   id="firstName"
                   name="firstName"
                   maxLength={50}
+                  aria-invalid={!!errors.firstName}
+                  aria-describedby={firstNameErrorId || actionErrorId}
                   className={inputClasses}
                   placeholder="Ram"
                 />
                 {errors.firstName && (
-                  <p className="text-sm text-destructive">
+                  <p id="signup-first-name-error" className="text-sm text-destructive">
                     {errors.firstName.message}
                   </p>
                 )}
@@ -252,11 +300,13 @@ export default function Signup() {
                   id="lastName"
                   name="lastName"
                   maxLength={50}
+                  aria-invalid={!!errors.lastName}
+                  aria-describedby={lastNameErrorId || actionErrorId}
                   className={inputClasses}
                   placeholder="Sharma"
                 />
                 {errors.lastName && (
-                  <p className="text-sm text-destructive">
+                  <p id="signup-last-name-error" className="text-sm text-destructive">
                     {errors.lastName.message}
                   </p>
                 )}
@@ -277,11 +327,13 @@ export default function Signup() {
                 id="email"
                 name="email"
                 maxLength={320}
+                aria-invalid={!!errors.email}
+                aria-describedby={emailErrorId || actionErrorId}
                 className={inputClasses}
                 placeholder="you@example.com"
               />
               {errors.email && (
-                <p className="text-sm text-destructive">
+                <p id="signup-email-error" className="text-sm text-destructive">
                   {errors.email.message}
                 </p>
               )}
@@ -301,11 +353,13 @@ export default function Signup() {
                 id="phone"
                 name="phone"
                 maxLength={20}
+                aria-invalid={!!errors.phone}
+                aria-describedby={phoneErrorId || actionErrorId}
                 className={inputClasses}
                 placeholder={APP_PHONE_PLACEHOLDER}
               />
               {errors.phone && (
-                <p className="text-sm text-destructive">
+                <p id="signup-phone-error" className="text-sm text-destructive">
                   {errors.phone.message}
                 </p>
               )}
@@ -326,6 +380,10 @@ export default function Signup() {
                   id="password"
                   name="password"
                   maxLength={128}
+                  aria-invalid={!!errors.password}
+                  aria-describedby={
+                    [passwordStrengthId, passwordErrorId, actionErrorId].filter(Boolean).join(" ") || undefined
+                  }
                   className={cn(inputClasses, "pr-10")}
                   placeholder="••••••••"
                 />
@@ -345,7 +403,7 @@ export default function Signup() {
 
               {/* Password Strength Indicator */}
               {password && (
-                <div className="mt-2">
+                  <div id="signup-password-strength" className="mt-2">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs text-muted-foreground">
                       {t('auth.signup.passwordStrength', 'Password strength:')}
@@ -381,7 +439,7 @@ export default function Signup() {
               )}
 
               {errors.password && (
-                <p className="text-sm text-destructive">
+                <p id="signup-password-error" className="text-sm text-destructive">
                   {errors.password.message}
                 </p>
               )}
@@ -402,6 +460,8 @@ export default function Signup() {
                   id="confirmPassword"
                   name="confirmPassword"
                   maxLength={128}
+                  aria-invalid={!!errors.confirmPassword}
+                  aria-describedby={confirmPasswordErrorId || actionErrorId}
                   className={cn(inputClasses, "pr-10")}
                   placeholder="••••••••"
                 />
@@ -419,7 +479,7 @@ export default function Signup() {
                 </button>
               </div>
               {errors.confirmPassword && (
-                <p className="text-sm text-destructive">
+                <p id="signup-confirm-password-error" className="text-sm text-destructive">
                   {errors.confirmPassword.message}
                 </p>
               )}

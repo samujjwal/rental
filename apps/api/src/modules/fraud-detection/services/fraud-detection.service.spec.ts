@@ -3,6 +3,7 @@ import { FraudDetectionService, RiskLevel, FraudCheckResult } from './fraud-dete
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { EventsService } from '@/common/events/events.service';
+import { FxService } from '@/common/fx/fx.service';
 
 describe('FraudDetectionService', () => {
   let service: FraudDetectionService;
@@ -58,6 +59,13 @@ describe('FraudDetectionService', () => {
             emitBookingCreated: jest.fn(),
             emitBookingStatusChanged: jest.fn(),
             emitPaymentProcessed: jest.fn(),
+          },
+        },
+        {
+          provide: FxService,
+          useValue: {
+            convert: jest.fn((amount: number) => amount),
+            getExchangeRate: jest.fn().mockResolvedValue(1),
           },
         },
       ],

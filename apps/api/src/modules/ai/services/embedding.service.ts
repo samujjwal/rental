@@ -1,13 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import type { SemanticRankingPort } from '@/modules/search/ports/semantic-ranking.port';
 
 /**
  * Service for generating and managing vector embeddings for semantic search.
  * Uses OpenAI's text-embedding-3-small model (1536 dimensions).
+ *
+ * Implements SemanticRankingPort so the Search domain can consume embedding-backed
+ * semantic ranking without depending on this class directly.
  */
 @Injectable()
-export class EmbeddingService {
+export class EmbeddingService implements SemanticRankingPort {
   private readonly logger = new Logger(EmbeddingService.name);
   private readonly apiKey: string | undefined;
   private readonly embeddingModel = 'text-embedding-3-small';

@@ -1,5 +1,5 @@
 import type { MetaFunction } from "react-router";
-import { useLoaderData, Link, useSearchParams, redirect } from "react-router";
+import { useLoaderData, Link, useSearchParams, useRevalidator, redirect } from "react-router";
 import {
   AlertTriangle,
   Clock,
@@ -25,10 +25,12 @@ import {
   Pagination,
 } from "~/components/ui";
 import { UnifiedButton } from "~/components/ui";
+import { EmptyStatePresets } from "~/components/ui/empty-state";
 import { cn } from "~/lib/utils";
 import { StatCardSkeleton, Skeleton } from "~/components/ui/skeleton";
 import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -36,6 +38,13 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "View and manage your disputes" },
   ];
 };
+
+export function getDisputesListError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load disputes", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading disputes timed out. Try again.",
+  });
+}
 
 // Extended dispute interface with UI-specific properties
 interface DisputeExtended {
@@ -106,10 +115,7 @@ export async function clientLoader({ request }: { request: Request }) {
       stats: { total: 0, open: 0, inProgress: 0, resolved: 0 },
       page: 1,
       totalPages: 1,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load disputes",
+      error: getDisputesListError(error),
     };
   }
 }
@@ -230,8 +236,10 @@ export default function DisputesPage() {
   const { t } = useTranslation();
   const { disputes, stats, page, totalPages, error } = useLoaderData<typeof clientLoader>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const revalidator = useRevalidator();
 
   const currentStatus = searchParams.get("status");
+  const currentStatusLabel = currentStatus ? t(STATUS_CONFIG[currentStatus]?.label || currentStatus) : "";
 
   const handleStatusFilter = (status: string | null) => {
     const params = new URLSearchParams(searchParams);
@@ -250,17 +258,7 @@ export default function DisputesPage() {
     setSearchParams(params);
   };
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const clearFilters = () => setSearchParams(new URLSearchParams());
 
   return (
     <div className="min-h-screen bg-background">
@@ -277,6 +275,24 @@ export default function DisputesPage() {
             </UnifiedButton>
           </Link>
         </div>
+
+        {error ? (
+          <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <span>{error}</span>
+              <div className="flex items-center gap-2">
+                <UnifiedButton variant="outline" onClick={() => revalidator.revalidate()}>
+                  {t("errors.tryAgain", "Try Again")}
+                </UnifiedButton>
+                {currentStatus ? (
+                  <UnifiedButton variant="ghost" onClick={clearFilters}>
+                    {t("search.clearFilters", "Clear filter")}
+                  </UnifiedButton>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -343,17 +359,24 @@ export default function DisputesPage() {
             ))
           ) : (
             <Card>
-              <CardContent className="p-12 text-center">
-                <CheckCircle className="w-12 h-12 text-success mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">{t("disputes.empty")}</h3>
-                <p className="text-muted-foreground mb-4">
-                  {currentStatus
-                    ? t("disputes.noStatusDisputes", { status: t(STATUS_CONFIG[currentStatus]?.label || "") })
-                    : t("disputes.emptyDefaultDesc")}
-                </p>
-                <Link to="/bookings">
-                  <UnifiedButton variant="outline">{t("disputes.viewBookings")}</UnifiedButton>
-                </Link>
+              <CardContent className="p-6">
+                {currentStatus ? (
+                  <EmptyStatePresets.NoDisputesFiltered
+                    statusLabel={currentStatusLabel}
+                    onClearFilter={clearFilters}
+                  />
+                ) : (
+                  <div className="p-12 text-center">
+                    <CheckCircle className="w-12 h-12 text-success mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-foreground mb-2">{t("disputes.empty")}</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {t("disputes.emptyDefaultDesc")}
+                    </p>
+                    <Link to="/bookings">
+                      <UnifiedButton variant="outline">{t("disputes.viewBookings")}</UnifiedButton>
+                    </Link>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

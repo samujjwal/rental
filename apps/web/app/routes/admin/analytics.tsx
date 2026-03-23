@@ -9,6 +9,7 @@ import {
 import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { RouteErrorBoundary } from "~/components/ui";
 import { formatCurrency, formatNumber } from "~/lib/utils";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 const RANGE_OPTIONS: AnalyticsRange[] = ["7d", "30d", "90d", "365d"];
 
@@ -55,6 +56,13 @@ function AlertBanner({ severity, title, children, action }: { severity: "error" 
   );
 }
 
+export function getAdminAnalyticsLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load analytics", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading analytics timed out. Try again.",
+  });
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
   const url = new URL(request.url);
@@ -66,7 +74,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       analytics: null, range,
-      error: error && typeof error === "object" && "message" in error ? String((error as { message?: string }).message) : "Failed to load analytics",
+      error: getAdminAnalyticsLoadError(error),
     };
   }
 }

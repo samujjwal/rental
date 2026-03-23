@@ -6,9 +6,6 @@ import { getSession, sessionStorage as cookieSessionStorage } from "~/utils/auth
 import { RouteErrorBoundary } from "~/components/ui";
 import { useTranslation } from "react-i18next";
 
-const getRefreshToken = () =>
-  typeof window !== "undefined" ? null : null; // B-29: refresh token is now in httpOnly cookie
-
 async function performLogout() {
   // B-29: Refresh token is sent automatically via httpOnly cookie.
   // Call logout endpoint to clear the cookie server-side.

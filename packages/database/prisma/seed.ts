@@ -79,7 +79,21 @@ async function main() {
   console.log('🧹 Cleaning existing data...');
 
   // Phase 2 tables may not exist yet (no migration); skip gracefully
-  const safeDelete = async (fn: () => Promise<any>) => { try { await fn(); } catch (e: any) { if (e?.code !== 'P2021') throw e; } };
+  const safeDelete = async (fn: () => Promise<any>) => {
+    try {
+      await fn();
+    } catch (e: any) {
+      if (e?.code === 'P2021') {
+        return;
+      }
+
+      if (e instanceof TypeError && /deleteMany/.test(e.message)) {
+        return;
+      }
+
+      throw e;
+    }
+  };
   await safeDelete(() => prisma.bookingPriceBreakdown.deleteMany());
   await safeDelete(() => prisma.fxRateSnapshot.deleteMany());
   await safeDelete(() => prisma.availabilitySlot.deleteMany());
@@ -115,9 +129,11 @@ async function main() {
   await prisma.notification.deleteMany();
   await prisma.review.deleteMany();
   await prisma.booking.deleteMany();
+  await prisma.pricingRecommendation.deleteMany();
   await prisma.listing.deleteMany();
   await prisma.organizationMember.deleteMany();
   await prisma.organization.deleteMany();
+  await prisma.reputationScore.deleteMany();
   await prisma.category.deleteMany();
   await prisma.cancellationPolicy.deleteMany();
   await prisma.emailTemplate.deleteMany();

@@ -60,7 +60,15 @@ describe('AuthController', () => {
         },
         {
           provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue('test') },
+          useValue: {
+            get: jest.fn((key: string) => {
+              if (key === 'NODE_ENV') return 'development';
+              if (key === 'devLogin.enabled') return true;
+              if (key === 'devLogin.secret') return 'test-secret';
+              if (key === 'devLogin.allowedIps') return '';
+              return 'test';
+            }),
+          },
         },
       ],
     })

@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -28,6 +29,8 @@ const mocks: Record<string, any> = {
   }),
   useLoaderData: vi.fn(),
   useActionData: vi.fn(),
+  useNavigation: vi.fn(() => ({ state: "idle" })),
+  useRevalidator: vi.fn(() => ({ revalidate: vi.fn() })),
 };
 
 vi.mock("react-router", () => ({
@@ -36,6 +39,8 @@ vi.mock("react-router", () => ({
   redirect: (...a: any[]) => mocks.redirect(...a),
   useLoaderData: () => mocks.useLoaderData(),
   useActionData: () => mocks.useActionData(),
+  useNavigation: () => mocks.useNavigation(),
+  useRevalidator: () => mocks.useRevalidator(),
 }));
 vi.mock("~/utils/auth", () => ({
   getUser: (...a: any[]) => mocks.getUser(...a),
@@ -48,6 +53,9 @@ vi.mock("~/lib/api/notifications", () => ({
 }));
 vi.mock("~/components/ui", () => ({
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
+  UnifiedButton: ({ children, loading, ...p }: any) => (
+    <button {...p}>{loading ? <span data-testid="loading-spinner" /> : null}{children}</button>
+  ),
 }));
 
 /* ------------------------------------------------------------------ */
@@ -62,7 +70,7 @@ function makeFormReq(fields: Record<string, string>) {
 /* ------------------------------------------------------------------ */
 /*  Import route under test                                            */
 /* ------------------------------------------------------------------ */
-import { clientLoader, clientAction } from "./settings.notifications";
+import { clientLoader, clientAction, getSettingsNotificationsError } from "./settings.notifications";
 import NotificationSettings from "./settings.notifications";
 
 const authUser = { id: "u1", email: "u@test.com", role: "renter" };
@@ -118,6 +126,34 @@ describe("clientLoader", () => {
     } as any);
     expect((result as any).preferences).toEqual(defaultPrefs);
     expect((result as any).error).toBeTruthy();
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getPreferences.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const result = await clientLoader({
+      request: new Request("http://localhost/settings/notifications"),
+      params: {},
+    } as any);
+
+    expect((result as any).error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("uses timeout-specific copy on loader failure", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getPreferences.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const result = await clientLoader({
+      request: new Request("http://localhost/settings/notifications"),
+      params: {},
+    } as any);
+
+    expect((result as any).error).toBe("Saving preferences timed out. Try again.");
   });
 });
 
@@ -212,6 +248,72 @@ describe("clientAction", () => {
     } as any);
     expect((result as any).success).toBe(false);
     expect((result as any).message).toBe("Server down");
+  });
+
+  it("uses actionable offline copy on save failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.updatePreferences.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const result = await clientAction({
+      request: makeFormReq({
+        intent: "save",
+        preferences: JSON.stringify(defaultPrefs),
+      }),
+      params: {},
+    } as any);
+
+    expect((result as any).success).toBe(false);
+    expect((result as any).message).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("uses timeout-specific copy on save failure", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.updatePreferences.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const result = await clientAction({
+      request: makeFormReq({
+        intent: "save",
+        preferences: JSON.stringify(defaultPrefs),
+      }),
+      params: {},
+    } as any);
+
+    expect((result as any).success).toBe(false);
+    expect((result as any).message).toBe("Saving preferences timed out. Try again.");
+  });
+
+  it("uses conflict-specific copy on save failure without a backend message", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.updatePreferences.mockRejectedValue(new AxiosError("Conflict", undefined, undefined, undefined, {
+      status: 409,
+      statusText: "Conflict",
+      headers: {},
+      config: { headers: {} } as any,
+      data: {},
+    } as any));
+
+    const result = await clientAction({
+      request: makeFormReq({
+        intent: "save",
+        preferences: JSON.stringify(defaultPrefs),
+      }),
+      params: {},
+    } as any);
+
+    expect((result as any).success).toBe(false);
+    expect((result as any).message).toBe(
+      "Your notification settings changed elsewhere. Refresh and try again."
+    );
+  });
+
+  it("preserves backend response messages in helper", () => {
+    expect(
+      getSettingsNotificationsError({ response: { data: { message: "Validation failed" } } }, "fallback")
+    ).toBe("Validation failed");
   });
 });
 

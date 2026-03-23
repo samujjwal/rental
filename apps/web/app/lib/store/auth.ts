@@ -27,14 +27,72 @@ interface AuthState {
   setAccessToken: (accessToken: string) => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
+function getInitialAuthSnapshot() {
+  if (typeof window === "undefined") {
+    return {
       user: null,
       accessToken: null,
       isInitialized: false,
       isLoading: false,
       isAuthenticated: false,
+    };
+  }
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return {
+        user: null,
+        accessToken: null,
+        isInitialized: false,
+        isLoading: false,
+        isAuthenticated: false,
+      };
+    }
+
+    const parsed = JSON.parse(raw) as {
+      state?: {
+        user?: User | null;
+        accessToken?: string | null;
+      };
+    };
+    const storedUser = parsed?.state?.user ?? null;
+    const storedAccessToken = parsed?.state?.accessToken ?? null;
+
+    if (!storedUser || !storedAccessToken) {
+      return {
+        user: null,
+        accessToken: null,
+        isInitialized: false,
+        isLoading: false,
+        isAuthenticated: false,
+      };
+    }
+
+    return {
+      user: { ...storedUser, role: normalizeRole(storedUser.role) },
+      accessToken: storedAccessToken,
+      isInitialized: true,
+      isLoading: false,
+      isAuthenticated: true,
+    };
+  } catch {
+    return {
+      user: null,
+      accessToken: null,
+      isInitialized: false,
+      isLoading: false,
+      isAuthenticated: false,
+    };
+  }
+}
+
+const initialAuthSnapshot = getInitialAuthSnapshot();
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      ...initialAuthSnapshot,
 
       setAuth: (user, accessToken) => {
         const normalizedUser = { ...user, role: normalizeRole(user.role) };
@@ -87,6 +145,19 @@ export const useAuthStore = create<AuthState>()(
           const { accessToken: storedAccessToken, user: storedUser } = get();
 
           if (storedAccessToken && storedUser) {
+            const normalizedUser = {
+              ...storedUser,
+              role: normalizeRole(storedUser.role),
+            };
+
+            // Restore persisted auth immediately so the app is not blocked on a refresh round-trip.
+            set({
+              user: normalizedUser,
+              accessToken: storedAccessToken,
+              isInitialized: true,
+              isAuthenticated: true,
+            });
+
             // Check if access token is expired
             if (isTokenExpired(storedAccessToken)) {
               // Try to refresh the token — refresh token is sent via httpOnly cookie (B-29)
@@ -110,9 +181,6 @@ export const useAuthStore = create<AuthState>()(
                 return;
               }
             }
-
-            // Access token is still valid, mark initialized
-            set({ isInitialized: true, isAuthenticated: true });
           } else {
             // No stored tokens, clear auth state
             set({ isInitialized: true });

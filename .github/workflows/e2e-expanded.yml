@@ -13,7 +13,8 @@ jobs:
   e2e-expanded:
     name: Expanded E2E Test Suite
     runs-on: ubuntu-latest
-    continue-on-error: true # Don't fail CI if exploratory tests fail
+    # Failures in this weekly regression suite are meaningful signals.
+    # Do NOT add continue-on-error here — failures must be visible and triaged.
 
     services:
       postgres:
@@ -99,7 +100,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379
-        continue-on-error: true
 
       - name: Upload test results for ${{ matrix.suite.name }}
         if: always()
@@ -127,8 +127,6 @@ jobs:
         run: |
           echo "## E2E Expanded Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Exploratory testing complete" >> $GITHUB_STEP_SUMMARY
-          echo "📊 Review individual suite results in artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "Weekly exploratory E2E run complete. Review suite artifacts for failures." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note:** These tests explore features under development" >> $GITHUB_STEP_SUMMARY
-          echo "Failures are expected for unimplemented features (~30 tests skipped)" >> $GITHUB_STEP_SUMMARY
+          echo "**These suites cover owner/renter/payment/org flows.** All failures are regression signals and must be triaged." >> $GITHUB_STEP_SUMMARY

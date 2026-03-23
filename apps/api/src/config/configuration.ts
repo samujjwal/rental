@@ -65,6 +65,7 @@ export default () => ({
   email: {
     from: process.env.EMAIL_FROM, // No fallback — require explicit sender address to ensure SPF/DKIM pass
     sendgridApiKey: process.env.SENDGRID_API_KEY,
+    adminDisputesEmail: process.env.ADMIN_DISPUTES_EMAIL,
   },
 
   // Frontend URLs
@@ -92,7 +93,15 @@ export default () => ({
   // Rate limiting
   rateLimit: {
     ttl: parseInt(process.env.RATE_LIMIT_TTL || '60', 10),
-    limit: parseInt(process.env.RATE_LIMIT || '100', 10),
+    limit: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+  },
+
+  // CDN endpoints (overridable per environment)
+  cdn: {
+    apSouth1: process.env.CDN_AP_SOUTH_1 || 'cdn.gharbatai.com',
+    apSoutheast1: process.env.CDN_AP_SOUTHEAST_1 || 'cdn-sea.gharbatai.com',
+    usEast1: process.env.CDN_US_EAST_1 || 'cdn-us.gharbatai.com',
+    euWest1: process.env.CDN_EU_WEST_1 || 'cdn-eu.gharbatai.com',
   },
 
   // Geocoding
@@ -106,4 +115,17 @@ export default () => ({
       `${process.env.BRAND_NAME || 'GharBatai'} (${process.env.BRAND_SUPPORT_EMAIL || 'support@gharbatai.com'})`,
     defaultLimit: parseInt(process.env.GEO_DEFAULT_LIMIT || '8', 10),
   },
+
+  // Default cancellation policy tiers applied when the PolicyEngine has no listing-specific rules.
+  // Operators should configure per-listing or global PolicyEngine rules to override these.
+  // Tiers are evaluated in order; the first matching tier wins.
+  // Format: JSON array of { minHoursBefore, maxHoursBefore (null = open-ended), refundPercentage, label }
+  defaultCancellationPolicy: JSON.parse(
+    process.env.DEFAULT_CANCELLATION_POLICY ||
+      JSON.stringify([
+        { minHoursBefore: 48, maxHoursBefore: null, refundPercentage: 1.0, label: 'Cancelled more than 48 hours before start — full refund' },
+        { minHoursBefore: 24, maxHoursBefore: 48, refundPercentage: 0.5, label: 'Cancelled 24–48 hours before start — 50% refund' },
+        { minHoursBefore: 0, maxHoursBefore: 24, refundPercentage: 0.0, label: 'Cancelled less than 24 hours before start — no refund' },
+      ]),
+  ),
 });

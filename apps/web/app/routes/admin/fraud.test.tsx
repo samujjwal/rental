@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
@@ -31,7 +32,7 @@ vi.mock("lucide-react", () => ({
   AlertTriangle: IconStub, ShieldAlert: IconStub,
 }));
 
-import { clientLoader } from "./fraud";
+import { clientLoader, getAdminFraudLoadError } from "./fraud";
 
 describe("admin/fraud", () => {
   beforeEach(() => {
@@ -52,6 +53,30 @@ describe("admin/fraud", () => {
     m.getHighRiskUsers.mockRejectedValue(new Error("x"));
     const res = await clientLoader({ request: new Request("http://l/admin/fraud") } as any);
     expect(res.riskUsers).toEqual([]);
-    expect(res.error).toMatch(/fraud/i);
+    expect(res.error).toBe("x");
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    m.getHighRiskUsers.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const res = await clientLoader({ request: new Request("http://l/admin/fraud") } as any);
+
+    expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getAdminFraudLoadError(new Error("fraud service unavailable"))).toBe(
+      "fraud service unavailable"
+    );
   });
 });

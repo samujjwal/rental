@@ -41,6 +41,12 @@ describe('StripeTaxService', () => {
       user: {
         findUnique: jest.fn(),
       },
+      taxForm: {
+        create: jest.fn().mockResolvedValue({ id: 'tax-form-1' }),
+      },
+      taxCalculation: {
+        create: jest.fn().mockResolvedValue({ id: 'tax-calc-1' }),
+      },
     };
 
     service = new StripeTaxService(configService, prisma);
@@ -99,13 +105,13 @@ describe('StripeTaxService', () => {
       const userId = 'owner-1';
       prisma.booking.findMany.mockResolvedValue([
         {
-          totalAmount: 500,
-          serviceFee: 50,
+          totalPrice: 500,
+          payments: [{ taxAmount: 50 }],
           listing: { ownerId: userId },
         },
         {
-          totalAmount: 300,
-          serviceFee: 30,
+          totalPrice: 300,
+          payments: [{ taxAmount: 30 }],
           listing: { ownerId: 'other-user' },
         },
       ]);
@@ -167,10 +173,10 @@ describe('StripeTaxService', () => {
   });
 
   describe('getSupportedJurisdictions', () => {
-    it('should return mock jurisdictions (CA, NY, TX)', async () => {
+    it('should return an array of supported jurisdictions', async () => {
       const result = await service.getSupportedJurisdictions();
       expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
+      expect(result).toEqual([]);
     });
   });
 

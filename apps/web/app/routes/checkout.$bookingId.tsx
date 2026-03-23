@@ -8,6 +8,7 @@ import {
   useNavigate,
   redirect,
   useActionData,
+  useRevalidator,
 } from "react-router";
 import { useState } from "react";
 import { RouteErrorBoundary } from "~/components/ui";
@@ -37,6 +38,9 @@ import { getUser } from "~/utils/auth";
 import { formatCurrency } from "~/lib/utils";
 import { useTranslation } from "react-i18next";
 import { isAppEntityId } from "~/utils/entity-id";
+import { withTimeout } from "~/lib/async";
+import { getActionableErrorMessage, ApiErrorType } from "~/lib/api-error";
+import { UnifiedButton } from "~/components/ui";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Checkout | GharBatai Rentals" }];
@@ -60,6 +64,81 @@ const safeTime = (value: unknown): number => {
   return Number.isNaN(date.getTime()) ? Number.NaN : date.getTime();
 };
 
+const getCheckoutLoadError = (error: unknown): string => {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading checkout again.";
+  }
+
+  return getActionableErrorMessage(error, "Unable to load checkout right now.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading checkout again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading checkout timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not reach the payment service. Try again in a moment.",
+  });
+};
+
+export const getCheckoutPaymentError = (
+  error: unknown,
+  fallbackMessage = "Payment failed"
+): string => {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  const directMessage =
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+      ? String((error as { message: string }).message).trim()
+      : "";
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You are offline. Reconnect before submitting payment.";
+  }
+
+  const actionableMessage = getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.TIMEOUT_ERROR]:
+      "Payment confirmation is taking longer than expected. Check your booking status before retrying to avoid duplicate charges.",
+    [ApiErrorType.OFFLINE]:
+      "You are offline. Reconnect before submitting payment.",
+    [ApiErrorType.NETWORK_ERROR]:
+      "We could not reach the payment service. Please try again.",
+  });
+
+  const genericMessages = new Set([
+    "network error",
+    "timeout",
+    "payment failed",
+    "payment processing failed",
+  ]);
+
+  if (directMessage && !genericMessages.has(directMessage.toLowerCase())) {
+    return directMessage;
+  }
+
+  return actionableMessage;
+};
+
 // Load Stripe outside component to avoid recreating on every render
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
@@ -76,10 +155,6 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   }
 
   try {
-    if (!stripePublishableKey) {
-      throw redirect(`/bookings/${bookingId}`);
-    }
-
     const booking = await bookingsApi.getBookingById(bookingId);
     const canAccessCheckout =
       booking.renterId === user.id || user.role === "admin";
@@ -93,24 +168,51 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
       throw redirect(`/bookings/${bookingId}`);
     }
 
-    // Create payment intent
-    const { clientSecret } = await paymentsApi.createPaymentIntent(bookingId);
-    if (
-      typeof clientSecret !== "string" ||
-      clientSecret.trim().length < MIN_STRIPE_CLIENT_SECRET_LENGTH
-    ) {
-      throw redirect(`/bookings/${bookingId}`);
+    if (!stripePublishableKey) {
+      return {
+        booking,
+        clientSecret: null,
+        stripePublishableKey,
+        error: "Payment is temporarily unavailable right now. Please try again later.",
+      };
     }
 
-    return {
-      booking,
-      clientSecret: clientSecret.trim(),
-      stripePublishableKey,
-    };
+    try {
+      const { clientSecret } = await paymentsApi.createPaymentIntent(bookingId);
+      if (
+        typeof clientSecret !== "string" ||
+        clientSecret.trim().length < MIN_STRIPE_CLIENT_SECRET_LENGTH
+      ) {
+        return {
+          booking,
+          clientSecret: null,
+          stripePublishableKey,
+          error: "We could not prepare payment right now. Try again.",
+        };
+      }
+
+      return {
+        booking,
+        clientSecret: clientSecret.trim(),
+        stripePublishableKey,
+      };
+    } catch (error) {
+      if (error instanceof Response) throw error;
+      return {
+        booking,
+        clientSecret: null,
+        stripePublishableKey,
+        error: getCheckoutLoadError(error),
+      };
+    }
   } catch (error) {
-    // Re-throw Response objects (redirects) so React Router can handle them
     if (error instanceof Response) throw error;
-    throw redirect("/bookings");
+    return {
+      booking: null,
+      clientSecret: null,
+      stripePublishableKey,
+      error: getCheckoutLoadError(error),
+    };
   }
 }
 
@@ -148,8 +250,18 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     }
 
     if (intent === "confirm-payment") {
-      // Payment confirmation is handled by Stripe on client-side
-      // This action can be used for additional server-side validation
+      // F-35 fix: Verify that payment actually succeeded server-side before
+      // redirecting to the success page.  Client-side Stripe callbacks can be
+      // spoofed or replayed; the authoritative source is the payment status API.
+      try {
+        const paymentStatus = await paymentsApi.getBookingPaymentStatus(bookingId);
+        const successStatuses = ['COMPLETED', 'SUCCEEDED', 'PAID', 'CAPTURED'];
+        if (!successStatuses.includes(paymentStatus.paymentStatus?.toUpperCase?.())) {
+          return { error: `Payment has not been completed (status: ${paymentStatus.paymentStatus}). Please try again.` };
+        }
+      } catch {
+        return { error: 'Could not verify payment status. Please contact support.' };
+      }
       return redirect(`/bookings/${bookingId}?payment=success`);
     }
 
@@ -165,7 +277,9 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
 
     return { error: "Invalid action" };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Payment failed" };
+    return {
+      error: getCheckoutPaymentError(error),
+    };
   }
 }
 
@@ -181,11 +295,18 @@ function CheckoutForm({ booking }: { booking: Booking }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const bookingId = safeText(booking.id);
+  const paymentCtaDisabled = !stripe || !elements || !stripeReady || isProcessing;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!stripe || !elements) {
+    if (!stripe || !elements || !stripeReady) {
+      setErrorMessage(
+        t(
+          "checkout.paymentFormLoading",
+          "The payment form is still loading. Wait a moment and try again."
+        )
+      );
       return;
     }
 
@@ -193,21 +314,26 @@ function CheckoutForm({ booking }: { booking: Booking }) {
     setErrorMessage(null);
 
     try {
-      const { error } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}${bookingId ? `/bookings/${bookingId}?payment=success` : "/bookings"}`,
-        },
-      });
+      const { error } = await withTimeout(
+        stripe.confirmPayment({
+          elements,
+          confirmParams: {
+            return_url: `${typeof window !== "undefined" ? window.location.origin : ""}${bookingId ? `/bookings/${bookingId}?payment=success` : "/bookings"}`,  
+          },
+        }),
+        60_000,
+        t(
+          "checkout.paymentTimedOut",
+          "Payment confirmation is taking longer than expected. Check your booking status before retrying to avoid duplicate charges."
+        )
+      );
 
       if (error) {
-        setErrorMessage(error.message || "Payment failed");
+        setErrorMessage(getCheckoutPaymentError(error));
         setIsProcessing(false);
       }
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Payment processing failed"
-      );
+      setErrorMessage(getCheckoutPaymentError(err, t("checkout.paymentFailed", "Payment processing failed")));
       setIsProcessing(false);
     }
   };
@@ -257,31 +383,30 @@ function CheckoutForm({ booking }: { booking: Booking }) {
       </div>
 
       <div className="flex gap-4">
-        <button
+        <UnifiedButton
           type="button"
           onClick={() => navigate(bookingId ? `/bookings/${bookingId}` : "/bookings")}
-          className="flex-1 px-6 py-3 border border-input rounded-md text-foreground hover:bg-muted transition-colors"
+          variant="outline"
+          fullWidth
           disabled={isProcessing}
         >
           {t("common.cancel")}
-        </button>
-        <button
+        </UnifiedButton>
+        <UnifiedButton
           type="submit"
-          disabled={!stripe || isProcessing}
-          className="flex-1 px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed flex items-center justify-center"
+          disabled={paymentCtaDisabled}
+          fullWidth
+          loading={isProcessing}
         >
           {isProcessing ? (
-            <>
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              {t("checkout.processing")}
-            </>
+            t("checkout.processing")
           ) : (
             <>
               <CreditCard className="w-5 h-5 mr-2" />
               {t("checkout.payAmount", { amount: formatCurrency(safeNumber(booking.totalAmount)) })}
             </>
           )}
-        </button>
+        </UnifiedButton>
       </div>
     </form>
   );
@@ -289,8 +414,40 @@ function CheckoutForm({ booking }: { booking: Booking }) {
 
 export default function CheckoutRoute() {
   const { t } = useTranslation();
-  const { booking, clientSecret } = useLoaderData<typeof clientLoader>();
+  const { booking, clientSecret, error } = useLoaderData<typeof clientLoader>();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
+
+  if (!booking) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-card rounded-lg shadow-md p-8 text-center space-y-4">
+            <AlertCircle className="w-10 h-10 mx-auto text-muted-foreground" />
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold text-foreground">Checkout unavailable</h1>
+              <p className="text-sm text-muted-foreground">
+                {error || "Unable to load checkout right now."}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <UnifiedButton type="button" onClick={() => revalidator.revalidate()}>
+                Try Again
+              </UnifiedButton>
+              <UnifiedButton
+                type="button"
+                variant="outline"
+                onClick={() => navigate("/bookings")}
+              >
+                Back to Bookings
+              </UnifiedButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const bookingId = safeText(booking.id);
 
   const startAt = safeTime(booking.startDate);
@@ -476,8 +633,20 @@ export default function CheckoutRoute() {
                 <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-start">
                   <AlertCircle className="w-5 h-5 text-destructive mr-2 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-destructive">
-                    {t("checkout.paymentSetupFailed")}
+                    {error || t("checkout.paymentSetupFailed")}
                   </p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <UnifiedButton type="button" onClick={() => revalidator.revalidate()}>
+                    Try Again
+                  </UnifiedButton>
+                  <UnifiedButton
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate(bookingId ? `/bookings/${bookingId}` : "/bookings")}
+                  >
+                    Back to Booking
+                  </UnifiedButton>
                 </div>
               </div>
             )}

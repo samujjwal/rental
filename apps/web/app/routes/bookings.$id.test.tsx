@@ -1,10 +1,20 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // ─── Hoisted mocks ──────────────────────────────────────────────────────────
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon-stub" />);
+const authStoreState = vi.hoisted(() => ({
+  user: { id: "user-1", role: "renter", firstName: "Sita", lastName: "Devi" } as {
+    id: string;
+    role: string;
+    firstName: string;
+    lastName: string;
+  } | null,
+  isAuthenticated: true,
+}));
 const mocks = vi.hoisted(() => ({
   getBookingById: vi.fn(),
   getAvailableTransitions: vi.fn(),
@@ -72,9 +82,8 @@ vi.mock("~/utils/auth", () => ({
 }));
 
 vi.mock("~/lib/store/auth", () => {
-  const state = { user: { id: "user-1", role: "renter", firstName: "Sita", lastName: "Devi" }, isAuthenticated: true };
-  const useAuthStore: any = (sel?: (s: any) => any) => sel ? sel(state) : state;
-  useAuthStore.getState = () => state;
+  const useAuthStore: any = (sel?: (s: any) => any) => sel ? sel(authStoreState) : authStoreState;
+  useAuthStore.getState = () => authStoreState;
   return { useAuthStore };
 });
 
@@ -102,8 +111,10 @@ vi.mock("~/components/ui", () => ({
   CardContent: ({ children }: any) => <div>{children}</div>,
   CardHeader: ({ children }: any) => <div>{children}</div>,
   CardTitle: ({ children }: any) => <h3>{children}</h3>,
-  UnifiedButton: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-  Dialog: ({ children }: any) => <div>{children}</div>,
+  UnifiedButton: ({ children, loading, ...props }: any) => (
+    <button {...props}>{loading ? <span data-testid="loading-spinner" /> : null}{children}</button>
+  ),
+  Dialog: ({ children, open }: any) => (open ? <div>{children}</div> : null),
   DialogFooter: ({ children }: any) => <div>{children}</div>,
   Alert: ({ children }: any) => <div role="alert">{children}</div>,
 }));
@@ -165,6 +176,12 @@ const makeFormData = (fields: Record<string, string>) => {
 describe("bookings.$id route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authStoreState.user = { id: "user-1", role: "renter", firstName: "Sita", lastName: "Devi" };
+    authStoreState.isAuthenticated = true;
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
     mocks.useLoaderData.mockReturnValue({
       booking: makeBooking(),
       viewerRole: "renter",
@@ -240,6 +257,8 @@ describe("bookings.$id route", () => {
 
     it("throws redirect to login when user is not authenticated", async () => {
       mocks.getUser.mockResolvedValue(null);
+      authStoreState.user = null;
+      authStoreState.isAuthenticated = false;
       await expect(
         clientLoader({ params: { id: VALID_UUID }, request: makeRequest() } as any)
       ).rejects.toBeInstanceOf(Response);
@@ -248,6 +267,8 @@ describe("bookings.$id route", () => {
 
     it("throws redirect for non-participant", async () => {
       mocks.getUser.mockResolvedValue({ id: "other-user", role: "renter" });
+      authStoreState.user = null;
+      authStoreState.isAuthenticated = false;
       mocks.getBookingById.mockResolvedValue(makeBooking());
       await expect(
         clientLoader({ params: { id: VALID_UUID }, request: makeRequest() } as any)
@@ -300,9 +321,36 @@ describe("bookings.$id route", () => {
     it("redirects on API error", async () => {
       mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
       mocks.getBookingById.mockRejectedValue(new Error("Network"));
-      await expect(
-        clientLoader({ params: { id: VALID_UUID }, request: makeRequest() } as any)
-      ).rejects.toBeInstanceOf(Response);
+      const result = await clientLoader({
+        params: { id: VALID_UUID },
+        request: makeRequest(),
+      } as any);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          booking: null,
+          availableTransitions: [],
+          error: "Network",
+        })
+      );
+    });
+
+    it("returns timeout-specific fallback state for recoverable loader failures", async () => {
+      mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
+      mocks.getBookingById.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+      const result = await clientLoader({
+        params: { id: VALID_UUID },
+        request: makeRequest(),
+      } as any);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          booking: null,
+          availableTransitions: [],
+          error: "Loading this booking timed out. Try again.",
+        })
+      );
     });
   });
 
@@ -615,6 +663,69 @@ describe("bookings.$id route", () => {
       } as any);
       expect(result).toEqual({ error: "Action failed" });
     });
+
+    it("returns timeout-specific action copy", async () => {
+      mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+      mocks.getBookingById.mockRejectedValue(
+        new AxiosError("timeout", "ECONNABORTED")
+      );
+
+      const result = await clientAction({
+        request: makeFormData({ intent: "confirm" }), params: { id: VALID_UUID },
+      } as any);
+
+      expect(result).toEqual({
+        error:
+          "This action is taking longer than expected. Refresh the booking to confirm the latest state before retrying.",
+      });
+    });
+
+    it("returns conflict-specific action copy", async () => {
+      mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+      mocks.getBookingById.mockRejectedValue(
+        new AxiosError("Conflict", undefined, undefined, undefined, {
+          status: 409,
+          statusText: "Conflict",
+          headers: {},
+          config: { headers: {} } as any,
+          data: {},
+        } as any)
+      );
+
+      const result = await clientAction({
+        request: makeFormData({ intent: "confirm" }), params: { id: VALID_UUID },
+      } as any);
+
+      expect(result).toEqual({
+        error:
+          "This booking changed while you were working. We refreshed the state. Please review the latest status and try again.",
+      });
+    });
+
+    it("returns offline-specific action copy", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+      mocks.getBookingById.mockRejectedValue(
+        new AxiosError("Network Error", "ERR_NETWORK")
+      );
+
+      const result = await clientAction({
+        request: makeFormData({ intent: "confirm" }), params: { id: VALID_UUID },
+      } as any);
+
+      expect(result).toEqual({
+        error: "You are offline. Reconnect and try the booking action again.",
+      });
+
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
+    });
   });
 
   // ─── Component rendering ────────────────────────────────────────────────
@@ -726,6 +837,25 @@ describe("bookings.$id route", () => {
       expect(
         screen.getByText(/Report Damage vs File a Dispute/i)
       ).toBeInTheDocument();
+    });
+
+    it("shows retryable fallback UI when booking data is unavailable", () => {
+      const revalidate = vi.fn();
+      mocks.useRevalidator.mockReturnValue({ revalidate, state: "idle" });
+      mocks.useLoaderData.mockReturnValue({
+        booking: null,
+        viewerRole: "renter",
+        availableTransitions: [],
+        error: "Loading this booking timed out. Try again.",
+      });
+
+      render(<BookingDetail />);
+
+      expect(screen.getByText("Booking unavailable")).toBeInTheDocument();
+      expect(screen.getByText("Loading this booking timed out. Try again.")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Try Again" }));
+      expect(revalidate).toHaveBeenCalledTimes(1);
     });
   });
 });

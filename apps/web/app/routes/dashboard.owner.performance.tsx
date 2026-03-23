@@ -1,6 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
-import { useLoaderData, Link, useSearchParams, redirect, useLocation } from "react-router";
+import { useLoaderData, Link, useSearchParams, redirect, useLocation, useRevalidator } from "react-router";
 import { useState } from "react";
 import {
   TrendingUp,
@@ -22,6 +22,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  UnifiedButton,
   RouteErrorBoundary,
 } from "~/components/ui";
 import { PortalPageLayout } from "~/components/layout";
@@ -31,6 +32,7 @@ import { getUser } from "~/utils/auth";
 import { APP_LOCALE } from "~/config/locale";
 import { ownerNavSections } from "~/config/navigation";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -46,6 +48,13 @@ const safeNumber = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+export function getOwnerPerformanceLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load performance data", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading performance data timed out. Try again.",
+  });
+}
 
 const ALLOWED_PERIODS = new Set(["7days", "30days", "90days", "year"]);
 
@@ -107,10 +116,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       metrics: null,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load performance data",
+      error: getOwnerPerformanceLoadError(error),
       period,
     };
   }
@@ -173,6 +179,7 @@ export default function OwnerPerformancePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedPeriod, setSelectedPeriod] = useState(period || "30days");
   const { pathname } = useLocation();
+  const { revalidate } = useRevalidator();
   const maxRevenue = Math.max(
     ...(metrics?.monthlyData.map((data) => data.revenue) ?? [0]),
     1
@@ -209,7 +216,12 @@ export default function OwnerPerformancePage() {
       banner={
         error ? (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-            {error}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <p>{error}</p>
+              <UnifiedButton type="button" variant="outline" onClick={() => revalidate()}>
+                Try Again
+              </UnifiedButton>
+            </div>
           </div>
         ) : null
       }

@@ -168,4 +168,80 @@ describe('CategoryTemplateService', () => {
       expect(all).toBe(CATEGORY_TEMPLATES);
     });
   });
+
+  // ── getCategoryFieldDefinitions — API contract gate ──────────────────────
+  //
+  // This block validates the shape that the web client depends on via
+  // GET /categories/slug/:slug/fields.  A breaking change to field shape,
+  // type values, or the options contract will fail here before reaching prod.
+
+  describe('getCategoryFieldDefinitions', () => {
+    it('returns non-empty array for a known slug', () => {
+      const fields = service.getCategoryFieldDefinitions('vehicles');
+      expect(fields.length).toBeGreaterThan(0);
+    });
+
+    it('returns empty array for an unknown slug', () => {
+      expect(service.getCategoryFieldDefinitions('does-not-exist')).toEqual([]);
+    });
+
+    it('every field has string key and label', () => {
+      for (const slug of Object.keys(CATEGORY_TEMPLATES)) {
+        const fields = service.getCategoryFieldDefinitions(slug);
+        for (const f of fields) {
+          expect(typeof f.key).toBe('string');
+          expect(typeof f.label).toBe('string');
+        }
+      }
+    });
+
+    it('every field type is one of the allowed discriminator values', () => {
+      const validTypes = ['text', 'number', 'select', 'boolean', 'multiselect'];
+      for (const slug of Object.keys(CATEGORY_TEMPLATES)) {
+        for (const f of service.getCategoryFieldDefinitions(slug)) {
+          expect(validTypes).toContain(f.type);
+        }
+      }
+    });
+
+    it('select fields always carry a non-empty options array', () => {
+      for (const slug of Object.keys(CATEGORY_TEMPLATES)) {
+        for (const f of service.getCategoryFieldDefinitions(slug)) {
+          if (f.type === 'select' || f.type === 'multiselect') {
+            expect(Array.isArray(f.options)).toBe(true);
+            expect(f.options!.length).toBeGreaterThan(0);
+            for (const opt of f.options!) {
+              expect(typeof opt.value).toBe('string');
+              expect(typeof opt.label).toBe('string');
+            }
+          }
+        }
+      }
+    });
+
+    it('vehicles slug returns make, model, year fields', () => {
+      const fields = service.getCategoryFieldDefinitions('vehicles');
+      const keys = fields.map((f) => f.key);
+      expect(keys).toContain('make');
+      expect(keys).toContain('model');
+      expect(keys).toContain('year');
+    });
+
+    it('spaces slug returns required spaceType select field', () => {
+      const fields = service.getCategoryFieldDefinitions('spaces');
+      const spaceType = fields.find((f) => f.key === 'spaceType');
+      expect(spaceType).toBeDefined();
+      expect(spaceType!.type).toBe('select');
+      expect(spaceType!.required).toBe(true);
+    });
+
+    it('number fields expose min/max when schema has minimum/maximum', () => {
+      const fields = service.getCategoryFieldDefinitions('vehicles');
+      const year = fields.find((f) => f.key === 'year');
+      expect(year).toBeDefined();
+      expect(year!.type).toBe('number');
+      expect(typeof year!.min).toBe('number');
+      expect(typeof year!.max).toBe('number');
+    });
+  });
 });

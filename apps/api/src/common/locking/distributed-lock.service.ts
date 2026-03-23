@@ -97,7 +97,7 @@ export class DistributedLockService {
    * @param lockValue - Lock value (to ensure we only release our own lock)
    */
   private async releaseLock(lockKey: string, lockValue: string): Promise<void> {
-    // Use Lua script for atomic check-and-delete
+    // Atomic check-and-delete via Lua script (prevents releasing another owner's lock)
     const luaScript = `
       if redis.call("get", KEYS[1]) == ARGV[1] then
         return redis.call("del", KEYS[1])
@@ -105,13 +105,7 @@ export class DistributedLockService {
         return 0
       end
     `;
-
-    // This would need to be implemented in your cache service
-    // For now, we'll use a simple approach
-    const currentValue = await this.cacheService.get(lockKey);
-    if (currentValue === lockValue) {
-      await this.cacheService.delete(lockKey);
-    }
+    await this.cacheService.getClient().eval(luaScript, 1, lockKey, lockValue);
   }
 
   /**

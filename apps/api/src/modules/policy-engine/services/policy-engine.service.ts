@@ -121,6 +121,10 @@ export class PolicyEngineService {
     entityType?: string,
     entityId?: string,
   ): Promise<TaxBreakdown> {
+    // Load rules upfront to capture version numbers for the audit snapshot
+    const ruleList = await this.registry.findActiveRules('TAX', context.country, context.state, context.city);
+    const ruleVersionMap = new Map<string, number>(ruleList.map((r) => [r.id, r.version]));
+
     const decision = await this.evaluate('TAX', context, entityType, entityId);
 
     const taxLines: TaxLineItem[] = [];
@@ -166,7 +170,7 @@ export class PolicyEngineService {
         const rateAction = r.actions.find((a) => a.type === 'SET_RATE' || a.type === 'COMPOUND');
         return {
           ruleId: r.ruleId,
-          version: 1, // Will be populated from registry
+          version: ruleVersionMap.get(r.ruleId) ?? 1,
           rate: rateAction ? Number((rateAction.params as Record<string, unknown>).rate) || 0 : 0,
           amount: taxLines.find((t) => t.ruleId === r.ruleId)?.amount || 0,
           jurisdiction: rateAction

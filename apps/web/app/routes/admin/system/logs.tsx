@@ -17,6 +17,7 @@ import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
 import { formatDateTime } from "~/lib/utils";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -24,6 +25,13 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "View and manage application logs" },
   ];
 };
+
+export function getSystemLogsLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load system logs", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading system logs timed out. Try again.",
+  });
+}
 
 const safeDateTimeLabel = (value: unknown): string => {
   const date = new Date(String(value || ""));
@@ -52,10 +60,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       logs: [],
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load system logs",
+      error: getSystemLogsLoadError(error),
     };
   }
 }

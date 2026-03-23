@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
 import { EmailModule } from '@/common/email/email.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { BookingsModule } from '@/modules/bookings/bookings.module';
@@ -10,7 +11,13 @@ import { AdminDisputesController } from './controllers/admin-disputes.controller
 import { DisputeSlaScheduler } from './schedulers/dispute-sla.scheduler';
 
 @Module({
-  imports: [EmailModule, NotificationsModule, forwardRef(() => BookingsModule), EventsModule],
+  imports: [
+    EmailModule,
+    NotificationsModule,
+    forwardRef(() => BookingsModule),
+    EventsModule,
+    BullModule.registerQueue({ name: 'payments' }),
+  ],
   controllers: [DisputesController, AdminDisputesController],
   providers: [DisputesService, DisputeEscalationService, DisputeSlaScheduler],
   exports: [DisputesService, DisputeEscalationService],

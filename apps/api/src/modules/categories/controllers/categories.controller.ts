@@ -16,7 +16,7 @@ import {
   CategoriesService,
 } from '../services/categories.service';
 import { CreateCategoryDto, UpdateCategoryDto } from '../dto/category.dto';
-import { CategoryTemplateService } from '../services/category-template.service';
+import { CategoryTemplateService, type CategoryFieldDefinition } from '../services/category-template.service';
 import { JwtAuthGuard, RolesGuard, Roles } from '@/common/auth';
 import { UserRole } from '@rental-portal/database';
 
@@ -90,6 +90,24 @@ export class CategoriesController {
     @Param('slug') slug: string,
   ): Promise<AsyncMethodResult<CategoriesService['findBySlug']>> {
     return this.categoriesService.findBySlug(slug);
+  }
+
+  @Get('slug/:slug/fields')
+  @ApiOperation({
+    summary: 'Get UI field definitions for a category',
+    description:
+      'Returns the canonical list of category-specific form fields derived from the ' +
+      'server-side JSON Schema templates. Clients must consume this endpoint rather ' +
+      'than maintaining their own static category field registries.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Field definitions for the category',
+  })
+  getCategoryFieldDefinitions(
+    @Param('slug') slug: string,
+  ): CategoryFieldDefinition[] {
+    return this.templateService.getCategoryFieldDefinitions(slug);
   }
 
   @Post()

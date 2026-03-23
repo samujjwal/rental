@@ -2,21 +2,22 @@
 
 A production-ready, multi-category rental marketplace platform supporting spaces, vehicles, instruments, event venues, event items, and wearables.
 
-**Current Status:** 88% Complete - Backend 100%, Frontend 75%, Infrastructure 30%  
-**Last Updated:** February 2, 2026
+**Current Status:** Active development  
+**Live Documentation Home:** [docs/README.md](docs/README.md)
 
-## 📊 Quick Status
+## 📚 Documentation
 
-- ✅ **Backend API:** 100% Complete (26 controllers, 59 services, ~30,000 lines)
-- ✅ **Database:** 100% Complete (70+ models, full schema with Prisma)
-- 🟡 **Web Frontend:** 75% Complete (54 routes, 31 components, admin + core flows)
-- 🟡 **Testing:** 70% Complete (17 API E2E tests, 16 web E2E tests, ~60% unit coverage)
-- 🟡 **External Services:** 80% (Stripe ✅, Email ✅, SMS ✅, Push ⚠️, Storage ✅)
-- 🟡 **Infrastructure:** 30% (local Docker only, AWS pending)
-- ⏭️ **Mobile App:** Planned for post-launch
-
-**[📋 View Detailed Gap Analysis →](IMPLEMENTATION_GAP_ANALYSIS.md)**  
-**[🚀 Production Deployment Guide →](PRODUCTION_DEPLOYMENT_GUIDE.md)**
+- [Documentation Map](docs/README.md)
+- [Product Vision](docs/product/vision.md)
+- [Product Requirements](docs/product/requirements.md)
+- [Feature Catalog](docs/product/features.md)
+- [Developer Guide](docs/engineering/developer-guide.md)
+- [Testing Guide](docs/engineering/testing.md)
+- [Deployment Guide](docs/engineering/deployment.md)
+- [Integrations Guide](docs/engineering/integrations.md)
+- [Runbooks](docs/operations/runbooks.md)
+- [SLOs](docs/operations/slo.md)
+- [Consolidation Plan](docs/CONSOLIDATION_PLAN.md)
 
 ---
 
@@ -24,24 +25,24 @@ A production-ready, multi-category rental marketplace platform supporting spaces
 
 This is a monorepo managed by Turbo, containing:
 
-- **apps/api**: NestJS backend API ✅ Complete
-- **apps/web**: React Router v7 web application 🟡 60% Complete
-- **apps/mobile**: React Native mobile app ⏭️ Planned
-- **packages/database**: Prisma database schema and client ✅ Complete
+- **apps/api**: NestJS backend API ✅ Live
+- **apps/web**: React Router v7 web application 🟡 Active development
+- **apps/mobile**: React Native mobile app 🟡 Live beta
+- **packages/database**: Prisma database schema and client ✅ Live
 
 ## 🚀 Tech Stack
 
 - **Backend**: NestJS, TypeScript, Prisma, PostgreSQL (pgvector), Redis
-- **Search**: Elasticsearch/OpenSearch (planned)
+- **Search**: PostgreSQL full-text search + pgvector semantic ranking
 - **Web**: React Router v7 (Framework Mode), TailwindCSS
-- **Mobile**: React Native, Expo (planned)
-- **Infrastructure**: Docker (local), AWS (planned - ECS, RDS, ElastiCache, CloudFront)
+- **Mobile**: React Native, Expo (live beta)
+- **Infrastructure**: Docker (local). Cloud deployment target: serverless containers + managed DB.
 - **Payments**: Stripe Connect ✅
 - **Real-time**: Socket.io with Redis adapter ✅
-- **Email**: SendGrid (pending configuration)
-- **SMS**: Twilio (pending configuration)
-- **Push**: Firebase Cloud Messaging (pending configuration)
-- **AI**: OpenAI GPT-4 (pending configuration)
+- **Email**: Resend / SendGrid depending on path
+- **SMS**: Twilio
+- **Push**: Firebase Cloud Messaging
+- **AI**: OpenAI-backed features where enabled
 
 ## 📋 Prerequisites
 
@@ -50,7 +51,6 @@ This is a monorepo managed by Turbo, containing:
 - Docker & Docker Compose (for local services)
 - PostgreSQL >= 15 (with pgvector extension)
 - Redis >= 7
-- ElasQuick Start
 
 ### Option 1: Using Docker (Recommended)
 
@@ -76,7 +76,7 @@ pnpm run dev:full
 
 ### Option 2: Manual Setup
 
-See [QUICK_START.md](QUICK_START.md) for detailed manual installation steps.
+See [docs/engineering/developer-guide.md](docs/engineering/developer-guide.md) for the canonical local workflow.
 
 ### Option 3: Run Tests
 

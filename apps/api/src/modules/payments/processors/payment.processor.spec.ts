@@ -6,9 +6,11 @@ import { StripeService } from '../services/stripe.service';
 import { Job } from 'bull';
 import { LedgerService } from '../services/ledger.service';
 import { PaymentCommandLogService } from '../services/payment-command-log.service';
+import { BookingStateMachineService } from '../../bookings/services/booking-state-machine.service';
 
 describe('PaymentProcessor', () => {
   let processor: PaymentProcessor;
+  let bookingStateMachine: { transition: jest.Mock; getCurrentState: jest.Mock };
 
   const mockPrisma = {
     payment: {
@@ -71,6 +73,11 @@ describe('PaymentProcessor', () => {
     }) as unknown as Job<T>;
 
   beforeEach(async () => {
+    bookingStateMachine = {
+      transition: jest.fn().mockResolvedValue({ success: true }),
+      getCurrentState: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentProcessor,
@@ -79,6 +86,10 @@ describe('PaymentProcessor', () => {
         { provide: StripeService, useValue: mockStripe },
         { provide: LedgerService, useValue: mockLedger },
         { provide: PaymentCommandLogService, useValue: mockPaymentCommands },
+        {
+          provide: BookingStateMachineService,
+          useValue: bookingStateMachine,
+        },
       ],
     }).compile();
 
@@ -136,8 +147,6 @@ describe('PaymentProcessor', () => {
       };
       mockPrisma.payment.findFirst.mockResolvedValue(payment);
       mockPrisma.payment.update.mockResolvedValue({});
-      mockPrisma.booking.update.mockResolvedValue({});
-
       const result = await processor.handleRetryPayment(
         createJob({ ...baseJobData, attempt: 3, maxAttempts: 3 }),
       );
@@ -151,10 +160,12 @@ describe('PaymentProcessor', () => {
           }),
         }),
       );
-      expect(mockPrisma.booking.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: { status: 'PAYMENT_FAILED' },
-        }),
+      expect(bookingStateMachine.transition).toHaveBeenCalledWith(
+        'booking-1',
+        'FAIL_PAYMENT',
+        'system',
+        'SYSTEM',
+        expect.objectContaining({ reason: 'Max retry attempts reached', maxAttempts: 3 }),
       );
       expect(mockEvents.emitPaymentFailed).toHaveBeenCalled();
     });

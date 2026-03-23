@@ -4,11 +4,13 @@ import { AxiosError } from 'axios';
  * API Error Types
  */
 export enum ApiErrorType {
+  OFFLINE = 'OFFLINE',
   NETWORK_ERROR = 'NETWORK_ERROR',
   TIMEOUT_ERROR = 'TIMEOUT_ERROR',
   UNAUTHORIZED = 'UNAUTHORIZED',
   FORBIDDEN = 'FORBIDDEN',
   NOT_FOUND = 'NOT_FOUND',
+  CONFLICT = 'CONFLICT',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   SERVER_ERROR = 'SERVER_ERROR',
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
@@ -29,11 +31,13 @@ export interface ApiError {
  * Error messages for different error types
  */
 const ERROR_MESSAGES: Record<ApiErrorType, string> = {
+  [ApiErrorType.OFFLINE]: 'You appear to be offline. Check your connection and try again.',
   [ApiErrorType.NETWORK_ERROR]: 'Unable to connect to the server. Please check your internet connection.',
   [ApiErrorType.TIMEOUT_ERROR]: 'The request took too long. Please try again.',
   [ApiErrorType.UNAUTHORIZED]: 'You need to sign in to access this resource.',
   [ApiErrorType.FORBIDDEN]: 'You do not have permission to access this resource.',
   [ApiErrorType.NOT_FOUND]: 'The requested resource was not found.',
+  [ApiErrorType.CONFLICT]: 'This data changed while you were working. Refresh and try again.',
   [ApiErrorType.VALIDATION_ERROR]: 'Please check your input and try again.',
   [ApiErrorType.SERVER_ERROR]: 'Something went wrong on our end. Please try again later.',
   [ApiErrorType.UNKNOWN_ERROR]: 'An unexpected error occurred. Please try again.',
@@ -46,6 +50,13 @@ export function parseApiError(error: unknown): ApiError {
   if (error instanceof AxiosError) {
     // Network errors (no response received)
     if (!error.response) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return {
+          type: ApiErrorType.OFFLINE,
+          message: ERROR_MESSAGES[ApiErrorType.OFFLINE],
+          retryable: true,
+        };
+      }
       if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
         return {
           type: ApiErrorType.TIMEOUT_ERROR,
@@ -84,6 +95,13 @@ export function parseApiError(error: unknown): ApiError {
           message: data?.message || ERROR_MESSAGES[ApiErrorType.NOT_FOUND],
           statusCode: status,
           retryable: false,
+        };
+      case 409:
+        return {
+          type: ApiErrorType.CONFLICT,
+          message: data?.message || ERROR_MESSAGES[ApiErrorType.CONFLICT],
+          statusCode: status,
+          retryable: true,
         };
       case 422:
       case 400:
@@ -143,6 +161,40 @@ export function isRetryableError(error: ApiError): boolean {
 export function getErrorMessage(error: unknown): string {
   const apiError = parseApiError(error);
   return apiError.message;
+}
+
+export function isApiErrorType(error: unknown, type: ApiErrorType): boolean {
+  return parseApiError(error).type === type;
+}
+
+export function isApiErrorStatus(error: unknown, statusCode: number): boolean {
+  return parseApiError(error).statusCode === statusCode;
+}
+
+export function isConflictError(error: unknown): boolean {
+  return isApiErrorType(error, ApiErrorType.CONFLICT) || isApiErrorStatus(error, 409);
+}
+
+export function isTimeoutError(error: unknown): boolean {
+  return isApiErrorType(error, ApiErrorType.TIMEOUT_ERROR);
+}
+
+export function isOfflineError(error: unknown): boolean {
+  return isApiErrorType(error, ApiErrorType.OFFLINE);
+}
+
+export function isNetworkError(error: unknown): boolean {
+  const parsed = parseApiError(error);
+  return parsed.type === ApiErrorType.NETWORK_ERROR || parsed.type === ApiErrorType.OFFLINE;
+}
+
+export function getActionableErrorMessage(
+  error: unknown,
+  fallbackMessage = ERROR_MESSAGES[ApiErrorType.UNKNOWN_ERROR],
+  overrides?: Partial<Record<ApiErrorType, string>>
+): string {
+  const parsed = parseApiError(error);
+  return overrides?.[parsed.type] || parsed.message || fallbackMessage;
 }
 
 /**

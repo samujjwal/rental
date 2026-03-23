@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -118,7 +119,11 @@ vi.mock("lucide-react", () => ({
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 
-import { clientLoader, clientAction } from "./listings.new";
+import {
+  clientLoader,
+  clientAction,
+  getCreateListingError,
+} from "./listings.new";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -245,6 +250,93 @@ describe("listings.new route", () => {
       } as any);
       expect(result).toEqual({ error: "Invalid listing payload" });
     });
+
+    it("preserves backend create-listing errors", async () => {
+      mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+      const categoriesMock = await import("~/lib/api/listings");
+      vi.mocked(categoriesMock.listingsApi.getCategories).mockResolvedValue([{ id: "cat-1" }] as any);
+      mocks.createListing.mockRejectedValue({
+        response: { data: { message: "Listing slug already exists" } },
+      });
+      const result = await clientAction({
+        request: makeActionRequest({
+          intent: "create",
+          data: JSON.stringify({ category: "cat-1", title: "Tripod" }),
+        }),
+      } as any);
+      expect(result).toEqual({ error: "Listing slug already exists" });
+    });
+
+    it("uses actionable offline copy on create failure", async () => {
+      mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+      const categoriesMock = await import("~/lib/api/listings");
+      vi.mocked(categoriesMock.listingsApi.getCategories).mockResolvedValue([{ id: "cat-1" }] as any);
+      mocks.createListing.mockRejectedValue(new Error("Network Error"));
+      const online = window.navigator.onLine;
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+
+      const result = await clientAction({
+        request: makeActionRequest({
+          intent: "create",
+          data: JSON.stringify({ category: "cat-1", title: "Tripod" }),
+        }),
+      } as any);
+      expect(result).toEqual({
+        error: "You appear to be offline. Reconnect and try creating the listing again.",
+      });
+
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: online,
+      });
+    });
+
+    it("uses timeout-specific copy on create failure", async () => {
+      mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+      const categoriesMock = await import("~/lib/api/listings");
+      vi.mocked(categoriesMock.listingsApi.getCategories).mockResolvedValue([{ id: "cat-1" }] as any);
+      mocks.createListing.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+      const result = await clientAction({
+        request: makeActionRequest({
+          intent: "create",
+          data: JSON.stringify({ category: "cat-1", title: "Tripod" }),
+        }),
+      } as any);
+
+      expect(result).toEqual({
+        error: "Creating the listing timed out. Try again.",
+      });
+    });
+
+    it("uses conflict-specific copy on create failure", async () => {
+      mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+      const categoriesMock = await import("~/lib/api/listings");
+      vi.mocked(categoriesMock.listingsApi.getCategories).mockResolvedValue([{ id: "cat-1" }] as any);
+      mocks.createListing.mockRejectedValue(
+        new AxiosError("Conflict", undefined, undefined, undefined, {
+          status: 409,
+          statusText: "Conflict",
+          headers: {},
+          config: { headers: {} } as any,
+          data: {},
+        } as any)
+      );
+
+      const result = await clientAction({
+        request: makeActionRequest({
+          intent: "create",
+          data: JSON.stringify({ category: "cat-1", title: "Tripod" }),
+        }),
+      } as any);
+
+      expect(result).toEqual({
+        error: "This listing is already being created or reviewed. Refresh and check your listings.",
+      });
+    });
   });
 
   describe("KEYWORD_PRICE_HINTS constant", () => {
@@ -252,6 +344,35 @@ describe("listings.new route", () => {
     it("module exports clientLoader and clientAction", () => {
       expect(clientLoader).toBeDefined();
       expect(clientAction).toBeDefined();
+    });
+  });
+
+  describe("getCreateListingError", () => {
+    it("preserves plain thrown errors", () => {
+      expect(getCreateListingError(new Error("Permission denied"), "fallback")).toBe(
+        "Permission denied"
+      );
+    });
+
+    it("uses timeout-specific helper copy", () => {
+      expect(getCreateListingError(new AxiosError("timeout", "ECONNABORTED"), "fallback")).toBe(
+        "Creating the listing timed out. Try again."
+      );
+    });
+
+    it("uses conflict-specific helper copy", () => {
+      expect(
+        getCreateListingError(
+          new AxiosError("Conflict", undefined, undefined, undefined, {
+            status: 409,
+            statusText: "Conflict",
+            headers: {},
+            config: { headers: {} } as any,
+            data: {},
+          } as any),
+          "fallback"
+        )
+      ).toBe("This listing is already being created or reviewed. Refresh and check your listings.");
     });
   });
 });

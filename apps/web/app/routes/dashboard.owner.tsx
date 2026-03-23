@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
 import { useState, useEffect, useMemo } from "react";
-import { useLoaderData, Link, redirect } from "react-router";
+import { useLoaderData, Link, redirect, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
   Package,
@@ -31,6 +31,7 @@ import {
   CardTitle,
   Badge,
   RouteErrorBoundary,
+  UnifiedButton,
 } from "~/components/ui";
 import { PortalPageLayout } from "~/components/layout";
 import { RecentActivity } from "~/components/dashboard/RecentActivity";
@@ -43,6 +44,7 @@ import { notificationsApi } from "~/lib/api/notifications";
 import { messagingApi } from "~/lib/api/messaging";
 import { insuranceApi } from "~/lib/api/insurance";
 import type { InsurancePolicy } from "~/lib/api/insurance";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Owner Dashboard | GharBatai Rentals" }];
@@ -65,6 +67,42 @@ const safeDateLabel = (value: unknown, pattern: string): string => {
 const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
   return text || fallback;
+};
+
+const getOwnerDashboardLoadError = (
+  error: unknown,
+  failedSections: string[] = []
+): string => {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  const sectionSuffix =
+    failedSections.length > 0
+      ? ` Some sections could not be loaded: ${failedSections.join(", ")}.`
+      : "";
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return `You appear to be offline. Reconnect and try loading the owner dashboard again.${sectionSuffix}`;
+  }
+
+  return getActionableErrorMessage(
+    error,
+    `Unable to load the owner dashboard right now.${sectionSuffix}`,
+    {
+      [ApiErrorType.OFFLINE]: `You appear to be offline. Reconnect and try loading the owner dashboard again.${sectionSuffix}`,
+      [ApiErrorType.TIMEOUT_ERROR]: `Loading the owner dashboard timed out. Try again.${sectionSuffix}`,
+      [ApiErrorType.NETWORK_ERROR]: `We could not reach the dashboard service. Try again in a moment.${sectionSuffix}`,
+    }
+  );
 };
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
@@ -119,6 +157,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
           : null
       )
       .filter(Boolean) as string[];
+    const firstRejectedReason = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected"
+    )?.reason;
 
     // Detect soon-to-expire insurance policies (within 30 days)
     const now = Date.now();
@@ -209,6 +250,10 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       unreadMessages:
         typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
       failedSections,
+      error:
+        failedSections.length > 0
+          ? getOwnerDashboardLoadError(firstRejectedReason, failedSections)
+          : null,
       expiringInsurancePolicies: expiringPolicies,
       hasInsurance: activePolicies.length > 0,
     };
@@ -233,7 +278,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       failedSections: [],
       expiringInsurancePolicies: [],
       hasInsurance: true,
-      error: "Failed to load owner dashboard data",
+      error: getOwnerDashboardLoadError(error),
     };
   }
 }
@@ -393,12 +438,19 @@ function ListingCard({ listing }: { listing: Listing }) {
             src={listing.photos[0]}
             alt={listingTitle}
             className="w-full h-full object-cover"
+            crossOrigin="anonymous"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+              (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.setProperty("display", "flex");
+            }}
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Package className="w-12 h-12 text-muted-foreground" />
-          </div>
-        )}
+        ) : null}
+        <div
+          className="w-full h-full flex items-center justify-center"
+          style={{ display: listing.photos?.[0] ? "none" : "flex" }}
+        >
+          <Package className="w-12 h-12 text-muted-foreground" />
+        </div>
         <span
           className={cn(
             "absolute top-2 right-2 px-2 py-1 text-white text-xs font-semibold rounded",
@@ -437,6 +489,7 @@ function ListingCard({ listing }: { listing: Listing }) {
 
 export default function OwnerDashboardRoute() {
   const { t } = useTranslation();
+  const revalidator = useRevalidator();
   const {
     stats,
     listings,
@@ -461,20 +514,21 @@ export default function OwnerDashboardRoute() {
   const pendingEarnings = safeNumber(stats.pendingEarnings);
   const totalEarnings = safeNumber(stats.totalEarnings);
   const averageRating = safeNumber(stats.averageRating);
-  const banner = error ? (
+  const banner = error && (!failedSections || failedSections.length === 0) ? (
     <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
       {error}
     </div>
   ) : failedSections && failedSections.length > 0 ? (
     <div className="bg-warning/10 border border-warning/20 rounded-lg p-4">
       <p className="text-sm text-warning-foreground">
-        Some sections failed to load: {failedSections.join(", ")}.{" "}
-        <button
-          onClick={() => window.location.reload()}
-          className="underline font-medium"
+        {error || `Some sections failed to load: ${failedSections.join(", ")}.`}{" "}
+        <UnifiedButton
+          variant="ghost"
+          className="h-auto p-0 underline font-medium"
+          onClick={() => revalidator.revalidate()}
         >
           Retry
-        </button>
+        </UnifiedButton>
       </p>
     </div>
   ) : null;

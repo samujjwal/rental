@@ -19,6 +19,7 @@ import {
 import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -35,6 +36,13 @@ interface EnvVariable {
   description?: string;
 }
 
+export function getEnvironmentLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load environment variables", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading environment variables timed out. Try again.",
+  });
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -49,10 +57,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     return {
       variables: [],
       environment: "unknown",
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load environment variables",
+      error: getEnvironmentLoadError(error),
     };
   }
 }

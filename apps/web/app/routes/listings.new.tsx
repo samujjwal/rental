@@ -1,26 +1,28 @@
 import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useNavigate, useActionData, useSubmit } from "react-router";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Upload, X, CheckCircle, Sparkles, TrendingUp } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
 import { uploadApi } from "~/lib/api/upload";
 import { aiApi } from "~/lib/api/ai";
-import { geoApi } from "~/lib/api/geo";
 import { listingSchema, type ListingInput } from "~/lib/validation/listing";
 import type { z } from "zod";
 import { redirect } from "react-router";
 import { cn } from "~/lib/utils";
-import { APP_MAP_CENTER } from "~/config/locale";
 import { toast } from "~/lib/toast";
 import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { Card, CardContent } from "~/components/ui";
 import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
 import { VoiceListingAssistant } from "~/components/listings/VoiceListingAssistant";
+import { AIListingAssistant } from "~/components/listings/AIListingAssistant";
 import { CategorySpecificFields } from "~/components/listings/CategorySpecificFields";
-import { getCategoryFields } from "~/lib/category-fields";
+import type { CategoryFieldDefinition as CategoryField } from "~/lib/api/listings";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
+import { getListingDescriptionGenerationError } from "~/lib/listing-description-error";
+import { getListingImageUploadError } from "~/lib/listing-image-upload-error";
 import {
   ListingStepIndicator,
   LocationStep,
@@ -28,26 +30,17 @@ import {
   PricingStep,
   ImageUploadStep,
 } from "~/components/listings/steps";
-const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
-const KEYWORD_PRICE_HINTS: Array<{ pattern: RegExp; price: number }> = [
-  { pattern: /(camera|lens|gopro|drone)/i, price: 5000 },
-  { pattern: /(car|suv|truck|van)/i, price: 10000 },
-  { pattern: /(bike|bicycle|scooter)/i, price: 2500 },
-  { pattern: /(tool|drill|saw|ladder)/i, price: 3000 },
-  { pattern: /(dress|suit|tuxedo|fashion)/i, price: 3500 },
-  { pattern: /(speaker|party|event|projector)/i, price: 6000 },
-];
-const CITY_COORDINATE_HINTS: Record<string, { lat: number; lng: number }> = {
-  // City hints are region-specific; in production, use the geocoding API instead.
-  // These serve as quick fallbacks when the geocoder is unavailable.
-  kathmandu: { lat: 27.7172, lng: 85.324 },
-  pokhara: { lat: 28.2096, lng: 83.9856 },
-  lalitpur: { lat: 27.6588, lng: 85.3247 },
-  bharatpur: { lat: 27.6833, lng: 84.4333 },
-  biratnagar: { lat: 26.4525, lng: 87.2718 },
-  birgunj: { lat: 27.0104, lng: 84.8777 },
-  dharan: { lat: 26.8065, lng: 87.2846 },
-};
+import { useListingDraft } from "~/features/listings/create/useListingDraft";
+import { useListingMedia } from "~/features/listings/create/useListingMedia";
+import { useListingCategories } from "~/features/listings/create/useListingCategories";
+import { useListingCompletenessScore } from "~/features/listings/create/useListingCompletenessScore";
+import {
+  inferCategoryId,
+  inferCondition,
+  inferDailyPrice,
+  inferCoordinates,
+  inferFeatureHints,
+} from "~/features/listings/create/listing-inference";
 
 export const meta: MetaFunction = () => {
   return [
@@ -55,6 +48,33 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "List your item for rent" },
   ];
 };
+
+export function getCreateListingError(
+  error: unknown,
+  fallbackMessage = "Failed to create listing. Please try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try creating the listing again.";
+  }
+
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.CONFLICT]: "This listing is already being created or reviewed. Refresh and check your listings.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try creating the listing again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Creating the listing timed out. Try again.",
+  });
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -116,13 +136,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     const listing = await listingsApi.createListing(parsedData.data as ListingInput);
     return redirect(`/listings/${listing.id}`);
   } catch (error: unknown) {
-    return {
-      error:
-        error && typeof error === "object" && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message || "Failed to create listing. Please try again."
-          : "Failed to create listing. Please try again.",
-    };
+    return { error: getCreateListingError(error) };
   }
 }
 
@@ -157,17 +171,12 @@ export default function CreateListing() {
   const submit = useSubmit();
   const actionData = useActionData<typeof clientAction>();
   const [currentStep, setCurrentStep] = useState(1);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const imageUrlsRef = useRef<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvancedEditor, setShowAdvancedEditor] = useState(false);
-  const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([]);
-  const [categoriesError, setCategoriesError] = useState("");
-  const [loadingCategories, setLoadingCategories] = useState(true);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [categorySpecificData, setCategorySpecificData] = useState<Record<string, unknown>>({});
-  const [hasDraft, setHasDraft] = useState(false);
+  const [categoryFields, setCategoryFields] = useState<CategoryField[]>([]);
+  const [showAiPanel, setShowAiPanel] = useState(false);
   const [priceSuggestion, setPriceSuggestion] = useState<{
     averagePrice: number;
     medianPrice: number;
@@ -202,6 +211,10 @@ export default function CreateListing() {
 
   const deliveryOptions = watch("deliveryOptions");
   const selectedCategoryId = watch("category");
+  const draftValues = watch();
+
+  // Categories must be loaded before selectedCategorySlug so the useMemo can reference the list
+  const { categories, loadingCategories, categoriesError } = useListingCategories();
 
   // Resolve selected category slug for dynamic fields
   const selectedCategorySlug = useMemo(() => {
@@ -210,126 +223,41 @@ export default function CreateListing() {
     return cat?.slug;
   }, [selectedCategoryId, categories]);
 
-  // Reset category-specific data when category changes
+  // Reset category-specific data when category changes and load new field definitions
   useEffect(() => {
     setCategorySpecificData({});
+    setCategoryFields([]);
+    if (!selectedCategorySlug) return;
+    let cancelled = false;
+    listingsApi.getCategoryFieldDefinitions(selectedCategorySlug)
+      .then((defs) => { if (!cancelled) setCategoryFields(defs); })
+      .catch(() => { /* non-critical: form still works, required-field guard is skipped */ });
+    return () => { cancelled = true; };
   }, [selectedCategorySlug]);
 
   const handleCategoryFieldChange = useCallback((key: string, value: unknown) => {
     setCategorySpecificData((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const DRAFT_KEY = 'listingDraft_v1';
+  const { imageUrls, imageFiles, handleImageUpload, removeImage } = useListingMedia({ setValue });
+  const { hasDraft, restoreDraft, discardDraft, clearSavedDraft } = useListingDraft({
+    currentStep,
+    draftValues,
+    categorySpecificData,
+    isSubmitting,
+    getValues,
+    setValue,
+    setCurrentStep,
+    setCategorySpecificData,
+  });
 
-  // Restore draft on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      if (!saved) return;
-      const { step, values } = JSON.parse(saved) as { step: number; values: Record<string, unknown> };
-      setHasDraft(true);
-      // Don't auto-restore — let user choose via the banner
-      void step; void values;
-    } catch { /* corrupt draft */ }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Autosave every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ step: currentStep, values: getValues() }));
-      } catch { /* storage full */ }
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, [currentStep, getValues]);
-
-  const restoreDraft = useCallback(() => {
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      if (!saved) return;
-      const { step, values } = JSON.parse(saved) as { step: number; values: Record<string, unknown> };
-      Object.entries(values).forEach(([key, val]) => {
-        setValue(key as Parameters<typeof setValue>[0], val as never);
-      });
-      setCurrentStep(Math.min(Math.max(1, step), STEPS.length));
-      setHasDraft(false);
-    } catch { /* ignore */ }
-  }, [setValue]);
-
-  const discardDraft = useCallback(() => {
-    localStorage.removeItem(DRAFT_KEY);
-    setHasDraft(false);
-  }, []);
-
-  // Real-time listing completeness score
-  const watchedTitle = watch('title');
-  const watchedDescription = watch('description');
-  const watchedCategory = watch('category');
-  const watchedBasePrice = watch('basePrice');
-  const watchedCondition = watch('condition');
-  const watchedLocation = watch('location');
-  const watchedFeatures = watch('features');
-  const completenessScore = useMemo(() => {
-    const checks = [
-      { filled: !!watchedTitle && watchedTitle.length >= 10, weight: 10 },
-      { filled: !!watchedDescription && watchedDescription.length >= 50, weight: 15 },
-      { filled: !!watchedCategory, weight: 10 },
-      { filled: typeof watchedBasePrice === 'number' && watchedBasePrice > 0, weight: 10 },
-      { filled: !!watchedCondition, weight: 5 },
-      { filled: !!watchedLocation?.city, weight: 10 },
-      { filled: !!watchedLocation?.address, weight: 5 },
-      { filled: !!watchedLocation?.country, weight: 5 },
-      { filled: imageUrls.length >= 3, weight: 20 },
-      { filled: imageUrls.length >= 5, weight: 5 },
-      { filled: !!watchedFeatures && watchedFeatures.length > 0, weight: 5 },
-    ];
-    const total = checks.reduce((s, c) => s + c.weight, 0);
-    const earned = checks.filter((c) => c.filled).reduce((s, c) => s + c.weight, 0);
-    return Math.round((earned / total) * 100);
-  }, [watchedTitle, watchedDescription, watchedCategory, watchedBasePrice, watchedCondition, watchedLocation, watchedFeatures, imageUrls]);
-
-  useEffect(() => {
-    imageUrlsRef.current = imageUrls;
-  }, [imageUrls]);
+  const completenessScore = useListingCompletenessScore({ watch, imageUrls });
 
   useEffect(() => {
     if (actionData?.error) {
       setIsSubmitting(false);
     }
   }, [actionData?.error]);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadCategories = async () => {
-      try {
-        const data = await listingsApi.getCategories();
-        if (!mounted) return;
-        setCategories(
-          (data || []).map((category) => ({
-            id: category.id,
-            name: category.name,
-            slug: category.slug || category.name.toLowerCase().replace(/\s+/g, "-"),
-          }))
-        );
-      } catch {
-        if (!mounted) return;
-        setCategories([]);
-        setCategoriesError("Unable to load categories. Please try again later.");
-      } finally {
-        if (mounted) setLoadingCategories(false);
-      }
-    };
-    loadCategories();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      imageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, []);
 
   // Fetch price suggestion when entering the Pricing step
   useEffect(() => {
@@ -361,37 +289,6 @@ export default function CreateListing() {
     return () => { cancelled = true; };
   }, [currentStep, getValues]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const validFiles = files.filter(
-      (file) => file.type.startsWith("image/") && file.size <= MAX_IMAGE_FILE_SIZE
-    );
-    if (validFiles.length !== files.length) {
-      toast.warning("Only image files up to 10MB are allowed.");
-    }
-    if (validFiles.length + imageFiles.length > 10) {
-      toast.warning("Maximum 10 images allowed");
-      return;
-    }
-    if (validFiles.length === 0) return;
-
-    const newImageUrls = validFiles.map((file) => URL.createObjectURL(file));
-    setImageUrls([...imageUrls, ...newImageUrls]);
-    setImageFiles([...imageFiles, ...validFiles]);
-    setValue("photos", [...imageUrls, ...newImageUrls]);
-  };
-
-  const removeImage = (index: number) => {
-    if (imageUrls[index]) {
-      URL.revokeObjectURL(imageUrls[index]);
-    }
-    const newImageUrls = imageUrls.filter((_, i) => i !== index);
-    const newImageFiles = imageFiles.filter((_, i) => i !== index);
-    setImageUrls(newImageUrls);
-    setImageFiles(newImageFiles);
-    setValue("photos", newImageUrls);
-  };
-
   const onSubmit = async (data: z.input<typeof listingSchema>) => {
     setIsSubmitting(true);
     try {
@@ -406,7 +303,10 @@ export default function CreateListing() {
       const results = await uploadApi.uploadImages(imageFiles);
       const finalImages = results.map((r) => r.url).filter(Boolean);
       if (finalImages.length === 0) {
-        setError("photos", { type: "manual", message: "Image upload failed. Please try again." });
+        setError("photos", {
+          type: "manual",
+          message: getListingImageUploadError(null),
+        });
         setIsSubmitting(false);
         return;
       }
@@ -423,10 +323,12 @@ export default function CreateListing() {
       formData.append("data", JSON.stringify(payload));
 
       // Clear autosaved draft on successful submission
-      localStorage.removeItem(DRAFT_KEY);
+      clearSavedDraft();
       submit(formData, { method: "post" });
     } catch (error) {
-      toast.error("Failed to create listing. Please try again.");
+      const uploadErrorMessage = getListingImageUploadError(error);
+      setError("photos", { type: "manual", message: uploadErrorMessage });
+      toast.error(uploadErrorMessage);
       setIsSubmitting(false);
     }
   };
@@ -464,88 +366,20 @@ export default function CreateListing() {
     }
   };
 
+  const applyFieldFromSuggestion = useCallback((field: keyof ListingInput, value: unknown) => {
+    setValue(field as Parameters<typeof setValue>[0], value as never, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  }, [setValue]);
+
   const applyVoiceField = (field: string, value: unknown) => {
     setValue(field as keyof z.input<typeof listingSchema>, value as never, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
-  };
-
-  const inferCategoryId = (title: string, description: string): string | undefined => {
-    const text = `${title} ${description}`.toLowerCase();
-    const direct = categories.find((category) => text.includes(category.name.toLowerCase()));
-    if (direct) return direct.id;
-
-    const hints: Array<{ keyword: RegExp; names: string[] }> = [
-      { keyword: /(camera|lens|drone|gopro|photo)/i, names: ["electronics", "photography"] },
-      { keyword: /(car|truck|suv|bike|scooter|vehicle)/i, names: ["vehicle", "vehicles", "transport"] },
-      { keyword: /(tool|drill|ladder|saw|generator)/i, names: ["tools", "equipment"] },
-      { keyword: /(dress|suit|tuxedo|fashion|jewelry)/i, names: ["fashion", "wearables", "clothing"] },
-      { keyword: /(party|speaker|projector|event)/i, names: ["event", "party"] },
-    ];
-
-    for (const hint of hints) {
-      if (!hint.keyword.test(text)) continue;
-      const match = categories.find((category) =>
-        hint.names.some((name) => category.name.toLowerCase().includes(name))
-      );
-      if (match) return match.id;
-    }
-
-    return categories[0]?.id;
-  };
-
-  const inferCondition = (title: string, description: string): ListingInput["condition"] => {
-    const text = `${title} ${description}`.toLowerCase();
-    if (/brand new|unused|sealed/.test(text)) return "new";
-    if (/like new|mint|excellent/.test(text)) return "like-new";
-    if (/fair|visible wear/.test(text)) return "fair";
-    if (/poor|damaged|for parts/.test(text)) return "poor";
-    return "good";
-  };
-
-  const inferDailyPrice = (title: string, description: string): number => {
-    const text = `${title} ${description}`;
-    const explicit = text.match(/(?:[A-Z]{2,4}\s*\.?|[^\w\s])?\s*(\d{1,6})(?:\.\d+)?\s*(?:\/day|per day|daily)/i);
-    if (explicit) return Math.max(1, Math.min(10000, Number(explicit[1])));
-    const hint = KEYWORD_PRICE_HINTS.find((entry) => entry.pattern.test(text));
-    return hint?.price ?? 30;
-  };
-
-  const inferCoordinates = async (city: string, lat?: number, lng?: number) => {
-    if (typeof lat === "number" && typeof lng === "number") {
-      return { lat, lng };
-    }
-    const key = city.trim().toLowerCase();
-    // Fast path: use hardcoded hints for known cities
-    if (CITY_COORDINATE_HINTS[key]) {
-      return CITY_COORDINATE_HINTS[key];
-    }
-    // Slow path: call geocoding API for unknown cities
-    if (city.trim()) {
-      try {
-        const country = getValues("location.country") || "Nepal";
-        const result = await geoApi.autocomplete(`${city.trim()}, ${country}`, { limit: 1 });
-        if (result.results?.length > 0) {
-          const coords = result.results[0].coordinates;
-          return { lat: coords.lat, lng: coords.lon };
-        }
-      } catch {
-        // Geocoding failed, fall through to default
-      }
-    }
-    return { lat: APP_MAP_CENTER[0], lng: APP_MAP_CENTER[1] };
-  };
-
-  const inferFeatureHints = (title: string, description: string): string[] => {
-    const text = `${title} ${description}`.toLowerCase();
-    const features: string[] = [];
-    if (/waterproof/.test(text)) features.push("waterproof");
-    if (/wireless|bluetooth/.test(text)) features.push("wireless");
-    if (/portable/.test(text)) features.push("portable");
-    if (/professional|pro/.test(text)) features.push("professional-grade");
-    return features;
   };
 
   const submitListing = async (rawData: z.input<typeof listingSchema>) => {
@@ -561,18 +395,24 @@ export default function CreateListing() {
       const results = await uploadApi.uploadImages(imageFiles);
       const finalImages = results.map((r) => r.url).filter(Boolean);
       if (finalImages.length === 0) {
-        setError("photos", { type: "manual", message: "Image upload failed. Please try again." });
+        setError("photos", {
+          type: "manual",
+          message: getListingImageUploadError(null),
+        });
         setIsSubmitting(false);
         return;
       }
 
       const payload = { ...parsed, images: finalImages, categorySpecificData: Object.keys(categorySpecificData).length > 0 ? categorySpecificData : undefined };
+      clearSavedDraft();
       const formData = new FormData();
       formData.append("intent", "create");
       formData.append("data", JSON.stringify(payload));
       submit(formData, { method: "post" });
     } catch (error) {
-      toast.error("Failed to create listing. Please try again.");
+      const uploadErrorMessage = getListingImageUploadError(error);
+      setError("photos", { type: "manual", message: uploadErrorMessage });
+      toast.error(uploadErrorMessage);
       setIsSubmitting(false);
     }
   };
@@ -595,8 +435,8 @@ export default function CreateListing() {
       });
       setValue("description", result.description, { shouldValidate: true });
       toast.success("Description generated");
-    } catch {
-      toast.error("Failed to generate description. Please write one manually.");
+    } catch (error) {
+      toast.error(getListingDescriptionGenerationError(error));
     } finally {
       setIsGeneratingDescription(false);
     }
@@ -606,7 +446,7 @@ export default function CreateListing() {
     const values = getValues();
     const title = String(values.title || "").trim();
     const description = String(values.description || "").trim();
-    const category = values.category || inferCategoryId(title, description) || "";
+    const category = values.category || inferCategoryId(title, description, categories) || "";
     const condition = values.condition || inferCondition(title, description);
 
     if (imageFiles.length === 0) {
@@ -617,9 +457,8 @@ export default function CreateListing() {
       return;
     }
 
-    // Validate required category-specific fields
-    const catSlug = categories.find((c) => c.id === category)?.slug;
-    const catFields = getCategoryFields(catSlug);
+    // Validate required category-specific fields (uses live-loaded fields from API)
+    const catFields = categoryFields;
     const missingRequired = catFields.filter(
       (f) => f.required && (categorySpecificData[f.key] === undefined || categorySpecificData[f.key] === "" || categorySpecificData[f.key] === null)
     );
@@ -635,8 +474,9 @@ export default function CreateListing() {
     const city = String(values.location?.city || "").trim();
     const coords = await inferCoordinates(
       city,
+      getValues("location.country") || "Nepal",
       values.location?.coordinates?.lat,
-      values.location?.coordinates?.lng
+      values.location?.coordinates?.lng,
     );
     const features =
       values.features && values.features.length > 0
@@ -850,7 +690,7 @@ export default function CreateListing() {
 
           {/* Category-Specific Fields (Quick Create) */}
           <CategorySpecificFields
-            categorySlug={selectedCategorySlug}
+            fields={categoryFields}
             values={categorySpecificData}
             onChange={handleCategoryFieldChange}
           />
@@ -958,6 +798,26 @@ export default function CreateListing() {
           onPrevStep={prevStep}
         />
 
+        <div className="mb-4">
+          <button
+            data-testid="ai-panel-toggle"
+            type="button"
+            onClick={() => setShowAiPanel((prev) => !prev)}
+            className="text-sm font-semibold text-primary hover:underline"
+          >
+            {showAiPanel ? t('listings.create.hideAiPanel', 'Hide AI Listing Assistant') : t('listings.create.showAiPanel', 'Open AI Listing Assistant')}
+          </button>
+        </div>
+
+        {showAiPanel && (
+          <AIListingAssistant
+            listingData={draftValues}
+            category={selectedCategorySlug ?? ""}
+            onSuggestionApply={applyFieldFromSuggestion}
+            className="mb-6"
+          />
+        )}
+
         {showAdvancedEditor && (
           <Form id="listing-form" method="post" onSubmit={handleSubmit(onSubmit)}>
           <input type="hidden" name="intent" value="create" />
@@ -1038,7 +898,7 @@ export default function CreateListing() {
 
                   {/* Category-Specific Fields (Advanced Editor) */}
                   <CategorySpecificFields
-                    categorySlug={selectedCategorySlug}
+                    fields={categoryFields}
                     values={categorySpecificData}
                     onChange={handleCategoryFieldChange}
                   />

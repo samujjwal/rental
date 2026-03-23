@@ -1,5 +1,6 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // ─── Hoisted mocks ──────────────────────────────────────────────────────────
@@ -16,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
   useNavigation: vi.fn(() => ({ state: "idle" })),
   useRevalidator: vi.fn(() => ({ revalidate: vi.fn(), state: "idle" })),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
   redirect: vi.fn((url: string) => {
     return new Response(null, { status: 302, headers: { Location: url } });
   }),
@@ -76,7 +79,10 @@ vi.mock("~/lib/utils", () => ({
 }));
 
 vi.mock("~/lib/toast", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: {
+    success: (...args: any[]) => mocks.toastSuccess(...args),
+    error: (...args: any[]) => mocks.toastError(...args),
+  },
 }));
 
 vi.mock("date-fns", () => ({
@@ -145,7 +151,12 @@ vi.mock("lucide-react", () => ({
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 
-import BookingsPage, { clientLoader } from "./bookings";
+import BookingsPage, {
+  clientLoader,
+  getBookingsActionError,
+  getBookingsLoadError,
+  getBookingsUnavailableActionError,
+} from "./bookings";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -176,6 +187,10 @@ describe("bookings route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAvailableTransitions.mockResolvedValue({ availableTransitions: [] });
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
   });
 
   describe("clientLoader", () => {
@@ -259,6 +274,47 @@ describe("bookings route", () => {
       expect(result.error).toBeTruthy();
     });
 
+    it("uses timeout-specific loader copy", async () => {
+      mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
+      mocks.getMyBookings.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+      const result = await clientLoader({
+        request: new Request("http://localhost/bookings"),
+      } as any) as any;
+
+      expect(result.error).toBe("Loading bookings timed out. Try again.");
+    });
+
+    it("uses offline-specific loader copy", async () => {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
+      mocks.getMyBookings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const result = await clientLoader({
+        request: new Request("http://localhost/bookings"),
+      } as any) as any;
+
+      expect(result.error).toBe(
+        "You appear to be offline. Reconnect and try loading bookings again."
+      );
+    });
+
+    it("preserves backend loader messages", async () => {
+      mocks.getUser.mockResolvedValue({ id: "user-1", role: "renter" });
+      mocks.getMyBookings.mockRejectedValue({
+        response: { data: { message: "Booking history is temporarily unavailable" } },
+      });
+
+      const result = await clientLoader({
+        request: new Request("http://localhost/bookings"),
+      } as any) as any;
+
+      expect(result.error).toBe("Booking history is temporarily unavailable");
+    });
+
     it("indicates canViewOwner for owner role", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
       mocks.getMyBookings.mockResolvedValue([]);
@@ -338,6 +394,22 @@ describe("bookings route", () => {
       expect(screen.getByText(/Failed to load/i)).toBeInTheDocument();
     });
 
+    it("revalidates when the loader error retry action is clicked", () => {
+      const revalidate = vi.fn();
+      mocks.useRevalidator.mockReturnValue({ revalidate, state: "idle" });
+      mocks.useLoaderData.mockReturnValue({
+        bookings: [],
+        view: "renter",
+        status: null,
+        canViewOwner: false,
+        error: "Loading bookings timed out. Try again.",
+      });
+
+      render(<BookingsPage />);
+      fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+      expect(revalidate).toHaveBeenCalledTimes(1);
+    });
+
     it("renders empty state", () => {
       mocks.useLoaderData.mockReturnValue({
         bookings: [],
@@ -383,6 +455,132 @@ describe("bookings route", () => {
       });
       render(<BookingsPage />);
       expect(screen.getByText(/Inspect the return/i)).toBeInTheDocument();
+    });
+
+    it("shows contextual recovery copy when a decline action is no longer available", () => {
+      mocks.useLoaderData.mockReturnValue({
+        bookings: [
+          makeBooking({
+            status: "PENDING_OWNER_APPROVAL",
+            ownerId: "user-1",
+            renterId: "renter-2",
+            availableTransitions: ["OWNER_APPROVE"],
+          }),
+        ],
+        view: "owner",
+        status: null,
+        canViewOwner: true,
+        error: null,
+      });
+
+      render(<BookingsPage />);
+
+      fireEvent.click(screen.getByRole("button", { name: /Decline/i }));
+      fireEvent.change(screen.getByRole("textbox"), {
+        target: { value: "No longer needed" },
+      });
+      fireEvent.click(screen.getAllByRole("button", { name: /Decline/i })[1]);
+
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "This booking request no longer needs a decline action. Refresh and review the latest booking status."
+      );
+    });
+  });
+
+  describe("error helpers", () => {
+    it("preserves backend loader errors", () => {
+      expect(
+        getBookingsLoadError({
+          response: { data: { message: "Booking history is temporarily unavailable" } },
+        })
+      ).toBe("Booking history is temporarily unavailable");
+    });
+
+    it("uses timeout-specific loader copy", () => {
+      expect(getBookingsLoadError(new AxiosError("timeout", "ECONNABORTED"))).toBe(
+        "Loading bookings timed out. Try again."
+      );
+    });
+
+    it("uses offline-specific loader copy", () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+
+      expect(getBookingsLoadError(new AxiosError("Network Error", "ERR_NETWORK"))).toBe(
+        "You appear to be offline. Reconnect and try loading bookings again."
+      );
+
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
+    });
+
+    it("preserves backend action errors", () => {
+      expect(
+        getBookingsActionError(
+          { response: { data: { message: "Booking was already cancelled" } } },
+          "fallback"
+        )
+      ).toBe("Booking was already cancelled");
+    });
+
+    it("uses conflict-specific action copy", () => {
+      expect(
+        getBookingsActionError(
+          new AxiosError("Conflict", undefined, undefined, undefined, {
+            status: 409,
+            statusText: "Conflict",
+            headers: {},
+            config: { headers: {} } as any,
+            data: {},
+          } as any),
+          "fallback"
+        )
+      ).toBe(
+        "This booking changed while you were working. Refresh and review the latest status before trying again."
+      );
+    });
+
+    it("uses timeout-specific action copy", () => {
+      expect(
+        getBookingsActionError(new AxiosError("timeout", "ECONNABORTED"), "fallback")
+      ).toBe("The booking request timed out. Refresh and try again.");
+    });
+
+    it("uses offline-specific action copy", () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+
+      expect(
+        getBookingsActionError(
+          new AxiosError("Network Error", "ERR_NETWORK"),
+          "fallback"
+        )
+      ).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
+    });
+
+    it("uses contextual unavailable-action copy for cancel", () => {
+      expect(getBookingsUnavailableActionError("cancel")).toBe(
+        "This booking can no longer be cancelled from the list. Refresh and review the latest booking status."
+      );
+    });
+
+    it("uses contextual unavailable-action copy for decline", () => {
+      expect(getBookingsUnavailableActionError("reject")).toBe(
+        "This booking request no longer needs a decline action. Refresh and review the latest booking status."
+      );
     });
   });
 });

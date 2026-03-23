@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, redirect, useLoaderData } from "react-router";
+import { Link, redirect, useLoaderData, useRevalidator } from "react-router";
 import {
   ArrowUpRight,
   Banknote,
@@ -12,10 +12,28 @@ import {
 } from "lucide-react";
 import { getUser } from "~/utils/auth";
 import { paymentsApi } from "~/lib/api/payments";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
 import { Card, CardContent } from "~/components/ui/card";
 import { useTranslation } from "react-i18next";
 import { formatCurrency } from "~/lib/utils";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
+
+export function getBillingPartialLoadError(error: unknown, resource: string): string {
+  const responseMessage =
+    error && typeof error === "object" && "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  return getActionableErrorMessage(error, `Unable to load ${resource} right now.`, {
+    [ApiErrorType.OFFLINE]: `You appear to be offline. Reconnect and try loading ${resource} again.`,
+    [ApiErrorType.TIMEOUT_ERROR]: `Loading ${resource} timed out. Try again.`,
+    [ApiErrorType.NETWORK_ERROR]: `We could not load ${resource} right now. Try again in a moment.`,
+  });
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -36,7 +54,16 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       ? txResult.value.transactions ?? []
       : [];
 
-  return { user, balance, transactions };
+  const balanceError =
+    balanceResult.status === "rejected"
+      ? getBillingPartialLoadError(balanceResult.reason, "your balance")
+      : null;
+  const transactionsError =
+    txResult.status === "rejected"
+      ? getBillingPartialLoadError(txResult.reason, "recent transactions")
+      : null;
+
+  return { user, balance, transactions, balanceError, transactionsError };
 }
 
 export const meta: MetaFunction = () => [
@@ -45,7 +72,8 @@ export const meta: MetaFunction = () => [
 ];
 
 export default function SettingsBillingPage() {
-  const { user, balance, transactions } = useLoaderData<typeof clientLoader>();
+  const { user, balance, transactions, balanceError, transactionsError } = useLoaderData<typeof clientLoader>();
+  const { revalidate } = useRevalidator();
   const { t } = useTranslation();
   const canOpenPayments = user.role === "owner" || user.role === "admin";
   const canManagePayouts = canOpenPayments;
@@ -96,6 +124,25 @@ export default function SettingsBillingPage() {
 
           {/* Main Content */}
           <div className="md:col-span-3 space-y-6">
+            {(balanceError || transactionsError) && (
+              <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning-foreground">
+                <p className="font-medium">Some billing information is temporarily unavailable.</p>
+                {balanceError && <p className="mt-1">{balanceError}</p>}
+                {transactionsError && <p className="mt-1">{transactionsError}</p>}
+                <div className="mt-3">
+                  <UnifiedButton
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      revalidate();
+                    }}
+                  >
+                    Try Again
+                  </UnifiedButton>
+                </div>
+              </div>
+            )}
+
             {/* Current Balance */}
             {balance && (
               <Card>
@@ -145,7 +192,14 @@ export default function SettingsBillingPage() {
                   )}
                 </div>
 
-                {transactions.length === 0 ? (
+                {transactionsError ? (
+                  <div className="py-8 text-center">
+                    <Receipt className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      Recent transactions are temporarily unavailable.
+                    </p>
+                  </div>
+                ) : transactions.length === 0 ? (
                   <div className="py-8 text-center">
                     <Receipt className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">

@@ -1,5 +1,6 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 const IconStub = vi.hoisted(() => (props: any) => (
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getUnreadMsgCount: vi.fn(),
   getMyPolicies: vi.fn(),
   useLoaderData: vi.fn(),
+  revalidate: vi.fn(),
   redirect: vi.fn(
     (url: string) =>
       new Response("", { status: 302, headers: { Location: url } })
@@ -23,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("react-router", () => ({
   useLoaderData: () => mocks.useLoaderData(),
+  useRevalidator: () => ({ revalidate: mocks.revalidate, state: "idle" }),
   redirect: mocks.redirect,
   Link: ({ children, to }: any) => <a href={to}>{children}</a>,
 }));
@@ -70,6 +73,7 @@ vi.mock("~/components/ui", () => ({
   CardTitle: ({ children }: any) => <h3>{children}</h3>,
   Badge: ({ children }: any) => <span>{children}</span>,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
+  UnifiedButton: ({ children, ...props }: any) => <button {...props}>{children}</button>,
 }));
 vi.mock("~/components/ui/skeleton", () => ({
   PageSkeleton: () => <div data-testid="skeleton" />,
@@ -78,7 +82,24 @@ vi.mock("~/components/layout", () => ({
   PageContainer: ({ children }: any) => <div>{children}</div>,
   PageHeader: ({ title }: any) => <h1>{title}</h1>,
   DashboardSidebar: () => <nav data-testid="sidebar" />,
-  PortalPageLayout: ({ children }: any) => <div>{children}</div>,
+  PortalPageLayout: ({ children, banner, actions }: any) => <div>{banner}{actions}{children}</div>,
+}));
+vi.mock("~/components/dashboard/RecentActivity", () => ({
+  RecentActivity: () => <div data-testid="recent-activity" />,
+}));
+vi.mock("~/components/dashboard/DashboardCustomizer", () => ({
+  DashboardCustomizer: () => <div data-testid="dashboard-customizer" />,
+}));
+vi.mock("~/hooks/useDashboardPreferences", () => ({
+  useDashboardPreferences: (_key: string, sections: any[]) => ({
+    orderedSections: sections,
+    hiddenIds: new Set(),
+    pinnedIds: new Set(),
+    updatePreferences: vi.fn(),
+    togglePinned: vi.fn(),
+    toggleHidden: vi.fn(),
+    resetPreferences: vi.fn(),
+  }),
 }));
 vi.mock("~/config/navigation", () => ({ ownerNavSections: [] }));
 vi.mock("lucide-react", async (importOriginal) => {
@@ -104,6 +125,10 @@ import OwnerDashboard, { clientLoader } from "./dashboard.owner";
 describe("dashboard.owner route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
     mocks.getMyListings.mockResolvedValue([]);
     mocks.getOwnerBookings.mockResolvedValue([]);
     mocks.getEarnings.mockResolvedValue({ amount: 0 });
@@ -164,7 +189,7 @@ describe("dashboard.owner route", () => {
 
     it("handles partial API failures gracefully", async () => {
       mocks.requireUser.mockResolvedValue({ id: "u1", role: "owner" });
-      mocks.getMyListings.mockRejectedValue(new Error("fail"));
+      mocks.getMyListings.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
       mocks.getOwnerBookings.mockRejectedValue(new Error("fail"));
 
       const r = await clientLoader({
@@ -174,6 +199,39 @@ describe("dashboard.owner route", () => {
       expect(r.stats.pendingBookings).toBe(0);
       expect(r.failedSections).toContain("listings");
       expect(r.failedSections).toContain("bookings");
+      expect(r.error).toBe(
+        "Loading the owner dashboard timed out. Try again. Some sections could not be loaded: listings, bookings."
+      );
+    });
+
+    it("uses offline-specific copy for partial dashboard failures", async () => {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      mocks.requireUser.mockResolvedValue({ id: "u1", role: "owner" });
+      mocks.getMyListings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const r = await clientLoader({
+        request: new Request("http://localhost"),
+      } as any) as any;
+
+      expect(r.error).toBe(
+        "You appear to be offline. Reconnect and try loading the owner dashboard again. Some sections could not be loaded: listings."
+      );
+    });
+
+    it("preserves backend messages for partial dashboard failures", async () => {
+      mocks.requireUser.mockResolvedValue({ id: "u1", role: "owner" });
+      mocks.getMyListings.mockRejectedValue({
+        response: { data: { message: "Owner listing analytics are recalculating" } },
+      });
+
+      const r = await clientLoader({
+        request: new Request("http://localhost"),
+      } as any) as any;
+
+      expect(r.error).toBe("Owner listing analytics are recalculating");
     });
 
     it("normalizes booking statuses", async () => {
@@ -229,6 +287,52 @@ describe("dashboard.owner route", () => {
       expect(r.hasInsurance).toBe(true);
       expect(r.expiringInsurancePolicies).toHaveLength(1);
     });
+
+    it("uses timeout-specific copy when dashboard loading throws before settling", async () => {
+      mocks.requireUser.mockResolvedValue({ id: "u1", role: "owner" });
+      mocks.getMyListings.mockImplementation(() => {
+        throw new AxiosError("timeout", "ECONNABORTED");
+      });
+
+      const r = await clientLoader({
+        request: new Request("http://localhost"),
+      } as any) as any;
+
+      expect(r.error).toBe("Loading the owner dashboard timed out. Try again.");
+      expect(r.failedSections).toEqual([]);
+    });
+
+    it("uses offline-specific copy when dashboard loading throws before settling", async () => {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      mocks.requireUser.mockResolvedValue({ id: "u1", role: "owner" });
+      mocks.getMyListings.mockImplementation(() => {
+        throw new AxiosError("Network Error", "ERR_NETWORK");
+      });
+
+      const r = await clientLoader({
+        request: new Request("http://localhost"),
+      } as any) as any;
+
+      expect(r.error).toBe(
+        "You appear to be offline. Reconnect and try loading the owner dashboard again."
+      );
+    });
+
+    it("preserves backend dashboard load errors", async () => {
+      mocks.requireUser.mockResolvedValue({ id: "u1", role: "owner" });
+      mocks.getMyListings.mockImplementation(() => {
+        throw { response: { data: { message: "Owner dashboard cache is warming up" } } };
+      });
+
+      const r = await clientLoader({
+        request: new Request("http://localhost"),
+      } as any) as any;
+
+      expect(r.error).toBe("Owner dashboard cache is warming up");
+    });
   });
 
   describe("OwnerDashboard component", () => {
@@ -265,6 +369,40 @@ describe("dashboard.owner route", () => {
       expect(
         screen.getAllByText(/dashboard|listings|bookings/i).length
       ).toBeGreaterThan(0);
+    });
+
+    it("revalidates when the partial-failure retry action is clicked", () => {
+      mocks.useLoaderData.mockReturnValue({
+        stats: {
+          activeListings: 0,
+          totalListings: 0,
+          pendingBookings: 0,
+          activeBookings: 0,
+          completedBookings: 0,
+          totalEarnings: 0,
+          pendingEarnings: 0,
+          averageRating: 0,
+          totalReviews: 0,
+        },
+        listings: [],
+        recentBookings: [],
+        userStats: { averageRating: 0, totalReviews: 0 },
+        unreadNotifications: 0,
+        unreadMessages: 0,
+        error:
+          "Loading the owner dashboard timed out. Try again. Some sections could not be loaded: listings.",
+        failedSections: ["listings"],
+        expiringInsurancePolicies: [],
+        hasInsurance: false,
+      });
+      render(<OwnerDashboard />);
+      expect(
+        screen.getByText(
+          "Loading the owner dashboard timed out. Try again. Some sections could not be loaded: listings."
+        )
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /Retry/i }));
+      expect(mocks.revalidate).toHaveBeenCalledTimes(1);
     });
   });
 });

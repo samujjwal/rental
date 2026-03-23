@@ -573,7 +573,21 @@ async function main() {
   console.log('🧹 Cleaning existing data...');
 
   // Phase 2 tables may not exist yet (no migration); skip gracefully
-  const safeDelete = async (fn: () => Promise<any>) => { try { await fn(); } catch (e: any) { if (e?.code !== 'P2021') throw e; } };
+  const safeDelete = async (fn: () => Promise<any>) => {
+    try {
+      await fn();
+    } catch (e: any) {
+      if (e?.code === 'P2021') {
+        return;
+      }
+
+      if (e instanceof TypeError && /deleteMany/.test(e.message)) {
+        return;
+      }
+
+      throw e;
+    }
+  };
   await safeDelete(() => prisma.bookingPriceBreakdown.deleteMany());
   await safeDelete(() => prisma.fxRateSnapshot.deleteMany());
   await safeDelete(() => prisma.availabilitySlot.deleteMany());
@@ -583,6 +597,29 @@ async function main() {
   await safeDelete(() => prisma.listingVersion.deleteMany());
   await safeDelete(() => prisma.listingContent.deleteMany());
   await safeDelete(() => prisma.identityDocument.deleteMany());
+  await safeDelete(() => prisma.aiConversationTurn.deleteMany());
+  await safeDelete(() => prisma.aiConversation.deleteMany());
+  await safeDelete(() => prisma.anomalyDetection.deleteMany());
+  await safeDelete(() => prisma.complianceRecord.deleteMany());
+  await safeDelete(() => prisma.deviceFingerprint.deleteMany());
+  await safeDelete(() => prisma.demandForecast.deleteMany());
+  await safeDelete(() => prisma.demandSignal.deleteMany());
+  await safeDelete(() => prisma.disputeEscalation.deleteMany());
+  await safeDelete(() => prisma.escrowTransaction.deleteMany());
+  await safeDelete(() => prisma.fraudSignal.deleteMany());
+  await safeDelete(() => prisma.hostActivationCampaign.deleteMany());
+  await safeDelete(() => prisma.inventoryGraphEdge.deleteMany());
+  await safeDelete(() => prisma.inventoryGraphNode.deleteMany());
+  await safeDelete(() => prisma.marketOpportunity.deleteMany());
+  await safeDelete(() => prisma.marketplaceHealthMetric.deleteMany());
+  await safeDelete(() => prisma.moderationAction.deleteMany());
+  await safeDelete(() => prisma.platformMetric.deleteMany());
+  await safeDelete(() => prisma.pricingRecommendation.deleteMany());
+  await safeDelete(() => prisma.reputationScore.deleteMany());
+  await safeDelete(() => prisma.searchEvent.deleteMany());
+  await safeDelete(() => prisma.serviceHealthCheck.deleteMany());
+  await safeDelete(() => prisma.trustScore.deleteMany());
+  await safeDelete(() => prisma.userSearchProfile.deleteMany());
 
   await prisma.disputeResolution.deleteMany();
   await prisma.disputeTimelineEvent.deleteMany();

@@ -5,10 +5,11 @@ import {
   Shield, AlertCircle, Clock, CheckCircle, X, ArrowLeft,
   FileText, Image, Video, ExternalLink, Calendar,
 } from "lucide-react";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
 import { useAuthStore } from "~/lib/store/auth";
 import { insuranceApi, type InsuranceClaim, type ClaimStatus } from "~/lib/api/insurance";
 import { formatCurrency } from "~/lib/utils";
+import { getActionableErrorMessage, ApiErrorType } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => [
   { title: "Claim Details | GharBatai Rentals" },
@@ -97,6 +98,7 @@ export default function InsuranceClaimDetailPage() {
   const [claim, setClaim] = useState<InsuranceClaim | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -110,10 +112,25 @@ export default function InsuranceClaimDetailPage() {
     insuranceApi
       .getClaim(claimId)
       .then((c) => { if (!cancelled) setClaim(c); })
-      .catch(() => { if (!cancelled) setError("Failed to load claim. It may not exist or you may not have permission to view it."); })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(
+            getActionableErrorMessage(
+              err,
+              "Failed to load claim. It may not exist or you may not have permission to view it.",
+              {
+                [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+                [ApiErrorType.TIMEOUT_ERROR]: "Loading the claim timed out. Try again.",
+              }
+            )
+          );
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [isAuthenticated, claimId, navigate]);
+  }, [isAuthenticated, claimId, navigate, reloadKey]);
+
+  const retryLoad = () => setReloadKey((prev) => prev + 1);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -145,12 +162,16 @@ export default function InsuranceClaimDetailPage() {
           <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
             <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
             <p className="font-medium text-red-700">{error}</p>
-            <Link
-              to="/insurance/claims"
-              className="mt-4 inline-block text-sm text-red-600 underline underline-offset-2 hover:text-red-800"
-            >
-              Return to claims list
-            </Link>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <UnifiedButton variant="outline" onClick={retryLoad}>
+                Retry
+              </UnifiedButton>
+              <Link to="/insurance/claims">
+                <UnifiedButton variant="ghost">
+                  Return to claims list
+                </UnifiedButton>
+              </Link>
+            </div>
           </div>
         )}
 

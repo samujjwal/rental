@@ -1,4 +1,6 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 /* ─── Mocks ───────────────────────────────────────────────────────── */
 const mocks = vi.hoisted(() => ({
@@ -6,10 +8,13 @@ const mocks = vi.hoisted(() => ({
   getInsights: vi.fn(),
   redirect: vi.fn((url: string) => new Response(null, { status: 302, headers: { Location: url } })),
   useLoaderData: vi.fn(),
+  revalidate: vi.fn(),
 }));
 
 vi.mock("react-router", () => ({
   useLoaderData: () => mocks.useLoaderData(),
+  useRevalidator: () => ({ revalidate: mocks.revalidate }),
+  useLocation: () => ({ pathname: "/dashboard/owner/insights" }),
   redirect: mocks.redirect,
   Link: ({ children, to, ...p }: any) => <a href={to} {...p}>{children}</a>,
 }));
@@ -44,10 +49,11 @@ vi.mock("~/components/ui", () => ({
   CardHeader: ({ children }: any) => <div>{children}</div>,
   CardTitle: ({ children }: any) => <div>{children}</div>,
   CardDescription: ({ children }: any) => <div>{children}</div>,
+  UnifiedButton: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 vi.mock("~/components/layout", () => ({
-  PortalPageLayout: ({ children }: any) => <div>{children}</div>,
+  PortalPageLayout: ({ banner, children }: any) => <div>{banner}{children}</div>,
 }));
 vi.mock("~/lib/utils", () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(" "),
@@ -57,9 +63,14 @@ vi.mock("~/config/navigation", () => ({
   ownerNavSections: [],
 }));
 
-import { clientLoader } from "./dashboard.owner.insights";
+import OwnerInsightsPage, { clientLoader, getOwnerInsightsLoadError } from "./dashboard.owner.insights";
 
 beforeEach(() => vi.clearAllMocks());
+
+beforeEach(() => {
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  mocks.useLoaderData.mockReturnValue({ data: null, error: null });
+});
 
 /* ================================================================== */
 /*  clientLoader – auth + role gating                                  */
@@ -114,6 +125,32 @@ describe("dashboard.owner.insights clientLoader", () => {
     expect(r.error).toBeTruthy();
   });
 
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+    mocks.getInsights.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/dashboard/owner/insights"),
+    } as any)) as any;
+
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("uses timeout-specific copy on loader failure", async () => {
+    mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+    mocks.getInsights.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/dashboard/owner/insights"),
+    } as any)) as any;
+
+    expect(r.error).toBe("Loading insights timed out. Try again.");
+  });
+
   it("handles null/missing insight data safely", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "admin" });
     mocks.getInsights.mockResolvedValue(null);
@@ -122,5 +159,20 @@ describe("dashboard.owner.insights clientLoader", () => {
     } as any)) as any;
     expect(r.data.score).toBe(0);
     expect(r.data.insights).toEqual([]);
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getOwnerInsightsLoadError(new Error("insights unavailable"))).toBe("insights unavailable");
+  });
+});
+
+describe("OwnerInsightsPage recovery UI", () => {
+  it("revalidates from the error banner", () => {
+    mocks.useLoaderData.mockReturnValue({ data: null, error: "Loading insights timed out. Try again." });
+
+    render(<OwnerInsightsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try Again" }));
+    expect(mocks.revalidate).toHaveBeenCalledTimes(1);
   });
 });

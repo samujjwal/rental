@@ -97,26 +97,37 @@ export class StripeService implements PaymentProvider {
   ) {
     const stripeKey = configService.get<string>('STRIPE_SECRET_KEY');
     const nodeEnv = configService.get<string>('nodeEnv') || process.env.NODE_ENV;
-    
-    if (!stripeKey) {
-      if (nodeEnv === 'development') {
-        this.logger.warn(
-          'STRIPE_SECRET_KEY not configured — Stripe disabled in development, using placeholder client',
-        );
-        // Create a dummy placeholder Stripe client for development
-        this.stripe = new Stripe('sk_test_dev_placeholder_key', {
-          apiVersion: '2026-01-28.clover',
-        });
-      } else {
-        throw new Error(
-          'STRIPE_SECRET_KEY is not configured. Stripe payments will not work.',
-        );
-      }
-    } else {
-      this.stripe = new Stripe(stripeKey, {
-        apiVersion: '2026-01-28.clover',
-      });
+
+    // Guard: STRIPE_TEST_BYPASS is only permitted in automated test environments (NODE_ENV=test or e2e).
+    // Allowing it in staging silently fakes all payments on non-production systems.
+    const testBypass = configService.get<string>('STRIPE_TEST_BYPASS') === 'true';
+    const allowedBypassEnvs = new Set(['test', 'e2e']);
+    if (testBypass && !allowedBypassEnvs.has(nodeEnv ?? '')) {
+      throw new Error(
+        `STRIPE_TEST_BYPASS=true is only permitted when NODE_ENV is 'test' or 'e2e'. ` +
+        `Current NODE_ENV='${nodeEnv}'. Remove STRIPE_TEST_BYPASS from this environment or set NODE_ENV=test.`,
+      );
     }
+
+    if (!stripeKey) {
+      // In test environments Stripe calls are mocked at the test-runner level;
+      // the service object itself is never constructed. Guard anyway.
+      if (nodeEnv === 'test') {
+        this.logger.warn('STRIPE_SECRET_KEY not set in test environment — Stripe service inactive');
+        return;
+      }
+      // In all other environments (dev, staging, production) we require a real key.
+      // Using a placeholder key creates a silently-broken Stripe client that fails
+      // only at the first API call, making debugging much harder.
+      throw new Error(
+        'STRIPE_SECRET_KEY is required. Add a Stripe test key (sk_test_…) for development '
+        + 'or a live key (sk_live_…) for production. See .env.example.',
+      );
+    }
+
+    this.stripe = new Stripe(stripeKey, {
+      apiVersion: '2026-01-28.clover',
+    });
   }
 
   async createConnectAccount(userId: string, email: string): Promise<string> {

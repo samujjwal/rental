@@ -1,5 +1,6 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // ─── Hoisted mocks ──────────────────────────────────────────────────────────
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   useNavigation: vi.fn(() => ({ state: "idle" })),
   useSubmit: vi.fn(() => vi.fn()),
   useNavigate: vi.fn(() => vi.fn()),
+  useRevalidator: vi.fn(() => ({ revalidate: vi.fn() })),
 }));
 
 vi.mock("react-router", () => ({
@@ -21,6 +23,7 @@ vi.mock("react-router", () => ({
   useNavigation: () => mocks.useNavigation(),
   useSubmit: () => mocks.useSubmit(),
   useNavigate: () => mocks.useNavigate(),
+  useRevalidator: () => mocks.useRevalidator(),
   Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
   Link: ({ children, to, ...props }: any) => (
     <a href={to} {...props}>
@@ -52,8 +55,12 @@ vi.mock("~/hooks/useDebounce", () => ({
 }));
 
 vi.mock("~/components/ui", () => ({
-  UnifiedButton: ({ children, ...props }: any) => (
-    <button {...props}>{children}</button>
+  UnifiedButton: ({ children, leftIcon, rightIcon, loading, ...props }: any) => (
+    <button {...props}>
+      {loading ? <span data-testid="loading-spinner" /> : leftIcon}
+      {children}
+      {!loading ? rightIcon : null}
+    </button>
   ),
   Badge: ({ children }: any) => <span>{children}</span>,
   CardGridSkeleton: () => <div data-testid="skeleton" />,
@@ -98,7 +105,7 @@ vi.mock("lucide-react", () => ({
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 
-import SearchPage, { clientLoader } from "./search";
+import SearchPage, { clientLoader, getSearchResultsError } from "./search";
 
 // ─── Helper function tests ──────────────────────────────────────────────────
 
@@ -109,6 +116,11 @@ import SearchPage, { clientLoader } from "./search";
 describe("search route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
   });
 
   // ── clientLoader tests ────────────────────────────────────────────────
@@ -407,6 +419,42 @@ describe("search route", () => {
       expect(data.results.total).toBe(0);
     });
 
+    it("returns actionable offline loader copy", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      mocks.searchListings.mockRejectedValue(
+        new AxiosError("Network Error", "ERR_NETWORK")
+      );
+
+      const data = await clientLoader({
+        request: new Request("http://localhost/search"),
+      } as any);
+
+      expect(data.error).toBe(
+        "You appear to be offline. Reconnect and try loading search results again."
+      );
+
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
+    });
+
+    it("returns timeout-specific loader copy", async () => {
+      mocks.searchListings.mockRejectedValue(
+        new AxiosError("timeout", "ECONNABORTED")
+      );
+
+      const data = await clientLoader({
+        request: new Request("http://localhost/search"),
+      } as any);
+
+      expect(data.error).toBe("Loading search results timed out. Try again.");
+    });
+
     it("handles category failure gracefully", async () => {
       mocks.searchListings.mockResolvedValue({
         listings: [],
@@ -454,6 +502,7 @@ describe("search route", () => {
       mocks.useSearchParams.mockReturnValue([new URLSearchParams(), vi.fn()]);
       mocks.useNavigation.mockReturnValue({ state: "idle" });
       mocks.useNavigate.mockReturnValue(vi.fn());
+      mocks.useRevalidator.mockReturnValue({ revalidate: vi.fn() });
     });
 
     it("renders search results", () => {
@@ -547,13 +596,119 @@ describe("search route", () => {
           limit: 20,
           totalPages: 1,
         },
-        categories: ["electronics", "vehicles"],
+        categories: [
+          { id: "electronics", name: "Electronics", slug: "electronics" },
+          { id: "vehicles", name: "Vehicles", slug: "vehicles" },
+        ],
         searchParams: {},
         error: null,
       });
       render(<SearchPage />);
       expect(screen.getByText(/Camera/)).toBeInTheDocument();
       expect(screen.getByText(/Bike/)).toBeInTheDocument();
+    });
+
+    it("does not carry saved map-only mode into a non-map saved view", async () => {
+      localStorage.setItem("searchViewMode", "grid");
+      localStorage.setItem("searchMapOnly", "true");
+
+      mocks.useLoaderData.mockReturnValue({
+        results: {
+          listings: [
+            {
+              id: "1",
+              title: "Camera",
+              basePrice: 500,
+              currency: "NPR",
+              images: [],
+              photos: [],
+              location: { city: "Kathmandu", coordinates: { lat: 27.7172, lng: 85.324 } },
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+        },
+        categories: [],
+        searchParams: {},
+        error: null,
+      });
+
+      render(<SearchPage />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Map view" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Map only" })).toBeInTheDocument();
+      });
+    });
+
+    it("enters map view when the saved view is map", async () => {
+      localStorage.setItem("searchViewMode", "map");
+      localStorage.setItem("searchMapOnly", "true");
+
+      mocks.useLoaderData.mockReturnValue({
+        results: {
+          listings: [
+            {
+              id: "1",
+              title: "Camera",
+              basePrice: 500,
+              currency: "NPR",
+              images: [],
+              photos: [],
+              location: { city: "Kathmandu", coordinates: { lat: 27.7172, lng: 85.324 } },
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+        },
+        categories: [],
+        searchParams: {},
+        error: null,
+      });
+
+      render(<SearchPage />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Map view" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Map only" })).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("error helpers", () => {
+    it("preserves plain thrown errors", () => {
+      expect(getSearchResultsError(new Error("search unavailable"))).toBe(
+        "search unavailable"
+      );
+    });
+
+    it("uses actionable offline copy", () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+
+      expect(getSearchResultsError(new Error("Network Error"))).toBe(
+        "You appear to be offline. Reconnect and try loading search results again."
+      );
+
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: previousOnline,
+      });
+    });
+
+    it("uses timeout-specific copy", () => {
+      expect(getSearchResultsError(new AxiosError("timeout", "ECONNABORTED"))).toBe(
+        "Loading search results timed out. Try again."
+      );
     });
   });
 });

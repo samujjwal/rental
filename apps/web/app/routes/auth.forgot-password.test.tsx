@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -47,7 +48,11 @@ vi.mock("react-hook-form", () => ({
 vi.mock("@hookform/resolvers/zod", () => ({ zodResolver: () => vi.fn() }));
 vi.mock("lucide-react", () => ({ Mail: IconStub, ArrowLeft: IconStub }));
 
-import ForgotPassword, { clientLoader, clientAction } from "./auth.forgot-password";
+import ForgotPassword, {
+  clientLoader,
+  clientAction,
+  getForgotPasswordError,
+} from "./auth.forgot-password";
 
 function makeFormReq(fields: Record<string, string>) {
   const fd = new FormData();
@@ -105,7 +110,50 @@ describe("auth.forgot-password route", () => {
         request: makeFormReq({ intent: "forgot-password", email: "a@b.com" }),
       } as any);
       expect(r.success).toBe(false);
-      expect(r.error).toContain("Failed to send");
+      expect(r.error).toBe("fail");
+    });
+
+    it("preserves backend forgot-password errors", async () => {
+      mocks.forgotPassword.mockRejectedValue({
+        response: { data: { message: "Too many reset attempts" } },
+      });
+      const r = await clientAction({
+        request: makeFormReq({ intent: "forgot-password", email: "a@b.com" }),
+      } as any);
+      expect(r.error).toBe("Too many reset attempts");
+    });
+
+    it("uses actionable offline copy", async () => {
+      mocks.forgotPassword.mockRejectedValue(new Error("Network Error"));
+      const online = window.navigator.onLine;
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      const r = await clientAction({
+        request: makeFormReq({ intent: "forgot-password", email: "a@b.com" }),
+      } as any);
+      expect(r.error).toBe(
+        "You appear to be offline. Reconnect and try sending the reset email again."
+      );
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: online,
+      });
+    });
+
+    it("uses timeout-specific copy", async () => {
+      mocks.forgotPassword.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+      const r = await clientAction({
+        request: makeFormReq({ intent: "forgot-password", email: "a@b.com" }),
+      } as any);
+      expect(r.error).toBe("Sending the reset email timed out. Try again.");
+    });
+  });
+
+  describe("getForgotPasswordError", () => {
+    it("preserves plain thrown errors", () => {
+      expect(getForgotPasswordError(new Error("boom"), "fallback")).toBe("boom");
     });
   });
 
@@ -119,6 +167,12 @@ describe("auth.forgot-password route", () => {
       mocks.useActionData.mockReturnValue({ success: true, message: "Done" });
       render(<ForgotPassword />);
       expect(screen.getByText(/Check your email/i)).toBeInTheDocument();
+    });
+
+    it("associates the server error with the email field", () => {
+      mocks.useActionData.mockReturnValue({ success: false, error: "Too many reset attempts" });
+      render(<ForgotPassword />);
+      expect(screen.getByLabelText(/email/i)).toHaveAttribute("aria-describedby", "forgot-password-form-error");
     });
   });
 });

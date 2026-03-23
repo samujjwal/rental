@@ -17,6 +17,13 @@ export interface SeedData {
   categoryId: string;
 }
 
+interface SeedListingItem {
+  id: string;
+  title: string;
+  categoryId?: string;
+  instantBooking?: boolean;
+}
+
 let _cached: SeedData | null = null;
 
 /**
@@ -33,7 +40,7 @@ export async function ensureSeedData(page: Page): Promise<SeedData> {
 
   // 2. Check if a bookable listing already exists
   const existingRes = await page.request.get(
-    `${API}/listings?limit=1&status=PUBLISHED`,
+    `${API}/listings?limit=20&status=PUBLISHED`,
     { headers: { Authorization: `Bearer ${ownerPayload.accessToken}` } },
   );
 
@@ -41,14 +48,17 @@ export async function ensureSeedData(page: Page): Promise<SeedData> {
     const data = await existingRes.json();
     const items = data.data ?? data.items ?? data.listings ?? (Array.isArray(data) ? data : []);
     if (items.length > 0) {
+      const requestListing = (items as SeedListingItem[]).find((item) => item.instantBooking !== true) ?? items[0];
       _cached = {
         ownerToken: ownerPayload.accessToken,
         renterToken: renterPayload.accessToken,
         adminToken: adminPayload.accessToken,
-        listing: { id: items[0].id, title: items[0].title },
-        categoryId: items[0].categoryId ?? "",
+        listing: { id: requestListing.id, title: requestListing.title },
+        categoryId: requestListing.categoryId ?? "",
       };
-      return _cached;
+      if ((requestListing as SeedListingItem).instantBooking !== true) {
+        return _cached;
+      }
     }
   }
 
@@ -96,6 +106,7 @@ export async function ensureSeedData(page: Page): Promise<SeedData> {
       basePrice: 100,
       currency: "NPR",
       categoryId,
+      bookingMode: "REQUEST",
       condition: "GOOD",
       location: "Kathmandu, Nepal",
     },

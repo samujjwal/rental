@@ -1,5 +1,8 @@
 import { spawnSync } from "node:child_process";
 
+const resolvedBaseUrl =
+  process.env.BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3401";
+
 const suites = {
   manual: [
     "e2e/manual-critical-ui-journeys.spec.ts",
@@ -67,7 +70,13 @@ const result = spawnSync(
   ["exec", "playwright", "test", ...suiteFiles, ...finalArgs],
   {
     stdio: "inherit",
-    env: process.env,
+    env: {
+      ...process.env,
+      BASE_URL: resolvedBaseUrl,
+      E2E_FORCE_UI_LOGIN:
+        process.env.E2E_FORCE_UI_LOGIN ?? "false",
+      PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL ?? resolvedBaseUrl,
+    },
   }
 );
 

@@ -9,6 +9,16 @@ import {
 async function getCurrentUserId(page: Page): Promise<string | null> {
   return page.evaluate(() => {
     try {
+      const authStorage = localStorage.getItem("auth-storage");
+      if (authStorage) {
+        const parsedAuth = JSON.parse(authStorage) as {
+          state?: { user?: { id?: string } };
+        };
+        if (typeof parsedAuth.state?.user?.id === "string") {
+          return parsedAuth.state.user.id;
+        }
+      }
+
       const raw = localStorage.getItem("user");
       if (!raw) return null;
       const user = JSON.parse(raw) as { id?: string };

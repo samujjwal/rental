@@ -1,6 +1,7 @@
 import {
   Inject,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { i18nForbidden } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
@@ -16,6 +17,8 @@ import * as os from 'node:os';
  */
 @Injectable()
 export class AdminSystemService {
+  private readonly logger = new Logger(AdminSystemService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly schedulerRegistry: SchedulerRegistry,
@@ -331,29 +334,42 @@ export class AdminSystemService {
   }
 
   /**
-   * Get backup information
+   * Get backup information.
+   *
+   * Reads backup records from the SystemBackup table, which is populated by
+   * the scheduled backup cron job (or external backup tooling via the API).
+   * Returns an empty list with a warning when no records exist — administrators
+   * should verify that the backup cron is running and registering records.
    */
   async getBackupInfo(adminId: string): Promise<any> {
     await this.verifyAdmin(adminId);
 
-    const backups = [
-      {
-        id: 'backup-1',
-        type: 'FULL',
-        size: 15728640,
-        status: 'COMPLETED',
-        createdAt: new Date('2024-01-25'),
-      },
-      {
-        id: 'backup-2',
-        type: 'INCREMENTAL',
-        size: 5242880,
-        status: 'COMPLETED',
-        createdAt: new Date('2024-01-26'),
-      },
-    ];
+    let backups: any[] = [];
 
-    return { backups };
+    try {
+      backups = await (this.prisma as any).systemBackup.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+    } catch {
+      // SystemBackup table may not exist yet in this deployment; return empty
+      this.logger.warn(
+        'SystemBackup table not found or query failed. ' +
+        'Run a database migration and ensure the backup cron is configured.',
+      );
+    }
+
+    const lastBackup = backups[0] ?? null;
+
+    return {
+      backups,
+      lastBackupAt: lastBackup?.createdAt ?? null,
+      nextScheduledAt: null, // Determined by the external cron schedule
+      warning:
+        backups.length === 0
+          ? 'No backup records found. Verify the backup cron job is running and posting records to /admin/system/backups.'
+          : undefined,
+    };
   }
 
   private async measureDatabaseHealth(): Promise<{ status: string; latency: number }> {

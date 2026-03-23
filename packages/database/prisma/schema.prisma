@@ -8,6 +8,46 @@ datasource db {
   extensions = [pg_trgm, vector]
 }
 
+// ============================================================================
+// SCHEMA DOMAIN OWNERSHIP MAP
+// ============================================================================
+// Audit / Events        owns: AuditLog, BookingStateHistory
+// Identity / Auth       owns: User, Session, DeviceToken, IdentityDocument,
+//                             UserPreferences, FavoriteListing
+// Listings / Inventory  owns: Listing, Category, Availability, ListingContent,
+//                             ListingVersion, CategoryAttributeDefinition,
+//                             ListingAttributeValue, InventoryUnit,
+//                             AvailabilitySlot, CancellationPolicy, ConditionReport
+// Organizations         owns: Organization, OrganizationMember
+// Bookings              owns: Booking, FxRateSnapshot, BookingPriceBreakdown
+// Reviews & Trust       owns: Review, TrustScore, ReputationScore
+// Payments & Finance    owns: Payment, Refund, DepositHold, Payout,
+//                             LedgerEntry, EscrowTransaction
+// Insurance             owns: InsurancePolicy, InsuranceClaim
+// Notifications         owns: Notification, EmailTemplate, DeviceToken
+// Messaging             owns: Conversation, Message, ConversationParticipant,
+//                             MessageReadReceipt
+// Disputes              owns: Dispute, DisputeEvidence, DisputeResponse,
+//                             DisputeTimelineEvent, DisputeResolution, DisputeEscalation
+// Policy & Compliance   owns: TaxRule, PolicyRule, PolicyAuditLog, ComplianceRecord,
+//                             InsurancePolicy, TaxPolicy, CountryPolicyPack
+// Platform Config       owns: CurrencyConfig, LocaleConfig, CountryConfig,
+//                             PricingRule, RegionConfig, HostActivationCampaign
+// Analytics & Metrics   owns: PlatformMetric, MarketplaceHealthMetric,
+//                             DemandForecast, DemandSignal, MarketOpportunity,
+//                             SearchEvent, UserSearchProfile, ServiceHealthCheck,
+//                             AnomalyDetection, ExpansionSimulation
+// AI & Concierge        owns: AiConversation, AiConversationTurn,
+//                             PricingRecommendation
+// Fraud & Moderation    owns: FraudSignal, DeviceFingerprint, ModerationAction
+// Inventory Graph       owns: InventoryGraphNode, InventoryGraphEdge
+// ============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT / EVENTS
+// Owner: platform-engineering  CODEOWNERS: @rental/platform-engineering
+// ─────────────────────────────────────────────────────────────────────────────
+
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String?
@@ -27,6 +67,11 @@ model AuditLog {
   @@index([action, createdAt])
   @@map("audit_logs")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IDENTITY / AUTH
+// Owner: auth-team  CODEOWNERS: @rental/auth-team
+// ─────────────────────────────────────────────────────────────────────────────
 
 model User {
   id                         String                    @id @default(cuid())
@@ -108,9 +153,9 @@ model User {
   reviewsGiven               Review[]                  @relation("ReviewGiven")
   searchEvents               SearchEvent[]             @relation("UserSearchEvents")
   sessions                   Session[]
-  trustScores                TrustScore[]              @relation("UserTrustScores")
   userPreferences            UserPreferences?
   searchProfile              UserSearchProfile?        @relation("SearchProfile")
+  taxForms                   TaxForm[]
 
   @@index([deletedAt])
   @@index([status])
@@ -119,6 +164,11 @@ model User {
   @@index([email])
   @@map("users")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LISTINGS & INVENTORY
+// Owner: listings-team  CODEOWNERS: @rental/listings-team
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Listing {
   id                     String                   @id @default(cuid())
@@ -230,6 +280,11 @@ model Category {
   @@map("categories")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ORGANIZATIONS
+// Owner: platform-engineering  CODEOWNERS: @rental/platform-engineering
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Organization {
   id                 String               @id @default(cuid())
   name               String
@@ -274,6 +329,11 @@ model OrganizationMember {
   @@unique([organizationId, userId])
   @@map("organization_members")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKINGS  (critical path — all changes require CODEOWNERS approval)
+// Owner: bookings-team  CODEOWNERS: @rental/bookings-team
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Booking {
   id                 String                  @id @default(cuid())
@@ -339,6 +399,11 @@ model Booking {
   @@map("bookings")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// REVIEWS & TRUST
+// Owner: trust-team  CODEOWNERS: @rental/trust-team
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Review {
   id                  String       @id @default(cuid())
   bookingId           String?
@@ -371,6 +436,11 @@ model Review {
   @@index([listingId, createdAt])
   @@map("reviews")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENTS & FINANCE  (all changes require security-team + payments-team review)
+// Owner: payments-team  CODEOWNERS: @rental/payments-team @rental/security-team
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Payment {
   id                    String        @id @default(cuid())
@@ -482,6 +552,45 @@ model LedgerEntry {
   @@index([bookingId])
   @@index([accountId, accountType])
   @@map("ledger_entries")
+}
+
+model TaxForm {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String // e.g. 'FORM_1099'
+  year        Int
+  formData    Json
+  generatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, year])
+  @@map("tax_forms")
+}
+
+/// Stores the result of every Stripe Tax API calculation for audit, reconciliation,
+/// and 1099/tax-form generation. One record per booking checkout attempt.
+model TaxCalculation {
+  id              String   @id @default(cuid())
+  bookingId       String?
+  listingId       String?
+  stripeTaxId     String? // Stripe Tax calculation ID (tax.calculations.id)
+  amount          Decimal // Pre-tax amount in minor units
+  taxAmount       Decimal // Tax portion
+  totalAmount     Decimal // amount + taxAmount
+  taxRate         Float    @default(0)
+  currency        String   @db.VarChar(3)
+  jurisdiction    String? // Primary tax jurisdiction name
+  taxBreakdown    Json     @default("[]") // Array of TaxLineItem
+  customerAddress Json? // Snapshot of customer address used for calculation
+  taxable         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@index([bookingId])
+  @@index([listingId])
+  @@index([createdAt])
+  @@map("tax_calculations")
 }
 
 model Availability {
@@ -662,6 +771,11 @@ model BookingStateHistory {
   @@map("booking_state_history")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// Owner: platform-engineering  CODEOWNERS: @rental/platform-engineering
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Notification {
   id           String           @id @default(cuid())
   userId       String
@@ -812,6 +926,11 @@ model ConditionReport {
   @@map("condition_reports")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// INSURANCE
+// Owner: compliance-team  CODEOWNERS: @rental/compliance-team
+// ─────────────────────────────────────────────────────────────────────────────
+
 model InsurancePolicy {
   id             String           @id @default(cuid())
   policyNumber   String           @unique
@@ -891,6 +1010,11 @@ model EmailTemplate {
   @@map("email_templates")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MESSAGING
+// Owner: messaging-team  CODEOWNERS: @rental/messaging-team
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Conversation {
   id            String                    @id @default(cuid())
   bookingId     String?
@@ -956,6 +1080,11 @@ model MessageReadReceipt {
   @@unique([messageId, userId])
   @@map("message_read_receipts")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISPUTES
+// Owner: trust-team  CODEOWNERS: @rental/trust-team
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Dispute {
   id                String                 @id @default(cuid())
@@ -1044,28 +1173,13 @@ model DisputeResolution {
 }
 
 /// @deprecated DB-D6: Use TaxPolicy model instead. TaxRule is the legacy table;
-/// TaxPolicy (in tax_policies) is the canonical model used by the PolicyEngine.
-/// Retained for backward compatibility — migrate existing data to TaxPolicy.
-model TaxRule {
-  id            String    @id @default(cuid())
-  country       String    @db.VarChar(2)
-  state         String?   @db.VarChar(10)
-  city          String?   @db.VarChar(100)
-  jurisdiction  String    @db.VarChar(100)
-  type          String    @db.VarChar(20)
-  name          String    @db.VarChar(100)
-  rate          Decimal   @db.Decimal(6, 3)
-  appliesTo     String[]  @default(["ALL"])
-  isActive      Boolean   @default(true)
-  effectiveFrom DateTime  @default(now())
-  effectiveTo   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+// ─────────────────────────────────────────────────────────────────────────────
+// POLICY & COMPLIANCE  (jurisdiction-aware tax, compliance, insurance rules)
+// Owner: compliance-team  CODEOWNERS: @rental/compliance-team
+// ─────────────────────────────────────────────────────────────────────────────
 
-  @@unique([country, state, city, type])
-  @@index([country, state, isActive])
-  @@map("tax_rules")
-}
+// TaxRule table has been dropped (migration 20260322_drop_deprecated_models).
+// Use TaxPolicy model for all new tax configuration.
 
 model PolicyRule {
   id                   String           @id @default(cuid())
@@ -1126,6 +1240,11 @@ model PolicyAuditLog {
   @@index([requestId])
   @@map("policy_audit_log")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLATFORM CONFIGURATION  (currency, locale, country, pricing, expansion)
+// Owner: platform-engineering  CODEOWNERS: @rental/platform-engineering
+// ─────────────────────────────────────────────────────────────────────────────
 
 model CurrencyConfig {
   code           String   @id @db.VarChar(3)
@@ -1205,28 +1324,8 @@ model PricingRule {
   @@map("pricing_rules")
 }
 
-/// @deprecated DB-D7: Use ReputationScore model instead. TrustScore is the legacy table;
-/// ReputationScore (in reputation_scores) is the canonical model used by the marketplace module.
-/// Retained for backward compatibility — migrate existing data to ReputationScore.
-model TrustScore {
-  id             String         @id @default(cuid())
-  userId         String
-  scoreType      TrustScoreType
-  score          Float          @default(0)
-  components     Json           @default("{}")
-  confidence     Float          @default(0)
-  dataPoints     Int            @default(0)
-  tier           TrustTier      @default(NEW)
-  lastCalculated DateTime       @default(now())
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  user           User           @relation("UserTrustScores", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, scoreType])
-  @@index([scoreType, tier])
-  @@index([userId])
-  @@map("trust_scores")
-}
+// TrustScore table has been dropped (migration 20260322_drop_deprecated_models).
+// Use ReputationScore model for all new reputation/trust data.
 
 model ComplianceRecord {
   id          String              @id @default(cuid())
@@ -1263,6 +1362,11 @@ model PlatformMetric {
   @@index([name, period, periodStart])
   @@map("platform_metrics")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENTS & FINANCE — ESCROW
+// Owner: payments-team  CODEOWNERS: @rental/payments-team
+// ─────────────────────────────────────────────────────────────────────────────
 
 model EscrowTransaction {
   id               String       @id @default(cuid())
@@ -1350,6 +1454,11 @@ model HostActivationCampaign {
   @@index([country, status])
   @@map("host_activation_campaigns")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI & CONCIERGE  (all prompt changes require AI platform owner approval)
+// Owner: ai-team  CODEOWNERS: @rental/ai-team
+// ─────────────────────────────────────────────────────────────────────────────
 
 model AiConversation {
   id             String               @id @default(cuid())
@@ -1503,6 +1612,11 @@ model PricingRecommendation {
   @@index([listingId, date])
   @@map("pricing_recommendations")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FRAUD DETECTION & MODERATION
+// Owner: trust-team  CODEOWNERS: @rental/trust-team @rental/security-team
+// ─────────────────────────────────────────────────────────────────────────────
 
 model FraudSignal {
   id                String    @id @default(cuid())
@@ -2084,13 +2198,6 @@ enum IdentityDocumentType {
   OTHER
 }
 
-/// @deprecated Not referenced by any model. Candidate for removal in next migration.
-enum AvailabilityMode {
-  DATE_RANGE
-  TIME_SLOT
-  CALENDAR
-}
-
 enum AvailabilitySlotStatus {
   AVAILABLE
   RESERVED
@@ -2277,4 +2384,65 @@ enum AnomalySeverity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Event Sourcing / Audit Trail
+// Owner: platform-team  CODEOWNERS: @rental/platform-team
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Append-only log of all domain events. Never updated or deleted.
+model EventStore {
+  id            String   @id @default(cuid())
+  aggregateId   String
+  aggregateType String
+  eventType     String
+  version       Int
+  /// JSON-stringified event payload
+  payload       String
+  /// Structured metadata including correlationId, causationId, userId, etc.
+  metadata      Json     @default("{}")
+  timestamp     DateTime @default(now())
+
+  @@index([aggregateId, version])
+  @@index([aggregateId, aggregateType])
+  @@index([eventType, timestamp])
+  @@index([timestamp])
+  @@map("event_store")
+}
+
+/// Point-in-time snapshots of aggregate state to speed up replay.
+model EventSnapshot {
+  id            String   @id @default(cuid())
+  aggregateId   String
+  aggregateType String
+  version       Int
+  /// JSON-stringified aggregate state at snapshot time
+  state         String
+  timestamp     DateTime @default(now())
+
+  @@unique([aggregateId, version])
+  @@index([aggregateId, version])
+  @@map("event_snapshots")
+}
+
+/// Lightweight ledger for tracking per-user AI token usage for cost governance.
+model AiUsageLedger {
+  id                 String   @id @default(cuid())
+  userId             String
+  organizationId     String?
+  promptId           String
+  promptVersion      String
+  model              String
+  inputTokens        Int
+  outputTokens       Int
+  totalTokens        Int
+  /// Estimated cost in USD cents (integer to avoid float rounding)
+  estimatedCostCents Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([promptId, createdAt])
+  @@map("ai_usage_ledger")
 }

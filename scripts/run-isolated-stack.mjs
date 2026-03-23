@@ -148,6 +148,7 @@ async function main() {
     "pnpm",
     ["--filter", "@rental-portal/api", "run", "start"],
     {
+      NODE_ENV: process.env.NODE_ENV ?? "test",
       HOST: apiHost,
       PORT: apiPort,
       API_HOST: apiHost,
@@ -155,6 +156,8 @@ async function main() {
       DATABASE_URL: databaseUrl,
       REDIS_HOST: redisHost,
       REDIS_PORT: redisPort,
+      DEV_LOGIN_ENABLED: process.env.DEV_LOGIN_ENABLED ?? "true",
+      DEV_LOGIN_SECRET: process.env.DEV_LOGIN_SECRET ?? "dev-secret-123",
       ALLOW_DEV_LOGIN: process.env.ALLOW_DEV_LOGIN ?? "true",
       STRIPE_TEST_BYPASS: process.env.STRIPE_TEST_BYPASS ?? "true",
       DISABLE_THROTTLE: process.env.DISABLE_THROTTLE ?? "true",

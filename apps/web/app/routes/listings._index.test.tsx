@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -80,7 +81,11 @@ vi.mock("lucide-react", () => ({
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 
-import OwnerListingsPage, { clientLoader, clientAction } from "./listings._index";
+import OwnerListingsPage, {
+  clientLoader,
+  clientAction,
+  getOwnerListingsError,
+} from "./listings._index";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -120,6 +125,7 @@ function makeListing(overrides: Record<string, unknown> = {}) {
 describe("listings._index route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
     mocks.getPerformanceMetrics.mockResolvedValue({
       overview: null,
       topListings: [],
@@ -217,6 +223,32 @@ describe("listings._index route", () => {
       } as any) as any;
       expect(result.listings).toEqual([]);
       expect(result.error).toBeTruthy();
+    });
+
+    it("uses actionable offline copy on loader failure", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+      mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+      mocks.getMyListings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const result = await clientLoader({
+        request: new Request("http://localhost/listings"),
+      } as any) as any;
+
+      expect(result.error).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+    });
+
+    it("uses timeout-specific copy on loader failure", async () => {
+      mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+      mocks.getMyListings.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+      const result = await clientLoader({
+        request: new Request("http://localhost/listings"),
+      } as any) as any;
+
+      expect(result.error).toBe("Listing request timed out. Try again.");
     });
   });
 
@@ -353,6 +385,48 @@ describe("listings._index route", () => {
         }),
       } as any) as any;
       expect(result.success).toBe(false);
+    });
+
+    it("uses actionable offline copy for action failures", async () => {
+      const previousOnline = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+      mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+      mocks.getListingById.mockResolvedValue({ ownerId: "owner-1" });
+      mocks.deleteListing.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+      const result = await clientAction({
+        request: makeFormData({ intent: "delete", listingId: validId, confirmed: "true" }),
+      } as any) as any;
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("You appear to be offline. Reconnect and try again.");
+
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+    });
+
+    it("uses timeout-specific copy for action failures", async () => {
+      mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+      mocks.getListingById.mockResolvedValue({ ownerId: "owner-1" });
+      mocks.deleteListing.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+      const result = await clientAction({
+        request: makeFormData({ intent: "delete", listingId: validId, confirmed: "true" }),
+      } as any) as any;
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Listing request timed out. Try again.");
+    });
+
+    it("preserves backend response messages in helper", () => {
+      expect(
+        getOwnerListingsError({ response: { data: { message: "Listing is locked for moderation" } } }, "fallback")
+      ).toBe("Listing is locked for moderation");
+    });
+
+    it("uses timeout-specific helper copy", () => {
+      expect(getOwnerListingsError(new AxiosError("timeout", "ECONNABORTED"), "fallback")).toBe(
+        "Listing request timed out. Try again."
+      );
     });
 
     it("skips ownership check for admin", async () => {

@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
@@ -41,7 +42,7 @@ vi.mock("lucide-react", () => ({
   AlertTriangle: IconStub, AlertCircle: IconStub,
 }));
 
-import { clientLoader } from "./_index";
+import { clientLoader, getAdminDashboardLoadError } from "./_index";
 
 describe("admin/_index", () => {
   beforeEach(() => {
@@ -74,7 +75,25 @@ describe("admin/_index", () => {
   it("uses generic error message for non-Error throws", async () => {
     m.getAdminAnalytics.mockRejectedValue("str");
     const res = await clientLoader({ request: new Request("http://l/admin") } as any);
-    expect(res.error).toMatch(/failed/i);
+    expect(res.error).toBe("An unexpected error occurred. Please try again.");
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    m.getAdminAnalytics.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const res = await clientLoader({ request: new Request("http://l/admin") } as any);
+
+    expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
   });
 
   it("maps severity from action", async () => {
@@ -88,5 +107,11 @@ describe("admin/_index", () => {
     const res = await clientLoader({ request: new Request("http://l/admin") } as any);
     expect(res.activities[0].severity).toBe("error"); // delete → error
     expect(res.activities[1].severity).toBe("success"); // create → success
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getAdminDashboardLoadError(new Error("dashboard unavailable"))).toBe(
+      "dashboard unavailable"
+    );
   });
 });

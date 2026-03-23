@@ -1,4 +1,6 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // ─── Hoisted mocks ──────────────────────────────────────────────────────────
@@ -9,15 +11,20 @@ const mocks = vi.hoisted(() => ({
   updateListing: vi.fn(),
   deleteListing: vi.fn(),
   getUser: vi.fn(),
+  useLoaderData: vi.fn(() => ({ listing: {} as any, error: null as string | null })) as any,
+  useActionData: vi.fn(() => null),
+  useNavigate: vi.fn(() => vi.fn()),
+  revalidate: vi.fn(),
   redirect: vi.fn((url: string) => {
     return new Response("", { status: 302, headers: { Location: url } });
   }),
 }));
 
 vi.mock("react-router", () => ({
-  useLoaderData: vi.fn(() => ({ listing: {} })),
-  useActionData: vi.fn(() => null),
-  useNavigate: vi.fn(() => vi.fn()),
+  useLoaderData: () => (mocks.useLoaderData as any)(),
+  useActionData: () => (mocks.useActionData as any)(),
+  useNavigate: () => (mocks.useNavigate as any)(),
+  useRevalidator: () => ({ revalidate: mocks.revalidate }),
   Form: ({ children, ...props }: any) => <form {...props}>{children}</form>,
   redirect: mocks.redirect,
 }));
@@ -27,6 +34,7 @@ vi.mock("~/lib/api/listings", () => ({
     getListingById: (...args: any[]) => mocks.getListingById(...args),
     updateListing: (...args: any[]) => mocks.updateListing(...args),
     deleteListing: (...args: any[]) => mocks.deleteListing(...args),
+    getCategories: vi.fn().mockResolvedValue([{ id: "electronics", name: "Electronics", slug: "electronics" }]),
   },
 }));
 
@@ -54,6 +62,7 @@ vi.mock("~/components/ui", () => ({
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
   Dialog: ({ children }: any) => <div>{children}</div>,
   DialogFooter: ({ children }: any) => <div>{children}</div>,
+  UnifiedButton: ({ children, ...props }: any) => <button {...props}>{children}</button>,
 }));
 
 vi.mock("~/components/listings/VoiceListingAssistant", () => ({
@@ -93,7 +102,12 @@ vi.mock("lucide-react", () => ({
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 
-import { clientLoader, clientAction } from "./listings.$id.edit";
+import EditListing, {
+  clientLoader,
+  clientAction,
+  getEditListingError,
+  getEditListingLoadError,
+} from "./listings.$id.edit";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -119,6 +133,10 @@ function makeListing(overrides: Record<string, unknown> = {}) {
 describe("listings.$id.edit route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
   });
 
   describe("clientLoader", () => {
@@ -170,7 +188,7 @@ describe("listings.$id.edit route", () => {
         params: { id: validId },
         request: new Request("http://localhost"),
       } as any);
-      expect(result).toEqual({ listing });
+      expect(result).toEqual({ listing, error: null });
     });
 
     it("loads listing for admin", async () => {
@@ -181,18 +199,42 @@ describe("listings.$id.edit route", () => {
         params: { id: validId },
         request: new Request("http://localhost"),
       } as any);
-      expect(result).toEqual({ listing });
+      expect(result).toEqual({ listing, error: null });
     });
 
-    it("redirects on API error", async () => {
+    it("returns retryable fallback loader state on API error", async () => {
       mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
-      mocks.getListingById.mockRejectedValue(new Error("fail"));
-      await expect(
-        clientLoader({
-          params: { id: validId },
-          request: new Request("http://localhost"),
-        } as any)
-      ).rejects.toThrow();
+      mocks.getListingById.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+      const result = await clientLoader({
+        params: { id: validId },
+        request: new Request("http://localhost"),
+      } as any);
+      expect(result).toEqual({
+        listing: null,
+        error: "Loading the listing timed out. Try again.",
+      });
+    });
+  });
+
+  describe("loader fallback UI", () => {
+    it("renders retryable fallback UI when loader data has no listing", () => {
+      mocks.useLoaderData.mockReturnValue({
+        listing: null,
+        error: "Loading the listing timed out. Try again.",
+      });
+      const navigateMock = vi.fn();
+      mocks.useNavigate.mockReturnValue(navigateMock);
+
+      render(<EditListing />);
+
+      expect(screen.getByText("Listing editor unavailable")).toBeInTheDocument();
+      expect(screen.getByText("Loading the listing timed out. Try again.")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Try Again" }));
+      expect(mocks.revalidate).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "Back to Dashboard" }));
+      expect(navigateMock).toHaveBeenCalledWith("/dashboard");
     });
   });
 
@@ -282,6 +324,46 @@ describe("listings.$id.edit route", () => {
         }
         expect(mocks.deleteListing).toHaveBeenCalled();
       });
+
+      it("uses actionable offline copy for delete failures", async () => {
+        const previousOnline = navigator.onLine;
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+        mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+        mocks.getListingById.mockResolvedValue(makeListing());
+        mocks.deleteListing.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+        const result = await clientAction({
+          params: { id: validId },
+          request: makeFormData({
+            intent: "delete",
+            deleteConfirmation: "DELETE",
+          }),
+        } as any);
+
+        expect(result).toEqual({
+          error: "You appear to be offline. Reconnect and try again.",
+        });
+
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+      });
+
+      it("uses timeout-specific copy for delete failures", async () => {
+        mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+        mocks.getListingById.mockResolvedValue(makeListing());
+        mocks.deleteListing.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+        const result = await clientAction({
+          params: { id: validId },
+          request: makeFormData({
+            intent: "delete",
+            deleteConfirmation: "DELETE",
+          }),
+        } as any);
+
+        expect(result).toEqual({
+          error: "Listing request timed out. Try again.",
+        });
+      });
     });
 
     it("rejects invalid intent other than update/delete", async () => {
@@ -337,6 +419,81 @@ describe("listings.$id.edit route", () => {
         } as any);
         expect(result).toEqual({
           error: "Listing payload exceeds allowed size limits",
+        });
+      });
+
+      it("preserves backend response messages in helper", () => {
+        expect(
+          getEditListingError({ response: { data: { message: "Moderation review in progress" } } }, "fallback")
+        ).toBe("Moderation review in progress");
+      });
+
+      it("maps offline loader failures to actionable copy", () => {
+        Object.defineProperty(window.navigator, "onLine", {
+          configurable: true,
+          value: false,
+        });
+
+        expect(getEditListingLoadError(new AxiosError("Network Error", "ERR_NETWORK"))).toBe(
+          "You appear to be offline. Reconnect and try loading the listing again."
+        );
+      });
+
+      it("uses actionable offline copy for update failures", async () => {
+        const previousOnline = navigator.onLine;
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+        mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+        mocks.getListingById.mockResolvedValue(makeListing());
+        mocks.updateListing.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+        const result = await clientAction({
+          params: { id: validId },
+          request: makeFormData({
+            intent: "update",
+            title: "Test",
+            description: "Test description",
+            category: "electronics",
+            basePrice: "100",
+            securityDeposit: "50",
+            minimumRentalPeriod: "1",
+            location: JSON.stringify({ city: "KTM" }),
+            photos: JSON.stringify(["img.jpg"]),
+            deliveryOptions: JSON.stringify({ pickup: true }),
+            features: JSON.stringify([]),
+          }),
+        } as any);
+
+        expect(result).toEqual({
+          error: "You appear to be offline. Reconnect and try again.",
+        });
+
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+      });
+
+      it("uses timeout-specific copy for update failures", async () => {
+        mocks.getUser.mockResolvedValue({ id: "owner-1", role: "owner" });
+        mocks.getListingById.mockResolvedValue(makeListing());
+        mocks.updateListing.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+        const result = await clientAction({
+          params: { id: validId },
+          request: makeFormData({
+            intent: "update",
+            title: "Test",
+            description: "Test description",
+            category: "electronics",
+            basePrice: "100",
+            securityDeposit: "50",
+            minimumRentalPeriod: "1",
+            location: JSON.stringify({ city: "KTM" }),
+            photos: JSON.stringify(["img.jpg"]),
+            deliveryOptions: JSON.stringify({ pickup: true }),
+            features: JSON.stringify([]),
+          }),
+        } as any);
+
+        expect(result).toEqual({
+          error: "Listing request timed out. Try again.",
         });
       });
 

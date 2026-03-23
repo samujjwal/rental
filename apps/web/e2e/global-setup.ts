@@ -12,6 +12,8 @@
  */
 
 import { request } from "@playwright/test";
+import { spawn } from "node:child_process";
+import { resolve } from "node:path";
 
 const API = process.env.E2E_API_URL ?? "http://localhost:3400/api";
 
@@ -20,6 +22,13 @@ const TEST_ROLES = [
   { role: "HOST", email: "owner@test.com" },
   { role: "ADMIN", email: "admin@test.com" },
 ] as const;
+
+const REPO_ROOT = resolve(process.cwd(), "../..");
+const DEFAULT_DATABASE_URL = API.includes(":3402/")
+  ? "postgresql://rental_user:rental_password@localhost:3432/rental_portal?schema=public"
+  : "postgresql://rental_user:rental_password@localhost:3433/rental_portal_e2e?schema=public";
+
+let hasTriggeredSeed = false;
 
 async function waitForHealth(maxAttempts = 30, intervalMs = 2_000): Promise<void> {
   const ctx = await request.newContext();
@@ -93,7 +102,7 @@ async function ensureTestUsers(): Promise<void> {
       } else if (res.status() === 403 || res.status() === 401) {
         throw new Error(
           `[global-setup] dev-login endpoint returned ${res.status()} — it appears to be disabled. ` +
-            `Set NODE_ENV=development and ALLOW_DEV_LOGIN=true in the API .env to enable it for E2E tests.`,
+            `Set NODE_ENV=development and DEV_LOGIN_ENABLED=true in the API env to enable it for E2E tests.`,
         );
       } else {
         console.warn(
@@ -110,11 +119,59 @@ async function ensureTestUsers(): Promise<void> {
 }
 
 async function triggerSeed(ctx: Awaited<ReturnType<typeof request.newContext>>): Promise<void> {
+  if (hasTriggeredSeed) {
+    return;
+  }
+
+  hasTriggeredSeed = true;
+
+  const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+
+  await new Promise<void>((resolveSeed, rejectSeed) => {
+    const child = spawn("pnpm", ["--filter", "@rental-portal/database", "run", "seed"], {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+      },
+      stdio: "pipe",
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (error) => {
+      rejectSeed(error);
+    });
+
+    child.on("exit", (code) => {
+      if (code === 0) {
+        const summary = stdout.trim().split("\n").slice(-5).join("\n");
+        console.log(`[global-setup]   ✓ Database seed completed\n${summary}`);
+        resolveSeed();
+        return;
+      }
+
+      rejectSeed(
+        new Error(
+          `[global-setup] Database seed failed with exit code ${code}. ${stderr.trim() || stdout.trim()}`,
+        ),
+      );
+    });
+  });
+
   try {
-    // Some APIs expose a dev-only seed endpoint; fall back to a no-op if absent.
-    await ctx.post(`${API}/dev/seed`, { timeout: 30_000 });
+    await ctx.post(`${API}/dev/seed`, { timeout: 5_000 });
   } catch {
-    // Seed endpoint not available — that's fine; we'll log warnings per-user above.
+    // Optional API-side seed hooks are ignored; DB seed above is the authoritative path.
   }
 }
 

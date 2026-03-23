@@ -2,10 +2,11 @@ import { Link } from "react-router";
 import type { MetaFunction } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
 import { Shield, FileCheck, AlertCircle, CheckCircle, Clock, X } from "lucide-react";
 import { useAuthStore } from "~/lib/store/auth";
 import { insuranceApi, type InsurancePolicy } from "~/lib/api/insurance";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 import { formatCurrency } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
@@ -29,6 +30,13 @@ const STATUS_CONFIG: Record<string, { label: string; className: string; icon: Re
   CLAIMED: { label: "Claimed", className: "text-blue-700 bg-blue-100", icon: Shield },
 };
 
+function getInsurancePoliciesError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load policies. Please try again.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading policies timed out. Try again.",
+  });
+}
+
 function PolicyStatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? { label: status, className: "text-gray-600 bg-gray-100", icon: Shield };
   const Icon = cfg.icon;
@@ -45,17 +53,31 @@ export default function InsurancePage() {
   const { isAuthenticated } = useAuthStore();
   const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
   const [policiesLoading, setPoliciesLoading] = useState(false);
+  const [policiesError, setPoliciesError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
     setPoliciesLoading(true);
+    setPoliciesError(null);
     insuranceApi.getMyPolicies({ limit: 10 })
-      .then((res) => { if (!cancelled) setPolicies(res.data ?? []); })
-      .catch(() => {})
+      .then((res) => {
+        if (!cancelled) {
+          setPolicies(res.data ?? []);
+          setPoliciesError(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setPoliciesError(getInsurancePoliciesError(error));
+        }
+      })
       .finally(() => { if (!cancelled) setPoliciesLoading(false); });
     return () => { cancelled = true; };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, reloadKey]);
+
+  const retryPoliciesLoad = () => setReloadKey((previous) => previous + 1);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -178,17 +200,35 @@ export default function InsurancePage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-semibold">{t("pages.insurance.myPolicies", "My Insurance Policies")}</h2>
             </div>
+            {policiesError && !policiesLoading && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+                    <div>
+                      <p className="text-sm font-medium text-red-700">{policiesError}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {t("pages.insurance.retryPoliciesLoad", "Try again to refresh your latest policy coverage.")}
+                      </p>
+                    </div>
+                  </div>
+                  <UnifiedButton variant="outline" onClick={retryPoliciesLoad}>
+                    {t("errors.tryAgain", "Try Again")}
+                  </UnifiedButton>
+                </div>
+              </div>
+            )}
             {policiesLoading ? (
               <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground text-sm">
                 {t("common.loading", "Loading policies…")}
               </div>
-            ) : policies.length === 0 ? (
+            ) : policies.length === 0 && !policiesError ? (
               <div className="rounded-xl border border-dashed bg-card p-8 text-center text-muted-foreground">
                 <Shield className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
                 <p className="text-sm font-medium text-foreground">{t("pages.insurance.noPolicies", "No insurance policies yet")}</p>
                 <p className="text-xs mt-1">{t("pages.insurance.noPoliciesDesc", "Policies are created automatically when you book a listing with insurance requirements.")}</p>
               </div>
-            ) : (
+            ) : policies.length > 0 ? (
               <div className="rounded-xl border bg-card overflow-hidden">
                 {policies.map((policy, idx) => (
                   <div
@@ -214,7 +254,7 @@ export default function InsurancePage() {
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
           </div>
         )}
       </div>

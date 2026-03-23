@@ -28,6 +28,7 @@ describe('CategoriesController', () => {
           provide: CategoryTemplateService,
           useValue: {
             getAllCategoryTemplates: jest.fn(),
+            getCategoryFieldDefinitions: jest.fn(),
           },
         },
       ],
@@ -108,6 +109,76 @@ describe('CategoriesController', () => {
       const stats = { listingCount: 10, activeListingCount: 5 };
       categoriesService.getCategoryStats.mockResolvedValue(stats as any);
       expect(await controller.getCategoryStats('1')).toBe(stats);
+    });
+  });
+
+  // ── getCategoryFieldDefinitions — contract gate ──
+  //
+  // This test validates the response shape of GET /categories/slug/:slug/fields.
+  // The web client (listings.$id.tsx, listings.new.tsx, listings.$id.edit.tsx)
+  // depends on this contract. Any breaking change to the response shape will
+  // surface here before reaching production.
+
+  describe('getCategoryFieldDefinitions', () => {
+    it('delegates to templateService with the slug', () => {
+      const fields = [
+        { key: 'make', label: 'Make', type: 'text', required: true },
+        { key: 'year', label: 'Year', type: 'number', required: true, min: 1800, max: 2030 },
+        {
+          key: 'transmission',
+          label: 'Transmission',
+          type: 'select',
+          required: false,
+          options: [
+            { value: 'automatic', label: 'Automatic' },
+            { value: 'manual', label: 'Manual' },
+          ],
+        },
+      ];
+      (templateService.getCategoryFieldDefinitions as jest.Mock).mockReturnValue(fields);
+
+      const result = controller.getCategoryFieldDefinitions('vehicles');
+
+      expect(templateService.getCategoryFieldDefinitions).toHaveBeenCalledWith('vehicles');
+      expect(result).toBe(fields);
+    });
+
+    it('returns empty array when slug has no template', () => {
+      (templateService.getCategoryFieldDefinitions as jest.Mock).mockReturnValue([]);
+      const result = controller.getCategoryFieldDefinitions('unknown-category');
+      expect(result).toEqual([]);
+    });
+
+    it('each field in the response has required contract shape: key, label, type', () => {
+      const fields = [
+        { key: 'spaceType', label: 'Space Type', type: 'select', required: true,
+          options: [{ value: 'house', label: 'House' }] },
+        { key: 'size', label: 'Size', type: 'number', required: true, min: 0 },
+        { key: 'furnished', label: 'Furnished', type: 'boolean', required: false },
+      ];
+      (templateService.getCategoryFieldDefinitions as jest.Mock).mockReturnValue(fields);
+
+      const result = controller.getCategoryFieldDefinitions('spaces');
+
+      for (const field of result) {
+        // key and label are always strings
+        expect(typeof field.key).toBe('string');
+        expect(typeof field.label).toBe('string');
+        // type is one of the known discriminator values
+        expect(['text', 'number', 'select', 'boolean', 'multiselect']).toContain(field.type);
+        // required is boolean when present
+        if (field.required !== undefined) {
+          expect(typeof field.required).toBe('boolean');
+        }
+        // options array exists and is well-formed on select/multiselect fields
+        if (field.type === 'select' || field.type === 'multiselect') {
+          expect(Array.isArray((field as any).options)).toBe(true);
+          for (const opt of (field as any).options) {
+            expect(typeof opt.value).toBe('string');
+            expect(typeof opt.label).toBe('string');
+          }
+        }
+      }
     });
   });
 

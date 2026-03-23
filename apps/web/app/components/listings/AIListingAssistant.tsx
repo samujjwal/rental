@@ -33,6 +33,8 @@ interface AISuggestion {
 
 interface MarketInsight {
   category: string;
+  /** ISO 4217 currency code for all price fields. Defaults to 'USD'. */
+  currency?: string;
   averagePrice: number;
   priceRange: { min: number; max: number };
   demand: 'high' | 'medium' | 'low';
@@ -53,6 +55,8 @@ export function AIListingAssistant({
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<'suggestions' | 'insights'>('suggestions');
   const [appliedSuggestions, setAppliedSuggestions] = useState<Set<string>>(new Set());
+  const [suggestionsUnavailable, setSuggestionsUnavailable] = useState(false);
+  const [insightsUnavailable, setInsightsUnavailable] = useState(false);
 
   // Generate AI suggestions when listing data changes
   useEffect(() => {
@@ -70,26 +74,36 @@ export function AIListingAssistant({
 
   const generateSuggestions = useCallback(async () => {
     setIsGenerating(true);
+    setSuggestionsUnavailable(false);
     try {
       const response = await aiApi.generateListingSuggestions({
         currentData: listingData,
         category,
       });
 
-      setSuggestions(response.suggestions || []);
+      // fromProvider === false means the AI provider was explicitly offline.
+      // Distinguish from undefined (legacy clients) to avoid false unavailable states.
+      if (response.fromProvider === false) {
+        setSuggestionsUnavailable(true);
+      } else {
+        setSuggestions(response.suggestions || []);
+      }
     } catch (error) {
-      console.error('Failed to generate AI suggestions:', error);
+      console.error('AI suggestions unavailable:', error);
+      setSuggestionsUnavailable(true);
     } finally {
       setIsGenerating(false);
     }
   }, [listingData]);
 
   const fetchMarketInsights = useCallback(async () => {
+    setInsightsUnavailable(false);
     try {
       const insights = await aiApi.getMarketInsights(category);
       setMarketInsights(insights);
     } catch (error) {
-      console.error('Failed to fetch market insights:', error);
+      console.error('Market insights unavailable:', error);
+      setInsightsUnavailable(true);
     }
   }, [category]);
 
@@ -133,14 +147,14 @@ export function AIListingAssistant({
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: marketInsights?.currency ?? 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(price);
   };
 
   return (
-    <div className={cn('bg-card rounded-lg shadow-md p-6', className)}>
+    <div data-testid="ai-listing-assistant" className={cn('bg-card rounded-lg shadow-md p-6', className)}>
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
@@ -178,6 +192,12 @@ export function AIListingAssistant({
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin mr-2" />
               {t('listing.generatingSuggestions', 'Generating AI suggestions...')}
+            </div>
+          ) : suggestionsUnavailable ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p className="font-medium">{t('listing.suggestionsUnavailable', 'AI Suggestions — Coming Soon')}</p>
+              <p className="text-xs mt-1">{t('listing.suggestionsUnavailableHint', 'This feature is not yet available in this environment.')}</p>
             </div>
           ) : suggestions.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -260,7 +280,15 @@ export function AIListingAssistant({
         </div>
       )}
 
-      {activeTab === 'insights' && marketInsights && (
+      {activeTab === 'insights' && insightsUnavailable && (
+        <div className="text-center py-8 text-muted-foreground">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+          <p className="font-medium">{t('listing.insightsUnavailable', 'Market Insights — Coming Soon')}</p>
+          <p className="text-xs mt-1">{t('listing.insightsUnavailableHint', 'This feature is not yet available in this environment.')}</p>
+        </div>
+      )}
+
+      {activeTab === 'insights' && !insightsUnavailable && marketInsights && (
         <div className="space-y-6">
           {/* Demand Indicator */}
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">

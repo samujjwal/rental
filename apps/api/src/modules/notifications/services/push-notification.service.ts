@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/common/prisma/prisma.service';
 
@@ -13,15 +13,39 @@ export interface PushNotificationOptions {
 }
 
 @Injectable()
-export class PushNotificationService {
+export class PushNotificationService implements OnModuleInit {
   private readonly logger = new Logger(PushNotificationService.name);
   private static readonly MAX_RETRIES = 3;
   private static readonly BASE_DELAY_MS = 500;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  private readonly admin = require('firebase-admin');
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * F-18 fix: Initialize Firebase Admin SDK eagerly during module init,
+   * not lazily inside sendToFCM, to prevent a race condition where multiple
+   * concurrent push requests each try to initialize the SDK simultaneously.
+   */
+  onModuleInit(): void {
+    if (this.admin.apps.length > 0) return;
+    const serviceAccount = this.config.get<string>('FIREBASE_SERVICE_ACCOUNT');
+    if (!serviceAccount) {
+      this.logger.warn('FIREBASE_SERVICE_ACCOUNT not configured — push notifications disabled');
+      return;
+    }
+    try {
+      this.admin.initializeApp({
+        credential: this.admin.credential.cert(JSON.parse(serviceAccount) as object),
+      });
+      this.logger.log('Firebase Admin SDK initialized');
+    } catch (err) {
+      this.logger.error('Failed to initialize Firebase Admin SDK', err);
+    }
+  }
 
   /**
    * Send push notification with exponential-backoff retry (max 3 attempts).
@@ -128,19 +152,9 @@ export class PushNotificationService {
    * Throws on transient errors (caught by sendWithRetry); returns false on permanent failures.
    */
   private async sendToFCM(tokens: string[], options: PushNotificationOptions): Promise<boolean> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const admin = require('firebase-admin');
-
-    // Initialize Firebase Admin SDK once
-    if (!admin.apps.length) {
-      const serviceAccount = this.config.get<string>('FIREBASE_SERVICE_ACCOUNT');
-      if (!serviceAccount) {
-        this.logger.warn('FIREBASE_SERVICE_ACCOUNT not configured — skipping push');
-        return false;
-      }
-      admin.initializeApp({
-        credential: admin.credential.cert(JSON.parse(serviceAccount) as object),
-      });
+    if (!this.admin.apps.length) {
+      this.logger.warn('Firebase Admin SDK not initialized — skipping push notification');
+      return false;
     }
 
     const message = {
@@ -161,7 +175,7 @@ export class PushNotificationService {
     };
 
     // Throws on network/server errors → caught by sendWithRetry
-    const response = await admin.messaging().sendEachForMulticast(message);
+    const response = await this.admin.messaging().sendEachForMulticast(message);
     this.logger.log(`Push notifications sent: ${response.successCount}/${tokens.length}`);
 
     if (response.failureCount > 0) {

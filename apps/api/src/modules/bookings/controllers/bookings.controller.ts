@@ -172,45 +172,6 @@ export class BookingsController {
     return this.bookingsService.cancelBooking(id, userId, dto.reason);
   }
 
-  @Post(':id/bypass-confirm')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[TEST ONLY] Bypass Stripe payment and confirm booking (requires STRIPE_TEST_BYPASS=true)' })
-  @ApiResponse({ status: 200, description: 'Booking confirmed via test bypass' })
-  @ApiResponse({ status: 403, description: 'Not available outside test mode or not authorized' })
-  async bypassConfirm(
-    @Param('id') id: string,
-    @CurrentUser('id') userId: string,
-  ): Promise<AsyncMethodResult<BookingStateMachineService['transition']>> {
-    if (process.env['STRIPE_TEST_BYPASS'] !== 'true') {
-      throw new ForbiddenException('bypass-confirm is only available when STRIPE_TEST_BYPASS=true');
-    }
-    // Use SYSTEM role so either the renter or owner token can call this endpoint.
-    return this.stateMachine.transition(id, 'COMPLETE_PAYMENT', userId, 'SYSTEM');
-  }
-
-  @Post('dev-reset')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[TEST ONLY] Force-cancel all non-final bookings (requires STRIPE_TEST_BYPASS=true)' })
-  @ApiResponse({ status: 200, description: 'All non-final bookings cancelled' })
-  @ApiResponse({ status: 403, description: 'Not available outside test mode' })
-  async devReset(): Promise<{ cancelled: number }> {
-    if (process.env['STRIPE_TEST_BYPASS'] !== 'true') {
-      throw new ForbiddenException('dev-reset is only available when STRIPE_TEST_BYPASS=true');
-    }
-    // Cancel ALL bookings (including COMPLETED/SETTLED) so prior-run date slots
-    // never conflict with upcoming test bookings. The conflict check treats
-    // COMPLETED and SETTLED as blocking, so they must be cleared too.
-    const result = await this.prisma.booking.updateMany({
-      where: {
-        status: { notIn: [BookingStatus.CANCELLED, BookingStatus.REFUNDED] },
-      },
-      data: { status: BookingStatus.CANCELLED },
-    });
-    return { cancelled: result.count };
-  }
-
   @Post(':id/start')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

@@ -1,4 +1,5 @@
 import { test as base, expect, Page, BrowserContext } from "@playwright/test";
+import { createCookieSessionStorage } from "react-router";
 import { testUsers, type TestUser } from "./fixtures";
 
 // Re-export for backward compatibility with existing tests
@@ -42,7 +43,125 @@ export const test = base.extend<{
 export { expect };
 
 const API_BASE_URL = process.env.E2E_API_URL || "http://localhost:3400/api";
+const WEB_BASE_URL = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || "http://localhost:3401";
 const AUTH_STORAGE_KEY = "auth-storage";
+const SESSION_COOKIE_NAME = "__session";
+const REFRESH_TOKEN_COOKIE_NAME = "refresh_token";
+
+const cookieSessionStorage = createCookieSessionStorage({
+  cookie: {
+    name: SESSION_COOKIE_NAME,
+    httpOnly: true,
+    maxAge: 60 * 60 * 24 * 7,
+    path: "/",
+    sameSite: "lax",
+    secrets: [process.env.SESSION_SECRET || "development-session-secret"],
+    secure: false,
+  },
+});
+
+function buildPersistedAuthState(accessToken: string, authUser: unknown) {
+  const rawRole =
+    authUser &&
+    typeof authUser === "object" &&
+    "role" in authUser &&
+    typeof (authUser as { role?: unknown }).role === "string"
+      ? String((authUser as { role: string }).role).toUpperCase()
+      : "";
+  const normalizedRole =
+    rawRole === "HOST"
+      ? "owner"
+      : rawRole === "ADMIN" || rawRole === "SUPER_ADMIN"
+        ? "admin"
+        : "renter";
+  const normalizedUser =
+    authUser && typeof authUser === "object"
+      ? { ...(authUser as Record<string, unknown>), role: normalizedRole }
+      : authUser;
+
+  return {
+    accessToken,
+    normalizedUser,
+    persistedState: {
+      state: {
+        user: normalizedUser,
+        accessToken,
+        isInitialized: true,
+        isAuthenticated: true,
+        isLoading: false,
+      },
+      version: 0,
+    },
+  };
+}
+
+async function seedPersistedAuth(page: Page, accessToken: string, authUser: unknown): Promise<void> {
+  const authState = buildPersistedAuthState(accessToken, authUser);
+
+  await page.addInitScript(
+    ({ authStorageKey, persistedState, token, user }) => {
+      localStorage.clear();
+      localStorage.setItem(authStorageKey, JSON.stringify(persistedState));
+      localStorage.setItem("accessToken", token);
+      localStorage.setItem("user", JSON.stringify(user));
+    },
+    {
+      authStorageKey: AUTH_STORAGE_KEY,
+      persistedState: authState.persistedState,
+      token: authState.accessToken,
+      user: authState.normalizedUser,
+    }
+  );
+}
+
+async function seedWebSessionCookie(
+  page: Page,
+  accessToken: string,
+  refreshToken: string,
+  authUser: unknown
+): Promise<void> {
+  const userId =
+    authUser &&
+    typeof authUser === "object" &&
+    "id" in authUser &&
+    typeof (authUser as { id?: unknown }).id === "string"
+      ? (authUser as { id: string }).id
+      : null;
+
+  if (!userId) {
+    return;
+  }
+
+  const session = await cookieSessionStorage.getSession();
+  session.set("userId", userId);
+  session.set("accessToken", accessToken);
+  session.set("refreshToken", refreshToken);
+
+  const setCookieHeader = await cookieSessionStorage.commitSession(session);
+  const match = setCookieHeader.match(new RegExp(`^${SESSION_COOKIE_NAME}=([^;]+)`));
+  if (!match) {
+    return;
+  }
+
+  await page.context().addCookies([
+    {
+      name: SESSION_COOKIE_NAME,
+      value: match[1],
+      url: WEB_BASE_URL,
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: false,
+    },
+    {
+      name: REFRESH_TOKEN_COOKIE_NAME,
+      value: refreshToken,
+      url: `${new URL(API_BASE_URL).origin}/api/auth`,
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: false,
+    },
+  ]);
+}
 
 function toApiRole(role: TestUser["role"]): "USER" | "HOST" | "ADMIN" {
   if (role === "owner") return "HOST";
@@ -63,18 +182,16 @@ function getExpectedPostLoginPattern(role: TestUser["role"]): RegExp {
 }
 
 async function clearAuthState(page: Page): Promise<void> {
-  await page.goto("/auth/logout", { waitUntil: "domcontentloaded" }).catch(() => {
-    // Best-effort only; the cookie cleanup below still runs if logout navigation fails.
-  });
+  // Navigate to about:blank first to detach from any app-controlled page.
+  // This prevents protocol errors when clearing cookies while the app is
+  // mid-navigation (e.g. /auth/logout triggers a redirect chain).
+  await page.goto("about:blank").catch(() => {});
+  await page.context().clearCookies();
   await page.evaluate(() => {
     localStorage.clear();
     sessionStorage.clear();
   }).catch(() => {
-    // Ignore cross-navigation timing failures and let the next navigation reset state.
-  });
-  await page.context().clearCookies();
-  await page.goto("about:blank").catch(() => {
-    // Force a full app-context unload so any in-memory auth store is discarded.
+    // about:blank may not have storage access in some browsers — safe to ignore.
   });
 }
 
@@ -142,6 +259,7 @@ async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
   }
 
   if (!response.ok()) {
+    console.log(`[devLoginFallback] dev-login request failed: HTTP ${response.status()} for ${user.email}`);
     return false;
   }
 
@@ -152,75 +270,38 @@ async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
   };
 
   if (!payload.accessToken || !payload.refreshToken || !payload.user) {
+    console.log(`[devLoginFallback] dev-login response missing fields for ${user.email}`);
     return false;
   }
 
-  await page.goto("/");
-  await page.evaluate(
-    ({ authStorageKey, accessToken, authUser }) => {
-      // Clear any stale auth state before setting new auth
-      localStorage.clear();
-
-      const rawRole =
-        authUser &&
-        typeof authUser === "object" &&
-        "role" in authUser &&
-        typeof (authUser as { role?: unknown }).role === "string"
-          ? String((authUser as { role: string }).role).toUpperCase()
-          : "";
-      const normalizedRole =
-        rawRole === "HOST"
-          ? "owner"
-          : rawRole === "ADMIN" || rawRole === "SUPER_ADMIN"
-            ? "admin"
-            : "renter";
-      const normalizedUser =
-        authUser && typeof authUser === "object"
-          ? { ...(authUser as Record<string, unknown>), role: normalizedRole }
-          : authUser;
-
-      localStorage.setItem(
-        authStorageKey,
-        JSON.stringify({
-          state: {
-            user: normalizedUser,
-            accessToken,
-          },
-          version: 0,
-        })
-      );
-      localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("user", JSON.stringify(normalizedUser));
-    },
-    {
-      authStorageKey: AUTH_STORAGE_KEY,
-      accessToken: payload.accessToken,
-      authUser: payload.user,
-    }
-  );
+  await clearAuthState(page);
+  await seedPersistedAuth(page, payload.accessToken, payload.user);
+  await seedWebSessionCookie(page, payload.accessToken, payload.refreshToken, payload.user);
 
   const destination = getExpectedPostLoginPath(user.role);
   await page
     .goto(destination, { waitUntil: "domcontentloaded", timeout: 30000 })
-    .catch(() => {
-      // Some heavy pages can exceed the default navigation budget in CI-like environments.
+    .catch((err) => {
+      console.log(`[devLoginFallback] goto ${destination} error:`, String(err).slice(0, 200));
     });
 
   // Wait for SPA client-side redirects to settle (clientLoader runs async after DOM loads)
   await page
     .waitForURL((url) => !url.pathname.startsWith("/auth/"), { timeout: 8000 })
     .catch(() => {
-      // If still on auth page after 8s, it's a real auth failure
+      console.log(`[devLoginFallback] still on auth page after 8s for ${user.email}, url: ${page.url()}`);
     });
 
   // Verify auth succeeded — we should NOT be on the login page
   if (page.url().includes("/auth/login")) {
+    console.log(`[devLoginFallback] landed on login page for ${user.email}`);
     return false;
   }
 
   // Also verify we landed somewhere expected (not a completely wrong page)
-  const expectedPath = getExpectedPostLoginPath(user.role);
-  if (!page.url().includes(expectedPath)) {
+  const expectedPattern = getExpectedPostLoginPattern(user.role);
+  if (!expectedPattern.test(new URL(page.url()).pathname)) {
+    console.log(`[devLoginFallback] unexpected URL for ${user.email}: ${page.url()}`);
     return false;
   }
 
@@ -235,6 +316,10 @@ async function devLoginFallback(page: Page, user: TestUser): Promise<boolean> {
       return false;
     }
   }, AUTH_STORAGE_KEY);
+
+  if (!hasAuth) {
+    console.log(`[devLoginFallback] localStorage auth not found after navigation for ${user.email}`);
+  }
 
   return hasAuth;
 }

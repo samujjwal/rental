@@ -20,6 +20,7 @@ import type { LucideIcon } from "lucide-react";
 import { adminApi } from "~/lib/api/admin";
 import { requireAdmin } from "~/utils/auth";
 import { RouteErrorBoundary } from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -27,6 +28,13 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "System configuration and settings" },
   ];
 };
+
+export function getSystemSettingsLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load system settings", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading system settings timed out. Try again.",
+  });
+}
 
 function formatUptime(systemHealth: { uptime?: number; processUptimeSeconds?: number } | null) {
   if (!systemHealth) {
@@ -64,10 +72,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       generalSettings: null,
       systemHealth: null,
       databaseInfo: null,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load system settings",
+      error: getSystemSettingsLoadError(error),
     };
   }
 }

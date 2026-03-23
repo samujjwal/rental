@@ -5,6 +5,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { ClaimStatus, NotificationType, toNumber } from '@rental-portal/database';
@@ -27,12 +28,13 @@ export class InsuranceClaimsService {
   ) {}
 
   /**
-   * Generate a unique claim number: CLM-YYYYMMDD-XXXX
+   * Generate a unique claim number: CLM-YYYYMMDD-XXXXXXXX
+   * Uses cryptographically random bytes instead of Math.random() (F-27 fix).
    */
   private generateClaimNumber(): string {
     const date = new Date();
     const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const random = randomBytes(4).toString('hex').toUpperCase();
     return `CLM-${dateStr}-${random}`;
   }
 
@@ -126,15 +128,24 @@ export class InsuranceClaimsService {
       },
     });
 
-    // Notify admins about new claim
-    this.notificationsService
-      .sendNotification({
-        userId: 'admin', // Admin notification channel
-        type: NotificationType.SYSTEM_UPDATE,
-        title: 'New Insurance Claim Filed',
-        message: `Claim ${claim.claimNumber} filed for amount ${dto.claimAmount}`,
-        data: { claimId: claim.id, claimNumber: claim.claimNumber },
-        channels: ['IN_APP'],
+    // F-28 fix: Look up a real admin user instead of using the literal 'admin'.
+    // If no admin can be found, log and skip — don't crash the claim filing.
+    this.prisma.user
+      .findFirst({
+        where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+      .then((admin) => {
+        if (!admin) return;
+        return this.notificationsService.sendNotification({
+          userId: admin.id,
+          type: NotificationType.SYSTEM_UPDATE,
+          title: 'New Insurance Claim Filed',
+          message: `Claim ${claim.claimNumber} filed for amount ${dto.claimAmount}`,
+          data: { claimId: claim.id, claimNumber: claim.claimNumber },
+          channels: ['IN_APP'],
+        });
       })
       .catch((err) => this.logger.warn('Failed to notify admin about claim', err));
 

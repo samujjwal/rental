@@ -1,4 +1,56 @@
-import { renderHook, waitFor, act } from "@testing-library/react";
+import { AxiosError } from "axios";
+import { describe, expect, it } from "vitest";
+
+import { getFavoritesMutationError } from "./useFavorites";
+
+describe("getFavoritesMutationError", () => {
+  it("preserves backend response messages", () => {
+    expect(
+      getFavoritesMutationError(
+        { response: { data: { message: "Favorite already exists" } } },
+        "fallback"
+      )
+    ).toBe("Favorite already exists");
+  });
+
+  it("uses actionable offline copy", () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    expect(getFavoritesMutationError(new Error("Network Error"), "fallback")).toBe(
+      "You appear to be offline. Reconnect and try again."
+    );
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("uses timeout-specific copy", () => {
+    expect(
+      getFavoritesMutationError(new AxiosError("timeout", "ECONNABORTED"), "fallback")
+    ).toBe("Favorites request timed out. Try again.");
+  });
+
+  it("uses conflict-specific copy", () => {
+    expect(
+      getFavoritesMutationError(
+        new AxiosError("Conflict", undefined, undefined, undefined, {
+          status: 409,
+          statusText: "Conflict",
+          headers: {},
+          config: { headers: {} } as any,
+          data: {},
+        } as any),
+        "fallback"
+      )
+    ).toBe("Your favorites changed elsewhere. Refresh and try again.");
+  });
+});import { renderHook, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -181,7 +233,7 @@ describe("useAddFavorite", () => {
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toast.error).toHaveBeenCalledWith("Failed to add favorite");
+    expect(toast.error).toHaveBeenCalledWith("fail");
   });
 });
 
@@ -222,6 +274,6 @@ describe("useRemoveFavorite", () => {
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toast.error).toHaveBeenCalledWith("Failed to remove favorite");
+    expect(toast.error).toHaveBeenCalledWith("fail");
   });
 });

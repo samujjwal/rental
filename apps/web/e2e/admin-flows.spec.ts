@@ -30,7 +30,7 @@ const openFirstDispute = async (page: Page): Promise<boolean> => {
 test.describe("Admin Dashboard", () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, testUsers.admin);
-    await page.goto("/admin");
+    await expect(page).toHaveURL(/.*\/admin/);
   });
 
   test.describe("Dashboard Overview", () => {

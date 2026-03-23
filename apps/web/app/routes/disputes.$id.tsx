@@ -1,5 +1,5 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
+import { Form, Link, redirect, useActionData, useLoaderData, useNavigation, useRevalidator } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
@@ -21,6 +21,7 @@ import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
 import { toast } from "~/lib/toast";
 import { isAppEntityId } from "~/utils/entity-id";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Dispute Details | GharBatai Rentals" }];
@@ -70,6 +71,52 @@ const safeText = (value: unknown, fallback = ""): string => {
 const humanizeKey = (value: unknown): string =>
   String(value || "").replace(/_/g, " ").trim();
 
+export function getDisputeDetailActionError(
+  error: unknown,
+  fallbackMessage = "Action failed"
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+
+  if (typeof responseMessage === "string" && responseMessage.length > 0) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try again.";
+  }
+
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.CONFLICT]: "This dispute changed while you were working. Refresh and try again.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "The dispute action timed out. Try again.",
+  });
+}
+
+export function getDisputeDetailLoadError(error: unknown): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+
+  if (typeof responseMessage === "string" && responseMessage.length > 0) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try again.";
+  }
+
+  return getActionableErrorMessage(error, "Unable to load this dispute right now.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading the dispute timed out. Try again.",
+  });
+}
+
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   const user = await getUser(request);
   if (!user) {
@@ -92,7 +139,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     }
     return { dispute };
   } catch (error) {
-    throw redirect("/disputes");
+    return { dispute: null, error: getDisputeDetailLoadError(error) };
   }
 }
 
@@ -178,24 +225,51 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     return { error: "Invalid action" };
   } catch (error: unknown) {
     return {
-      error:
-        (error &&
-          typeof error === "object" &&
-          "response" in error &&
-          (error as { response?: { data?: { message?: string } } }).response
-            ?.data?.message) ||
-        "Action failed",
+      error: getDisputeDetailActionError(error),
     };
   }
 }
 
 export default function DisputeDetailPage() {
   const { t } = useTranslation();
-  const { dispute } = useLoaderData<{ dispute: DisputeDetail }>();
+  const { dispute, error } = useLoaderData<{ dispute: DisputeDetail | null; error?: string }>();
   const actionData = useActionData<{ success?: string; error?: string }>();
+  const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const { user } = useAuthStore();
   const [message, setMessage] = useState("");
   const [closeReason, setCloseReason] = useState("");
+
+  if (!dispute) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <Card>
+            <CardContent className="p-8 text-center space-y-4">
+              <AlertCircle className="w-10 h-10 mx-auto text-muted-foreground" />
+              <div className="space-y-2">
+                <h1 className="text-2xl font-bold text-foreground">Dispute unavailable</h1>
+                <p className="text-sm text-muted-foreground">
+                  {error || "Unable to load this dispute right now."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <UnifiedButton type="button" onClick={() => revalidator.revalidate()}>
+                  Try Again
+                </UnifiedButton>
+                <Link
+                  to="/disputes"
+                  className="inline-flex items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  Back to Disputes
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const statusKey = safeText(dispute.status, "OPEN").toUpperCase();
   const statusConfig = STATUS_CONFIG[statusKey] || STATUS_CONFIG.OPEN;
@@ -212,6 +286,7 @@ export default function DisputeDetailPage() {
   const isAdminUser = user?.role === "admin" || user?.role === "SUPER_ADMIN";
   const canEscalate = isAdminUser && !["CLOSED", "RESOLVED"].includes(statusKey);
   const [escalateReason, setEscalateReason] = useState("");
+  const isSubmitting = navigation.state === "submitting";
 
   useEffect(() => {
     if (actionData?.success) {
@@ -369,13 +444,18 @@ export default function DisputeDetailPage() {
                 }
                 placeholder={t("disputes.addResponsePlaceholder")}
                 className="w-full border border-input rounded-lg px-3 py-2 min-h-[120px] bg-background"
-                disabled={!canRespond}
+                disabled={!canRespond || isSubmitting}
               />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{t("disputes.responseHelp", "Add any relevant evidence or timeline details.")}</span>
+                <span>{message.trim().length}/{MAX_DISPUTE_MESSAGE_LENGTH}</span>
+              </div>
               <UnifiedButton
                 type="submit"
                 variant="primary"
                 leftIcon={<Send className="w-4 h-4" />}
-                disabled={!canRespond || message.trim().length === 0}
+                loading={isSubmitting}
+                disabled={!canRespond || message.trim().length === 0 || isSubmitting}
               >
                 {t("disputes.sendResponse")}
               </UnifiedButton>
@@ -400,11 +480,16 @@ export default function DisputeDetailPage() {
                   }
                   placeholder={t("disputes.closeReasonPlaceholder")}
                   className="w-full border border-input rounded-lg px-3 py-2 min-h-[100px] bg-background"
+                  disabled={isSubmitting}
                 />
+                <div className="text-right text-xs text-muted-foreground">
+                  {closeReason.trim().length}/{MAX_CLOSE_REASON_LENGTH}
+                </div>
                 <UnifiedButton
                   type="submit"
                   variant="destructive"
-                  disabled={closeReason.trim().length === 0}
+                  loading={isSubmitting}
+                  disabled={closeReason.trim().length === 0 || isSubmitting}
                 >
                   {t("disputes.closeDispute")}
                 </UnifiedButton>
@@ -430,11 +515,16 @@ export default function DisputeDetailPage() {
                   }
                   placeholder={t("disputes.escalateReasonPlaceholder", "Explain why this dispute needs to be escalated...")}
                   className="w-full border border-input rounded-lg px-3 py-2 min-h-[100px] bg-background"
+                  disabled={isSubmitting}
                 />
+                <div className="text-right text-xs text-muted-foreground">
+                  {escalateReason.trim().length}/{MAX_CLOSE_REASON_LENGTH}
+                </div>
                 <UnifiedButton
                   type="submit"
                   variant="secondary"
-                  disabled={escalateReason.trim().length === 0}
+                  loading={isSubmitting}
+                  disabled={escalateReason.trim().length === 0 || isSubmitting}
                 >
                   {t("disputes.escalateDispute", "Escalate Dispute")}
                 </UnifiedButton>

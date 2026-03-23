@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 
 /**
@@ -14,46 +15,51 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 export class GeoDistributionService {
   private readonly logger = new Logger(GeoDistributionService.name);
 
-  private readonly defaultRegions: Record<string, any> = {
-    'ap-south-1': {
-      regionCode: 'ap-south-1',
-      name: 'South Asia (Mumbai)',
-      countries: ['NP', 'IN', 'BD', 'LK', 'BT', 'MV'],
-      primaryDb: 'postgres-ap-south-1',
-      readReplica: 'postgres-ap-south-1-ro',
-      cdnEndpoint: 'cdn.gharbatai.com',
-      latencyBudgetMs: 200,
-    },
-    'ap-southeast-1': {
-      regionCode: 'ap-southeast-1',
-      name: 'Southeast Asia (Singapore)',
-      countries: ['TH', 'ID', 'MY', 'SG', 'VN', 'PH'],
-      primaryDb: 'postgres-ap-southeast-1',
-      readReplica: 'postgres-ap-southeast-1-ro',
-      cdnEndpoint: 'cdn-sea.gharbatai.com',
-      latencyBudgetMs: 250,
-    },
-    'us-east-1': {
-      regionCode: 'us-east-1',
-      name: 'US East (Virginia)',
-      countries: ['US', 'CA', 'MX'],
-      primaryDb: 'postgres-us-east-1',
-      readReplica: 'postgres-us-east-1-ro',
-      cdnEndpoint: 'cdn-us.gharbatai.com',
-      latencyBudgetMs: 150,
-    },
-    'eu-west-1': {
-      regionCode: 'eu-west-1',
-      name: 'Europe (Ireland)',
-      countries: ['GB', 'DE', 'FR', 'ES', 'IT', 'NL'],
-      primaryDb: 'postgres-eu-west-1',
-      readReplica: 'postgres-eu-west-1-ro',
-      cdnEndpoint: 'cdn-eu.gharbatai.com',
-      latencyBudgetMs: 150,
-    },
-  };
+  private readonly defaultRegions: Record<string, any>;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {
+    this.defaultRegions = {
+      'ap-south-1': {
+        regionCode: 'ap-south-1',
+        name: 'South Asia (Mumbai)',
+        countries: ['NP', 'IN', 'BD', 'LK', 'BT', 'MV'],
+        primaryDb: 'postgres-ap-south-1',
+        readReplica: 'postgres-ap-south-1-ro',
+        cdnEndpoint: this.config.get<string>('cdn.apSouth1') || 'cdn.gharbatai.com',
+        latencyBudgetMs: 200,
+      },
+      'ap-southeast-1': {
+        regionCode: 'ap-southeast-1',
+        name: 'Southeast Asia (Singapore)',
+        countries: ['TH', 'ID', 'MY', 'SG', 'VN', 'PH'],
+        primaryDb: 'postgres-ap-southeast-1',
+        readReplica: 'postgres-ap-southeast-1-ro',
+        cdnEndpoint: this.config.get<string>('cdn.apSoutheast1') || 'cdn-sea.gharbatai.com',
+        latencyBudgetMs: 250,
+      },
+      'us-east-1': {
+        regionCode: 'us-east-1',
+        name: 'US East (Virginia)',
+        countries: ['US', 'CA', 'MX'],
+        primaryDb: 'postgres-us-east-1',
+        readReplica: 'postgres-us-east-1-ro',
+        cdnEndpoint: this.config.get<string>('cdn.usEast1') || 'cdn-us.gharbatai.com',
+        latencyBudgetMs: 150,
+      },
+      'eu-west-1': {
+        regionCode: 'eu-west-1',
+        name: 'Europe (Ireland)',
+        countries: ['GB', 'DE', 'FR', 'ES', 'IT', 'NL'],
+        primaryDb: 'postgres-eu-west-1',
+        readReplica: 'postgres-eu-west-1-ro',
+        cdnEndpoint: this.config.get<string>('cdn.euWest1') || 'cdn-eu.gharbatai.com',
+        latencyBudgetMs: 150,
+      },
+    };
+  }
 
   /**
    * Get region config for a country.
@@ -134,7 +140,7 @@ export class GeoDistributionService {
       region: config.regionCode || region.regionCode,
       primaryDb: config.primaryDb || 'postgres-default',
       readReplica: config.readReplica || config.primaryDb || 'postgres-default-ro',
-      cdnEndpoint: config.cdnEndpoint || 'cdn.gharbatai.com',
+      cdnEndpoint: config.cdnEndpoint || this.config.get<string>('cdn.apSouth1') || 'cdn.gharbatai.com',
       latencyBudgetMs: config.latencyBudgetMs || 200,
     };
   }

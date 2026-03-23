@@ -3,6 +3,7 @@ import { AiConciergeService } from './ai-concierge.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
+import { AI_PROVIDER_PORT } from '@/modules/ai/ports/ai-provider.port';
 
 describe('AiConciergeService', () => {
   let service: AiConciergeService;
@@ -49,6 +50,20 @@ describe('AiConciergeService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('GharBatai') } },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        {
+          provide: AI_PROVIDER_PORT,
+          useValue: {
+            complete: jest.fn().mockResolvedValue({
+              content: '',
+              model: 'none',
+              fromProvider: false,
+              latencyMs: 0,
+              promptId: 'ai-concierge.intent-classify',
+              promptVersion: '1.0.0',
+            }),
+            embed: jest.fn().mockResolvedValue(null),
+          },
+        },
       ],
     }).compile();
 

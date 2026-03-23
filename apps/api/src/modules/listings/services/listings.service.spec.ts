@@ -7,6 +7,7 @@ import { ListingValidationService } from './listing-validation.service';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { EmbeddingService } from '../../ai/services/embedding.service';
 import { ListingVersionService } from './listing-version.service';
+import { ConfigService } from '@nestjs/config';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   PropertyStatus,
@@ -81,6 +82,12 @@ describe('ListingsService', () => {
           provide: ListingVersionService,
           useValue: {
             createSnapshot: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
           },
         },
       ],

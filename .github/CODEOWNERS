@@ -1,0 +1,46 @@
+# CODEOWNERS
+#
+# Format: <pattern> <owner> [<owner> ...]
+# Owners are GitHub usernames or team sluges (@org/team-name).
+# The last matching rule wins when multiple patterns match.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Replace placeholder owner @rental-portal/platform-team with real GitHub
+# usernames or teams before activating pull request rule enforcement in
+# Settings > Branches > Require review from code owners.
+
+# ── Default: every file requires platform team review ─────────────────────────
+*                                       @rental-portal/platform-team
+
+# ── Security and auth boundaries ──────────────────────────────────────────────
+apps/api/src/modules/auth/              @rental-portal/platform-team @rental-portal/security-team
+apps/web/app/utils/auth.ts              @rental-portal/platform-team @rental-portal/security-team
+apps/web/app/lib/store/auth.ts          @rental-portal/platform-team @rental-portal/security-team
+apps/web/app/root.tsx                   @rental-portal/platform-team
+
+# ── Privacy and data export ────────────────────────────────────────────────────
+apps/api/src/modules/users/services/data-export.service.ts @rental-portal/platform-team @rental-portal/security-team
+packages/database/prisma/schema.prisma  @rental-portal/platform-team @rental-portal/security-team
+
+# ── Payments and financial flows ───────────────────────────────────────────────
+apps/api/src/modules/payments/          @rental-portal/platform-team @rental-portal/payments-team
+
+# ── AI platform boundaries ─────────────────────────────────────────────────────
+apps/api/src/modules/ai/                @rental-portal/platform-team @rental-portal/ai-team
+apps/api/src/modules/ai/ports/          @rental-portal/platform-team @rental-portal/ai-team
+apps/api/src/modules/ai/prompts/        @rental-portal/platform-team @rental-portal/ai-team
+apps/api/src/modules/marketplace/services/ai-concierge.service.ts @rental-portal/platform-team @rental-portal/ai-team
+
+# ── Booking critical path ──────────────────────────────────────────────────────
+apps/api/src/modules/bookings/          @rental-portal/platform-team
+
+# ── Deployment and CI pipelines ────────────────────────────────────────────────
+.github/                                @rental-portal/platform-team
+apps/api/Dockerfile                     @rental-portal/platform-team
+apps/web/Dockerfile                     @rental-portal/platform-team
+docker-compose*.yml                     @rental-portal/platform-team
+scripts/deploy*.sh                      @rental-portal/platform-team
+
+# ── Cross-app contract boundaries ─────────────────────────────────────────────
+packages/shared-types/                  @rental-portal/platform-team
+apps/api/src/modules/categories/        @rental-portal/platform-team

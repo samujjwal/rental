@@ -38,18 +38,21 @@ export class FieldEncryptionService implements OnModuleInit {
     const hexKey = this.config.get<string>('FIELD_ENCRYPTION_KEY');
 
     if (!hexKey) {
-      if (process.env.NODE_ENV === 'production') {
+      const env = process.env.NODE_ENV;
+      if (env !== 'development' && env !== 'test') {
+        // Require a real key in production AND staging/ci environments.
         throw new Error(
-          'FIELD_ENCRYPTION_KEY must be set in production. ' +
+          'FIELD_ENCRYPTION_KEY must be set in all non-development environments. ' +
           'Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
         );
       }
-      // Dev: use a deterministic key so existing data isn't corrupted across restarts
+      // Development only: use a deterministic fallback key so existing dev data
+      // isn't corrupted across restarts.  Never deploy this key outside dev/test.
       const devKey = '0011223344556677889900aabbccddeeff0011223344556677889900aabbccdd';
       this.key = Buffer.from(devKey, 'hex');
       this.logger.warn(
-        'FIELD_ENCRYPTION_KEY not set — using insecure dev key. ' +
-        'Set FIELD_ENCRYPTION_KEY in production.',
+        'FIELD_ENCRYPTION_KEY not set — using insecure deterministic dev key. ' +
+        'Set FIELD_ENCRYPTION_KEY in all non-development environments.',
       );
     } else {
       if (hexKey.length !== 64) {

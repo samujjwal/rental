@@ -9,13 +9,11 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  BadRequestException,
-  Headers,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard, CurrentUser } from '@/common/auth';
+import { OptionalJwtAuthGuard } from '@/modules/auth/guards/optional-jwt-auth.guard';
 import { FavoritesService } from '../services/favorites.service';
 
 @ApiTags('Favorites')
@@ -47,33 +45,19 @@ export class FavoritesController {
   }
 
   @Get('listing/:listingId')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get favorite by listing ID (optional auth)' })
   @ApiResponse({ status: 200, description: 'Favorite retrieved' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - invalid token' })
   async getFavoriteByListingId(
     @Param('listingId') listingId: string,
-    @Headers('authorization') authorization?: string,
+    @CurrentUser('id') userId?: string,
   ) {
-    if (!authorization) {
+    if (!userId) {
       return { isFavorite: false };
     }
-    
-    try {
-      // Extract token from Authorization header
-      const token = authorization.replace('Bearer ', '');
-      // Decode the token to get the user ID
-      const { JwtService } = require('@nestjs/jwt');
-      const jwt = new JwtService({
-        secret: process.env.JWT_SECRET || 'dev-secret',
-      });
-      const payload = jwt.verify(token) as { sub: string };
-      const userId = payload.sub;
-      
-      const result = await this.favoritesService.getFavoriteByListingId(userId, listingId);
-      return { isFavorite: result?.favorited ?? !!result };
-    } catch {
-      return { isFavorite: false };
-    }
+
+    const result = await this.favoritesService.getFavoriteByListingId(userId, listingId);
+    return { isFavorite: result?.favorited ?? !!result };
   }
 
   @Get('count')

@@ -5,7 +5,6 @@ import { LedgerService } from './services/ledger.service';
 import { PayoutsService } from './services/payouts.service';
 import { PaymentDataService } from './services/payment-data.service';
 import { StripeTaxService } from './services/stripe-tax.service';
-import { PaymentEventsService } from './services/payment-events.service';
 import { PaymentProviderFactory } from './services/payment-provider-factory.service';
 import { EscrowService } from './services/escrow.service';
 import { PaymentCommandLogService } from './services/payment-command-log.service';
@@ -33,7 +32,6 @@ import { EventsModule } from '@/common/events/events.module';
     PaymentDataService,
     StripeTaxService,
     WebhookService,
-    PaymentEventsService,
     PaymentProviderFactory,
     EscrowService,
     PaymentCommandLogService,

@@ -1,5 +1,5 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link, redirect } from "react-router";
+import { useLoaderData, Link, redirect, useRevalidator } from "react-router";
 import { useMemo, useState } from "react";
 import {
   ChevronLeft,
@@ -20,6 +20,7 @@ import { APP_LOCALE } from "~/config/locale";
 import { ownerNavSections } from "~/config/navigation";
 import { formatCurrency, formatDate } from "~/lib/utils";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -27,6 +28,13 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "Manage your rental calendar" },
   ];
 };
+
+export function getOwnerCalendarLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load calendar data", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading calendar data timed out. Try again.",
+  });
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -51,10 +59,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     return {
       bookings: [],
       listings: [],
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load calendar data",
+      error: getOwnerCalendarLoadError(error),
     };
   }
 }
@@ -104,6 +109,7 @@ export default function OwnerCalendarPage() {
     listings: Listing[];
     error: string | null;
   };
+  const { revalidate } = useRevalidator();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedListing, setSelectedListing] = useState<string>("all");
   const listingIds = useMemo(
@@ -216,7 +222,12 @@ export default function OwnerCalendarPage() {
       banner={
         error ? (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-            {error}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <p>{error}</p>
+              <UnifiedButton variant="outline" onClick={() => revalidate()}>
+                Try Again
+              </UnifiedButton>
+            </div>
           </div>
         ) : null
       }
@@ -233,6 +244,11 @@ export default function OwnerCalendarPage() {
       {error ? (
         <div className="rounded-xl border border-dashed border-border/70 bg-card/50 p-10 text-center text-muted-foreground">
           Calendar data is currently unavailable.
+          <div className="mt-4">
+            <UnifiedButton variant="outline" onClick={() => revalidate()}>
+              Try Again
+            </UnifiedButton>
+          </div>
         </div>
       ) : (
         <>

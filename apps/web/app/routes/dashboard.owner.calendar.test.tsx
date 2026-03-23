@@ -1,4 +1,6 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 /* ------------------------------------------------------------------ */
 const IconStub = vi.hoisted(() => (props: any) => (
@@ -20,6 +22,8 @@ const mocks: Record<string, any> = {
   getUser: vi.fn(),
   getOwnerBookings: vi.fn(),
   getMyListings: vi.fn(),
+  useLoaderData: vi.fn(),
+  revalidate: vi.fn(),
   redirect: vi.fn(
     (url: string) =>
       new Response(null, { status: 302, headers: { Location: url } })
@@ -33,7 +37,8 @@ vi.mock("react-router", () => ({
     </a>
   ),
   redirect: (...a: any[]) => mocks.redirect(...a),
-  useLoaderData: () => ({ bookings: [], listings: [] }),
+  useLoaderData: () => mocks.useLoaderData(),
+  useRevalidator: () => ({ revalidate: mocks.revalidate }),
 }));
 vi.mock("~/utils/auth", () => ({
   getUser: (...a: any[]) => mocks.getUser(...a),
@@ -73,15 +78,20 @@ vi.mock("~/components/ui", () => ({
   Badge: ({ children }: any) => <span>{children}</span>,
 }));
 vi.mock("~/components/layout", () => ({
-  PortalPageLayout: ({ children }: any) => <div>{children}</div>,
+  PortalPageLayout: ({ banner, children }: any) => <div>{banner}{children}</div>,
 }));
 vi.mock("~/config/navigation", () => ({ ownerNavSections: [] }));
 
-import { clientLoader } from "./dashboard.owner.calendar";
+import OwnerCalendarPage, { clientLoader, getOwnerCalendarLoadError } from "./dashboard.owner.calendar";
 
 const ownerUser = { id: "u1", role: "owner" };
 
 beforeEach(() => vi.clearAllMocks());
+
+beforeEach(() => {
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  mocks.useLoaderData.mockReturnValue({ bookings: [], listings: [], error: null });
+});
 
 describe("clientLoader", () => {
   it("redirects unauthenticated", async () => {
@@ -123,5 +133,51 @@ describe("clientLoader", () => {
     expect(r.bookings).toEqual([]);
     expect(r.listings).toEqual([]);
     expect(r.error).toBeTruthy();
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getOwnerBookings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    mocks.getMyListings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/dashboard/owner/calendar"),
+    } as any)) as any;
+
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("uses timeout-specific copy on loader failure", async () => {
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getOwnerBookings.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    mocks.getMyListings.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/dashboard/owner/calendar"),
+    } as any)) as any;
+
+    expect(r.error).toBe("Loading calendar data timed out. Try again.");
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getOwnerCalendarLoadError(new Error("calendar unavailable"))).toBe("calendar unavailable");
+  });
+});
+
+describe("OwnerCalendarPage recovery UI", () => {
+  it("revalidates from the error banner and fallback state", () => {
+    mocks.useLoaderData.mockReturnValue({ bookings: [], listings: [], error: "Loading calendar data timed out. Try again." });
+
+    render(<OwnerCalendarPage />);
+
+    const retryButtons = screen.getAllByRole("button", { name: "Try Again" });
+    fireEvent.click(retryButtons[0]);
+    fireEvent.click(retryButtons[1]);
+
+    expect(mocks.revalidate).toHaveBeenCalledTimes(2);
   });
 });

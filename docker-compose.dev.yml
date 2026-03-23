@@ -21,20 +21,11 @@ services:
     volumes:
       - redis_data:/data
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
-    container_name: rental-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
-    ports:
-      - "3492:9200"
-      - "3493:9300"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
+  # NOTE: The active search stack is PostgreSQL full-text search + pgvector semantic ranking.
+  # OpenSearch (@opensearch-project/opensearch) is available in the dependency tree as the
+  # Apache-2.0 licensed successor to Elasticsearch for any future dedicated index features.
+  # See apps/api/src/modules/search/ for the current implementation.
 
 volumes:
   postgres_data:
   redis_data:
-  elasticsearch_data:

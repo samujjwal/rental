@@ -73,19 +73,20 @@ export class InsuranceVerificationService {
   }
 
   /**
-   * Automated verification checks
+   * Automated verification checks.
+   *
+   * NOTE: OCR-based automated verification (carrier API, document parsing) is
+   * not yet implemented. Every submission is flagged for mandatory manual review
+   * by an admin. The confidence value of 0 explicitly signals no automated
+   * analysis was performed — callers MUST NOT auto-approve based on this result.
    */
   async runAutomatedChecks(policyId: string): Promise<{
     passed: boolean;
+    requiresManualReview: boolean;
     flags: string[];
     confidence: number;
   }> {
     const flags: string[] = [];
-    let confidence = 1.0;
-
-    // Automated checks placeholder
-    // Currently relying on manual verification process.
-    // Future integration: OCR, Policy Format Validation, Carrier Verification.
 
     const policy = await this.prisma.auditLog.findFirst({
       where: {
@@ -95,23 +96,26 @@ export class InsuranceVerificationService {
     });
 
     if (!policy) {
-      flags.push('Policy not found');
-      confidence = 0;
-    } else {
-      // Flag for manual review
-      flags.push('Manual verification required');
-      confidence = 0.5;
+      flags.push('Policy record not found');
+      return { passed: false, requiresManualReview: false, flags, confidence: 0 };
     }
 
-    // If coverage seems too low
-    // if (policy.coverageAmount < threshold) {
-    //   flags.push('Coverage amount below expected threshold');
-    //   confidence -= 0.2;
-    // }
+    // Automated carrier API / OCR verification not yet implemented.
+    // All policies are routed to the manual admin review queue.
+    // This is distinct from an automated rejection — the policy is valid enough
+    // to warrant human inspection; it has not been automatically rejected.
+    flags.push('Queued for manual admin verification — automated OCR/carrier checks are not yet enabled');
 
-    const passed = flags.length === 0 && confidence > 0.7;
+    this.logger.log(
+      `Insurance policy ${policyId} queued for manual review (automated checks not implemented).`,
+    );
 
-    return { passed, flags, confidence };
+    return {
+      passed: false,
+      requiresManualReview: true,
+      flags,
+      confidence: 0,
+    };
   }
 
   /**
@@ -123,7 +127,9 @@ export class InsuranceVerificationService {
   }
 
   /**
-   * Get list of known insurance providers
+   * Get list of known insurance providers (Nepal and South Asia focus).
+   * Providers registered with the Insurance Authority of Nepal (Beema Samiti)
+   * and regional non-life insurers.
    */
   private async getKnownProviders(): Promise<string[]> {
     // Cache for 24 hours
@@ -131,17 +137,35 @@ export class InsuranceVerificationService {
     if (cached) return cached;
 
     const providers = [
-      'State Farm',
-      'Geico',
-      'Progressive',
-      'Allstate',
-      'USAA',
-      'Liberty Mutual',
-      'Farmers Insurance',
-      'Nationwide',
-      'Travelers',
-      'American Family',
-      // Add more providers
+      // Nepal — Non-life insurers (Insurance Authority of Nepal registered)
+      'Nepal Insurance Company',
+      'National Insurance Company',
+      'Himalayan General Insurance',
+      'Sagarmatha Insurance Company',
+      'NIC Asia General Insurance',
+      'Shikhar Insurance',
+      'Lumbini General Insurance',
+      'Everest Insurance Company',
+      'Prudential Insurance Company',
+      'Siddhartha Insurance Company',
+      'Prabhu Insurance',
+      'Excel Development Bank Insurance',
+      // India — national and major private non-life insurers
+      'New India Assurance',
+      'National Insurance Company India',
+      'United India Insurance',
+      'Oriental Insurance Company',
+      'Bajaj Allianz General Insurance',
+      'HDFC ERGO General Insurance',
+      'ICICI Lombard General Insurance',
+      'Tata AIG General Insurance',
+      // Bangladesh
+      'Sadharan Bima Corporation',
+      'Green Delta Insurance',
+      // Sri Lanka
+      'Sri Lanka Insurance Corporation',
+      'AIA Insurance Sri Lanka',
+      'Ceylinco Insurance',
     ];
 
     await this.cache.set('insurance:providers', providers, 86400); // 24 hours
@@ -149,7 +173,15 @@ export class InsuranceVerificationService {
   }
 
   /**
-   * OCR document processing (placeholder)
+   * OCR document processing — NOT YET IMPLEMENTED.
+   *
+   * Returns an empty object. In production this should call AWS Textract,
+   * Google Document AI, or a similar OCR provider to extract structured
+   * data from the insurance document image/PDF.
+   *
+   * Until integrated, the admin review workflow covers this gap:
+   * `runAutomatedChecks()` returns `requiresManualReview: true` for all
+   * submissions, routing them to the admin queue.
    */
   async extractPolicyDetails(documentUrl: string): Promise<{
     policyNumber?: string;
@@ -158,9 +190,9 @@ export class InsuranceVerificationService {
     expirationDate?: Date;
     coverageAmount?: number;
   }> {
-    // In production: Use AWS Textract, Google Vision API, or similar
-    // to extract text from insurance document
-
+    this.logger.log(
+      `OCR extraction requested for ${documentUrl} — returning empty (manual review required).`,
+    );
     return {};
   }
 }

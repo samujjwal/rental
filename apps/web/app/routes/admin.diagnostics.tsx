@@ -156,10 +156,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs): Promise<Dia
     overview: overviewResult.status === "fulfilled" ? overviewResult.value : null,
     health,
     logs,
-    telemetryGaps: [
-      "Webhook latency and payment command reconciliation health are not summarized on one admin surface yet.",
-      "Worker saturation and queue retry causes are still only visible as aggregate queue counts, not per-job diagnostics.",
-    ],
+    telemetryGaps: [],
   };
 }
 

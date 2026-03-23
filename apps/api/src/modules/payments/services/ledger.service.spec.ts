@@ -12,6 +12,7 @@ describe('LedgerService', () => {
   mockPrismaService.ledgerEntry = {
     createMany: jest.fn(),
     findMany: jest.fn(),
+    findFirst: jest.fn(),
   };
   mockPrismaService.booking = {
     findMany: jest.fn(),
@@ -38,6 +39,7 @@ describe('LedgerService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    mockPrismaService.ledgerEntry.findFirst.mockResolvedValue(null);
   });
 
   it('should be defined', () => {

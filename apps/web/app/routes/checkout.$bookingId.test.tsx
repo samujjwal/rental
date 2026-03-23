@@ -1,4 +1,7 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 
 /* ------------------------------------------------------------------ */
 /*  lucide-react                                                       */
@@ -19,21 +22,34 @@ const mocks: Record<string, any> = {
   getUser: vi.fn(),
   getBookingById: vi.fn(),
   createPaymentIntent: vi.fn(),
+  getBookingPaymentStatus: vi.fn(),
+  cancelBooking: vi.fn(),
+  useLoaderData: vi.fn(() => ({})),
+  useActionData: vi.fn(() => null),
+  useRevalidator: vi.fn(() => ({ revalidate: vi.fn(), state: "idle" })),
+  navigate: vi.fn(),
   redirect: vi.fn((url: string) => new Response(null, { status: 302, headers: { Location: url } })),
 };
 
 vi.mock("react-router", () => ({
   redirect: (...a: any[]) => mocks.redirect(...a),
-  useLoaderData: () => ({}),
-  useNavigate: () => vi.fn(),
-  useActionData: () => null,
+  useLoaderData: () => mocks.useLoaderData(),
+  useNavigate: () => mocks.navigate,
+  useActionData: () => mocks.useActionData(),
+  useRevalidator: () => mocks.useRevalidator(),
 }));
 vi.mock("~/utils/auth", () => ({ getUser: (...a: any[]) => mocks.getUser(...a) }));
 vi.mock("~/lib/api/bookings", () => ({
-  bookingsApi: { getBookingById: (...a: any[]) => mocks.getBookingById(...a) },
+  bookingsApi: {
+    getBookingById: (...a: any[]) => mocks.getBookingById(...a),
+    cancelBooking: (...a: any[]) => mocks.cancelBooking(...a),
+  },
 }));
 vi.mock("~/lib/api/payments", () => ({
-  paymentsApi: { createPaymentIntent: (...a: any[]) => mocks.createPaymentIntent(...a) },
+  paymentsApi: {
+    createPaymentIntent: (...a: any[]) => mocks.createPaymentIntent(...a),
+    getBookingPaymentStatus: (...a: any[]) => mocks.getBookingPaymentStatus(...a),
+  },
 }));
 vi.mock("~/types/booking", () => ({}));
 vi.mock("date-fns", () => ({ format: () => "2024-01-01" }));
@@ -46,6 +62,13 @@ vi.mock("@stripe/react-stripe-js", () => ({
 }));
 vi.mock("~/components/ui", () => ({
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
+  UnifiedButton: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+}));
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, fallbackOrOptions?: unknown) =>
+      typeof fallbackOrOptions === "string" ? fallbackOrOptions : key,
+  }),
 }));
 
 const validId = "11111111-1111-1111-8111-111111111111";
@@ -66,6 +89,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
   vi.stubEnv("VITE_STRIPE_PUBLISHABLE_KEY", "pk_test_123");
+  mocks.getBookingPaymentStatus.mockResolvedValue({ paymentStatus: "PAID" });
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
 });
 
 /* ================================================================== */
@@ -106,6 +134,47 @@ describe("clientLoader", () => {
     expect(result.booking.status).toBe("PAYMENT_FAILED");
     expect(result.clientSecret).toBe("cs_test_retry_abcdefghijklmnopqrstuvwxyz");
     expect(mocks.createPaymentIntent).toHaveBeenCalledWith(validId);
+  });
+
+  it("returns fallback loader data when payment setup times out", async () => {
+    const { clientLoader } = await loadRouteModule();
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue(booking);
+    mocks.createPaymentIntent.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const result = (await clientLoader({
+      request: new Request("http://localhost/checkout/" + validId),
+      params: { bookingId: validId },
+    } as any)) as any;
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        booking: expect.objectContaining({ id: validId }),
+        clientSecret: null,
+        error: "Loading checkout timed out. Try again.",
+      })
+    );
+  });
+});
+
+describe("CheckoutRoute recovery UI", () => {
+  it("renders retry UI when checkout data is unavailable", async () => {
+    const { default: CheckoutRoute } = await loadRouteModule();
+    const revalidate = vi.fn();
+    mocks.useRevalidator.mockReturnValue({ revalidate, state: "idle" });
+    mocks.useLoaderData.mockReturnValue({
+      booking: null,
+      clientSecret: null,
+      error: "Loading checkout timed out. Try again.",
+    });
+
+    render(<CheckoutRoute />);
+
+    expect(screen.getByText("Checkout unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Loading checkout timed out. Try again.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try Again" }));
+    expect(revalidate).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -155,6 +224,7 @@ describe("clientAction", () => {
     const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getBookingById.mockResolvedValue(booking);
+    mocks.getBookingPaymentStatus.mockResolvedValue({ paymentStatus: "PAID" });
     const r = await clientAction({ request: makeFormReq({ intent: "confirm-payment" }), params: { bookingId: validId } } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe(`/bookings/${validId}?payment=success`);
@@ -164,6 +234,7 @@ describe("clientAction", () => {
     const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getBookingById.mockResolvedValue({ ...booking, id: validCuid });
+    mocks.getBookingPaymentStatus.mockResolvedValue({ paymentStatus: "CAPTURED" });
     const r = await clientAction({
       request: makeFormReq({ intent: "confirm-payment" }),
       params: { bookingId: validCuid },
@@ -178,6 +249,7 @@ describe("clientAction", () => {
     const { clientAction } = await loadRouteModule();
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getBookingById.mockResolvedValue(booking);
+    mocks.cancelBooking.mockResolvedValue(undefined);
     const r = await clientAction({ request: makeFormReq({ intent: "cancel" }), params: { bookingId: validId } } as any);
     expect(r).toBeInstanceOf(Response);
     expect((r as Response).headers.get("Location")).toBe(`/bookings/${validId}`);
@@ -189,5 +261,96 @@ describe("clientAction", () => {
     mocks.getBookingById.mockRejectedValue(new Error("Booking not found"));
     const r = await clientAction({ request: makeFormReq({ intent: "confirm-payment" }), params: { bookingId: validId } } as any);
     expect((r as any).error).toBe("Booking not found");
+  });
+
+  it("returns timeout-specific payment copy", async () => {
+    const { clientAction } = await loadRouteModule();
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "confirm-payment" }),
+      params: { bookingId: validId },
+    } as any);
+
+    expect((r as any).error).toBe(
+      "Payment confirmation is taking longer than expected. Check your booking status before retrying to avoid duplicate charges."
+    );
+  });
+
+  it("returns offline-specific payment copy", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const { clientAction } = await loadRouteModule();
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "confirm-payment" }),
+      params: { bookingId: validId },
+    } as any);
+
+    expect((r as any).error).toBe(
+      "You are offline. Reconnect before submitting payment."
+    );
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("preserves backend payment errors", async () => {
+    const { clientAction } = await loadRouteModule();
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockRejectedValue({
+      response: { data: { message: "Payment session already expired" } },
+    });
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "confirm-payment" }),
+      params: { bookingId: validId },
+    } as any);
+
+    expect((r as any).error).toBe("Payment session already expired");
+  });
+
+  it("keeps specific non-transport payment messages", async () => {
+    const { getCheckoutPaymentError } = await loadRouteModule();
+
+    expect(getCheckoutPaymentError({ message: "Your card was declined." })).toBe(
+      "Your card was declined."
+    );
+  });
+
+  it("maps network-style messages to actionable offline copy", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const { getCheckoutPaymentError } = await loadRouteModule();
+
+    expect(getCheckoutPaymentError({ message: "Network Error" })).toBe(
+      "You are offline. Reconnect before submitting payment."
+    );
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("maps timeout payment errors to the shared recovery copy", async () => {
+    const { getCheckoutPaymentError } = await loadRouteModule();
+
+    expect(
+      getCheckoutPaymentError(new AxiosError("timeout", "ECONNABORTED"))
+    ).toBe(
+      "Payment confirmation is taking longer than expected. Check your booking status before retrying to avoid duplicate charges."
+    );
   });
 });

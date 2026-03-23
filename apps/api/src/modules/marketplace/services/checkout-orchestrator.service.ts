@@ -1,15 +1,14 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { BookingStatus } from '@rental-portal/database';
 import { CacheService } from '../../../common/cache/cache.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { FraudIntelligenceService } from './fraud-intelligence.service';
+import { FraudIntelligenceService } from '../sub-modules/marketplace-compliance.index';
 import { AvailabilityGraphService } from './availability-graph.service';
-import { PaymentOrchestrationService } from './payment-orchestration.service';
-import { TaxPolicyEngineService } from './tax-policy-engine.service';
-import { CountryPolicyPackService } from './country-policy-pack.service';
+import { PaymentOrchestrationService } from '../sub-modules/marketplace-operations.index';
+import { TaxPolicyEngineService, CountryPolicyPackService } from '../sub-modules/marketplace-pricing.index';
 
 /**
  * Checkout Orchestrator Service (V5 Prompt 1 — Domain Model §CheckoutOrchestrator)
@@ -59,6 +58,7 @@ export class CheckoutOrchestratorService {
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(forwardRef(() => FraudIntelligenceService))
     private readonly fraudService: FraudIntelligenceService,
     private readonly availabilityService: AvailabilityGraphService,
     private readonly paymentService: PaymentOrchestrationService,
@@ -82,25 +82,25 @@ export class CheckoutOrchestratorService {
       await this.validatePolicyRules(params);
       sagaSteps.push('POLICY_VALIDATED');
 
-      // ── Step 2: Fraud Risk Assessment ──
-      this.logger.log(`Checkout[${params.listingId}] Step 2: Fraud assessment`);
-      await this.assessFraudRisk(params);
-      sagaSteps.push('FRAUD_CLEARED');
-
-      // ── Step 3: Availability Lock (Redis distributed lock, 10-min TTL) ──
-      this.logger.log(`Checkout[${params.listingId}] Step 3: Availability lock`);
+      // ── Step 2: Availability Lock (Redis distributed lock, 10-min TTL) ──
+      this.logger.log(`Checkout[${params.listingId}] Step 2: Availability lock`);
       lockId = await this.acquireAvailabilityLock(params);
       sagaSteps.push('AVAILABILITY_LOCKED');
 
-      // ── Step 4: Verify availability (DB check while lock held) ──
-      this.logger.log(`Checkout[${params.listingId}] Step 4: Availability verify`);
+      // ── Step 3: Verify availability (DB check while lock held) ──
+      this.logger.log(`Checkout[${params.listingId}] Step 3: Availability verify`);
       const listing = await this.verifyAvailability(params);
       sagaSteps.push('AVAILABILITY_VERIFIED');
 
-      // ── Step 5: Calculate pricing + taxes ──
-      this.logger.log(`Checkout[${params.listingId}] Step 5: Price calculation`);
+      // ── Step 4: Calculate pricing + taxes ──
+      this.logger.log(`Checkout[${params.listingId}] Step 4: Price calculation`);
       const pricing = await this.calculatePricing(params, listing);
       sagaSteps.push('PRICING_CALCULATED');
+
+      // ── Step 5: Fraud Risk Assessment (after pricing so actual amount is available) ──
+      this.logger.log(`Checkout[${params.listingId}] Step 5: Fraud assessment`);
+      await this.assessFraudRisk(params, pricing.totalAmount);
+      sagaSteps.push('FRAUD_CLEARED');
 
       // ── Step 6: Payment Authorization ──
       this.logger.log(`Checkout[${params.listingId}] Step 6: Payment authorization`);
@@ -192,11 +192,11 @@ export class CheckoutOrchestratorService {
     }
   }
 
-  private async assessFraudRisk(params: CheckoutParams): Promise<void> {
+  private async assessFraudRisk(params: CheckoutParams, totalAmount: number): Promise<void> {
     const riskResult = await this.fraudService.analyzeRisk({
       userId: params.userId,
       action: 'BOOKING',
-      amount: 0, // Will be calculated later; initial check is velocity/device based
+      amount: totalAmount,
       metadata: {
         listingId: params.listingId,
         country: params.country,

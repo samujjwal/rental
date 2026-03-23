@@ -13,6 +13,11 @@ import { ContentModerationService } from '../../moderation/services/content-mode
 import { PolicyEngineService } from '../../policy-engine/services/policy-engine.service';
 import { ContextResolverService } from '../../policy-engine/services/context-resolver.service';
 import { BookingPricingService } from './booking-pricing.service';
+import { BookingPricingBridgeService } from './booking-pricing-bridge.service';
+import { BookingEligibilityService } from './booking-eligibility.service';
+import { BookingValidationService } from './booking-validation.service';
+import { BOOKING_ELIGIBILITY_PORT } from '../ports/booking-eligibility.port';
+import { BOOKING_PRICING_PORT } from '../ports/booking-pricing.port';
 import { FxService } from '../../../common/fx/fx.service';
 import { ComplianceService } from '@/modules/compliance/compliance.service';
 import { ConfigService } from '@nestjs/config';
@@ -36,6 +41,9 @@ describe('BookingsService', () => {
     booking: {
       create: jest.fn(),
       findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    availability: {
       findMany: jest.fn().mockResolvedValue([]),
     },
   };
@@ -167,6 +175,17 @@ describe('BookingsService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        BookingValidationService,
+        BookingEligibilityService,
+        {
+          provide: BOOKING_ELIGIBILITY_PORT,
+          useExisting: BookingEligibilityService,
+        },
+        BookingPricingBridgeService,
+        {
+          provide: BOOKING_PRICING_PORT,
+          useExisting: BookingPricingBridgeService,
         },
       ],
     }).compile();
@@ -424,7 +443,7 @@ describe('BookingsService', () => {
         requiresManualReview: true,
       });
 
-      await expect(service.create('renter-1', createDto)).rejects.toThrow(ForbiddenException);
+      await expect(service.create('renter-1', createDto)).rejects.toThrow(BadRequestException);
     });
 
     it('should throw for invalid date strings', async () => {
@@ -658,7 +677,7 @@ describe('BookingsService', () => {
         requiresManualReview: true,
       });
 
-      await expect(service.create('renter-1', createDto)).rejects.toThrow(ForbiddenException);
+      await expect(service.create('renter-1', createDto)).rejects.toThrow(BadRequestException);
     });
 
     it('should still throw when compliance explicitly blocks non-compliant renter', async () => {

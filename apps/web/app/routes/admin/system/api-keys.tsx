@@ -21,6 +21,7 @@ import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
 import { formatDate } from "~/lib/utils";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 // Local type for API key from the server
 interface ServerApiKey {
@@ -47,6 +48,24 @@ const safeDateLabel = (value: unknown): string => {
   return Number.isNaN(date.getTime()) ? "Unknown date" : formatDate(date);
 };
 
+export function getAdminApiKeysError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "API key request timed out. Try again.",
+    })
+  );
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -59,10 +78,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       apiKeys: [],
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load API keys",
+      error: getAdminApiKeysError(error, "Failed to load API keys"),
     };
   }
 }
@@ -106,13 +122,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          (error &&
-            typeof error === "object" &&
-            "response" in error &&
-            (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message) ||
-          "Failed to create API key",
+        error: getAdminApiKeysError(error, "Failed to create API key"),
       };
     }
   }
@@ -128,13 +138,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          (error &&
-            typeof error === "object" &&
-            "response" in error &&
-            (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message) ||
-          "Failed to revoke API key",
+        error: getAdminApiKeysError(error, "Failed to revoke API key"),
       };
     }
   }
@@ -154,13 +158,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          (error &&
-            typeof error === "object" &&
-            "response" in error &&
-            (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message) ||
-          "Failed to regenerate API key",
+        error: getAdminApiKeysError(error, "Failed to regenerate API key"),
       };
     }
   }

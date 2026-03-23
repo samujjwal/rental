@@ -5,6 +5,7 @@ import RenterDashboardRoute from '../routes/dashboard.renter';
 
 // Hoist the useLoaderData mock so it can be used in vi.mock factory
 const _mockUseLoaderData = vi.hoisted(() => vi.fn());
+const _mockRevalidate = vi.hoisted(() => vi.fn());
 
 // Mock react-router with useLoaderData intercepted
 vi.mock('react-router', async () => {
@@ -12,6 +13,7 @@ vi.mock('react-router', async () => {
   return {
     ...(actual as object),
     useLoaderData: () => _mockUseLoaderData(),
+    useRevalidator: () => ({ revalidate: _mockRevalidate }),
   };
 });
 
@@ -94,6 +96,9 @@ vi.mock('~/components/ui', () => ({
       <button onClick={onDismiss}>Dismiss</button>
     </div>
   ),
+  UnifiedButton: ({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) => (
+    <button {...props}>{children}</button>
+  ),
 }));
 
 vi.mock('~/components/layout', () => ({
@@ -163,6 +168,7 @@ const mockLoaderData = {
 describe('Dashboard Personalization Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _mockRevalidate.mockReset();
     _mockUseLoaderData.mockReturnValue(mockLoaderData);
   });
 
@@ -290,18 +296,39 @@ describe('Dashboard Personalization Integration', () => {
   it('handles error states gracefully', async () => {
     const errorData = {
       ...mockLoaderData,
-      error: 'Failed to load dashboard data',
-      failedSections: ['recentBookings', 'favorites'],
+      error: 'Loading the renter dashboard timed out. Try again.',
+      failedSections: [],
     };
 
     renderDashboard(errorData);
 
     await waitFor(() => {
-      // Error takes precedence over the partial-failure banner
       expect(screen.getByTestId('banner')).toBeInTheDocument();
-      expect(screen.getByText('Failed to load dashboard data')).toBeInTheDocument();
-      expect(screen.queryByText('Some sections failed to load: recentBookings, favorites')).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Loading the renter dashboard timed out. Try again.')
+      ).toBeInTheDocument();
     });
+  });
+
+  it('shows partial-failure sections and retries via revalidation', async () => {
+    renderDashboard({
+      ...mockLoaderData,
+      error:
+        'Loading the renter dashboard timed out. Try again. Some sections could not be loaded: favorites, messages.',
+      failedSections: ['favorites', 'messages'],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('banner')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Loading the renter dashboard timed out. Try again. Some sections could not be loaded: favorites, messages.'
+        )
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(_mockRevalidate).toHaveBeenCalledTimes(1);
   });
 
   it('displays correct navigation badges', async () => {

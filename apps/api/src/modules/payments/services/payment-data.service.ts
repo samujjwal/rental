@@ -67,6 +67,7 @@ export class PaymentDataService {
     status: string;
     paymentIntentId: string;
     stripePaymentIntentId: string;
+    metadata?: Record<string, unknown> | null;
   }, tx?: any): Promise<any> {
     const client = tx || this.prisma;
     return client.payment.upsert({
@@ -78,6 +79,7 @@ export class PaymentDataService {
         status: data.status as any,
         paymentIntentId: data.paymentIntentId,
         stripePaymentIntentId: data.stripePaymentIntentId,
+        metadata: data.metadata ? JSON.stringify(data.metadata) : null,
       },
       update: {
         bookingId: data.bookingId,
@@ -85,6 +87,7 @@ export class PaymentDataService {
         currency: data.currency,
         status: data.status as any,
         stripePaymentIntentId: data.stripePaymentIntentId,
+        metadata: data.metadata ? JSON.stringify(data.metadata) : null,
         failureReason: null,
         processedAt: null,
       },

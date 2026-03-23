@@ -68,6 +68,9 @@ describe('InsuranceClaimsService', () => {
       booking: {
         findUnique: jest.fn(),
       },
+      user: {
+        findFirst: jest.fn(),
+      },
       auditLog: {
         create: jest.fn().mockResolvedValue({ id: 'audit-1' }),
       },
@@ -163,6 +166,7 @@ describe('InsuranceClaimsService', () => {
 
     it('should create a claim successfully and send admin notification', async () => {
       prisma.insurancePolicy.findUnique.mockResolvedValue(mockPolicy);
+      prisma.user.findFirst.mockResolvedValue({ id: adminId });
       prisma.insuranceClaim.create.mockResolvedValue(mockClaim);
 
       const result = await service.fileClaim(userId, dto);
@@ -182,6 +186,7 @@ describe('InsuranceClaimsService', () => {
 
     it('should create a claim with valid booking when bookingId is provided', async () => {
       prisma.insurancePolicy.findUnique.mockResolvedValue(mockPolicy);
+      prisma.user.findFirst.mockResolvedValue({ id: adminId });
       prisma.booking.findUnique.mockResolvedValue({ id: 'booking-1' });
       prisma.insuranceClaim.create.mockResolvedValue({
         ...mockClaim,

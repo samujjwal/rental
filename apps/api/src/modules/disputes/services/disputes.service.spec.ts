@@ -10,6 +10,7 @@ import { EmailService } from '@/common/email/email.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
+import { ConfigService } from '@nestjs/config';
 import { DisputeStatus, ResolutionType, UserRole } from '@rental-portal/database';
 
 describe('DisputesService', () => {
@@ -70,8 +71,10 @@ describe('DisputesService', () => {
         DisputesService,
         { provide: PrismaService, useValue: prisma },
         { provide: EmailService, useValue: emailService },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: CacheService, useValue: cacheService },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: 'BullQueue_payments', useValue: { add: jest.fn() } },
         {
           provide: BookingStateMachineService,
           useValue: {

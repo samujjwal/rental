@@ -5,8 +5,8 @@ import { StorageService } from './storage.service';
 jest.mock('fs/promises');
 const fsMock = jest.requireMock('fs/promises');
 
-jest.mock('uuid', () => ({
-  v4: () => 'mocked-uuid',
+jest.mock('crypto', () => ({
+  randomUUID: () => 'mocked-uuid',
 }));
 
 // Mock the S3Client and getSignedUrl at module level

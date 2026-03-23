@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AxiosError } from "axios";
 
 /* ------------------------------------------------------------------ */
 const IconStub = vi.hoisted(() => (props: any) => (
@@ -29,6 +30,7 @@ const mocks: Record<string, any> = {
     (url: string) =>
       new Response(null, { status: 302, headers: { Location: url } })
   ),
+  useRevalidator: vi.fn(() => ({ revalidate: vi.fn() })),
 };
 
 vi.mock("react-router", () => ({
@@ -41,6 +43,7 @@ vi.mock("react-router", () => ({
     error: null,
   }),
   useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  useRevalidator: () => mocks.useRevalidator(),
 }));
 vi.mock("~/utils/auth", () => ({
   getUser: (...a: any[]) => mocks.getUser(...a),
@@ -69,6 +72,11 @@ vi.mock("~/components/ui", () => ({
   Pagination: () => <nav />,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
+vi.mock("~/components/ui/empty-state", () => ({
+  EmptyStatePresets: {
+    NoNotificationsFiltered: () => <div data-testid="empty-notifications-filtered" />,
+  },
+}));
 vi.mock("~/components/ui/skeleton", () => ({ Skeleton: () => <div /> }));
 vi.mock("~/components/layout", () => ({
   PortalPageLayout: ({ children }: any) => <div>{children}</div>,
@@ -78,11 +86,21 @@ vi.mock("~/config/navigation", () => ({
   resolvePortalNavRole: () => "renter",
 }));
 
-import { clientLoader } from "./notifications";
+import {
+  clientLoader,
+  getNotificationsActionError,
+  getNotificationsLoadError,
+} from "./notifications";
 
 const authUser = { id: "u1", role: "renter" };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
+});
 
 describe("clientLoader", () => {
   it("redirects unauthenticated", async () => {
@@ -165,5 +183,88 @@ describe("clientLoader", () => {
     expect(r.notifications).toEqual([]);
     expect(r.unreadCount).toBe(0);
     expect(r.error).toBeTruthy();
+  });
+
+  it("returns actionable offline loader copy", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getNotifications.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/notifications"),
+    } as any)) as any;
+
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("returns timeout-specific loader copy", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getNotifications.mockRejectedValue(
+      new AxiosError("timeout", "ECONNABORTED")
+    );
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/notifications"),
+    } as any)) as any;
+
+    expect(r.error).toBe("Loading notifications timed out. Try again.");
+  });
+});
+
+describe("notifications error helpers", () => {
+  it("preserves backend action messages", () => {
+    expect(
+      getNotificationsActionError(
+        { response: { data: { message: "Notification already deleted" } } },
+        "fallback"
+      )
+    ).toBe("Notification already deleted");
+  });
+
+  it("returns actionable offline copy for action failures", () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    expect(getNotificationsActionError(new AxiosError("Network Error", "ERR_NETWORK"), "fallback")).toBe(
+      "You appear to be offline. Reconnect and try again."
+    );
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("returns timeout-specific copy for action failures", () => {
+    expect(
+      getNotificationsActionError(
+        new AxiosError("timeout", "ECONNABORTED"),
+        "fallback"
+      )
+    ).toBe("The notification request timed out. Try again.");
+  });
+
+  it("keeps plain thrown load errors when provided", () => {
+    expect(getNotificationsLoadError(new Error("notifications unavailable"))).toBe(
+      "notifications unavailable"
+    );
+  });
+
+  it("returns timeout-specific copy for load helper", () => {
+    expect(getNotificationsLoadError(new AxiosError("timeout", "ECONNABORTED"))).toBe(
+      "Loading notifications timed out. Try again."
+    );
   });
 });

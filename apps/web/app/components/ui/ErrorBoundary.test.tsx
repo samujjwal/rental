@@ -3,11 +3,17 @@ import { vi } from 'vitest';
 import { ErrorBoundary, withErrorBoundary } from '~/components/ui/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
 
+const mockRequestNavigation = vi.hoisted(() => vi.fn());
+
 // Mock the translation hook
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, defaultValue?: string) => defaultValue || key,
   }),
+}));
+
+vi.mock('~/lib/navigation', () => ({
+  requestNavigation: mockRequestNavigation,
 }));
 
 // Mock console.error to avoid noise in tests
@@ -201,12 +207,6 @@ describe('ErrorBoundary', () => {
   });
 
   it('handles go home functionality', () => {
-    const originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: { ...originalLocation, href: '' } as Location,
-    });
-
     const ThrowErrorComponent = () => {
       throw new Error('Test error');
     };
@@ -220,12 +220,7 @@ describe('ErrorBoundary', () => {
     const homeButton = screen.getByText('Go Home');
     fireEvent.click(homeButton);
 
-    expect(window.location.href).toBe('/');
-
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: originalLocation,
-    });
+    expect(mockRequestNavigation).toHaveBeenCalledWith('/', { replace: true });
   });
 
   it('generates unique error IDs', () => {

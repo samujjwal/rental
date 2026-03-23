@@ -12,6 +12,7 @@ import {
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { cn } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -19,6 +20,44 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "Reset your password" },
   ];
 };
+
+export function getForgotPasswordError(
+  error: unknown,
+  fallbackMessage = "Failed to send reset email. Please try again."
+): string {
+  const hasTransportContext = Boolean(
+    error &&
+      typeof error === "object" &&
+      ("response" in error || "code" in error || "isAxiosError" in error)
+  );
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try sending the reset email again.";
+  }
+
+  if (hasTransportContext) {
+    return getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try sending the reset email again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Sending the reset email timed out. Try again.",
+    });
+  }
+
+  if (error instanceof Error) {
+    return error.message || fallbackMessage;
+  }
+
+  return fallbackMessage;
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -58,12 +97,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   } catch (error: unknown) {
     return {
       success: false,
-      error:
-        error && typeof error === "object" && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message ||
-            "Failed to send reset email. Please try again."
-          : "Failed to send reset email. Please try again.",
+      error: getForgotPasswordError(error),
     };
   }
 }
@@ -89,6 +123,8 @@ export default function ForgotPassword() {
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     "disabled:cursor-not-allowed disabled:opacity-50"
   );
+  const actionErrorId = actionData?.error ? "forgot-password-form-error" : undefined;
+  const emailErrorId = errors.email ? "forgot-password-email-error" : undefined;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-background px-4">
@@ -137,7 +173,7 @@ export default function ForgotPassword() {
               {/* Error Message */}
               {actionData?.error && (
                 <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                  <p className="text-sm text-destructive">{actionData.error}</p>
+                  <p id="forgot-password-form-error" className="text-sm text-destructive">{actionData.error}</p>
                 </div>
               )}
 
@@ -155,11 +191,13 @@ export default function ForgotPassword() {
                   id="email"
                   name="email"
                   maxLength={320}
+                  aria-invalid={!!errors.email}
+                  aria-describedby={emailErrorId || actionErrorId}
                   className={inputClasses}
                   placeholder="you@example.com"
                 />
                 {errors.email && (
-                  <p className="text-sm text-destructive">
+                  <p id="forgot-password-email-error" className="text-sm text-destructive">
                     {errors.email.message}
                   </p>
                 )}

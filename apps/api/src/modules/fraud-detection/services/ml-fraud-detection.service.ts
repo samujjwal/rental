@@ -1,8 +1,19 @@
 /**
- * ML-Based Fraud Detection Service
- * 
- * Implements machine learning models for detecting fraudulent behavior
- * including payment fraud, account takeovers, and marketplace abuse.
+ * Fraud Scoring Service (rule-based heuristics)
+ *
+ * Despite the "ML" name, scoring is currently implemented as a weighted
+ * rule-based heuristic across deterministic factors (account age, transaction
+ * velocity, device trust, IP reputation, etc.). No external ML model is
+ * connected.
+ *
+ * To connect a live model:
+ *   1. Set ML_FRAUD_ENDPOINT and ML_FRAUD_API_KEY in your environment.
+ *   2. Replace the per-factor scoring methods below with a single call to
+ *      the model API, passing the TransactionContext as the feature vector.
+ *   3. Map the model's probability output to the 0–100 score scale used here.
+ *
+ * Until integrated, the rule-based scores provide reasonable fraud signal
+ * and should be treated as a heuristic, not an ML prediction.
  */
 
 import { Injectable, Logger } from '@nestjs/common';

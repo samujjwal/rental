@@ -317,3 +317,37 @@ export const testDisputes = {
     evidence: "Screenshots of unanswered messages.",
   },
 };
+
+// Login helper function for new test files
+import type { Page } from '@playwright/test';
+
+export async function loginAs(
+  page: Page,
+  email: string,
+  role: 'USER' | 'HOST' | 'ADMIN'
+): Promise<void> {
+  // Navigate to login page
+  await page.goto('/login');
+  
+  // Fill email and password based on role
+  let password = 'password123'; // Default test password
+  
+  if (email.includes('admin')) {
+    password = 'admin123';
+  } else if (email.includes('owner')) {
+    password = 'owner123';
+  }
+  
+  // Fill form
+  const emailInput = page.locator('input[type="email"]');
+  const passwordInput = page.locator('input[type="password"]');
+  
+  await emailInput.fill(email);
+  await passwordInput.fill(password);
+  
+  // Submit
+  await page.locator('button[type="submit"]').click();
+  
+  // Wait for redirect
+  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 });
+}

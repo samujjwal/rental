@@ -187,6 +187,138 @@ export const EmptyStatePresets = {
     );
   },
 
+  NoBookingsFiltered: ({
+    statusLabel,
+    onClearFilter,
+  }: {
+    statusLabel: string;
+    onClearFilter?: () => void;
+  }) => {
+    const { t } = useTranslation();
+    return (
+    <EmptyState
+      icon="🗂️"
+      title={t("bookings.emptyFilteredTitle", "No bookings match this status")}
+      description={t(
+        "bookings.emptyFilteredDesc",
+        "There are no bookings in {{status}} right now. Clear the filter to see the full list.",
+        { status: statusLabel }
+      )}
+      action={
+        onClearFilter
+          ? { label: t("search.clearFilters", "Clear filter"), onClick: onClearFilter }
+          : undefined
+      }
+      secondaryAction={{ label: t("bookings.filterAll", "View all bookings"), href: "/bookings" }}
+    />
+    );
+  },
+
+  NoDisputesFiltered: ({
+    statusLabel,
+    onClearFilter,
+  }: {
+    statusLabel: string;
+    onClearFilter?: () => void;
+  }) => {
+    const { t } = useTranslation();
+    return (
+    <EmptyState
+      icon="⚖️"
+      title={t("disputes.emptyFilteredTitle", "No disputes match this status")}
+      description={t(
+        "disputes.emptyFilteredDesc",
+        "There are no disputes in {{status}} right now. Clear the filter to see everything.",
+        { status: statusLabel }
+      )}
+      action={
+        onClearFilter
+          ? { label: t("search.clearFilters", "Clear filter"), onClick: onClearFilter }
+          : undefined
+      }
+      secondaryAction={{ label: t("common.viewAll", "View all"), href: "/disputes" }}
+    />
+    );
+  },
+
+  NoNotificationsFiltered: ({
+    onShowAll,
+  }: {
+    onShowAll?: () => void;
+  }) => {
+    const { t } = useTranslation();
+    return (
+    <EmptyState
+      icon="🔔"
+      title={t("notifications.emptyUnreadTitle", "No unread notifications")}
+      description={t(
+        "notifications.emptyUnreadDesc",
+        "You are all caught up. Show all notifications to review older activity."
+      )}
+      action={
+        onShowAll
+          ? { label: t("notifications.showAll", "Show all"), onClick: onShowAll }
+          : undefined
+      }
+      secondaryAction={{ label: t("common.goToDashboard", "Go to dashboard"), href: "/dashboard" }}
+    />
+    );
+  },
+
+  NoFavoritesFiltered: ({
+    query,
+    onClearSearch,
+  }: {
+    query: string;
+    onClearSearch?: () => void;
+  }) => {
+    const { t } = useTranslation();
+    return (
+    <EmptyState
+      icon="💗"
+      title={t("favorites.emptyFilteredTitle", "No saved listings match your search")}
+      description={t(
+        "favorites.emptyFilteredDesc",
+        "No saved listings matched \"{{query}}\". Clear the search to see all favorites again.",
+        { query }
+      )}
+      action={
+        onClearSearch
+          ? { label: t("search.clearFilters", "Clear search"), onClick: onClearSearch }
+          : undefined
+      }
+      secondaryAction={{ label: t("favorites.browseMore", "Browse more"), href: "/search" }}
+    />
+    );
+  },
+
+  NoReviewsFiltered: ({
+    filterLabel,
+    onClearFilter,
+  }: {
+    filterLabel: string;
+    onClearFilter?: () => void;
+  }) => {
+    const { t } = useTranslation();
+    return (
+    <EmptyState
+      icon="⭐"
+      title={t("reviews.emptyFilteredTitle", "No reviews match this filter")}
+      description={t(
+        "reviews.emptyFilteredDesc",
+        "There are no reviews for {{filterLabel}} right now. Clear the filter to see all reviews.",
+        { filterLabel }
+      )}
+      action={
+        onClearFilter
+          ? { label: t("search.clearFilters", "Clear filter"), onClick: onClearFilter }
+          : undefined
+      }
+      secondaryAction={{ label: t("reviews.viewBookings", "View bookings"), href: "/bookings" }}
+    />
+    );
+  },
+
   /**
    * No listings (for owners)
    */

@@ -84,7 +84,7 @@ export class ReviewsService {
 
     // Enforce 30-day review window — reviews after the completion date are no longer meaningful
     const REVIEW_WINDOW_DAYS = 30;
-    const completedAt = booking.updatedAt; // updatedAt reflects the last status change (completion)
+    const completedAt = booking.completedAt ?? booking.updatedAt;
     const cutoff = new Date(Date.now() - REVIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     if (completedAt < cutoff) {
       throw i18nBadRequest('review.windowExpired');

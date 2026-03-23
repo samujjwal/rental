@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
@@ -12,6 +13,7 @@ import { EmbeddingService } from '../../ai/services/embedding.service';
 import {
   Listing as Property,
   PropertyStatus,
+  PropertyType,
   VerificationStatus,
   BookingMode,
   PropertyCondition,
@@ -95,6 +97,7 @@ export class ListingsService {
     private readonly moderationService: ContentModerationService,
     private readonly embeddingService: EmbeddingService,
     private readonly versionService: ListingVersionService,
+    private readonly configService: ConfigService,
   ) {}
 
   private async resolveCategoryId(input: any): Promise<string> {
@@ -128,6 +131,17 @@ export class ListingsService {
     if (normalized === 'fair') return PropertyCondition.FAIR;
     if (normalized === 'poor') return PropertyCondition.POOR;
     return undefined;
+  }
+
+  private normalizePropertyType(type?: string): PropertyType {
+    if (!type) return PropertyType.OTHER;
+
+    const normalized = type.trim().toUpperCase();
+    if ((Object.values(PropertyType) as string[]).includes(normalized)) {
+      return normalized as PropertyType;
+    }
+
+    throw new BadRequestException(`Unsupported property type: ${type}`);
   }
 
   private normalizeRules(rules?: string | string[]): string[] | undefined {
@@ -258,9 +272,9 @@ export class ListingsService {
           dto.photos?.map((p) => (typeof p === 'string' ? p : p.url)) ||
           (dto as any).images ||
           [],
-        type: (dto as any).type || 'OTHER',
+        type: this.normalizePropertyType((dto as any).type),
         basePrice: basePrice,
-        currency: dto.currency || 'USD',
+        currency: dto.currency || this.configService.get('DEFAULT_CURRENCY', 'NPR'),
         // requiresDeposit, depositAmount, depositType don't exist in schema
         // bookingMode, minBookingHours, maxBookingDays, leadTime, advanceNotice don't exist in schema
         amenities: dto.amenities || [],
@@ -273,8 +287,8 @@ export class ListingsService {
         status: PropertyStatus.DRAFT,
         verificationStatus: VerificationStatus.PENDING,
         bookingMode: bookingMode || BookingMode.REQUEST,
-        minStayNights: (dto as any).minimumRentalPeriod || dto.minBookingHours || 1,
-        maxStayNights: (dto as any).maximumRentalPeriod || dto.maxBookingDays || null,
+        minStayNights: (dto as any).minimumRentalPeriod || 1,
+        maxStayNights: (dto as any).maximumRentalPeriod || null,
         weeklyDiscount: weeklyPrice ? 0 : undefined,
         monthlyDiscount: monthlyPrice ? 0 : undefined,
         condition: this.normalizeCondition((dto as any).condition),
@@ -315,6 +329,9 @@ export class ListingsService {
     totalPages: number;
   }> {
     const where: any = {};
+
+    // Always exclude soft-deleted listings regardless of caller
+    where.deletedAt = null;
 
     if (filters.categoryId) where.categoryId = filters.categoryId;
     if (filters.ownerId) where.ownerId = filters.ownerId;
@@ -792,7 +809,7 @@ export class ListingsService {
       where: { id },
       data: {
         status: PropertyStatus.ARCHIVED,
-        // Mark as archived with ARCHIVED status to distinguish from paused (UNAVAILABLE)
+        deletedAt: new Date(),
       },
     });
 
@@ -808,7 +825,7 @@ export class ListingsService {
   }
 
   async getOwnerProperties(ownerId: string, includeAll: boolean = false): Promise<Property[]> {
-    const where: any = { ownerId };
+    const where: any = { ownerId, deletedAt: null };
 
     if (!includeAll) {
       where.status = { not: PropertyStatus.UNAVAILABLE };

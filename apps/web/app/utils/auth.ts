@@ -3,6 +3,8 @@ import { api } from "~/lib/api-client";
 import { useAuthStore } from "~/lib/store/auth";
 import type { User } from "~/types/user";
 
+const DEFAULT_SERVER_API_URL = "http://localhost:3400/api";
+
 // Safe access for browser environments where process might not exist
 const isServer = typeof process !== "undefined" && process.env && process.env.NODE_ENV;
 
@@ -11,13 +13,36 @@ if (isServer && !process.env.SESSION_SECRET) {
   if (process.env.NODE_ENV === "production") {
     throw new Error("SESSION_SECRET environment variable must be set in production");
   } else {
-    const randomSecret = Math.random().toString(36) + Math.random().toString(36);
-    process.env.SESSION_SECRET = randomSecret;
-    console.warn("[Web] WARNING: SESSION_SECRET not set — using a random secret for this session. Sessions will be invalidated on restart.");
+    process.env.SESSION_SECRET = "development-session-secret";
+    console.warn("[Web] WARNING: SESSION_SECRET not set — using the development fallback secret. Set SESSION_SECRET explicitly for shared environments.");
   }
 }
 
 const sessionSecret = isServer ? process.env.SESSION_SECRET! : "browser-safe-secret";
+
+function getServerApiBaseUrl(): string {
+  const apiUrl = process.env.API_URL || DEFAULT_SERVER_API_URL;
+  return apiUrl.replace(/\/$/, "");
+}
+
+async function getUserFromServerApi(token: string): Promise<User> {
+  const response = await fetch(`${getServerApiBaseUrl()}/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw {
+      response: {
+        status: response.status,
+      },
+    };
+  }
+
+  return response.json() as Promise<User>;
+}
 
 export const sessionStorage = createCookieSessionStorage({
   cookie: {
@@ -53,8 +78,10 @@ export async function getUser(request: Request): Promise<User | null> {
   let token: string | null = session.get("accessToken") ?? null;
   let persistedUser: User | null = null;
 
-  // Fall back to Zustand store for client-side navigation
-  // Session cookie is primary source of truth
+  // Fall back to Zustand in-memory store for client-side navigation.
+  // Server session cookie is primary source of truth; Zustand store is the only
+  // permitted client-side projection. Direct localStorage reads are intentionally
+  // removed — the store's persist plugin owns that hydration boundary.
   if (typeof window !== "undefined" && !token) {
     const storeState = useAuthStore.getState();
     token = storeState.accessToken;
@@ -64,39 +91,17 @@ export async function getUser(request: Request): Promise<User | null> {
           role: normalizeStoredRole(storeState.user.role),
         }
       : null;
-
-    // Zustand v5 persist may hydrate async; read localStorage directly as fallback
-    if (!token || !persistedUser) {
-      try {
-        const raw = localStorage.getItem("auth-storage");
-        if (raw) {
-          const parsed = JSON.parse(raw) as {
-            state?: { accessToken?: string; user?: User | null };
-          };
-          token = parsed?.state?.accessToken ?? null;
-          persistedUser = parsed?.state?.user
-            ? {
-                ...parsed.state.user,
-                role: normalizeStoredRole(parsed.state.user.role),
-              }
-            : persistedUser;
-        }
-      } catch {
-        // ignore parse errors
-      }
-      // Sync token into Zustand store so the API client interceptor can use it
-      if (token) {
-        useAuthStore.getState().setAccessToken(token);
-      }
-    }
   }
 
-  if (typeof window !== "undefined" && token && persistedUser) {
+  if (typeof window !== "undefined" && token) {
     const storeState = useAuthStore.getState();
     if (!storeState.accessToken) {
       storeState.setAccessToken(token);
     }
-    return persistedUser;
+
+    if (persistedUser) {
+      return persistedUser;
+    }
   }
 
   if (!token) return null;
@@ -104,7 +109,9 @@ export async function getUser(request: Request): Promise<User | null> {
   // Retry auth check up to 2 times for transient errors (e.g., API under load)
   for (let attempt = 0; attempt <= 2; attempt++) {
     try {
-      const rawUser = await api.get<User>("/auth/me");
+      const rawUser = typeof window !== "undefined"
+        ? await api.get<User>("/auth/me")
+        : await getUserFromServerApi(token);
       const normalizedRole = (() => {
         const role = String((rawUser as { role?: unknown }).role || "").toUpperCase();
         if (role === "ADMIN" || role === "SUPER_ADMIN") return "admin";

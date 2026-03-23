@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('lucide-react', () => ({
   Save: (props: Record<string, unknown>) => <svg data-testid="save-icon" {...props} />,
@@ -52,6 +52,14 @@ const booleanField: FieldConfig = {
 };
 
 describe('EnhancedForm', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders with title', () => {
     render(<EnhancedForm fields={[textField]} onSubmit={vi.fn()} title="Create Listing" />);
     expect(screen.getByText('Create Listing')).toBeInTheDocument();
@@ -135,6 +143,51 @@ describe('EnhancedForm', () => {
   it('disables submit in view mode', () => {
     render(<EnhancedForm fields={[textField]} onSubmit={vi.fn()} mode="view" submitLabel="Save" />);
     expect(screen.getByText('Save').closest('button')).toBeDisabled();
+  });
+
+  it('auto-saves after field changes when enabled', async () => {
+    vi.useFakeTimers();
+    const onAutoSave = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <EnhancedForm
+        fields={[textField]}
+        onSubmit={vi.fn()}
+        enableAutoSave
+        autoSaveInterval={1000}
+        onAutoSave={onAutoSave}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('Enter title'), {
+        target: { value: 'Updated title' },
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(onAutoSave).toHaveBeenCalledWith(expect.objectContaining({ title: 'Updated title' }));
+  });
+
+  it('does not auto-save in view mode', async () => {
+    vi.useFakeTimers();
+    const onAutoSave = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <EnhancedForm
+        fields={[textField]}
+        onSubmit={vi.fn()}
+        mode="view"
+        enableAutoSave
+        autoSaveInterval={1000}
+        onAutoSave={onAutoSave}
+        initialData={{ title: 'Read only title' }}
+      />
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(onAutoSave).not.toHaveBeenCalled();
   });
 
   describe('stepped layout', () => {

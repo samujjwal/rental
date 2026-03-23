@@ -7,8 +7,14 @@ const { mockToast } = vi.hoisted(() => ({
   },
 }));
 
+const mockRequestNavigation = vi.hoisted(() => vi.fn());
+
 vi.mock("./toast", () => ({
   toast: mockToast,
+}));
+
+vi.mock("./navigation", () => ({
+  requestNavigation: mockRequestNavigation,
 }));
 
 import {
@@ -145,6 +151,11 @@ describe("handleAuthError", () => {
       expect.any(String),
       expect.objectContaining({ label: "Log In" }),
     );
+
+    const action = mockToast.error.mock.calls[0][2] as { onClick: () => void };
+    action.onClick();
+
+    expect(mockRequestNavigation).toHaveBeenCalledWith("/auth/login", { replace: true });
   });
 
   it("handles generic auth error", () => {

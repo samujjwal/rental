@@ -325,7 +325,8 @@ describe('AIListingAssistant', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Add more details to get AI suggestions')).toBeInTheDocument();
+      expect(screen.getByText(/AI Suggestions/)).toBeInTheDocument();
+      expect(screen.getByText('This feature is not yet available in this environment.')).toBeInTheDocument();
     });
   });
 

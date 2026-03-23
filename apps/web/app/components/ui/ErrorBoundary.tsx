@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home, Bug } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { requestNavigation } from '~/lib/navigation';
 
 interface Props {
   children: ReactNode;
@@ -77,7 +78,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   private handleGoHome = () => {
-    window.location.href = '/';
+    requestNavigation('/', { replace: true });
   };
 
   private handleReportBug = () => {

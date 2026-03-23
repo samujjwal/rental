@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useLoaderData, Link, Form, useNavigation, useActionData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   HardDrive,
   Download,
@@ -14,9 +14,10 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { adminApi, type SystemBackup } from "~/lib/api/admin";
-import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { UnifiedButton , RouteErrorBoundary, Dialog, DialogFooter } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
 import { formatDateTime } from "~/lib/utils";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -36,6 +37,24 @@ const safeNumber = (value: unknown): number => {
 const safeStatus = (value: unknown): string =>
   String(value || "").trim().toLowerCase();
 
+export function getAdminBackupsError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Backup request timed out. Try again.",
+    })
+  );
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -48,10 +67,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       backups: [],
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load backups",
+      error: getAdminBackupsError(error, "Failed to load backups"),
     };
   }
 }
@@ -79,13 +95,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          (error &&
-            typeof error === "object" &&
-            "response" in error &&
-            (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message) ||
-          "Failed to create backup",
+        error: getAdminBackupsError(error, "Failed to create backup"),
       };
     }
   }
@@ -105,13 +115,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          (error &&
-            typeof error === "object" &&
-            "response" in error &&
-            (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message) ||
-          "Failed to restore backup",
+        error: getAdminBackupsError(error, "Failed to restore backup"),
       };
     }
   }
@@ -136,6 +140,7 @@ export default function BackupsPage() {
   const { backups, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const [showConfirmRestore, setShowConfirmRestore] = useState<string | null>(null);
 
   const isSubmitting = navigation.state === "submitting";
@@ -144,6 +149,12 @@ export default function BackupsPage() {
     typeof actionData?.message === "string" ? actionData.message : null;
   const actionError =
     typeof actionData?.error === "string" ? actionData.error : null;
+
+  useEffect(() => {
+    if (actionData?.success) {
+      setShowConfirmRestore(null);
+    }
+  }, [actionData]);
 
   const getStatusIcon = (status: unknown) => {
     switch (safeStatus(status)) {
@@ -181,6 +192,9 @@ export default function BackupsPage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <h3 className="text-red-800 font-semibold mb-2">{t("admin.errorLoadingBackups")}</h3>
           <p className="text-red-600">{error}</p>
+          <UnifiedButton className="mt-4" variant="outline" onClick={() => revalidator.revalidate()}>
+            {t("common.retry", "Retry")}
+          </UnifiedButton>
         </div>
       </div>
     );
@@ -342,43 +356,14 @@ export default function BackupsPage() {
                         </a>
                       )}
 
-                      {showConfirmRestore === backup.id ? (
-                        <div className="flex items-center gap-2">
-                          <Form method="post">
-                            <input type="hidden" name="intent" value="restore" />
-                            <input type="hidden" name="backupId" value={backup.id} />
-                            <input type="hidden" name="confirmed" value="true" />
-                            <UnifiedButton
-                              type="submit"
-                              size="sm"
-                              variant="destructive"
-                              disabled={isSubmitting}
-                            >
-                              {isSubmitting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                "Confirm"
-                              )}
-                            </UnifiedButton>
-                          </Form>
-                          <UnifiedButton
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowConfirmRestore(null)}
-                          >
-                            Cancel
-                          </UnifiedButton>
-                        </div>
-                      ) : (
-                        <UnifiedButton
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowConfirmRestore(backup.id)}
-                        >
-                          <Upload className="w-4 h-4 mr-1" />
-                          {t("admin.restore")}
-                        </UnifiedButton>
-                      )}
+                      <UnifiedButton
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowConfirmRestore(backup.id)}
+                      >
+                        <Upload className="w-4 h-4 mr-1" />
+                        {t("admin.restore")}
+                      </UnifiedButton>
                     </div>
                   )}
                 </div>
@@ -387,6 +372,44 @@ export default function BackupsPage() {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={showConfirmRestore !== null}
+        onClose={() => {
+          if (!isSubmitting) {
+            setShowConfirmRestore(null);
+          }
+        }}
+        title={t("admin.restore")}
+        description={t("admin.restoreWarningDesc")}
+      >
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+          {t("admin.restoreWarningDesc")}
+        </div>
+        <Form method="post">
+          <input type="hidden" name="intent" value="restore" />
+          <input type="hidden" name="backupId" value={showConfirmRestore ?? ""} />
+          <input type="hidden" name="confirmed" value="true" />
+          <DialogFooter>
+            <UnifiedButton
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmRestore(null)}
+              disabled={isSubmitting}
+            >
+              {t("admin.cancel", "Cancel")}
+            </UnifiedButton>
+            <UnifiedButton
+              type="submit"
+              variant="destructive"
+              loading={isSubmitting && formIntent === "restore"}
+              disabled={isSubmitting || !showConfirmRestore}
+            >
+              {t("admin.confirm", "Confirm")}
+            </UnifiedButton>
+          </DialogFooter>
+        </Form>
+      </Dialog>
     </div>
   );
 }

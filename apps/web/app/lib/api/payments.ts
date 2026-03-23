@@ -92,12 +92,12 @@ export const paymentsApi = {
     return api.get<BookingPaymentStatusResponse>(`/payments/bookings/${bookingId}/status`);
   },
 
-  async getPaymentHistory(userId: string): Promise<Transaction[]> {
+  async getPaymentHistory(): Promise<Transaction[]> {
     const response = await api.get<TransactionsResponse>(`/payments/transactions`);
     return response.transactions || [];
   },
 
-  async getOwnerEarnings(userId: string): Promise<OwnerEarnings> {
+  async getOwnerEarnings(): Promise<OwnerEarnings> {
     return api.get<OwnerEarnings>("/payments/earnings");
   },
 

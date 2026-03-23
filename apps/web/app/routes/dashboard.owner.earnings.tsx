@@ -7,6 +7,7 @@ import {
   redirect,
   Link,
   useLocation,
+  useRevalidator,
 } from "react-router";
 import { useState, useCallback } from "react";
 import {
@@ -24,7 +25,7 @@ import {
   type Transaction,
   type PayoutResponse,
 } from "~/lib/api/payments";
-import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
+import { UnifiedButton, RouteErrorBoundary, Dialog, DialogFooter } from "~/components/ui";
 import { PortalPageLayout } from "~/components/layout";
 import { getUser } from "~/utils/auth";
 import { exportToCsv } from "~/utils/export";
@@ -32,6 +33,7 @@ import { formatCurrency, formatDate } from "~/lib/utils";
 import { APP_CURRENCY, APP_LOCALE } from "~/config/locale";
 import { ownerNavSections } from "~/config/navigation";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 const CURRENCY_SYMBOL =
   new Intl.NumberFormat(APP_LOCALE, {
@@ -61,6 +63,53 @@ const shortId = (value: unknown): string => {
   const text = typeof value === "string" ? value.trim() : "";
   return text ? text.slice(0, 8) : "";
 };
+
+const getOwnerEarningsResponseMessage = (error: unknown): string | undefined =>
+  error && typeof error === "object" && "response" in error
+    ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+    : undefined;
+
+export function getOwnerEarningsError(error: unknown, fallbackMessage: string): string {
+  const responseMessage = getOwnerEarningsResponseMessage(error);
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Earnings request timed out. Try again.",
+      [ApiErrorType.CONFLICT]: "Your payout balance changed. Refresh and try again.",
+    })
+  );
+}
+
+export function getOwnerEarningsLoadError(
+  error: unknown,
+  failedSections: string[] = []
+): string {
+  const responseMessage = getOwnerEarningsResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  const sectionSuffix =
+    failedSections.length > 0
+      ? ` Some sections could not be loaded: ${failedSections.join(", ")}.`
+      : "";
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return `You appear to be offline. Reconnect and try again.${sectionSuffix}`;
+  }
+
+  return getActionableErrorMessage(
+    error,
+    `Unable to load earnings data right now.${sectionSuffix}`,
+    {
+      [ApiErrorType.OFFLINE]: `You appear to be offline. Reconnect and try again.${sectionSuffix}`,
+      [ApiErrorType.TIMEOUT_ERROR]: `Earnings request timed out. Try again.${sectionSuffix}`,
+      [ApiErrorType.NETWORK_ERROR]: `We could not reach the earnings service. Try again in a moment.${sectionSuffix}`,
+    }
+  );
+}
 
 export async function clientLoader({ request }: { request: Request }) {
   const user = await getUser(request);
@@ -97,6 +146,9 @@ export async function clientLoader({ request }: { request: Request }) {
           : null
       )
       .filter(Boolean) as string[];
+    const failedReasons = results
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason);
 
     return {
       balance: {
@@ -110,7 +162,7 @@ export async function clientLoader({ request }: { request: Request }) {
       payouts: Array.isArray(payoutsRes.payouts) ? payoutsRes.payouts : [],
       error:
         failedSections.length > 0
-          ? `Failed to load: ${failedSections.join(", ")}`
+          ? getOwnerEarningsLoadError(failedReasons[0], failedSections)
           : null,
     };
   } catch (error: unknown) {
@@ -119,10 +171,7 @@ export async function clientLoader({ request }: { request: Request }) {
       available: 0,
       transactions: [],
       payouts: [],
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load earnings data",
+      error: getOwnerEarningsLoadError(error),
     };
   }
 }
@@ -176,11 +225,7 @@ export async function clientAction({ request }: { request: Request }) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          error && typeof error === "object" && "response" in error
-            ? (error as { response?: { data?: { message?: string } } }).response
-                ?.data?.message || "Failed to request payout"
-            : "Failed to request payout",
+        error: getOwnerEarningsError(error, "Failed to request payout"),
       };
     }
   }
@@ -201,6 +246,7 @@ export default function OwnerEarningsPage() {
   };
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const [showPayoutModal, setShowPayoutModal] = useState(false);
 
   const isSubmitting = navigation.state === "submitting";
@@ -324,7 +370,12 @@ export default function OwnerEarningsPage() {
       )}
       {error && (
         <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
-          {error}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <span>{error}</span>
+            <UnifiedButton variant="outline" size="sm" onClick={() => revalidator.revalidate()}>
+              {t("common.retry", "Retry")}
+            </UnifiedButton>
+          </div>
         </div>
       )}
     </>
@@ -360,7 +411,10 @@ export default function OwnerEarningsPage() {
 
         {error && transactions.length === 0 && payouts.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border/70 bg-card/50 p-10 text-center text-muted-foreground">
-            Earnings data is currently unavailable.
+            <p className="mb-4">{error}</p>
+            <UnifiedButton variant="outline" onClick={() => revalidator.revalidate()}>
+              {t("common.retry", "Retry")}
+            </UnifiedButton>
           </div>
         ) : (
           <>
@@ -560,67 +614,65 @@ export default function OwnerEarningsPage() {
       </PortalPageLayout>
 
       {/* Payout Modal */}
-      {showPayoutModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card border rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-foreground mb-4">
-              {t("earnings.requestPayout")}
-            </h3>
-            <Form method="post">
-              <input type="hidden" name="intent" value="requestPayout" />
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  {t("earnings.amount")}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    {CURRENCY_SYMBOL}
-                  </span>
-                  <input
-                    type="number"
-                    name="amount"
-                    step="0.01"
-                    min="1"
-                    max={availableAmount}
-                    defaultValue={availableAmount.toFixed(2)}
-                    inputMode="decimal"
-                    className="w-full pl-8 pr-4 py-2 border border-input rounded-lg bg-background"
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {t("earnings.available", {
-                    amount: formatCurrency(availableAmount),
-                  })}
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <UnifiedButton
-                  type="button"
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setShowPayoutModal(false)}
-                >
-                  {t("common.cancel")}
-                </UnifiedButton>
-                <UnifiedButton
-                  type="submit"
-                  className="flex-1"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {t("earnings.processingPayout")}
-                    </>
-                  ) : (
-                    t("earnings.requestPayout")
-                  )}
-                </UnifiedButton>
-              </div>
-            </Form>
+      <Dialog
+        open={showPayoutModal}
+        onClose={() => {
+          if (!isSubmitting) {
+            setShowPayoutModal(false);
+          }
+        }}
+        title={t("earnings.requestPayout")}
+        size="md"
+      >
+        <Form method="post">
+          <input type="hidden" name="intent" value="requestPayout" />
+          <div className="mb-4">
+            <label htmlFor="payout-amount" className="block text-sm font-medium text-foreground mb-2">
+              {t("earnings.amount")}
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {CURRENCY_SYMBOL}
+              </span>
+              <input
+                id="payout-amount"
+                type="number"
+                name="amount"
+                step="0.01"
+                min="1"
+                max={availableAmount}
+                defaultValue={availableAmount.toFixed(2)}
+                inputMode="decimal"
+                disabled={isSubmitting}
+                aria-describedby="payout-amount-help"
+                className="w-full pl-8 pr-4 py-2 border border-input rounded-lg bg-background"
+              />
+            </div>
+            <p id="payout-amount-help" className="text-sm text-muted-foreground mt-1">
+              {t("earnings.available", {
+                amount: formatCurrency(availableAmount),
+              })}
+            </p>
           </div>
-        </div>
-      )}
+          <DialogFooter className="mt-4">
+            <UnifiedButton
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => setShowPayoutModal(false)}
+            >
+              {t("common.cancel")}
+            </UnifiedButton>
+            <UnifiedButton
+              type="submit"
+              loading={isSubmitting}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? t("earnings.processingPayout") : t("earnings.requestPayout")}
+            </UnifiedButton>
+          </DialogFooter>
+        </Form>
+      </Dialog>
     </>
   );
 }

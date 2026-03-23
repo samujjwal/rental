@@ -1,6 +1,7 @@
+import { AxiosError } from 'axios';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { InstantSearch } from './InstantSearch';
+import { InstantSearch, getInstantSearchError } from './InstantSearch';
 import { BrowserRouter } from 'react-router';
 
 // Mock the listings API
@@ -166,7 +167,36 @@ describe('InstantSearch', () => {
     fireEvent.change(input, { target: { value: 'test' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to search. Please try again.')).toBeInTheDocument();
+      expect(screen.getByText('Network error')).toBeInTheDocument();
+    });
+  });
+
+  it('displays actionable offline search copy', async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: false,
+    });
+    mockSearchListings.mockRejectedValue(new Error('Network error'));
+
+    render(
+      <BrowserRouter>
+        <InstantSearch />
+      </BrowserRouter>
+    );
+
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: 'test' } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('You appear to be offline. Reconnect and try searching again.')
+      ).toBeInTheDocument();
+    });
+
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: previousOnline,
     });
   });
 
@@ -319,5 +349,17 @@ describe('InstantSearch', () => {
     );
     const input = screen.getByRole('combobox');
     expect(input).toHaveFocus();
+  });
+
+  it('uses timeout-specific helper copy', () => {
+    expect(getInstantSearchError(new AxiosError('timeout', 'ECONNABORTED'))).toBe(
+      'Searching timed out. Try again.'
+    );
+  });
+
+  it('preserves plain thrown helper messages', () => {
+    expect(getInstantSearchError(new Error('Search service warming up'))).toBe(
+      'Search service warming up'
+    );
   });
 });

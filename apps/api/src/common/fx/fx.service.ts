@@ -63,6 +63,7 @@ export class FxService {
     const key = `${base}:${target}`;
     const fallbackRate = FxService.FALLBACK_RATES[key];
     if (fallbackRate) {
+      this.logger.warn(`FX live rate unavailable for ${base}→${target}; using static fallback rate ${fallbackRate}`);
       const result: FxRate = {
         base,
         target,
@@ -78,6 +79,7 @@ export class FxService {
     const baseToUsd = FxService.FALLBACK_RATES[`${base}:USD`];
     const usdToTarget = FxService.FALLBACK_RATES[`USD:${target}`];
     if (baseToUsd && usdToTarget) {
+      this.logger.warn(`FX live rate unavailable for ${base}→${target}; using static USD-pivot fallback`);
       const result: FxRate = {
         base,
         target,

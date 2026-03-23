@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
-import { EmbeddingService } from '@/modules/ai/services/embedding.service';
+import { SEMANTIC_RANKING_PORT, type SemanticRankingPort } from '../ports/semantic-ranking.port';
 import { PropertyStatus, VerificationStatus, toNumber } from '@rental-portal/database';
 
 export interface SearchQuery {
@@ -102,7 +102,7 @@ export class SearchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
-    private readonly embeddingService: EmbeddingService,
+    @Inject(SEMANTIC_RANKING_PORT) private readonly semanticRanking: SemanticRankingPort,
   ) {}
 
   async search(searchQuery: SearchQuery): Promise<{
@@ -455,7 +455,7 @@ export class SearchService {
         }
         // ─────────────────────────────────────────────────────────────────────
         try {
-          const semanticResults = await this.embeddingService.semanticSearch(
+          const semanticResults = await this.semanticRanking.semanticSearch(
             searchQuery.query,
             size - results.length,
             0,

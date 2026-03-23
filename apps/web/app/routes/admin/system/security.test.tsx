@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AxiosError } from "axios";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
 const m = vi.hoisted(() => ({
@@ -37,7 +38,7 @@ vi.mock("lucide-react", () => ({
   UserX: IconStub, Globe: IconStub,
 }));
 
-import { clientLoader, clientAction } from "../system/security";
+import { clientLoader, clientAction, getAdminSecurityError } from "../system/security";
 
 function form(fields: Record<string, string>) {
   const fd = new FormData();
@@ -89,6 +90,16 @@ describe("admin/system/security", () => {
       const res = await clientLoader({ request: new Request("http://l/") } as any);
       expect(res.settings).toBeDefined();
       expect(res.error).toBe("fail");
+    });
+
+    it("returns actionable offline loader copy", async () => {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.getSettings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+      const res = await clientLoader({ request: new Request("http://l/") } as any);
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
     });
   });
 
@@ -193,6 +204,23 @@ describe("admin/system/security", () => {
       const res = await clientAction({ request: form(validSave) } as any);
       expect(res.success).toBe(false);
       expect(res.error).toBe("perm denied");
+    });
+
+    it("returns actionable offline action copy", async () => {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.updateSettings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+      const res = await clientAction({ request: form(validSave) } as any);
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+    });
+  });
+
+  describe("error helper", () => {
+    it("keeps plain thrown errors when provided", () => {
+      expect(getAdminSecurityError(new Error("fail"), "Failed to update settings")).toBe("fail");
     });
   });
 });

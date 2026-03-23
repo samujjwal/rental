@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /* ------------------------------------------------------------------ */
@@ -19,9 +20,10 @@ const mocks = {
 
 vi.mock("react-router", () => ({
   Link: ({ children, to, ...p }: any) => <a href={to} {...p}>{children}</a>,
-  useLoaderData: () => ({ featuredListings: [] }),
+  useLoaderData: () => ({ featuredListings: [], featuredListingsError: null }),
   useNavigate: () => vi.fn(),
   useNavigation: () => ({ state: "idle" }),
+  useRevalidator: () => ({ revalidate: vi.fn(), state: "idle" }),
   createCookieSessionStorage: () => ({ getSession: vi.fn(), commitSession: vi.fn(), destroySession: vi.fn() }),
   redirect: (url: string) => new Response(null, { status: 302, headers: { Location: url } }),
 }));
@@ -45,9 +47,15 @@ vi.mock("~/components/ui", () => ({
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 
-import { clientLoader } from "./home";
+import { clientLoader, getHomeFeaturedListingsError } from "./home";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
+});
 
 describe("clientLoader", () => {
   it("returns featured listings", async () => {
@@ -56,6 +64,7 @@ describe("clientLoader", () => {
 
     const r = (await clientLoader()) as any;
     expect(r.featuredListings).toHaveLength(8); // capped at 8
+    expect(r.featuredListingsError).toBeNull();
   });
 
   it("falls back to searchListings on featured failure", async () => {
@@ -64,14 +73,45 @@ describe("clientLoader", () => {
 
     const r = (await clientLoader()) as any;
     expect(r.featuredListings).toHaveLength(1);
+    expect(r.featuredListingsError).toBeNull();
     expect(mocks.searchListings).toHaveBeenCalledWith(expect.objectContaining({ limit: 8 }));
   });
 
-  it("returns empty array on double failure", async () => {
+  it("returns a loader error on double failure", async () => {
     mocks.getFeaturedListings.mockRejectedValue(new Error("fail"));
     mocks.searchListings.mockRejectedValue(new Error("fail2"));
 
     const r = (await clientLoader()) as any;
     expect(r.featuredListings).toEqual([]);
+    expect(r.featuredListingsError).toBe("fail");
+  });
+});
+
+describe("getHomeFeaturedListingsError", () => {
+  it("preserves plain thrown errors", () => {
+    expect(getHomeFeaturedListingsError(new Error("fail"))).toBe("fail");
+  });
+
+  it("uses actionable offline copy", () => {
+    const online = window.navigator.onLine;
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    expect(getHomeFeaturedListingsError(new Error("Network Error"))).toBe(
+      "You appear to be offline. Reconnect and try loading featured listings again."
+    );
+
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: online,
+    });
+  });
+
+  it("uses timeout-specific copy", () => {
+    expect(getHomeFeaturedListingsError(new AxiosError("timeout", "ECONNABORTED"))).toBe(
+      "Loading featured listings timed out. Try again."
+    );
   });
 });

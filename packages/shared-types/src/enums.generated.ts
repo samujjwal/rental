@@ -1,7 +1,7 @@
 // ==========================================================================
 // AUTO-GENERATED — DO NOT EDIT
 // Source: packages/database/prisma/schema.prisma
-// Generated: 2026-03-18T15:06:05.565Z
+// Generated: 2026-03-23T00:15:50.334Z
 // Run: pnpm --filter shared-types generate
 // ==========================================================================
 
@@ -409,14 +409,6 @@ export enum IdentityDocumentType {
 }
 
 export const IdentityDocumentTypeValues = ['DRIVERS_LICENSE', 'PASSPORT', 'NATIONAL_ID', 'OTHER'] as const;
-
-export enum AvailabilityMode {
-  DATE_RANGE = 'DATE_RANGE',
-  TIME_SLOT = 'TIME_SLOT',
-  CALENDAR = 'CALENDAR',
-}
-
-export const AvailabilityModeValues = ['DATE_RANGE', 'TIME_SLOT', 'CALENDAR'] as const;
 
 export enum AvailabilitySlotStatus {
   AVAILABLE = 'AVAILABLE',

@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData, useNavigate, redirect } from "react-router";
+import { useLoaderData, useNavigate, redirect, useRevalidator } from "react-router";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
 import { formatCurrency } from "~/lib/utils";
@@ -7,9 +7,10 @@ import { uploadApi } from "~/lib/api/upload";
 import { getUser } from "~/utils/auth";
 import { listingsApi } from "~/lib/api/listings";
 import { insuranceApi } from "~/lib/api/insurance";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
 import { useTranslation } from "react-i18next";
 import { isAppEntityId } from "~/utils/entity-id";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 interface InsuranceRequirement {
   required: boolean;
@@ -22,6 +23,28 @@ const MAX_POLICY_FIELD_LENGTH = 120;
 const MAX_PROVIDER_FIELD_LENGTH = 120;
 const MAX_TYPE_FIELD_LENGTH = 80;
 const MAX_COVERAGE_AMOUNT = 10_000_000;
+
+const ALLOWED_DOCUMENT_FILE_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+const ALLOWED_DOCUMENT_FILE_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+
+export function isAllowedInsuranceDocument(file: File): boolean {
+  if (ALLOWED_DOCUMENT_FILE_TYPES.has(file.type)) {
+    return true;
+  }
+
+  if (typeof file.name !== "string") {
+    return false;
+  }
+
+  const normalizedFileName = file.name.toLowerCase();
+  return ALLOWED_DOCUMENT_FILE_EXTENSIONS.some((extension) => normalizedFileName.endsWith(extension));
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -45,9 +68,13 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     }
 
     const requirement = await insuranceApi.getListingRequirement(listingId);
-    return { listingId, requirement };
+    return { listingId, requirement, error: null };
   } catch (error) {
-    return redirect("/listings");
+    return {
+      listingId,
+      requirement: null,
+      error: getInsuranceUploadLoadError(error),
+    };
   }
 }
 
@@ -58,12 +85,99 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+export function getInsuranceUploadSubmitError(err: unknown): string {
+  const responseMessage =
+    typeof err === "object" &&
+    err !== null &&
+    "response" in err &&
+    typeof (err as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (err as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(err, "Unable to upload insurance policy. Please try again.", {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Uploading the insurance policy timed out. Try again.",
+    })
+  );
+}
+
+export function getInsuranceUploadLoadError(err: unknown): string {
+  const responseMessage =
+    typeof err === "object" &&
+    err !== null &&
+    "response" in err &&
+    typeof (err as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (err as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  return getActionableErrorMessage(
+    err,
+    "Unable to load the insurance upload form right now.",
+    {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading the insurance form again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Loading the insurance upload form timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not load the insurance upload form right now. Try again in a moment.",
+    }
+  );
+}
+
+export function getInsuranceUploadDocumentError(err: unknown): string {
+  const responseMessage =
+    typeof err === "object" &&
+    err !== null &&
+    "response" in err &&
+    typeof (err as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (err as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(err, "Unable to upload document. Please try again.", {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Uploading the insurance document timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not upload the insurance document right now. Try again in a moment.",
+    })
+  );
+}
+
 export default function InsuranceUpload() {
-  const { listingId, requirement } = useLoaderData<typeof clientLoader>();
+  const { listingId, requirement, error: loadError } = useLoaderData<typeof clientLoader>();
   const navigate = useNavigate();
+  const { revalidate } = useRevalidator();
   const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (!requirement) {
+    return (
+      <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-card shadow rounded-lg p-8 text-center">
+            <h1 className="text-3xl font-bold text-foreground">
+              Insurance upload unavailable
+            </h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {loadError || "Unable to load the insurance upload form right now."}
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <UnifiedButton type="button" onClick={() => revalidate()}>
+                Try Again
+              </UnifiedButton>
+              <UnifiedButton type="button" variant="outline" onClick={() => navigate("/listings") }>
+                Back to Listings
+              </UnifiedButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -82,13 +196,7 @@ export default function InsuranceUpload() {
       setUploading(false);
       return;
     }
-    const allowedFileTypes = new Set([
-      "application/pdf",
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ]);
-    if (!allowedFileTypes.has(documentFile.type)) {
+    if (!isAllowedInsuranceDocument(documentFile)) {
       setError("Only PDF, JPG, PNG, or WEBP documents are allowed.");
       setUploading(false);
       return;
@@ -98,8 +206,8 @@ export default function InsuranceUpload() {
     try {
       const uploadResult = await uploadApi.uploadDocument(documentFile);
       documentUrl = uploadResult.url;
-    } catch {
-      setError("Unable to upload document. Please try again.");
+    } catch (error: unknown) {
+      setError(getInsuranceUploadDocumentError(error));
       setUploading(false);
       return;
     }
@@ -178,8 +286,8 @@ export default function InsuranceUpload() {
       await insuranceApi.uploadPolicy(data);
 
       navigate("/listings");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+    } catch (err: unknown) {
+      setError(getInsuranceUploadSubmitError(err));
     } finally {
       setUploading(false);
     }
@@ -405,7 +513,7 @@ export default function InsuranceUpload() {
             {/* Document Upload */}
             <div>
               <label
-                htmlFor="documentUrl"
+                htmlFor="document"
                 className="block text-sm font-medium text-foreground"
               >
                 {t("pages.insurance.insuranceDocument")}
@@ -427,20 +535,23 @@ export default function InsuranceUpload() {
 
             {/* Submit */}
             <div className="flex items-center justify-between pt-6">
-              <button
+              <UnifiedButton
                 type="button"
                 onClick={() => navigate(-1)}
-                className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md shadow-sm hover:bg-muted"
+                variant="outline"
+                disabled={uploading}
+                className="px-4 py-2 text-sm font-medium"
               >
                 {t("common.cancel")}
-              </button>
-              <button
+              </UnifiedButton>
+              <UnifiedButton
                 type="submit"
                 disabled={uploading}
-                className="px-6 py-2 text-sm font-medium text-primary-foreground bg-primary border border-transparent rounded-md shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
+                loading={uploading}
+                className="px-6 py-2 text-sm font-medium"
               >
                 {uploading ? t("pages.insurance.uploading") : t("pages.insurance.submitForVerification")}
-              </button>
+              </UnifiedButton>
             </div>
           </form>
 

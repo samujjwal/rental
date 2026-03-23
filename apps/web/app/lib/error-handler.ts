@@ -1,3 +1,4 @@
+import { requestNavigation } from "./navigation";
 import { toast } from "./toast";
 
 /**
@@ -136,7 +137,7 @@ export function handleAuthError(error: unknown) {
     toast.error("Session Expired", "Please log in again to continue.", {
       label: "Log In",
       onClick: () => {
-        window.location.href = "/auth/login";
+        requestNavigation("/auth/login", { replace: true });
       },
     });
     return;

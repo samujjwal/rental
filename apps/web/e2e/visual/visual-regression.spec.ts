@@ -421,15 +421,22 @@ test.describe('UI Components', () => {
   });
 
   test('AI listing assistant component', async ({ page }) => {
+    // NOTE: Previous version targeted data-testid="ai-assistant-tab" and
+    // data-testid="ai-suggestions" which were never implemented. This test
+    // has been rewritten to match the actual UI:
+    //   - data-testid="ai-panel-toggle" opens the AIListingAssistant panel
+    //   - data-testid="ai-listing-assistant" is the component wrapper
+    // See apps/web/e2e/ai-listing-assistant.e2e.spec.ts.QUARANTINE_REASON.md
     await page.goto('/auth/login');
     await page.fill('[name="email"]', 'owner@example.com');
     await page.fill('[name="password"]', 'password123');
     await page.click('button[type="submit"]');
     await page.goto('/listings/new');
     await waitForPageStability(page);
-    await page.click('[data-testid="ai-assistant-tab"]');
-    await page.waitForSelector('[data-testid="ai-suggestions"]', { state: 'visible' });
-    const component = await page.locator('[data-testid="ai-listing-assistant"]');
+    // Open the AI assistant panel via the real toggle button.
+    await page.click('[data-testid="ai-panel-toggle"]');
+    await page.waitForSelector('[data-testid="ai-listing-assistant"]', { state: 'visible' });
+    const component = page.locator('[data-testid="ai-listing-assistant"]');
     await expect(component).toHaveScreenshot('component-ai-assistant.png');
   });
 

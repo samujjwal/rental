@@ -28,6 +28,7 @@ import { formatCurrency } from "~/lib/utils";
 import { APP_CURRENCY } from "~/config/locale";
 import { getUser } from "~/utils/auth";
 import { exportToCsv } from "~/utils/export";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -73,6 +74,44 @@ const humanizeStatus = (value: unknown): string => {
 const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
   return text || fallback;
+};
+
+const getPaymentsResponseMessage = (error: unknown): string | null => {
+  return error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+    ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+    : null;
+};
+
+const getPaymentsLoadError = (
+  error: unknown,
+  failedSections: string[] = []
+): string => {
+  const responseMessage = getPaymentsResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  const sectionSuffix =
+    failedSections.length > 0
+      ? ` Some sections could not be loaded: ${failedSections.join(", ")}.`
+      : "";
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return `You appear to be offline. Reconnect and try loading your payment data again.${sectionSuffix}`;
+  }
+
+  return getActionableErrorMessage(
+    error,
+    `Unable to load your payment data right now.${sectionSuffix}`,
+    {
+      [ApiErrorType.OFFLINE]: `You appear to be offline. Reconnect and try loading your payment data again.${sectionSuffix}`,
+      [ApiErrorType.TIMEOUT_ERROR]: `Loading your payment data timed out. Try again.${sectionSuffix}`,
+      [ApiErrorType.NETWORK_ERROR]: `We could not reach the payment service. Try again in a moment.${sectionSuffix}`,
+    }
+  );
 };
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
@@ -130,6 +169,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     const failedSections = results
       .map((r, i) => r.status === 'rejected' ? ['balance', 'earnings', 'summary', 'transactions'][i] : null)
       .filter(Boolean) as string[];
+    const firstRejectedReason = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected"
+    )?.reason;
 
     const data: PaymentsData = {
       balance: {
@@ -149,7 +191,10 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       totalTransactions: safeNumber(transactionsData.total),
       page: Math.max(1, safeNumber(transactionsData.page || 1)),
       limit: Math.max(1, safeNumber(transactionsData.limit || 20)),
-      error: failedSections.length > 0 ? `Failed to load: ${failedSections.join(', ')}` : null,
+      error:
+        failedSections.length > 0
+          ? getPaymentsLoadError(firstRejectedReason, failedSections)
+          : null,
     };
 
     return data;
@@ -161,7 +206,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       totalTransactions: 0,
       page: 1,
       limit: 20,
-      error: "Failed to load payment data",
+      error: getPaymentsLoadError(error),
     };
 
     return data;
@@ -224,6 +269,13 @@ export default function PaymentsPage() {
     ? ((data.earnings.thisMonth - data.earnings.lastMonth) / data.earnings.lastMonth) * 100
     : 0;
   const safeEarningsGrowth = Math.min(Math.max(safeNumber(earningsGrowth), -9999), 9999);
+  const hasTransactions = data.transactions.length > 0;
+  const hasSummaryData =
+    data.balance.available > 0 ||
+    data.balance.pending > 0 ||
+    data.earnings.thisMonth > 0 ||
+    data.earnings.total > 0;
+  const clearFilters = () => setSearchParams(new URLSearchParams());
 
   const handleExport = useCallback(() => {
     if (!data.transactions.length) return;
@@ -243,24 +295,33 @@ export default function PaymentsPage() {
     );
   }, [data.transactions]);
 
-  if (data.error) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="text-center">
-            <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
-            <h1 className="text-2xl font-bold text-foreground mb-2">{t("payments.unableToLoad")}</h1>
-            <p className="text-muted-foreground mb-6">{data.error}</p>
-            <UnifiedButton onClick={() => revalidator.revalidate()}>{t("common.retry")}</UnifiedButton>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {data.error ? (
+          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-medium">{t("payments.unableToLoad")}</p>
+                  <p>{data.error}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <UnifiedButton variant="outline" onClick={() => revalidator.revalidate()}>
+                  {t("common.retry")}
+                </UnifiedButton>
+                {(currentType || currentStatus) ? (
+                  <UnifiedButton variant="ghost" onClick={clearFilters}>
+                    {t("payments.clearFilters")}
+                  </UnifiedButton>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {/* Page header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -431,10 +492,7 @@ export default function PaymentsPage() {
                   <UnifiedButton
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      const params = new URLSearchParams();
-                      setSearchParams(params);
-                    }}
+                        onClick={clearFilters}
                   >
                     {t("payments.clearFilters")}
                   </UnifiedButton>
@@ -444,15 +502,21 @@ export default function PaymentsPage() {
           </div>
 
           {/* Transactions List */}
-          {data.transactions.length === 0 ? (
+          {!hasTransactions ? (
             <div className="p-12 text-center">
               <CreditCard className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">{t("payments.noTransactions")}</p>
+              <p className="text-muted-foreground">
+                {(currentType || currentStatus)
+                  ? t("payments.noTransactionsForFilters", "No transactions match the selected filters.")
+                  : hasSummaryData
+                    ? t("payments.noTransactionsYet", "No transactions have posted yet.")
+                    : t("payments.noTransactions")}
+              </p>
               {(currentType || currentStatus) && (
                 <UnifiedButton
                   variant="ghost"
                   className="mt-2"
-                  onClick={() => setSearchParams(new URLSearchParams())}
+                  onClick={clearFilters}
                 >
                   {t("payments.clearFiltersToSeeAll")}
                 </UnifiedButton>

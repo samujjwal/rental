@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /* ------------------------------------------------------------------ */
@@ -74,7 +75,12 @@ function makeFormReq(fields: Record<string, string>, files?: { name: string; fil
   return { formData: () => Promise.resolve(fd) } as unknown as Request;
 }
 
-import { clientLoader, clientAction } from "./disputes.new.$bookingId";
+import {
+  clientLoader,
+  clientAction,
+  getCreateDisputeError,
+  getDisputeEvidenceUploadError,
+} from "./disputes.new.$bookingId";
 
 const authUser = { id: "u1", email: "u@test.com", role: "renter" };
 const booking = {
@@ -86,6 +92,13 @@ const booking = {
 };
 
 beforeEach(() => vi.clearAllMocks());
+
+beforeEach(() => {
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
+});
 
 /* ================================================================== */
 /*  clientLoader                                                       */
@@ -306,5 +319,166 @@ describe("clientAction", () => {
       params: { bookingId: validId },
     } as any);
     expect((r as any).error).toBe("Duplicate dispute");
+  });
+
+  it("returns upload-specific backend evidence errors before creating the dispute", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue(booking);
+    mocks.uploadDocument.mockRejectedValue({
+      response: { data: { message: "Evidence storage is temporarily unavailable" } },
+    });
+
+    const file = new File(["pdf"], "receipt.pdf", { type: "application/pdf" });
+    const r = await clientAction({
+      request: makeFormReq(
+        {
+          type: "REFUND_REQUEST",
+          title: "Refund please",
+          description: "Item not as described",
+        },
+        [{ name: "evidence", file }]
+      ),
+      params: { bookingId: validId },
+    } as any);
+
+    expect((r as any).error).toBe("Evidence storage is temporarily unavailable");
+    expect(mocks.createDispute).not.toHaveBeenCalled();
+  });
+
+  it("uses offline-specific evidence upload copy", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue(booking);
+    mocks.uploadImage.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    const online = window.navigator.onLine;
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    const file = new File(["img"], "damage.jpg", { type: "image/jpeg" });
+    const r = await clientAction({
+      request: makeFormReq(
+        {
+          type: "PROPERTY_DAMAGE",
+          title: "Damage",
+          description: "Broken casing",
+        },
+        [{ name: "evidence", file }]
+      ),
+      params: { bookingId: validId },
+    } as any);
+
+    expect((r as any).error).toBe(
+      "You appear to be offline. Reconnect and try uploading dispute evidence again."
+    );
+    expect(mocks.createDispute).not.toHaveBeenCalled();
+
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: online,
+    });
+  });
+
+  it("uses timeout-specific evidence upload copy", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue(booking);
+    mocks.uploadDocument.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const file = new File(["pdf"], "evidence.pdf", { type: "application/pdf" });
+    const r = await clientAction({
+      request: makeFormReq(
+        {
+          type: "PAYMENT_ISSUE",
+          title: "Receipt mismatch",
+          description: "The charged amount is wrong",
+        },
+        [{ name: "evidence", file }]
+      ),
+      params: { bookingId: validId },
+    } as any);
+
+    expect((r as any).error).toBe("Uploading dispute evidence timed out. Try again.");
+    expect(mocks.createDispute).not.toHaveBeenCalled();
+  });
+
+  it("uses actionable offline copy", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue(booking);
+    mocks.createDispute.mockRejectedValue(new Error("Network Error"));
+    const online = window.navigator.onLine;
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    const r = await clientAction({
+      request: makeFormReq({
+        type: "OTHER",
+        title: "Test",
+        description: "Test description",
+      }),
+      params: { bookingId: validId },
+    } as any);
+    expect((r as any).error).toBe(
+      "You appear to be offline. Reconnect and try creating the dispute again."
+    );
+
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: online,
+    });
+  });
+
+  it("uses timeout-specific copy", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getBookingById.mockResolvedValue(booking);
+    mocks.createDispute.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const r = await clientAction({
+      request: makeFormReq({
+        type: "OTHER",
+        title: "Test",
+        description: "Test description",
+      }),
+      params: { bookingId: validId },
+    } as any);
+
+    expect((r as any).error).toBe("Creating the dispute timed out. Try again.");
+  });
+});
+
+describe("getCreateDisputeError", () => {
+  it("uses conflict-specific copy without a backend message", () => {
+    expect(
+      getCreateDisputeError(
+        new AxiosError("Conflict", undefined, undefined, undefined, {
+          status: 409,
+          statusText: "Conflict",
+          headers: {},
+          config: { headers: {} } as any,
+          data: {},
+        } as any)
+      )
+    ).toBe("A dispute for this booking is already in progress. Refresh and review the booking timeline.");
+  });
+
+  it("preserves plain thrown errors", () => {
+    expect(getCreateDisputeError(new Error("Permission denied"), "fallback")).toBe(
+      "Permission denied"
+    );
+  });
+});
+
+describe("getDisputeEvidenceUploadError", () => {
+  it("uses timeout-specific evidence upload copy", () => {
+    expect(
+      getDisputeEvidenceUploadError(new AxiosError("timeout", "ECONNABORTED"))
+    ).toBe("Uploading dispute evidence timed out. Try again.");
+  });
+
+  it("preserves plain thrown evidence upload errors", () => {
+    expect(getDisputeEvidenceUploadError(new Error("Unsupported evidence file type"))).toBe(
+      "Unsupported evidence file type"
+    );
   });
 });

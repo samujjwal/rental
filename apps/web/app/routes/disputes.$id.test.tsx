@@ -1,5 +1,7 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 
 /* ------------------------------------------------------------------ */
 /*  lucide-react                                                       */
@@ -31,7 +33,8 @@ const mocks: Record<string, any> = {
   }),
   useLoaderData: vi.fn(),
   useActionData: vi.fn(),
-  useRevalidator: vi.fn(() => ({ revalidate: vi.fn() })),
+  revalidate: vi.fn(),
+  useNavigation: vi.fn(() => ({ state: "idle" })),
 };
 
 vi.mock("react-router", () => ({
@@ -42,7 +45,8 @@ vi.mock("react-router", () => ({
   redirect: (...a: any[]) => mocks.redirect(...a),
   useLoaderData: () => mocks.useLoaderData(),
   useActionData: () => mocks.useActionData(),
-  useRevalidator: () => mocks.useRevalidator(),
+  useRevalidator: () => ({ revalidate: mocks.revalidate }),
+  useNavigation: () => mocks.useNavigation(),
 }));
 vi.mock("~/utils/auth", () => ({
   getUser: (...a: any[]) => mocks.getUser(...a),
@@ -69,7 +73,7 @@ vi.mock("~/components/ui", () => ({
   Badge: ({ children }: any) => <span>{children}</span>,
   Card: ({ children }: any) => <div>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,
-  UnifiedButton: ({ children, ...p }: any) => <button {...p}>{children}</button>,
+  UnifiedButton: ({ children, loading, leftIcon, ...p }: any) => <button {...p}>{children}</button>,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 
@@ -85,7 +89,13 @@ function makeFormReq(fields: Record<string, string>) {
 const validId = "11111111-1111-1111-8111-111111111111";
 const validCuid = "ckx1234567890abcdefghijkl";
 
-import { clientLoader, clientAction } from "./disputes.$id";
+import {
+  clientLoader,
+  clientAction,
+  getDisputeDetailActionError,
+  getDisputeDetailLoadError,
+  default as DisputeDetailPage,
+} from "./disputes.$id";
 
 const authUser = { id: "u1", email: "u@test.com", role: "renter" };
 const dispute = {
@@ -101,10 +111,22 @@ const dispute = {
 
 beforeEach(() => vi.clearAllMocks());
 
+beforeEach(() => {
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
+});
+
 /* ================================================================== */
 /*  clientLoader                                                       */
 /* ================================================================== */
 describe("clientLoader", () => {
+  beforeEach(() => {
+    mocks.useActionData.mockReturnValue(null);
+    mocks.useNavigation.mockReturnValue({ state: "idle" });
+  });
+
   it("redirects unauthenticated to /auth/login", async () => {
     mocks.getUser.mockResolvedValue(null);
     const r = await clientLoader({
@@ -162,6 +184,53 @@ describe("clientLoader", () => {
       params: { id: validId },
     } as any);
     expect(r).toEqual({ dispute });
+  });
+
+  it("returns actionable fallback loader state on timeout", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getDisputeById.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const result = await clientLoader({
+      request: new Request("http://localhost/disputes/" + validId),
+      params: { id: validId },
+    } as any);
+
+    expect(result).toEqual({
+      dispute: null,
+      error: "Loading the dispute timed out. Try again.",
+    });
+  });
+
+  it("maps offline loader failures to actionable copy", () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    expect(getDisputeDetailLoadError(new AxiosError("Network Error", "ERR_NETWORK"))).toBe(
+      "You appear to be offline. Reconnect and try again."
+    );
+  });
+});
+
+describe("DisputeDetailPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.useActionData.mockReturnValue(null);
+    mocks.useNavigation.mockReturnValue({ state: "idle" });
+  });
+
+  it("renders retryable fallback UI when dispute data is unavailable", () => {
+    mocks.useLoaderData.mockReturnValue({
+      dispute: null,
+      error: "Loading the dispute timed out. Try again.",
+    });
+
+    render(<DisputeDetailPage />);
+
+    expect(screen.getByText("Dispute unavailable")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try Again" }));
+    expect(mocks.revalidate).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -268,5 +337,70 @@ describe("clientAction — close", () => {
       params: { id: validId },
     } as any);
     expect((r as any).error).toBe("Server error");
+  });
+
+  it("uses actionable offline copy", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getDisputeById.mockResolvedValue(dispute);
+    mocks.closeDispute.mockRejectedValue(new Error("Network Error"));
+    const online = window.navigator.onLine;
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    const r = await clientAction({
+      request: makeFormReq({ intent: "close", reason: "Done" }),
+      params: { id: validId },
+    } as any);
+    expect((r as any).error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: online,
+    });
+  });
+});
+
+describe("getDisputeDetailActionError", () => {
+  it("preserves plain thrown errors", () => {
+    expect(getDisputeDetailActionError(new Error("Permission denied"), "fallback")).toBe(
+      "Permission denied"
+    );
+  });
+
+  it("uses timeout-specific copy", () => {
+    expect(
+      getDisputeDetailActionError(new AxiosError("timeout", "ECONNABORTED"), "fallback")
+    ).toBe("The dispute action timed out. Try again.");
+  });
+
+  it("uses conflict-specific copy without a backend message", () => {
+    expect(
+      getDisputeDetailActionError(
+        new AxiosError("Conflict", undefined, undefined, undefined, {
+          status: 409,
+          statusText: "Conflict",
+          headers: {},
+          config: { headers: {} } as any,
+          data: {},
+        } as any),
+        "fallback"
+      )
+    ).toBe("This dispute changed while you were working. Refresh and try again.");
+  });
+});
+
+describe("getDisputeDetailLoadError", () => {
+  it("preserves backend response messages", () => {
+    expect(
+      getDisputeDetailLoadError({ response: { data: { message: "Dispute could not be loaded" } } })
+    ).toBe("Dispute could not be loaded");
+  });
+
+  it("uses timeout-specific copy", () => {
+    expect(getDisputeDetailLoadError(new AxiosError("timeout", "ECONNABORTED"))).toBe(
+      "Loading the dispute timed out. Try again."
+    );
   });
 });

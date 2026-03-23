@@ -37,6 +37,7 @@ import { getUser } from "~/utils/auth";
 import { isAppEntityId } from "~/utils/entity-id";
 import { toast } from "~/lib/toast";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -53,6 +54,24 @@ const safeNumber = (value: unknown): number => {
 const safeText = (value: unknown): string =>
   typeof value === "string" ? value : "";
 const safeLower = (value: unknown): string => safeText(value).toLowerCase();
+
+export function getOwnerListingsError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Listing request timed out. Try again.",
+    })
+  );
+}
 
 const ListingThumbnail = ({
   src,
@@ -261,7 +280,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       analyticsByListing,
       error:
         listingsResponse.status === "rejected"
-          ? "Failed to load listings"
+          ? getOwnerListingsError(listingsResponse.reason, "Failed to load listings")
           : null,
     };
   } catch (error) {
@@ -282,7 +301,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       },
       analyticsOverview: null,
       analyticsByListing: EMPTY_ANALYTICS_BY_LISTING,
-      error: "Failed to load listings",
+      error: getOwnerListingsError(error, "Failed to load listings"),
     };
   }
 }
@@ -344,10 +363,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   } catch (error: unknown) {
     return {
       success: false,
-      message:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Action failed.",
+      message: getOwnerListingsError(error, "Action failed."),
     };
   }
 }
@@ -550,8 +566,8 @@ export default function OwnerListingsPage() {
       toast.success(`${selectedItems.length} listing${selectedItems.length === 1 ? "" : "s"} updated.`);
       selection.clearSelection();
       revalidator.revalidate();
-    } catch {
-      toast.error("Bulk update failed. Please try again.");
+    } catch (error) {
+      toast.error(getOwnerListingsError(error, "Bulk update failed. Please try again."));
     }
   };
 
@@ -564,8 +580,8 @@ export default function OwnerListingsPage() {
       toast.success(`${selectedItems.length} listing${selectedItems.length === 1 ? "" : "s"} deleted.`);
       selection.clearSelection();
       revalidator.revalidate();
-    } catch {
-      toast.error("Bulk delete failed. Please try again.");
+    } catch (error) {
+      toast.error(getOwnerListingsError(error, "Bulk delete failed. Please try again."));
     }
   };
 

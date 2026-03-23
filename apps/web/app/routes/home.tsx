@@ -1,6 +1,6 @@
 
 import type { MetaFunction } from "react-router";
-import { Link, useLoaderData, useNavigation } from "react-router";
+import { Link, useLoaderData, useNavigation, useRevalidator } from "react-router";
 import { useAuthStore } from "~/lib/store/auth";
 import { DevUserSwitcher } from "~/components/DevUserSwitcher";
 import { listingsApi } from "~/lib/api/listings";
@@ -33,6 +33,7 @@ import {
 import {
   CardGridSkeleton,
   EmptyState,
+  UnifiedButton,
   RouteErrorBoundary,
 } from "~/components/ui";
 import { formatCurrency } from "~/lib/utils";
@@ -40,6 +41,7 @@ import { InstantSearch } from "~/components/search/InstantSearch";
 import { LocationAutocomplete } from "~/components/search/LocationAutocomplete";
 import { useTranslation } from "react-i18next";
 import { AppNav } from "~/components/layout/AppNav";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => [
   { title: "GharBatai Rentals - Rent Anything, Anywhere" },
@@ -58,19 +60,33 @@ const safeText = (value: unknown, fallback = ""): string => {
   return text || fallback;
 };
 
+export function getHomeFeaturedListingsError(error: unknown): string {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading featured listings again.";
+  }
+
+  return getActionableErrorMessage(error, "Failed to load featured listings. Please try again.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading featured listings again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading featured listings timed out. Try again.",
+  });
+}
+
 export async function clientLoader() {
   const normalizeListings = (items: unknown): Listing[] =>
     Array.isArray(items) ? (items.filter(Boolean).slice(0, 8) as Listing[]) : [];
 
   try {
     const featuredListings = await listingsApi.getFeaturedListings();
-    return { featuredListings: normalizeListings(featuredListings) };
-  } catch {
+    return { featuredListings: normalizeListings(featuredListings), featuredListingsError: null };
+  } catch (featuredError) {
     try {
       const { listings } = await listingsApi.searchListings({ limit: 8 });
-      return { featuredListings: normalizeListings(listings) };
+      return { featuredListings: normalizeListings(listings), featuredListingsError: null };
     } catch {
-      return { featuredListings: [] };
+      return {
+        featuredListings: [],
+        featuredListingsError: getHomeFeaturedListingsError(featuredError),
+      };
     }
   }
 }
@@ -91,8 +107,9 @@ const CATEGORY_KEYS = [
 
 export default function Home() {
   const { user } = useAuthStore();
-  const { featuredListings } = useLoaderData<typeof clientLoader>();
+  const { featuredListings, featuredListingsError } = useLoaderData<typeof clientLoader>();
   const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const { t } = useTranslation();
   const [location, setLocation] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
@@ -402,9 +419,20 @@ export default function Home() {
           {navigation.state === "loading" && (
             <CardGridSkeleton count={8} />
           )}
+
+          {navigation.state !== "loading" && featuredListingsError && (
+            <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <span>{featuredListingsError}</span>
+                <UnifiedButton variant="outline" onClick={() => revalidator.revalidate()}>
+                  {t("errors.tryAgain", "Try Again")}
+                </UnifiedButton>
+              </div>
+            </div>
+          )}
           
           {/* Empty state */}
-          {navigation.state !== "loading" && featuredListings.length === 0 && (
+          {navigation.state !== "loading" && !featuredListingsError && featuredListings.length === 0 && (
             <EmptyState
               icon="🏠"
               title={t("home.noListingsYet")}

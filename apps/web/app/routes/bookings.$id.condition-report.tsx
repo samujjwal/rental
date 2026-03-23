@@ -1,5 +1,5 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, useActionData, useNavigation, Form, Link, redirect } from "react-router";
+import { useLoaderData, useActionData, useNavigation, Form, Link, redirect, useRevalidator } from "react-router";
 import {
   ArrowLeft,
   Camera,
@@ -15,7 +15,8 @@ import { bookingsApi } from "~/lib/api/bookings";
 import { getUser } from "~/utils/auth";
 import { format } from "date-fns";
 import type { Booking, ConditionReport } from "~/types/booking";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export { RouteErrorBoundary as ErrorBoundary };
 
@@ -31,6 +32,73 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const CUID_PATTERN = /^c[a-z0-9]{20,}$/i;
 const isValidId = (v: string | undefined): v is string =>
   Boolean(v && (UUID_PATTERN.test(v) || CUID_PATTERN.test(v)));
+
+export function getConditionReportLoadError(error: unknown): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, "Unable to load the condition reports right now.", {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Loading the condition reports timed out. Try again.",
+    })
+  );
+}
+
+export function getConditionReportUpdateError(
+  error: unknown,
+  fallbackMessage = "Failed to update report"
+): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  const directMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+      ? String((error as { message: string }).message).trim()
+      : "";
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try updating the report again.";
+  }
+
+  const actionableMessage = getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try updating the report again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Updating the report timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not update the report right now. Try again in a moment.",
+    [ApiErrorType.CONFLICT]: "This report was updated elsewhere. Refresh and try again.",
+  });
+
+  const genericMessages = new Set([
+    "conflict",
+    "network error",
+    "timeout",
+    fallbackMessage.toLowerCase(),
+  ]);
+
+  if (directMessage && !genericMessages.has(directMessage.toLowerCase())) {
+    return directMessage;
+  }
+
+  return actionableMessage;
+}
 
 // ---------- loader ----------
 
@@ -56,7 +124,12 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     return { booking, reports, userId: user.id };
   } catch (error) {
     if (error instanceof Response) throw error;
-    throw redirect("/bookings");
+    return {
+      booking: null,
+      reports: [],
+      userId: user.id,
+      error: getConditionReportLoadError(error),
+    };
   }
 }
 
@@ -100,8 +173,7 @@ export async function clientAction({ params, request }: ActionFunctionArgs) {
     await bookingsApi.updateConditionReport(bookingId, reportId, dto);
     return { success: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update report";
-    return { error: message };
+    return { error: getConditionReportUpdateError(err) };
   }
 }
 
@@ -286,10 +358,11 @@ function ReportCard({
             </div>
 
             <div className="flex justify-end">
-              <button
+              <UnifiedButton
                 type="submit"
                 disabled={isSubmitting}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                loading={isSubmitting}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold"
               >
                 {isSubmitting ? (
                   <>
@@ -302,7 +375,7 @@ function ReportCard({
                     Save Report
                   </>
                 )}
-              </button>
+              </UnifiedButton>
             </div>
           </Form>
         </div>
@@ -314,12 +387,38 @@ function ReportCard({
 // ---------- page ----------
 
 export default function ConditionReportPage() {
-  const { booking, reports, userId } = useLoaderData<typeof clientLoader>();
+  const { booking, reports, userId, error } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>() as
     | { success?: boolean; error?: string }
     | null;
   const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const isSubmitting = navigation.state === "submitting";
+
+  if (!booking) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+            <FileText className="w-10 h-10 text-gray-300 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900">Condition reports unavailable</h1>
+            <p className="mt-3 text-sm text-gray-500">{error || "Unable to load the condition reports right now."}</p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <UnifiedButton type="button" onClick={() => revalidator.revalidate()}>
+                Try Again
+              </UnifiedButton>
+              <Link
+                to="/bookings"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Back to Bookings
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isRenter = booking.renterId === userId;
   const isOwner = booking.ownerId === userId;

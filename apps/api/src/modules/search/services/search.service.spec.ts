@@ -2,14 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
-import { EmbeddingService } from '../../ai/services/embedding.service';
+import { SEMANTIC_RANKING_PORT } from '../ports/semantic-ranking.port';
 
 describe('SearchService', () => {
   let service: SearchService;
 
-  const mockEmbeddingService = {
-    generateEmbedding: jest.fn().mockResolvedValue([0.1, 0.2, 0.3]),
-    searchSimilar: jest.fn().mockResolvedValue([]),
+  const mockSemanticRanking = {
+    rankListings: jest.fn().mockImplementation(async (params: any) => params.candidates ?? []),
   };
 
   const mockPrismaService = {
@@ -33,7 +32,7 @@ describe('SearchService', () => {
         SearchService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: CacheService, useValue: mockCacheService },
-        { provide: EmbeddingService, useValue: mockEmbeddingService },
+        { provide: SEMANTIC_RANKING_PORT, useValue: mockSemanticRanking },
       ],
     }).compile();
 

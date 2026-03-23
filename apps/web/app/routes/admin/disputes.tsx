@@ -1,8 +1,8 @@
 
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, Link, Form, useNavigation, useActionData } from "react-router";
+import { useLoaderData, Link, Form, useNavigation, useActionData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   AlertTriangle,
   XCircle,
@@ -15,26 +15,27 @@ import {
 } from "lucide-react";
 import { adminApi, type AdminDispute } from "~/lib/api/admin";
 import { disputesApi, type DisputeDetail } from "~/lib/api/disputes";
-import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
+import { Dialog, DialogFooter, UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
 import { formatCurrency, formatDate } from "~/lib/utils";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === "string") {
-    return error.message;
-  }
+export function getAdminDisputesError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
 
-  if (typeof error === "object" && error !== null) {
-    const record = error as Record<string, unknown>;
-    const response = record.response as Record<string, unknown> | undefined;
-    const data = response?.data as Record<string, unknown> | undefined;
-    const message = data?.message;
-    if (typeof message === "string" && message.trim().length > 0) {
-      return message;
-    }
-  }
-
-  return "Unknown error";
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Dispute request timed out. Try again.",
+    })
+  );
 }
 
 export const meta: MetaFunction = () => {
@@ -80,7 +81,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     return {
       disputes: [],
       pagination: null,
-      error: getErrorMessage(error) || "Failed to load disputes",
+      error: getAdminDisputesError(error, "Failed to load disputes"),
     };
   }
 }
@@ -113,7 +114,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       await adminApi.updateDisputeStatus(disputeId, status);
       return { success: true, message: "Dispute updated successfully" };
     } catch (error: unknown) {
-      return { success: false, error: getErrorMessage(error) || "Failed to update dispute" };
+      return { success: false, error: getAdminDisputesError(error, "Failed to update dispute") };
     }
   }
 
@@ -125,7 +126,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       await adminApi.assignDispute(disputeId);
       return { success: true, message: "Dispute assigned for review" };
     } catch (error: unknown) {
-      return { success: false, error: getErrorMessage(error) || "Failed to assign dispute" };
+      return { success: false, error: getAdminDisputesError(error, "Failed to assign dispute") };
     }
   }
 
@@ -141,7 +142,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       await adminApi.updateDispute(disputeId, { adminNotes: adminNote });
       return { success: true, message: "Admin note added" };
     } catch (error: unknown) {
-      return { success: false, error: getErrorMessage(error) || "Failed to add admin note" };
+      return { success: false, error: getAdminDisputesError(error, "Failed to add admin note") };
     }
   }
 
@@ -157,7 +158,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       await disputesApi.respondToDispute(disputeId, message);
       return { success: true, message: "Message sent to dispute thread" };
     } catch (error: unknown) {
-      return { success: false, error: getErrorMessage(error) || "Failed to send message" };
+      return { success: false, error: getAdminDisputesError(error, "Failed to send message") };
     }
   }
 
@@ -185,7 +186,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
       });
       return { success: true, message: "Dispute resolved successfully" };
     } catch (error: unknown) {
-      return { success: false, error: getErrorMessage(error) || "Failed to resolve dispute" };
+      return { success: false, error: getAdminDisputesError(error, "Failed to resolve dispute") };
     }
   }
 
@@ -213,10 +214,11 @@ export default function AdminDisputesPage() {
   const [selectedDisputeDetail, setSelectedDisputeDetail] = useState<DisputeDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const revalidator = useRevalidator();
 
   const isSubmitting = navigation.state === "submitting";
 
-  const openDisputeDetails = async (dispute: AdminDispute) => {
+  const openDisputeDetails = useCallback(async (dispute: AdminDispute) => {
     setSelectedDispute(dispute);
     setSelectedDisputeDetail(null);
     setDetailError(null);
@@ -225,11 +227,11 @@ export default function AdminDisputesPage() {
       const detail = await disputesApi.getDisputeById(dispute.id);
       setSelectedDisputeDetail(detail);
     } catch (detailLoadError: unknown) {
-      setDetailError(getErrorMessage(detailLoadError));
+      setDetailError(getAdminDisputesError(detailLoadError, "Failed to load dispute details"));
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, []);
 
   const closeDisputeDetails = () => {
     setSelectedDispute(null);
@@ -295,18 +297,6 @@ export default function AdminDisputesPage() {
   };
 
 
-  if (error && disputes.length === 0) {
-    return (
-      <div className="min-h-screen bg-background p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -324,6 +314,17 @@ export default function AdminDisputesPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {error ? (
+          <div className="mb-6 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-destructive">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <span>{error}</span>
+              <UnifiedButton variant="outline" size="sm" onClick={() => revalidator.revalidate()}>
+                {t("errors.tryAgain", "Try Again")}
+              </UnifiedButton>
+            </div>
+          </div>
+        ) : null}
+
         {/* Success/Error Messages */}
         {actionData?.success && (
           <div
@@ -494,51 +495,39 @@ export default function AdminDisputesPage() {
       </div>
 
       {/* Dispute Detail Modal */}
-      {selectedDispute && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          data-testid="dispute-details-overlay"
-        >
-          <div
-            className="bg-card border rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
-            data-testid="dispute-details"
-          >
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-card border-b p-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                  Dispute #{shortId(selectedDispute.id)}
-                </h2>
-                <div className="flex items-center gap-2 mt-1">
-                  {selectedDispute.priority ? (
-                    <span
-                      className={`px-2 py-0.5 text-xs font-medium rounded ${getPriorityColor(
-                        selectedDispute.priority as DisputePriority
-                      )}`}
-                    >
-                      {selectedDispute.priority}
-                    </span>
-                  ) : null}
-                  <span
-                    className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(
-                      selectedDispute.status as DisputeStatus
-                    )}`}
-                  >
-                    {humanize(selectedDispute.status)}
-                  </span>
-                </div>
-              </div>
-              <button
-                data-testid="close-dispute-details"
-                onClick={closeDisputeDetails}
-                className="p-2 hover:bg-muted rounded-lg"
+      <Dialog
+        open={!!selectedDispute}
+        onClose={() => {
+          if (!isSubmitting) {
+            closeDisputeDetails();
+          }
+        }}
+        title={selectedDispute ? `Dispute #${shortId(selectedDispute.id)}` : "Dispute details"}
+        description={selectedDispute ? `${getTypeIcon(selectedDispute.type)} ${humanize(selectedDispute.type)}` : undefined}
+        size="xl"
+      >
+        {selectedDispute ? (
+          <div data-testid="dispute-details" className="space-y-6">
+            <div className="flex items-center gap-2">
+              {selectedDispute.priority ? (
+                <span
+                  className={`px-2 py-0.5 text-xs font-medium rounded ${getPriorityColor(
+                    selectedDispute.priority as DisputePriority
+                  )}`}
+                >
+                  {selectedDispute.priority}
+                </span>
+              ) : null}
+              <span
+                className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(
+                  selectedDispute.status as DisputeStatus
+                )}`}
               >
-                <XCircle className="w-5 h-5" />
-              </button>
+                {humanize(selectedDispute.status)}
+              </span>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-6 space-y-6">
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
               {detailLoading && (
                 <div className="p-3 bg-muted/40 rounded-lg text-sm text-muted-foreground flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -547,7 +536,17 @@ export default function AdminDisputesPage() {
               )}
               {detailError && (
                 <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
-                  {detailError}
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <span>{detailError}</span>
+                    <UnifiedButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void openDisputeDetails(selectedDispute)}
+                      disabled={detailLoading}
+                    >
+                      {t("errors.tryAgain", "Try Again")}
+                    </UnifiedButton>
+                  </div>
                 </div>
               )}
 
@@ -642,6 +641,11 @@ export default function AdminDisputesPage() {
                     <UnifiedButton
                       type="submit"
                       variant="outline"
+                      loading={
+                        isSubmitting &&
+                        navigation.formData?.get("intent") === "assign-to-me" &&
+                        navigation.formData?.get("disputeId") === selectedDispute.id
+                      }
                       disabled={isSubmitting}
                       data-testid="assign-dispute-button"
                     >
@@ -673,6 +677,11 @@ export default function AdminDisputesPage() {
                   <UnifiedButton
                     type="submit"
                     variant="outline"
+                    loading={
+                      isSubmitting &&
+                      navigation.formData?.get("intent") === "add-note" &&
+                      navigation.formData?.get("disputeId") === selectedDispute.id
+                    }
                     disabled={isSubmitting}
                     data-testid="add-note-button"
                   >
@@ -695,6 +704,11 @@ export default function AdminDisputesPage() {
                   <UnifiedButton
                     type="submit"
                     variant="outline"
+                    loading={
+                      isSubmitting &&
+                      navigation.formData?.get("intent") === "send-message" &&
+                      navigation.formData?.get("disputeId") === selectedDispute.id
+                    }
                     disabled={isSubmitting}
                     data-testid="send-dispute-message-button"
                   >
@@ -728,11 +742,18 @@ export default function AdminDisputesPage() {
                   </label>
                   <UnifiedButton
                     type="submit"
+                    loading={
+                      isSubmitting &&
+                      navigation.formData?.get("intent") === "resolve-dispute" &&
+                      navigation.formData?.get("disputeId") === selectedDispute.id
+                    }
                     disabled={isSubmitting}
                     className="bg-destructive hover:bg-destructive/90"
                     data-testid="resolve-dispute-button"
                   >
-                    {isSubmitting ? (
+                    {isSubmitting &&
+                    navigation.formData?.get("intent") === "resolve-dispute" &&
+                    navigation.formData?.get("disputeId") === selectedDispute.id ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         {t("admin.updating")}
@@ -747,9 +768,21 @@ export default function AdminDisputesPage() {
                 </Form>
               </div>
             </div>
+            <DialogFooter>
+              <UnifiedButton
+                type="button"
+                variant="outline"
+                onClick={closeDisputeDetails}
+                disabled={isSubmitting}
+                data-testid="close-dispute-details"
+              >
+                <XCircle className="w-4 h-4" />
+                {t("common.close", "Close")}
+              </UnifiedButton>
+            </DialogFooter>
           </div>
-        </div>
-      )}
+        ) : null}
+      </Dialog>
     </div>
   );
 }

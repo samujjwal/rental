@@ -203,8 +203,12 @@ export class PrismaWrapper {
     return this.prisma.bookingPriceBreakdown;
   }
 
-  get taxRule() {
-    return this.prisma.taxRule;
+  get taxForm() {
+    return this.prisma.taxForm;
+  }
+
+  get taxCalculation() {
+    return this.prisma.taxCalculation;
   }
 
   // Phase 3: Policy engine model accessors
@@ -233,9 +237,7 @@ export class PrismaWrapper {
     return this.prisma.pricingRule;
   }
 
-  get trustScore() {
-    return this.prisma.trustScore;
-  }
+  // trustScore model was removed in migration 20260322155535_drop_deprecated_trust_score_tax_rule
 
   get complianceRecord() {
     return this.prisma.complianceRecord;

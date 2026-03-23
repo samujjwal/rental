@@ -24,7 +24,13 @@ import type {
 } from "~/lib/admin/entity-framework";
 import type { ColumnDef, SortingState, ColumnFiltersState } from "@tanstack/react-table";
 import { useAdminEntity } from "~/hooks/useAdminEntity";
-import { RouteErrorBoundary } from "~/components/ui";
+import {
+  Dialog,
+  DialogFooter,
+  RouteErrorBoundary,
+  UnifiedButton,
+} from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 type EntityRecord = Record<string, unknown> & { id?: unknown };
 
@@ -50,6 +56,29 @@ function getErrorMessage(error: unknown): string | null {
   }
 
   return null;
+}
+
+export function getAdminEntityActionError(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
+      "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "This admin action timed out. Try again.",
+      [ApiErrorType.CONFLICT]: "This record changed while you were working. Refresh and try again.",
+    })
+  );
 }
 
 function getRecordId(record: EntityRecord): string | null {
@@ -129,6 +158,8 @@ export default function ModernDynamicEntityPage() {
   const [view, setView] = useState<ViewMode>("table");
   const [selectedRecord, setSelectedRecord] = useState<EntityRecord | null>(null);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [pendingDeleteRecord, setPendingDeleteRecord] = useState<EntityRecord | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Sync server-side auth to client-side store
   useEffect(() => {
@@ -147,10 +178,13 @@ export default function ModernDynamicEntityPage() {
     setView("table");
     setSelectedRecord(null);
     setRowSelection({});
+    setPendingDeleteRecord(null);
+    setActionError(null);
   }, [entity]);
 
   // Handle create
   const handleCreate = () => {
+    setActionError(null);
     setSelectedRecord(null);
     setView("form");
   };
@@ -161,11 +195,14 @@ export default function ModernDynamicEntityPage() {
     const id = getRecordId(record);
     if (!id) return;
     try {
+      setActionError(null);
       const detail = await fetchDetail(id);
       setSelectedRecord((detail as EntityRecord | null) ?? record);
       setView("form");
-    } catch {
-      // ignored
+    } catch (error) {
+      setActionError(
+        getAdminEntityActionError(error, "Failed to load the latest record details")
+      );
     }
   };
 
@@ -173,6 +210,7 @@ export default function ModernDynamicEntityPage() {
   const handleView = useCallback(
     async (record: EntityRecord) => {
       if (!entityConfig) return;
+      setActionError(null);
       setSelectedRecord(record);
       setView("detail");
       try {
@@ -180,8 +218,10 @@ export default function ModernDynamicEntityPage() {
         if (!id) return;
         const detail = await fetchDetail(id);
         if (detail) setSelectedRecord(detail as EntityRecord);
-      } catch (err) {
-        console.warn("Failed to fetch full record details:", err);
+      } catch (error) {
+        setActionError(
+          getAdminEntityActionError(error, "Failed to load the latest record details")
+        );
       }
     },
     [entityConfig, fetchDetail]
@@ -191,18 +231,39 @@ export default function ModernDynamicEntityPage() {
   const handleDelete = useCallback(
     async (record: EntityRecord) => {
       if (!entityConfig) return;
-      if (!window.confirm(t("admin.deleteConfirm", { name: entityConfig.name }))) {
-        return;
-      }
-      const id = getRecordId(record);
-      if (!id) return;
+      setActionError(null);
+      setPendingDeleteRecord(record);
+    },
+    [entityConfig]
+  );
+
+  const closeDeleteDialog = useCallback(() => {
+    if (isDeleting) return;
+    setPendingDeleteRecord(null);
+  }, [isDeleting]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!entityConfig || !pendingDeleteRecord || isDeleting) return;
+
+    const id = getRecordId(pendingDeleteRecord);
+    if (!id) {
+      setPendingDeleteRecord(null);
+      return;
+    }
+
+    try {
+      setActionError(null);
       await deleteEntity(id);
       refresh();
       setView("table");
       setSelectedRecord(null);
-    },
-    [entityConfig, deleteEntity, refresh]
-  );
+      setPendingDeleteRecord(null);
+    } catch (error) {
+      setActionError(
+        getAdminEntityActionError(error, "Failed to delete this record")
+      );
+    }
+  }, [entityConfig, pendingDeleteRecord, isDeleting, deleteEntity, refresh]);
 
   const bulkStatusOptions = useMemo(() => {
     const statusField = entityConfig?.fields.find(
@@ -222,9 +283,16 @@ export default function ModernDynamicEntityPage() {
         .map(getRecordId)
         .filter((id): id is string => Boolean(id));
       if (ids.length === 0) return;
-      await Promise.all(ids.map((id) => deleteEntity(id)));
-      refresh();
-      setRowSelection({});
+      try {
+        setActionError(null);
+        await Promise.all(ids.map((id) => deleteEntity(id)));
+        refresh();
+        setRowSelection({});
+      } catch (error) {
+        setActionError(
+          getAdminEntityActionError(error, "Failed to delete the selected records")
+        );
+      }
     },
     [entityConfig, deleteEntity, refresh]
   );
@@ -236,9 +304,16 @@ export default function ModernDynamicEntityPage() {
         .map(getRecordId)
         .filter((id): id is string => Boolean(id));
       if (ids.length === 0) return;
-      await Promise.all(ids.map((id) => update({ id, data: { status } })));
-      refresh();
-      setRowSelection({});
+      try {
+        setActionError(null);
+        await Promise.all(ids.map((id) => update({ id, data: { status } })));
+        refresh();
+        setRowSelection({});
+      } catch (error) {
+        setActionError(
+          getAdminEntityActionError(error, "Failed to update the selected records")
+        );
+      }
     },
     [entityConfig, refresh, update]
   );
@@ -248,21 +323,33 @@ export default function ModernDynamicEntityPage() {
     if (!entityConfig) return;
 
     const isCreate = !selectedRecord;
-    if (isCreate) {
-      await create(formData);
-    } else {
-      const id = getRecordId(selectedRecord);
-      if (!id) return;
-      await update({ id, data: formData });
-    }
+    try {
+      setActionError(null);
+      if (isCreate) {
+        await create(formData);
+      } else {
+        const id = getRecordId(selectedRecord);
+        if (!id) return;
+        await update({ id, data: formData });
+      }
 
-    refresh();
-    setView("table");
-    setSelectedRecord(null);
+      refresh();
+      setView("table");
+      setSelectedRecord(null);
+    } catch (error) {
+      setActionError(
+        getAdminEntityActionError(
+          error,
+          isCreate ? "Failed to create this record" : "Failed to save your changes"
+        )
+      );
+    }
   };
 
   // Handle cancel
   const handleCancel = () => {
+    setActionError(null);
+    setPendingDeleteRecord(null);
     setView("table");
     setSelectedRecord(null);
   };
@@ -318,7 +405,8 @@ export default function ModernDynamicEntityPage() {
     );
   };
 
-  const errorMessage = getErrorMessage(configError) ?? getErrorMessage(dataError);
+  const errorMessage =
+    actionError ?? getErrorMessage(configError) ?? getErrorMessage(dataError);
 
   const loading =
     isConfigLoading || isDataLoading || isCreating || isUpdating || isDeleting;
@@ -492,6 +580,40 @@ export default function ModernDynamicEntityPage() {
           enableAutoSave={false}
         />
       )}
+
+      <Dialog
+        open={!!pendingDeleteRecord}
+        onClose={closeDeleteDialog}
+        title={t("admin.delete", "Delete record")}
+        description={t("admin.deleteConfirm", {
+          name: entityConfig?.name || t("admin.entity", "entity"),
+        })}
+        size="sm"
+      >
+        <div className="text-sm text-muted-foreground">
+          {getRecordId(pendingDeleteRecord || {})
+            ? t("admin.deleteRecordSummary", {
+                defaultValue: "Record ID: {{id}}",
+                id: getRecordId(pendingDeleteRecord || {}),
+              })
+            : ""}
+        </div>
+        <DialogFooter>
+          <UnifiedButton variant="outline" onClick={closeDeleteDialog} disabled={isDeleting}>
+            {t("admin.cancel", "Cancel")}
+          </UnifiedButton>
+          <UnifiedButton
+            variant="destructive"
+            onClick={() => {
+              void confirmDelete();
+            }}
+            loading={isDeleting}
+            disabled={!pendingDeleteRecord}
+          >
+            {t("admin.delete", "Delete")}
+          </UnifiedButton>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }

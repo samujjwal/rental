@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { PaymentOrchestrationService } from './payment-orchestration.service';
+import { PaymentOrchestrationService } from '../sub-modules/marketplace-operations.index';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
@@ -18,6 +18,7 @@ export class DisputeResolutionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(forwardRef(() => PaymentOrchestrationService))
     private readonly paymentService: PaymentOrchestrationService,
   ) {}
 

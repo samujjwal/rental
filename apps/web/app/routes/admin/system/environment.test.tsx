@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AxiosError } from "axios";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
 const m = vi.hoisted(() => ({
@@ -33,7 +34,7 @@ vi.mock("lucide-react", () => ({
   Lock: IconStub, Eye: IconStub, EyeOff: IconStub, Info: IconStub,
 }));
 
-import { clientLoader } from "./environment";
+import { clientLoader, getEnvironmentLoadError } from "./environment";
 
 describe("admin/system/environment", () => {
   beforeEach(() => {
@@ -56,5 +57,21 @@ describe("admin/system/environment", () => {
     expect(res.variables).toEqual([]);
     expect(res.environment).toBe("unknown");
     expect(res.error).toBe("denied");
+  });
+
+  it("returns actionable offline loader copy", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    m.getEnvironmentVariables.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    const res = await clientLoader({ request: new Request("http://l/") } as any);
+    expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+  });
+});
+
+describe("admin/system/environment loader helper", () => {
+  it("keeps plain thrown errors when provided", () => {
+    expect(getEnvironmentLoadError(new Error("denied"))).toBe("denied");
   });
 });

@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -37,6 +38,7 @@ const mocks: Record<string, any> = {
   }),
   useLoaderData: vi.fn(),
   useActionData: vi.fn(),
+  useNavigation: vi.fn(() => ({ state: "idle" })),
 };
 
 vi.mock("react-router", () => ({
@@ -49,6 +51,8 @@ vi.mock("react-router", () => ({
   redirect: (...a: any[]) => mocks.redirect(...a),
   useLoaderData: () => mocks.useLoaderData(),
   useActionData: () => mocks.useActionData(),
+  useNavigation: () => mocks.useNavigation(),
+  useRevalidator: () => ({ revalidate: vi.fn() }),
 }));
 vi.mock("~/utils/auth", () => ({
   getUser: (...a: any[]) => mocks.getUser(...a),
@@ -72,8 +76,8 @@ vi.mock("~/lib/api/upload", () => ({
   },
 }));
 vi.mock("~/components/ui", () => ({
-  UnifiedButton: ({ children, ...p }: any) => (
-    <button {...p}>{children}</button>
+  UnifiedButton: ({ children, loading, leftIcon, asChild: _asChild, ...p }: any) => (
+    <button {...p}>{loading ? <span data-testid="loading-spinner" /> : leftIcon}{children}</button>
   ),
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
   Card: ({ children }: any) => <div>{children}</div>,
@@ -103,7 +107,12 @@ function makeFormReq(fields: Record<string, string>) {
 /* ------------------------------------------------------------------ */
 /*  Import route under test (after mocks)                              */
 /* ------------------------------------------------------------------ */
-import { clientLoader, clientAction } from "./settings.profile";
+import {
+  clientLoader,
+  clientAction,
+  getProfileSettingsLoadError,
+  getProfilePhotoUploadError,
+} from "./settings.profile";
 import ProfileSettings from "./settings.profile";
 
 const authUser = { id: "u1", email: "u@test.com", role: "renter" };
@@ -123,6 +132,10 @@ const stats = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
 });
 
 /* ================================================================== */
@@ -155,6 +168,7 @@ describe("clientLoader", () => {
         totalListings: 2,
         averageRating: 4.5,
       },
+      error: null,
     });
   });
 
@@ -172,7 +186,7 @@ describe("clientLoader", () => {
     expect((result as any).user.averageRating).toBeNull();
   });
 
-  it("redirects to /auth/login on API error", async () => {
+  it("returns actionable fallback loader state on API error", async () => {
     mocks.getUser.mockResolvedValue(authUser);
     mocks.getCurrentUser.mockRejectedValue(new Error("fail"));
 
@@ -180,8 +194,29 @@ describe("clientLoader", () => {
       request: new Request("http://localhost/settings/profile"),
       params: {},
     } as any);
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).headers.get("Location")).toBe("/auth/login");
+    expect(result).toEqual({
+      user: null,
+      error: "fail",
+    });
+  });
+});
+
+describe("getProfileSettingsLoadError", () => {
+  it("maps offline loader failures to actionable copy", () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    expect(getProfileSettingsLoadError(new AxiosError("Network Error", "ERR_NETWORK"))).toBe(
+      "You appear to be offline. Reconnect and try loading your profile again."
+    );
+  });
+
+  it("maps timeout loader failures to actionable copy", () => {
+    expect(getProfileSettingsLoadError(new AxiosError("timeout", "ECONNABORTED"))).toBe(
+      "Loading your profile settings timed out. Try again."
+    );
   });
 });
 
@@ -337,6 +372,21 @@ describe("clientAction — change-password", () => {
     } as any);
     expect((result as any).error).toBe("Wrong current password");
   });
+
+  it("uses timeout-specific copy for password changes", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.changePassword.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    const result = await clientAction({
+      request: makeFormReq({
+        intent: "change-password",
+        currentPassword: "oldpass123",
+        newPassword: "newpass123",
+        confirmPassword: "newpass123",
+      }),
+      params: {},
+    } as any);
+    expect((result as any).error).toBe("Updating your password timed out. Try again.");
+  });
 });
 
 /* ================================================================== */
@@ -381,6 +431,28 @@ describe("clientAction — delete-account", () => {
     } as any);
     expect((result as any).success).toBe(false);
     expect((result as any).error).toMatch(/failed to delete/i);
+  });
+
+  it("uses conflict-specific copy for delete-account transport failures", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.deleteAccount.mockRejectedValue(
+      new AxiosError("Conflict", undefined, undefined, undefined, {
+        status: 409,
+        statusText: "Conflict",
+        headers: {},
+        config: { headers: {} } as any,
+        data: {},
+      } as any)
+    );
+    const result = await clientAction({
+      request: makeFormReq({
+        intent: "delete-account",
+        deleteConfirmation: "DELETE",
+      }),
+      params: {},
+    } as any);
+    expect((result as any).success).toBe(false);
+    expect((result as any).error).toBe("Account state changed while you were working. Refresh and try again.");
   });
 });
 
@@ -454,6 +526,59 @@ describe("clientAction — update-profile", () => {
     } as any);
     expect((result as any).error).toBe("Email already taken");
   });
+
+  it("uses timeout-specific copy for profile updates", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.updateCurrentUser.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    const result = await clientAction({
+      request: makeFormReq({
+        intent: "update-profile",
+        firstName: "John",
+        email: "john@example.com",
+      }),
+      params: {},
+    } as any);
+    expect((result as any).error).toBe("Saving your profile timed out. Try again.");
+  });
+});
+
+describe("getProfilePhotoUploadError", () => {
+  it("preserves backend response messages", () => {
+    expect(
+      getProfilePhotoUploadError({
+        response: { data: { message: "Image quota exceeded" } },
+      })
+    ).toBe("Image quota exceeded");
+  });
+
+  it("preserves specific direct error messages", () => {
+    expect(getProfilePhotoUploadError(new Error("Corrupted image metadata"))).toBe(
+      "Corrupted image metadata"
+    );
+  });
+
+  it("maps offline upload failures to actionable copy", () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    expect(
+      getProfilePhotoUploadError(new AxiosError("Network Error", "ERR_NETWORK"))
+    ).toBe("You appear to be offline. Reconnect and try uploading your photo again.");
+  });
+
+  it("maps timeout upload failures to actionable copy", () => {
+    expect(
+      getProfilePhotoUploadError(new AxiosError("timeout", "ECONNABORTED"))
+    ).toBe("Uploading the photo timed out. Try again.");
+  });
+
+  it("maps network upload failures to actionable copy", () => {
+    expect(
+      getProfilePhotoUploadError(new AxiosError("Network Error", "ERR_NETWORK"))
+    ).toBe("We could not upload the photo right now. Try again in a moment.");
+  });
 });
 
 /* ================================================================== */
@@ -461,9 +586,25 @@ describe("clientAction — update-profile", () => {
 /* ================================================================== */
 describe("ProfileSettings component", () => {
   it("renders profile settings page", () => {
-    mocks.useLoaderData.mockReturnValue({ user: fullUser });
+    mocks.useLoaderData.mockReturnValue({ user: fullUser, error: null });
     mocks.useActionData.mockReturnValue(null);
     render(<ProfileSettings />);
     expect(screen.getByText("Profile Settings")).toBeTruthy();
+  });
+
+  it("renders retryable fallback UI when loader data has no user", () => {
+    mocks.useLoaderData.mockReturnValue({
+      user: null,
+      error: "Loading your profile settings timed out. Try again.",
+    });
+    mocks.useActionData.mockReturnValue(null);
+
+    render(<ProfileSettings />);
+
+    expect(screen.getByText("Profile settings unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("Loading your profile settings timed out. Try again.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try Again" })).toBeInTheDocument();
   });
 });

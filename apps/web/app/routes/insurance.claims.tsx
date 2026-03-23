@@ -2,10 +2,11 @@ import { Link, useNavigate } from "react-router";
 import type { MetaFunction } from "react-router";
 import { useState, useEffect } from "react";
 import { Shield, AlertCircle, Clock, CheckCircle, X, ChevronRight, FileText, Plus } from "lucide-react";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
 import { useAuthStore } from "~/lib/store/auth";
 import { insuranceApi, type InsuranceClaim, type ClaimStatus } from "~/lib/api/insurance";
 import { formatCurrency } from "~/lib/utils";
+import { getActionableErrorMessage, ApiErrorType } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => [
   { title: "My Claims | GharBatai Rentals" },
@@ -47,6 +48,7 @@ export default function InsuranceClaimsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("ALL");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -59,10 +61,21 @@ export default function InsuranceClaimsPage() {
     insuranceApi
       .getMyClaims({ limit: 50 })
       .then((res) => { if (!cancelled) setClaims(res.data ?? []); })
-      .catch(() => { if (!cancelled) setError("Failed to load claims. Please try again."); })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(
+            getActionableErrorMessage(err, "Failed to load claims. Please try again.", {
+              [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+              [ApiErrorType.TIMEOUT_ERROR]: "Loading claims timed out. Try again.",
+            })
+          );
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, reloadKey]);
+
+  const retryLoad = () => setReloadKey((prev) => prev + 1);
 
   const filteredClaims = filterStatus === "ALL"
     ? claims
@@ -147,12 +160,9 @@ export default function InsuranceClaimsPage() {
           <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
             <p className="text-sm font-medium text-red-700">{error}</p>
-            <button
-              className="mt-3 text-sm text-red-600 underline underline-offset-2 hover:text-red-800"
-              onClick={() => window.location.reload()}
-            >
+            <UnifiedButton className="mt-4" variant="outline" onClick={retryLoad}>
               Retry
-            </button>
+            </UnifiedButton>
           </div>
         )}
 
@@ -164,13 +174,14 @@ export default function InsuranceClaimsPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               Claims can be filed through your active insurance policies when an incident occurs.
             </p>
-            <Link
-              to="/insurance"
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              <Shield className="w-4 h-4" />
-              View My Policies
-            </Link>
+            <div className="mt-4">
+              <Link to="/insurance">
+                <UnifiedButton>
+                  <Shield className="w-4 h-4" />
+                  View My Policies
+                </UnifiedButton>
+              </Link>
+            </div>
           </div>
         )}
 
@@ -178,12 +189,11 @@ export default function InsuranceClaimsPage() {
         {!loading && !error && claims.length > 0 && filteredClaims.length === 0 && (
           <div className="rounded-xl border border-dashed bg-card p-8 text-center text-muted-foreground">
             <p className="text-sm">No claims with status "{filterOptions.find(o => o.value === filterStatus)?.label}".</p>
-            <button
-              className="mt-2 text-sm text-primary hover:underline"
-              onClick={() => setFilterStatus("ALL")}
-            >
-              Show all claims
-            </button>
+            <div className="mt-3">
+              <UnifiedButton variant="ghost" onClick={() => setFilterStatus("ALL")}>
+                Show all claims
+              </UnifiedButton>
+            </div>
           </div>
         )}
 

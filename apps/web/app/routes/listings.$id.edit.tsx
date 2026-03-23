@@ -3,7 +3,7 @@ import type {
   LoaderFunctionArgs,
   ActionFunctionArgs,
 } from "react-router";
-import { Form, useNavigate, useLoaderData, useActionData } from "react-router";
+import { Form, useNavigate, useLoaderData, useActionData, useRevalidator } from "react-router";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,11 +31,15 @@ import { toast } from "~/lib/toast";
 import type { Listing, UpdateListingRequest } from "~/types/listing";
 import { normalizeCondition } from "@rental-portal/shared-types";
 import { getUser } from "~/utils/auth";
-import { RouteErrorBoundary, Dialog, DialogFooter } from "~/components/ui";
+import { RouteErrorBoundary, Dialog, DialogFooter, UnifiedButton } from "~/components/ui";
 import { useTranslation } from "react-i18next";
 import { VoiceListingAssistant } from "~/components/listings/VoiceListingAssistant";
 import { CategorySpecificFields } from "~/components/listings/CategorySpecificFields";
-import { getCategoryFields } from "~/lib/category-fields";
+import type { CategoryFieldDefinition as CategoryField } from "~/lib/api/listings";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
+import { getListingCategoryLoadError } from "~/lib/listing-category-load-error";
+import { getListingDescriptionGenerationError } from "~/lib/listing-description-error";
+import { getListingImageUploadError } from "~/lib/listing-image-upload-error";
 const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024;
 
 export const meta: MetaFunction = () => {
@@ -46,6 +50,38 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{5,127}$/;
 const isValidListingId = (value: string | undefined): value is string =>
   Boolean(value && (UUID_PATTERN.test(value) || SAFE_ID_PATTERN.test(value)));
+
+export function getEditListingError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    error && typeof error === "object" && "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Listing request timed out. Try again.",
+    })
+  );
+}
+
+export function getEditListingLoadError(error: unknown): string {
+  const responseMessage =
+    error && typeof error === "object" && "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  return getActionableErrorMessage(error, "Unable to load this listing for editing right now.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading the listing again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading the listing timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not load this listing right now. Try again in a moment.",
+  });
+}
 
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -63,9 +99,9 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     if (user.role !== "admin" && listing.ownerId !== user.id) {
       return redirect(`/listings/${listingId}`);
     }
-    return { listing };
+    return { listing, error: null };
   } catch (error) {
-    throw redirect("/dashboard");
+    return { listing: null, error: getEditListingLoadError(error) };
   }
 }
 
@@ -114,11 +150,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
       return redirect("/dashboard");
     } catch (error: unknown) {
       return {
-        error:
-          error && typeof error === "object" && "response" in error
-            ? (error as { response?: { data?: { message?: string } } })
-                .response?.data?.message || "Failed to delete listing"
-            : "Failed to delete listing",
+        error: getEditListingError(error, "Failed to delete listing"),
       };
     }
   }
@@ -224,11 +256,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     return redirect(`/listings/${listingId}`);
   } catch (error: unknown) {
     return {
-      error:
-        error && typeof error === "object" && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message || "Failed to update listing"
-          : "Failed to update listing",
+      error: getEditListingError(error, "Failed to update listing"),
     };
   }
 }
@@ -256,9 +284,38 @@ const CANCELLATION_POLICIES = [
 ];
 
 export default function EditListing() {
-  const { listing } = useLoaderData<{ listing: Listing }>();
+  const { listing, error } = useLoaderData<{ listing: Listing | null; error?: string | null }>();
   const actionData = useActionData<{ error?: string }>();
   const navigate = useNavigate();
+  const { revalidate } = useRevalidator();
+
+  if (!listing) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+            <h1 className="text-2xl font-semibold text-foreground">Listing editor unavailable</h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {error || "Unable to load this listing for editing right now."}
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <UnifiedButton type="button" onClick={() => revalidate()}>
+                Try Again
+              </UnifiedButton>
+              <UnifiedButton
+                type="button"
+                variant="outline"
+                onClick={() => navigate("/dashboard")}
+              >
+                Back to Dashboard
+              </UnifiedButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const [currentStep, setCurrentStep] = useState(1);
   const [imageItems, setImageItems] = useState<Array<{ url: string; file?: File }>>(
     ((listing.photos && listing.photos.length > 0 ? listing.photos : listing.images) || []).map((url) => ({ url }))
@@ -315,6 +372,7 @@ export default function EditListing() {
   const [categorySpecificData, setCategorySpecificData] = useState<Record<string, unknown>>(
     listing.categorySpecificData || {}
   );
+  const [categoryFields, setCategoryFields] = useState<CategoryField[]>([]);
 
   // Resolve selected category slug for dynamic fields
   const selectedCategorySlug = useMemo(() => {
@@ -326,6 +384,17 @@ export default function EditListing() {
   const handleCategoryFieldChange = useCallback((key: string, value: unknown) => {
     setCategorySpecificData((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  // Load category-specific field definitions from the API whenever the category changes
+  useEffect(() => {
+    setCategoryFields([]);
+    if (!selectedCategorySlug) return;
+    let cancelled = false;
+    listingsApi.getCategoryFieldDefinitions(selectedCategorySlug)
+      .then((defs) => { if (!cancelled) setCategoryFields(defs as CategoryField[]); })
+      .catch(() => { /* non-critical */ });
+    return () => { cancelled = true; };
+  }, [selectedCategorySlug]);
 
   useEffect(() => {
     let mounted = true;
@@ -340,10 +409,10 @@ export default function EditListing() {
             slug: category.slug,
           }))
         );
-      } catch {
+      } catch (error) {
         if (!mounted) return;
         setCategories([]);
-        setCategoriesError("Unable to load categories. Please try again later.");
+        setCategoriesError(getListingCategoryLoadError(error));
       } finally {
         if (mounted) setLoadingCategories(false);
       }
@@ -427,7 +496,19 @@ export default function EditListing() {
         .map((item) => item.file) as File[];
 
       if (newFiles.length > 0) {
-        const uploaded = await uploadApi.uploadImages(newFiles);
+        let uploaded: Array<{ url?: string }> = [];
+        try {
+          uploaded = await uploadApi.uploadImages(newFiles);
+        } catch (error) {
+          toast.error(getListingImageUploadError(error));
+          return;
+        }
+
+        if (uploaded.length === 0) {
+          toast.error(getListingImageUploadError(null));
+          return;
+        }
+
         let uploadIndex = 0;
         finalImages = imageItems.map((item) => {
           if (item.file) {
@@ -473,7 +554,7 @@ export default function EditListing() {
       // Clean up the detached form node
       setTimeout(() => document.body.removeChild(form), 0);
     } catch (error) {
-      toast.error("Failed to update listing. Please try again.");
+      toast.error(getEditListingError(error, "Failed to update listing. Please try again."));
     }
   };
 
@@ -653,8 +734,8 @@ export default function EditListing() {
                         });
                         setValue("description", result.description, { shouldValidate: true });
                         toast.success("Description generated");
-                      } catch {
-                        toast.error("Failed to generate description. Please write one manually.");
+                      } catch (error) {
+                        toast.error(getListingDescriptionGenerationError(error));
                       } finally {
                         setIsGeneratingDescription(false);
                       }
@@ -727,7 +808,7 @@ export default function EditListing() {
 
               {/* Category-Specific Fields */}
               <CategorySpecificFields
-                categorySlug={selectedCategorySlug}
+                fields={categoryFields}
                 values={categorySpecificData}
                 onChange={handleCategoryFieldChange}
               />

@@ -109,9 +109,9 @@ describe('StorageController', () => {
     it('deletes file and returns status', async () => {
       mockDeleteFile.mockResolvedValue(undefined);
 
-      const result = await controller.deleteFile('uploads/old.jpg');
+      const result = await controller.deleteFile('users/user-123/old.jpg', 'user-123', 'RENTER');
 
-      expect(mockDeleteFile).toHaveBeenCalledWith('uploads/old.jpg');
+      expect(mockDeleteFile).toHaveBeenCalledWith('users/user-123/old.jpg');
       expect(result).toEqual({ status: 'deleted' });
     });
   });

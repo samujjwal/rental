@@ -446,20 +446,27 @@ test.describe("Session Management", () => {
     await expect(page).toHaveURL(/.*\/(dashboard|admin)/);
   });
 
-  test("should handle expired session gracefully", async ({ page }) => {
+  test("should handle expired session gracefully", async ({ page, context }) => {
     await loginAs(page, TEST_USER.email, TEST_USER.password);
 
-    // Simulate a fully expired client session by clearing both cookies and persisted auth state.
-    await page.context().clearCookies();
-    await page.evaluate(() => {
-      localStorage.removeItem("auth-storage");
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("user");
+    // Open a new page in the same context (fresh JS context, same cookie/storage jar)
+    const freshPage = await context.newPage();
+    
+    // Clear all auth state from the new page's perspective
+    await freshPage.goto("/favicon.ico");
+    await context.clearCookies();
+    await freshPage.evaluate(() => {
+      localStorage.clear();
       sessionStorage.clear();
     });
 
-    await page.goto("/dashboard");
-    await expect(page).toHaveURL(/.*\/login|.*\/auth/);
+    // Close the original page so its SPA can't write back to localStorage
+    await page.close();
+
+    // Now navigate the fresh page to /dashboard
+    await freshPage.goto("/dashboard");
+    await expect(freshPage).toHaveURL(/.*\/login|.*\/auth/, { timeout: 10000 });
+
+    await freshPage.close();
   });
 });

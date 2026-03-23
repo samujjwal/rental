@@ -1,13 +1,15 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Notification, NotificationType } from '@rental-portal/database';
-import * as nodemailer from 'nodemailer';
-import { Twilio } from 'twilio';
 import { formatCurrency } from '@rental-portal/shared-types';
 import { escapeHtml } from '@/common/utils/sanitize';
 import { PushNotificationService } from './push-notification.service';
+import { EmailService } from './resend.service';
+import { SmsService } from './twilio.service';
 
 type NotificationPayload = Record<string, any>;
 type NormalizedNotification = Omit<Notification, 'data'> & {
@@ -40,36 +42,15 @@ export interface NotificationPreferences {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private emailTransporter: nodemailer.Transporter;
-  private twilioClient: Twilio;
 
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
     private pushService: PushNotificationService,
-  ) {
-    // Initialize email transporter
-    this.emailTransporter = nodemailer.createTransport({
-      host: this.configService.get('SMTP_HOST'),
-      port: this.configService.get('SMTP_PORT'),
-      secure: this.configService.get('SMTP_SECURE') === 'true',
-      auth: {
-        user: this.configService.get('SMTP_USER'),
-        pass: this.configService.get('SMTP_PASSWORD'),
-      },
-    });
-
-    // Initialize Twilio client for SMS
-    const twilioAccountSid = this.configService.get('TWILIO_ACCOUNT_SID');
-    const twilioAuthToken = this.configService.get('TWILIO_AUTH_TOKEN');
-    try {
-      if (twilioAccountSid && twilioAuthToken) {
-        this.twilioClient = new Twilio(twilioAccountSid, twilioAuthToken);
-      }
-    } catch (error) {
-      this.logger.warn('Failed to initialize Twilio client: ' + error.message);
-    }
-  }
+    private readonly emailService: EmailService,
+    private readonly smsService: SmsService,
+    @InjectQueue('notifications') private readonly notificationsQueue: Queue,
+  ) {}
 
   private parseNotificationData(raw: unknown): NotificationPayload | null {
     if (!raw) {
@@ -121,7 +102,7 @@ export class NotificationsService {
     }
 
     // Parse preferences
-    const preferences: any = user.userPreferences?.preferences || {};
+    const preferences = this.parsePreferences(user.userPreferences?.preferences);
 
     // Create notification record
     const payload = { ...data, priority, scheduledFor };
@@ -136,8 +117,15 @@ export class NotificationsService {
     });
     const normalizedNotification = this.normalizeNotification(notification);
 
-    // If scheduled for later, we skip sending for now (MVP: scheduling not fully implemented)
+    // F-08: If scheduled for later, enqueue a delayed job instead of silently
+    // dropping the notification.  BullMQ will dispatch it at the right time.
     if (scheduledFor && scheduledFor > new Date()) {
+      const delayMs = scheduledFor.getTime() - Date.now();
+      await this.notificationsQueue.add(
+        'send-scheduled-notification',
+        { notificationId: notification.id, dto },
+        { delay: delayMs, attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+      );
       return normalizedNotification;
     }
 
@@ -204,6 +192,7 @@ export class NotificationsService {
         return preferences.reviewAlerts !== false;
 
       case NotificationType.MESSAGE_RECEIVED:
+      case NotificationType.NEW_MESSAGE:
         return preferences.messageAlerts !== false;
 
       default:
@@ -212,13 +201,12 @@ export class NotificationsService {
   }
 
   /**
-   * Send email notification
+   * Send email notification (F-33 fix: uses retry-capable EmailService).
    */
   private async sendEmailNotification(user: any, notification: NormalizedNotification): Promise<void> {
     const template = this.getEmailTemplate(notification);
 
-    await this.emailTransporter.sendMail({
-      from: this.configService.get('SMTP_FROM'),
+    await this.emailService.sendEmail({
       to: user.email,
       subject: template.subject,
       html: template.html,
@@ -228,23 +216,21 @@ export class NotificationsService {
   }
 
   /**
-   * Send SMS notification
+   * Send SMS notification (F-33 fix: uses retry-capable SmsService).
    */
   private async sendSMSNotification(user: any, notification: NormalizedNotification): Promise<void> {
-    if (!this.twilioClient) {
-      this.logger.warn('Twilio client not configured, skipping SMS');
-      return;
-    }
-
     const smsBody = `${notification.title}\n${notification.message}`;
 
-    await this.twilioClient.messages.create({
-      body: smsBody.substring(0, 160), // SMS limit
-      from: this.configService.get('TWILIO_PHONE_NUMBER'),
+    const result = await this.smsService.sendSms({
       to: user.phone,
+      body: smsBody.substring(0, 160),
     });
 
-    this.logger.log(`SMS sent to ${user.phone} for notification ${notification.id}`);
+    if (result.status !== 'sent' && result.status !== 'queued') {
+      this.logger.warn(`SMS delivery uncertain for user ${user.id}: status=${result.status}`);
+    }
+
+    this.logger.log(`SMS dispatched to ${user.phone} for notification ${notification.id}`);
   }
 
   /**
@@ -486,15 +472,51 @@ export class NotificationsService {
     };
   }
 
-  private parsePreferences(raw: string | null | undefined): Record<string, any> {
+  private parsePreferences(raw: string | null | undefined): NotificationPreferences {
+    const defaults: NotificationPreferences = {
+      email: true,
+      sms: false,
+      push: true,
+      inApp: true,
+      bookingUpdates: true,
+      paymentUpdates: true,
+      reviewAlerts: true,
+      messageAlerts: true,
+      marketingEmails: false,
+    };
+
     if (!raw) {
-      return {};
+      return defaults;
     }
 
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw) as Record<string, any>;
+
+      // F-11 fix: Handle nested format written by NotificationPreferencesService
+      // ({ notifications: { email: {...}, push: {...}, sms: {...} } }) alongside
+      // the flat format expected here.
+      if (parsed?.notifications) {
+        const n = parsed.notifications;
+        return {
+          ...defaults,
+          email: n.email?.bookingRequests !== false,
+          sms: n.sms?.bookingRequests === true,
+          push: n.push?.bookingRequests !== false,
+          bookingUpdates:
+            n.email?.bookingRequests !== false || n.push?.bookingRequests !== false,
+          paymentUpdates:
+            n.email?.paymentReceived !== false || n.push?.paymentReceived !== false,
+          reviewAlerts:
+            n.email?.reviews !== false || n.push?.reviews !== false,
+          messageAlerts:
+            n.email?.messages !== false || n.push?.messages !== false,
+          marketingEmails: n.email?.marketing === true,
+        };
+      }
+
+      return { ...defaults, ...parsed };
     } catch {
-      return {};
+      return defaults;
     }
   }
 }

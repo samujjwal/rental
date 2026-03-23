@@ -3,7 +3,7 @@
  * Stepped wizard form with smart validation and auto-save — pure Tailwind
  */
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Save,
   X,
@@ -107,6 +107,7 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isViewMode = mode === "view";
   const isSteppedLayout = layout === "steps" && steps && steps.length > 0;
@@ -137,6 +138,23 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
       });
     }
   }, [onSubmit]);
+
+  const runAutoSave = useCallback(async () => {
+    if (!onAutoSave) return;
+
+    const formData = form.getValues();
+    if (Object.keys(formData).length === 0) return;
+
+    setAutoSaving(true);
+    try {
+      await onAutoSave(formData);
+      setLastSaved(new Date());
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      setAutoSaving(false);
+    }
+  }, [form, onAutoSave]);
 
   const validateField = useCallback(
     (field: FieldConfig, value: unknown): string | null => {
@@ -177,25 +195,29 @@ export const EnhancedForm: React.FC<EnhancedFormProps> = ({
   const handleNext = useCallback(() => { if (validateStep()) setActiveStep((prev) => prev + 1); }, [validateStep]);
   const handleBack = useCallback(() => { setActiveStep((prev) => prev - 1); }, []);
 
-  // Auto-save
   useEffect(() => {
     if (!enableAutoSave || !onAutoSave || isViewMode) return;
-    const timer = setInterval(async () => {
-      const formData = form.getValues();
-      if (Object.keys(formData).length > 0) {
-        setAutoSaving(true);
-        try {
-          await onAutoSave(formData);
-          setLastSaved(new Date());
-        } catch (error) {
-          console.error("Auto-save failed:", error);
-        } finally {
-          setAutoSaving(false);
-        }
+
+    const clearPendingAutoSave = () => {
+      if (autoSaveTimeoutRef.current !== null) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
       }
-    }, autoSaveInterval);
-    return () => clearInterval(timer);
-  }, [enableAutoSave, onAutoSave, autoSaveInterval, form, isViewMode]);
+    };
+
+    const subscription = form.watch(() => {
+      clearPendingAutoSave();
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        autoSaveTimeoutRef.current = null;
+        void runAutoSave();
+      }, autoSaveInterval);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      clearPendingAutoSave();
+    };
+  }, [autoSaveInterval, enableAutoSave, form, isViewMode, onAutoSave, runAutoSave]);
 
   const renderField = useCallback(
     (field: FieldConfig) => {

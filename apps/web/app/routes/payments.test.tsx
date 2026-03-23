@@ -1,4 +1,7 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 
 /* ------------------------------------------------------------------ */
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon-stub" />);
@@ -16,15 +19,18 @@ const mocks: Record<string, any> = {
   getEarnings: vi.fn(),
   getEarningsSummary: vi.fn(),
   getTransactions: vi.fn(),
+  useLoaderData: vi.fn(() => ({})),
+  setSearchParams: vi.fn(),
+  revalidate: vi.fn(),
   redirect: vi.fn((url: string) => new Response(null, { status: 302, headers: { Location: url } })),
 };
 
 vi.mock("react-router", () => ({
   Link: ({ children, to, ...p }: any) => <a href={to} {...p}>{children}</a>,
   redirect: (...a: any[]) => mocks.redirect(...a),
-  useLoaderData: () => ({}),
-  useSearchParams: () => [new URLSearchParams(), vi.fn()],
-  useRevalidator: () => ({ revalidate: vi.fn() }),
+  useLoaderData: () => mocks.useLoaderData(),
+  useSearchParams: () => [new URLSearchParams("type=PAYOUT"), mocks.setSearchParams],
+  useRevalidator: () => ({ revalidate: mocks.revalidate }),
 }));
 vi.mock("~/utils/auth", () => ({ getUser: (...a: any[]) => mocks.getUser(...a) }));
 vi.mock("~/lib/api/payments", () => ({
@@ -36,9 +42,17 @@ vi.mock("~/lib/api/payments", () => ({
   },
 }));
 vi.mock("date-fns", () => ({ formatDistanceToNow: () => "2 days ago" }));
-vi.mock("~/lib/utils", () => ({ cn: (...a: string[]) => a.filter(Boolean).join(" ") }));
+vi.mock("~/lib/utils", () => ({
+  cn: (...a: string[]) => a.filter(Boolean).join(" "),
+  formatCurrency: (value: number) => `NPR ${value}`,
+}));
 vi.mock("~/components/ui", () => ({
-  UnifiedButton: ({ children, ...p }: any) => <button {...p}>{children}</button>,
+  UnifiedButton: ({ children, asChild, ...p }: any) => {
+    if (asChild) {
+      return children;
+    }
+    return <button {...p}>{children}</button>;
+  },
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 vi.mock("~/components/ui/skeleton", () => ({
@@ -46,12 +60,23 @@ vi.mock("~/components/ui/skeleton", () => ({
   TableSkeleton: () => <div />,
 }));
 vi.mock("~/utils/export", () => ({ exportToCsv: vi.fn() }));
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
 
-import { clientLoader } from "./payments";
+import PaymentsPage, { clientLoader } from "./payments";
 
 const ownerUser = { id: "u1", role: "owner" };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
+});
 
 /* ================================================================== */
 /*  clientLoader                                                       */
@@ -119,25 +144,81 @@ describe("clientLoader", () => {
 
   it("handles partial API failures gracefully", async () => {
     mocks.getUser.mockResolvedValue(ownerUser);
-    mocks.getBalance.mockRejectedValue(new Error("fail"));
+    mocks.getBalance.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
     mocks.getEarnings.mockResolvedValue({ amount: 0, currency: "USD" });
     mocks.getEarningsSummary.mockResolvedValue({ thisMonth: 0, lastMonth: 0, total: 0 });
     mocks.getTransactions.mockResolvedValue({ transactions: [], total: 0 });
 
     const r = (await clientLoader({ request: new Request("http://localhost/payments") } as any)) as any;
-    expect(r.error).toMatch(/balance/i);
+    expect(r.error).toBe(
+      "Loading your payment data timed out. Try again. Some sections could not be loaded: balance."
+    );
     expect(r.balance.available).toBe(0);
   });
 
   it("returns empty state on total failure", async () => {
     mocks.getUser.mockResolvedValue(ownerUser);
-    mocks.getBalance.mockRejectedValue(new Error("fail"));
-    mocks.getEarnings.mockRejectedValue(new Error("fail"));
-    mocks.getEarningsSummary.mockRejectedValue(new Error("fail"));
-    mocks.getTransactions.mockRejectedValue(new Error("fail"));
+    mocks.getBalance.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    mocks.getEarnings.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    mocks.getEarningsSummary.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+    mocks.getTransactions.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
 
     const r = (await clientLoader({ request: new Request("http://localhost/payments") } as any)) as any;
-    expect(r.error).toBeTruthy();
+    expect(r.error).toBe(
+      "Loading your payment data timed out. Try again. Some sections could not be loaded: balance, earnings, summary, transactions."
+    );
     expect(r.transactions).toEqual([]);
+  });
+
+  it("uses offline-specific copy on partial loader failure", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getBalance.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    mocks.getEarnings.mockResolvedValue({ amount: 0, currency: "USD" });
+    mocks.getEarningsSummary.mockResolvedValue({ thisMonth: 0, lastMonth: 0, total: 0 });
+    mocks.getTransactions.mockResolvedValue({ transactions: [], total: 0 });
+
+    const r = (await clientLoader({ request: new Request("http://localhost/payments") } as any)) as any;
+    expect(r.error).toBe(
+      "You appear to be offline. Reconnect and try loading your payment data again. Some sections could not be loaded: balance."
+    );
+  });
+
+  it("preserves backend loader messages", async () => {
+    mocks.getUser.mockResolvedValue(ownerUser);
+    mocks.getBalance.mockRejectedValue({
+      response: { data: { message: "Payment ledger is temporarily unavailable" } },
+    });
+    mocks.getEarnings.mockResolvedValue({ amount: 0, currency: "USD" });
+    mocks.getEarningsSummary.mockResolvedValue({ thisMonth: 0, lastMonth: 0, total: 0 });
+    mocks.getTransactions.mockResolvedValue({ transactions: [], total: 0 });
+
+    const r = (await clientLoader({ request: new Request("http://localhost/payments") } as any)) as any;
+    expect(r.error).toBe("Payment ledger is temporarily unavailable");
+  });
+});
+
+describe("PaymentsPage recovery UI", () => {
+  it("revalidates and clears filters from the loader error banner", () => {
+    mocks.useLoaderData.mockReturnValue({
+      balance: { available: 0, pending: 0, currency: "NPR" },
+      earnings: { thisMonth: 0, lastMonth: 0, total: 0, currency: "NPR" },
+      transactions: [],
+      totalTransactions: 0,
+      page: 1,
+      limit: 20,
+      error: "Loading your payment data timed out. Try again. Some sections could not be loaded: balance.",
+    });
+
+    render(<PaymentsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "common.retry" }));
+    expect(mocks.revalidate).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "payments.clearFilters" }));
+    expect(mocks.setSearchParams).toHaveBeenCalledWith(expect.any(URLSearchParams));
   });
 });

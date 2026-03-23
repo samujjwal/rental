@@ -1,5 +1,5 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link, useNavigate } from "react-router";
+import { useLoaderData, useRevalidator, Link, useNavigate } from "react-router";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   MapPin,
@@ -23,10 +23,10 @@ import { reviewsApi } from "~/lib/api/reviews";
 import { messagingApi } from "~/lib/api/messaging";
 import type { BookingCalculation } from "~/types/booking";
 import {
-  getCategoryFields,
-  groupCategoryFields,
-  formatFieldValue,
-} from "~/lib/category-fields";
+  groupCategoryFieldDefinitions,
+  formatCategoryFieldValue,
+  type CategoryFieldDefinition,
+} from "~/lib/api/listings";
 import { getCategoryContext } from "~/lib/category-context";
 import { formatCurrency, formatDate } from "~/lib/utils";
 import { APP_CURRENCY } from "~/config/locale";
@@ -45,6 +45,7 @@ import {
 import { Skeleton, CardSkeleton } from "~/components/ui/skeleton";
 import { ListingGallery } from "~/components/ui/ListingGallery";
 import { BookingCalendar } from "~/components/booking/BookingCalendar";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction<typeof clientLoader> = ({ data }) => {
   if (!data?.listing) {
@@ -76,6 +77,164 @@ const safeText = (value: unknown, fallback = ""): string => {
   return text || fallback;
 };
 
+export function getListingBookingError(
+  error: unknown,
+  fallback = "Unable to create booking. Please try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (
+      (error as { response?: { data?: { message?: unknown; error?: unknown } } }).response?.data
+        ?.message ||
+      (error as { response?: { data?: { message?: unknown; error?: unknown } } }).response?.data
+        ?.error
+    );
+
+  if (responseMessage) {
+    return Array.isArray(responseMessage)
+      ? responseMessage.join(" ")
+      : String(responseMessage);
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try creating the booking again.";
+  }
+
+  return getActionableErrorMessage(error, fallback, {
+    [ApiErrorType.CONFLICT]: "This listing changed while you were booking. Refresh availability and try again.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try creating the booking again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Booking creation timed out. Try again.",
+  });
+}
+
+export function getListingContactOwnerError(
+  error: unknown,
+  fallback = "Failed to start a conversation. Please try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+
+  if (responseMessage) {
+    return String(responseMessage);
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try contacting the owner again.";
+  }
+
+  return getActionableErrorMessage(error, fallback, {
+    [ApiErrorType.CONFLICT]: "This conversation was already created. Open your messages and try again.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try contacting the owner again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Starting the conversation timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not start the conversation right now. Try again in a moment.",
+    [ApiErrorType.UNKNOWN_ERROR]: fallback,
+  });
+}
+
+export function getListingAvailabilityError(
+  error: unknown,
+  fallback = "Unable to check availability. Try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+
+  if (responseMessage) {
+    return String(responseMessage);
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try checking availability again.";
+  }
+
+  return getActionableErrorMessage(error, fallback, {
+    [ApiErrorType.CONFLICT]: "Availability changed while you were checking. Try again.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try checking availability again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Availability check timed out. Try again.",
+  });
+}
+
+export function getListingPriceCalculationError(
+  error: unknown,
+  fallback = "Unable to calculate pricing right now. Try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+
+  if (responseMessage) {
+    return String(responseMessage);
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try calculating the price again.";
+  }
+
+  return getActionableErrorMessage(error, fallback, {
+    [ApiErrorType.CONFLICT]: "Pricing changed while you were checking. Try again.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try calculating the price again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Price calculation timed out. Try again.",
+  });
+}
+
+export function getListingReviewsError(
+  error: unknown,
+  fallback = "Reviews are temporarily unavailable. Try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+
+  if (responseMessage) {
+    return String(responseMessage);
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading reviews again.";
+  }
+
+  return getActionableErrorMessage(error, fallback, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading reviews again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading reviews timed out. Try again.",
+  });
+}
+
+export function getListingLoadError(
+  error: unknown,
+  fallback = "Unable to load this listing right now. Please try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+
+  if (responseMessage) {
+    return String(responseMessage);
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading this listing again.";
+  }
+
+  return getActionableErrorMessage(error, fallback, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading this listing again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading this listing timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not reach the listing service. Try again in a moment.",
+  });
+}
+
 export async function clientLoader({ params }: LoaderFunctionArgs) {
   const { id } = params;
   if (!isValidListingId(id)) {
@@ -84,17 +243,65 @@ export async function clientLoader({ params }: LoaderFunctionArgs) {
 
   try {
     const listing = await listingsApi.getListingById(id);
-    return { listing };
+    // Fetch category field definitions from the canonical API source in parallel
+    // with the listing already in hand. Failures are isolated — a broken category
+    // endpoint must not prevent the listing detail page from rendering.
+    const categorySlug = (listing as { categorySlug?: string | null }).categorySlug;
+    let categoryFieldDefs: CategoryFieldDefinition[] = [];
+    if (categorySlug) {
+      try {
+        categoryFieldDefs = await listingsApi.getCategoryFieldDefinitions(categorySlug);
+      } catch {
+        // Non-critical — fall back to empty field list (page still renders)
+        categoryFieldDefs = [];
+      }
+    }
+    return { listing, categoryFieldDefs, error: null };
   } catch (error) {
-    throw new Response("Listing not found", { status: 404 });
+    // Genuine 404 → let ErrorBoundary handle it; transient failures stay in-page
+    const status = (error as { status?: number; response?: { status?: number } })?.status
+      ?? (error as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      throw new Response("Listing not found", { status: 404 });
+    }
+    return { listing: null, categoryFieldDefs: [], error: getListingLoadError(error) };
   }
 }
 
 export default function ListingDetail() {
   const { t } = useTranslation();
-  const { listing } = useLoaderData<typeof clientLoader>();
+  const { listing, categoryFieldDefs, error: loadError } = useLoaderData<typeof clientLoader>();
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
+
+  if (!listing) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-card rounded-lg shadow-md p-8 border border-border">
+            <h1 className="text-2xl font-bold text-foreground mb-3">
+              {t("listing.unavailable", "Listing unavailable")}
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              {loadError ?? t("listing.loadFailed", "Unable to load this listing right now. Please try again.")}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <UnifiedButton onClick={() => revalidator.revalidate()}>
+                {t("common.retry", "Retry")}
+              </UnifiedButton>
+              <Link
+                to="/search"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-input text-foreground hover:bg-accent transition-colors"
+              >
+                {t("common.browseListings", "Browse listings")}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [guestCount, setGuestCount] = useState(1);
@@ -112,6 +319,7 @@ export default function ListingDetail() {
   const [reviewsPage, setReviewsPage] = useState(1);
   const [reviewsTotal, setReviewsTotal] = useState(0);
   const [loadingReviews, setLoadingReviews] = useState(false);
+  const [reviewsError, setReviewsError] = useState("");
   const [availabilityStatus, setAvailabilityStatus] = useState<
     "idle" | "checking" | "available" | "unavailable"
   >("idle");
@@ -185,9 +393,10 @@ export default function ListingDetail() {
         }
       );
       setCalculation(calc);
+      setBookingError("");
     } catch (error) {
       setCalculation(null);
-      console.error('Price calculation failed:', error);
+      setBookingError(getListingPriceCalculationError(error));
     } finally {
       setLoading(false);
     }
@@ -238,7 +447,7 @@ export default function ListingDetail() {
       }
     } catch (error) {
       setAvailabilityStatus("unavailable");
-      setAvailabilityMessage("Unable to check availability. Try again.");
+      setAvailabilityMessage(getListingAvailabilityError(error));
       setCalculation(null);
     }
   };
@@ -367,13 +576,7 @@ export default function ListingDetail() {
         navigate(`/bookings/${booking.id}`);
       }
     } catch (error: unknown) {
-      // Surface the backend error message when available
-      const apiMessage =
-        (error as any)?.response?.data?.message ||
-        (error as any)?.response?.data?.error ||
-        (typeof (error as any)?.message === 'string' && (error as any).message) ||
-        "Unable to create booking. Please try again.";
-      setBookingError(Array.isArray(apiMessage) ? apiMessage.join(' ') : String(apiMessage));
+      setBookingError(getListingBookingError(error));
     } finally {
       setBookingSubmitting(false);
     }
@@ -401,9 +604,14 @@ export default function ListingDetail() {
       });
       navigate(`/messages?conversation=${conversation.id}`);
     } catch (error) {
-      console.error("Failed to start conversation:", error);
       setContactOwnerError(
-        t("listings.detail.contactOwnerError", "Failed to start a conversation. Please try again.")
+        getListingContactOwnerError(
+          error,
+          t(
+            "listings.detail.contactOwnerError",
+            "Unable to start a conversation for this listing right now. Try again."
+          )
+        )
       );
     } finally {
       setContactingOwner(false);
@@ -432,8 +640,9 @@ export default function ListingDetail() {
       );
       setReviewsTotal(response.total || response.reviews.length);
       setReviewsPage(page);
-    } catch {
-      // Reviews loading failure is non-critical — silently ignore
+      setReviewsError("");
+    } catch (error) {
+      setReviewsError(getListingReviewsError(error));
     } finally {
       setLoadingReviews(false);
     }
@@ -596,7 +805,7 @@ export default function ListingDetail() {
 
                 {/* Category-Specific Details */}
                 <CategorySpecificDetails
-                  categorySlug={listing.categorySlug}
+                  fieldDefs={categoryFieldDefs}
                   data={listing.categorySpecificData}
                 />
 
@@ -758,6 +967,10 @@ export default function ListingDetail() {
 
                   {loadingReviews ? (
                     <p className="text-sm text-muted-foreground">{t('listings.detail.loadingReviews', 'Loading reviews...')}</p>
+                  ) : reviewsError ? (
+                    <div className="p-4 bg-destructive/10 rounded-lg text-sm text-destructive">
+                      {reviewsError}
+                    </div>
                   ) : reviews.length === 0 ? (
                     <div className="p-4 bg-muted rounded-lg text-sm text-muted-foreground">
                       {t('reviews.noReviews')}
@@ -1217,21 +1430,21 @@ export default function ListingDetail() {
 // ---------------------------------------------------------------------------
 
 function CategorySpecificDetails({
-  categorySlug,
+  fieldDefs,
   data,
 }: {
-  categorySlug?: string | null;
+  /** API-driven field definitions from GET /categories/slug/:slug/fields */
+  fieldDefs: CategoryFieldDefinition[];
   data?: Record<string, unknown>;
 }) {
   const { t } = useTranslation();
-  const fields = useMemo(() => getCategoryFields(categorySlug), [categorySlug]);
-  const groups = useMemo(() => groupCategoryFields(fields), [fields]);
+  const groups = useMemo(() => groupCategoryFieldDefinitions(fieldDefs), [fieldDefs]);
 
-  if (fields.length === 0) return null;
+  if (fieldDefs.length === 0) return null;
 
   const safeData = data ?? {};
   const hasAnyData = Object.keys(safeData).length > 0 &&
-    fields.some((f) => {
+    fieldDefs.some((f) => {
       const v = safeData[f.key];
       return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
     });
@@ -1266,7 +1479,7 @@ function CategorySpecificDetails({
                   <div key={field.key}>
                     <div className="text-sm text-muted-foreground">{field.label}</div>
                     <div className="font-semibold text-foreground">
-                      {formatFieldValue(field, safeData[field.key])}
+                      {formatCategoryFieldValue(field, safeData[field.key])}
                     </div>
                   </div>
                 ))}

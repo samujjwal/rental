@@ -1,6 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, Link, useRevalidator, redirect } from "react-router";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { favoritesKeys } from "~/hooks/useFavorites";
 import {
@@ -22,11 +22,13 @@ import {
   getPortalNavSections,
   resolvePortalNavRole,
 } from "~/config/navigation";
-import { Button, Badge, RouteErrorBoundary } from "~/components/ui";
+import { Button, Badge, RouteErrorBoundary, Dialog, DialogFooter } from "~/components/ui";
+import { EmptyStatePresets } from "~/components/ui/empty-state";
 import { toast } from "~/lib/toast";
 import { formatCurrency } from "~/lib/utils";
 import { useTranslation } from "react-i18next";
 import { isAppEntityId } from "~/utils/entity-id";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -75,6 +77,34 @@ const safeLocation = (listing: FavoriteListing): string => {
   return city || state || "Location";
 };
 
+export function getFavoritesLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load favorites", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading favorites timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not load favorites right now. Try again in a moment.",
+  });
+}
+
+export function getFavoriteRemovalError(
+  error: unknown,
+  fallbackMessage = "Failed to remove favorite. Please try again."
+): string {
+  const responseMessage =
+    error && typeof error === "object" && "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Removing this favorite timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not remove this favorite right now. Try again in a moment.",
+      [ApiErrorType.CONFLICT]: "This listing was already removed from your favorites. Refresh to see the latest state.",
+    })
+  );
+}
+
 export async function clientLoader({ request: _request }: LoaderFunctionArgs) {
   const user = await getUser(_request);
   if (!user) {
@@ -87,7 +117,7 @@ export async function clientLoader({ request: _request }: LoaderFunctionArgs) {
     const favorites = Array.isArray(favoritesResult) ? favoritesResult : [];
     return { favorites, portalRole, error: null };
   } catch (error) {
-    return { favorites: [], portalRole, error: "Failed to load favorites" };
+    return { favorites: [], portalRole, error: getFavoritesLoadError(error) };
   }
 }
 
@@ -108,10 +138,25 @@ export default function FavoritesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [favoritePendingRemoval, setFavoritePendingRemoval] = useState<FavoriteListing | null>(null);
   // Optimistic state: track IDs that have been optimistically removed
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 12;
+
+  useEffect(() => {
+    setRemovedIds(new Set());
+    setRemovingId(null);
+    setFavoritePendingRemoval((current) => {
+      if (!current) {
+        return null;
+      }
+
+      return serverFavorites.some((favorite) => favorite.id === current.id)
+        ? current
+        : null;
+    });
+  }, [serverFavorites]);
 
   const favorites = serverFavorites.filter((f) => !removedIds.has(f.id));
 
@@ -128,6 +173,13 @@ export default function FavoritesPage() {
     Math.ceil(filteredFavorites.length / ITEMS_PER_PAGE)
   );
   const safePage = Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    if (currentPage !== safePage) {
+      setCurrentPage(safePage);
+    }
+  }, [currentPage, safePage]);
+
   const paginatedFavorites = useMemo(
     () =>
       filteredFavorites.slice(
@@ -137,19 +189,28 @@ export default function FavoritesPage() {
     [filteredFavorites, safePage]
   );
 
+  const clearSearch = useCallback(() => {
+    setSearchQuery("");
+    setCurrentPage(1);
+  }, []);
+
+  const closeRemoveDialog = useCallback(() => {
+    if (removingId) {
+      return;
+    }
+    setFavoritePendingRemoval(null);
+  }, [removingId]);
+
   const handleRemoveFavorite = useCallback(
     async (listingId: string) => {
       if (!isAppEntityId(listingId)) {
-        return;
-      }
-      const confirmed = window.confirm(t("favorites.removeConfirm"));
-      if (!confirmed) {
         return;
       }
 
       // Optimistically remove from UI immediately
       setRemovedIds((prev) => new Set(prev).add(listingId));
       setRemovingId(listingId);
+      setFavoritePendingRemoval(null);
 
       try {
         await listingsApi.removeFavorite(listingId);
@@ -165,12 +226,14 @@ export default function FavoritesPage() {
           next.delete(listingId);
           return next;
         });
-        toast.error(t("favorites.removeFailed"));
+        toast.error(
+          getFavoriteRemovalError(error, t("favorites.removeFailed"))
+        );
       } finally {
         setRemovingId(null);
       }
     },
-    [revalidator]
+    [queryClient, revalidator, t]
   );
 
   return (
@@ -185,7 +248,19 @@ export default function FavoritesPage() {
       banner={
         error ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-            {error}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <span>{error}</span>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => revalidator.revalidate()}>
+                  {t("common.retry")}
+                </Button>
+                {searchQuery ? (
+                  <Button variant="ghost" onClick={clearSearch}>
+                    {t("search.clearFilters", "Clear search")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           </div>
         ) : null
       }
@@ -211,25 +286,10 @@ export default function FavoritesPage() {
           </Button>
         </div>
       ) : favorites.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="w-20 h-20 bg-red-50 dark:bg-red-950/30 rounded-full flex items-center justify-center mx-auto mb-5">
-            <Heart className="w-10 h-10 text-red-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">
-            {t("favorites.empty", "No saved listings yet")}
-          </h2>
-          <p className="text-muted-foreground mb-8 max-w-sm mx-auto text-sm leading-relaxed">
-            {t("favorites.emptyDesc", "Tap the heart on any listing to save it here so you can compare and book later.")}
-          </p>
-          <Link to="/search">
-            <Button size="lg" className="gap-2">
-              <Search className="w-4 h-4" />
-              {t("favorites.startExploring", "Browse Listings")}
-            </Button>
-          </Link>
-          {/* Quick category shortcuts */}
+        <div className="py-10">
+          <EmptyStatePresets.NoFavorites />
           <div className="mt-10">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Popular categories</p>
+            <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Popular categories</p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               {["Cameras", "Power Tools", "Camping Gear", "Bikes", "Party Supplies", "Electronics"].map((cat) => (
                 <Link
@@ -284,11 +344,11 @@ export default function FavoritesPage() {
 
           {/* Listings */}
           {filteredFavorites.length === 0 ? (
-            <div className="text-center py-12">
-              <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                {t("favorites.noSearchResults")}
-              </p>
+            <div className="py-8">
+              <EmptyStatePresets.NoFavoritesFiltered
+                query={searchQuery}
+                onClearSearch={clearSearch}
+              />
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -417,7 +477,7 @@ export default function FavoritesPage() {
                             </h3>
                           </Link>
                           <button
-                            onClick={() => handleRemoveFavorite(listing.id)}
+                            onClick={() => setFavoritePendingRemoval(listing)}
                             disabled={removingId === listing.id}
                             className="p-1 hover:bg-muted rounded transition-colors"
                             title={t("favorites.remove")}
@@ -498,6 +558,39 @@ export default function FavoritesPage() {
           )}
         </>
       )}
+      <Dialog
+        open={!!favoritePendingRemoval}
+        onClose={closeRemoveDialog}
+        title={t("favorites.remove", "Remove favorite")}
+        description={t(
+          "favorites.removeConfirm",
+          "Remove this listing from your saved favorites?"
+        )}
+        size="sm"
+      >
+        <div className="text-sm text-muted-foreground">
+          {favoritePendingRemoval ? favoritePendingRemoval.title : ""}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={closeRemoveDialog} disabled={!!removingId}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() =>
+              favoritePendingRemoval
+                ? void handleRemoveFavorite(favoritePendingRemoval.id)
+                : undefined
+            }
+            disabled={!favoritePendingRemoval || !!removingId}
+          >
+            {removingId && favoritePendingRemoval?.id === removingId ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : null}
+            {t("favorites.remove")}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </PortalPageLayout>
   );
 }

@@ -23,8 +23,16 @@ import {
 } from "lucide-react";
 import { ActivityFeed, type ActivityItem } from "~/components/admin/ActivityFeed";
 import { RouteErrorBoundary } from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => [{ title: "Admin Dashboard | GharBatai Rentals" }];
+
+export function getAdminDashboardLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load admin dashboard data", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading admin dashboard data timed out. Try again.",
+  });
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await requireAdmin(request);
@@ -60,10 +68,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       user,
       analytics: null,
       activities: [],
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load admin dashboard data",
+      error: getAdminDashboardLoadError(error),
     };
   }
 }

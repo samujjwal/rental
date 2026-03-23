@@ -19,11 +19,13 @@ describe('PayoutsService', () => {
     },
     booking: {
       aggregate: jest.fn(),
+      groupBy: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
     },
     payout: {
       aggregate: jest.fn(),
+      groupBy: jest.fn(),
       create: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
@@ -81,8 +83,12 @@ describe('PayoutsService', () => {
       });
 
       // Mock pending earnings
-      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 200 } });
-      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 50 } }); // Net 150
+      mockPrismaService.booking.groupBy.mockResolvedValue([
+        { currency: 'NPR', _sum: { ownerEarnings: 200 } },
+      ]);
+      mockPrismaService.payout.groupBy.mockResolvedValue([
+        { currency: 'NPR', _sum: { amount: 50 } },
+      ]); // Net 150
       mockPrismaService.userPreferences.findUnique.mockResolvedValue(null); // Default NPR
       mockPrismaService.payout.create.mockResolvedValue({
         id: 'po_1',
@@ -126,8 +132,12 @@ describe('PayoutsService', () => {
       });
 
       // 100 total - 90 paid = 10 available
-      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 100 } });
-      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 90 } });
+      mockPrismaService.booking.groupBy.mockResolvedValue([
+        { currency: 'NPR', _sum: { ownerEarnings: 100 } },
+      ]);
+      mockPrismaService.payout.groupBy.mockResolvedValue([
+        { currency: 'NPR', _sum: { amount: 90 } },
+      ]);
       mockPrismaService.userPreferences.findUnique.mockResolvedValue(null);
 
       await expect(service.createPayout(ownerId, 20)).rejects.toThrow('Insufficient funds');
@@ -136,8 +146,12 @@ describe('PayoutsService', () => {
 
   describe('getPendingEarnings', () => {
     it('should use user preferred currency from UserPreferences', async () => {
-      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 500 } });
-      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 100 } });
+      mockPrismaService.booking.groupBy.mockResolvedValue([
+        { currency: 'EUR', _sum: { ownerEarnings: 500 } },
+      ]);
+      mockPrismaService.payout.groupBy.mockResolvedValue([
+        { currency: 'EUR', _sum: { amount: 100 } },
+      ]);
       mockPrismaService.userPreferences.findUnique.mockResolvedValue({ currency: 'EUR' });
 
       const result = await service.getPendingEarnings(ownerId);
@@ -147,8 +161,12 @@ describe('PayoutsService', () => {
     });
 
     it('should fall back to NPR when no user preferences exist', async () => {
-      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 200 } });
-      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 50 } });
+      mockPrismaService.booking.groupBy.mockResolvedValue([
+        { currency: 'NPR', _sum: { ownerEarnings: 200 } },
+      ]);
+      mockPrismaService.payout.groupBy.mockResolvedValue([
+        { currency: 'NPR', _sum: { amount: 50 } },
+      ]);
       mockPrismaService.userPreferences.findUnique.mockResolvedValue(null);
 
       const result = await service.getPendingEarnings(ownerId);
@@ -158,8 +176,12 @@ describe('PayoutsService', () => {
     });
 
     it('should fall back to NPR when user has no currency preference', async () => {
-      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: 100 } });
-      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
+      mockPrismaService.booking.groupBy.mockResolvedValue([
+        { currency: 'NPR', _sum: { ownerEarnings: 100 } },
+      ]);
+      mockPrismaService.payout.groupBy.mockResolvedValue([
+        { currency: 'NPR', _sum: { amount: 0 } },
+      ]);
       mockPrismaService.userPreferences.findUnique.mockResolvedValue({ currency: null });
 
       const result = await service.getPendingEarnings(ownerId);
@@ -168,8 +190,8 @@ describe('PayoutsService', () => {
     });
 
     it('should handle zero earnings', async () => {
-      mockPrismaService.booking.aggregate.mockResolvedValue({ _sum: { ownerEarnings: null } });
-      mockPrismaService.payout.aggregate.mockResolvedValue({ _sum: { amount: null } });
+      mockPrismaService.booking.groupBy.mockResolvedValue([]);
+      mockPrismaService.payout.groupBy.mockResolvedValue([]);
       mockPrismaService.userPreferences.findUnique.mockResolvedValue(null);
 
       const result = await service.getPendingEarnings(ownerId);

@@ -25,6 +25,7 @@ import { redirect } from "react-router";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { cn } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -39,6 +40,31 @@ const isValidResetToken = (value: string | null) => {
   // Allow test tokens for E2E tests (min 8 chars) and real tokens (up to 512 chars)
   return token.length >= 8 && token.length <= 512;
 };
+
+export function getResetPasswordError(
+  error: unknown,
+  fallbackMessage = "Failed to reset password. Please try again."
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try resetting your password again.";
+  }
+
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try resetting your password again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Resetting the password timed out. Try again.",
+  });
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -86,12 +112,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   } catch (error: unknown) {
     return {
       success: false,
-      error:
-        error && typeof error === "object" && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message ||
-            "Failed to reset password. Please try again."
-          : "Failed to reset password. Please try again.",
+      error: getResetPasswordError(error),
     };
   }
 }
@@ -136,6 +157,10 @@ export default function ResetPassword() {
   };
 
   const passwordStrength = getPasswordStrength(password);
+  const actionErrorId = actionData?.error ? "reset-password-form-error" : undefined;
+  const passwordStrengthId = password ? "reset-password-strength" : undefined;
+  const passwordErrorId = errors.password ? "reset-password-password-error" : undefined;
+  const confirmPasswordErrorId = errors.confirmPassword ? "reset-password-confirm-error" : undefined;
 
   const inputClasses = cn(
     "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
@@ -198,7 +223,7 @@ export default function ResetPassword() {
               {/* Error Message */}
               {actionData?.error && (
                 <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                  <p className="text-sm text-destructive">{actionData.error}</p>
+                  <p id="reset-password-form-error" className="text-sm text-destructive">{actionData.error}</p>
                 </div>
               )}
 
@@ -217,6 +242,10 @@ export default function ResetPassword() {
                     id="password"
                     name="password"
                     maxLength={128}
+                    aria-invalid={!!errors.password}
+                    aria-describedby={
+                      [passwordStrengthId, passwordErrorId, actionErrorId].filter(Boolean).join(" ") || undefined
+                    }
                     className={cn(inputClasses, "pr-10")}
                     placeholder="••••••••"
                   />
@@ -236,7 +265,7 @@ export default function ResetPassword() {
 
                 {/* Password Strength Indicator */}
                 {password && (
-                  <div className="mt-2">
+                  <div id="reset-password-strength" className="mt-2">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-muted-foreground">
                         {t('auth.signup.passwordStrength', 'Password strength:')}
@@ -272,7 +301,7 @@ export default function ResetPassword() {
                 )}
 
                 {errors.password && (
-                  <p className="text-sm text-destructive">
+                  <p id="reset-password-password-error" className="text-sm text-destructive">
                     {errors.password.message}
                   </p>
                 )}
@@ -293,6 +322,8 @@ export default function ResetPassword() {
                     id="confirmPassword"
                     name="confirmPassword"
                     maxLength={128}
+                    aria-invalid={!!errors.confirmPassword}
+                    aria-describedby={confirmPasswordErrorId || actionErrorId}
                     className={cn(inputClasses, "pr-10")}
                     placeholder="••••••••"
                   />
@@ -310,7 +341,7 @@ export default function ResetPassword() {
                   </button>
                 </div>
                 {errors.confirmPassword && (
-                  <p className="text-sm text-destructive">
+                  <p id="reset-password-confirm-error" className="text-sm text-destructive">
                     {errors.confirmPassword.message}
                   </p>
                 )}

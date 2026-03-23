@@ -7,7 +7,7 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -80,7 +80,7 @@ export class StorageService {
 
     // Generate unique key
     const extension = path.extname(fileName);
-    const uniqueName = `${uuidv4()}${extension}`;
+    const uniqueName = `${randomUUID()}${extension}`;
     const key = folder ? `${folder}/${uniqueName}` : uniqueName;
 
     if (this.useLocalStorage) {

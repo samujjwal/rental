@@ -35,32 +35,30 @@ export class WebhookService implements OnModuleInit {
     const nodeEnv = this.configService.get<string>('nodeEnv') || process.env.NODE_ENV;
 
     if (!stripeKey || !webhookSecret) {
-      if (nodeEnv === 'development') {
-        this.logger.warn(
-          'STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET not configured — Webhook service disabled in development',
-        );
-        this.stripe = new Stripe('sk_test_dev_placeholder_key', {
-          apiVersion: '2026-01-28.clover',
-        });
-        this.webhookSecret = 'wh_test_dev_placeholder_secret';
-      } else {
-        if (!stripeKey) {
-          throw new Error(
-            'STRIPE_SECRET_KEY is not configured. Set it in environment variables.',
-          );
-        }
-        if (!webhookSecret) {
-          throw new Error(
-            'STRIPE_WEBHOOK_SECRET is not configured. Set it in environment variables.',
-          );
-        }
+      if (nodeEnv === 'test') {
+        // In test environments the webhook handler is mocked; skip init.
+        this.logger.warn('Stripe keys not set in test environment — WebhookService inactive');
+        return;
       }
-    } else {
-      this.stripe = new Stripe(stripeKey, {
-        apiVersion: '2026-01-28.clover',
-      });
-      this.webhookSecret = webhookSecret;
+      // Fail fast in development/staging/production. A placeholder webhook secret
+      // would silently accept no real Stripe events (signature always fails), causing
+      // missed payment confirmations, refunds, and disputes without any visible error.
+      if (!stripeKey) {
+        throw new Error(
+          'STRIPE_SECRET_KEY is required. Add a Stripe test key (sk_test_…) for development. See .env.example.',
+        );
+      }
+      if (!webhookSecret) {
+        throw new Error(
+          'STRIPE_WEBHOOK_SECRET is required. Obtain it from the Stripe Dashboard webhook endpoint page. See .env.example.',
+        );
+      }
     }
+
+    this.stripe = new Stripe(stripeKey!, {
+      apiVersion: '2026-01-28.clover',
+    });
+    this.webhookSecret = webhookSecret!;
   }
 
   onModuleInit() {
@@ -462,6 +460,7 @@ export class WebhookService implements OnModuleInit {
       this.logger.log(`Payment ${payment.id} marked as cancelled`);
     } catch (error) {
       this.logger.error(`Error handling payment cancellation: ${error.message}`);
+      throw error; // Re-throw so Stripe retries on transient DB failures
     }
   }
 

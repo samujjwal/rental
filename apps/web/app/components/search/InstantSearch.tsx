@@ -8,6 +8,7 @@ import { useDebounce } from '~/hooks/useDebounce';
 import { prefersReducedMotion, Keys } from '~/lib/accessibility';
 import { listingsApi } from '~/lib/api/listings';
 import { OptimizedImage } from '~/components/ui/OptimizedImage';
+import { ApiErrorType, getActionableErrorMessage } from '~/lib/api-error';
 
 export interface InstantSearchProps {
     placeholder?: string;
@@ -29,6 +30,18 @@ interface SearchResult {
         city?: string;
         state?: string;
     };
+}
+
+export function getInstantSearchError(error: unknown): string {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return 'You appear to be offline. Reconnect and try searching again.';
+    }
+
+    return getActionableErrorMessage(error, 'Failed to search. Please try again.', {
+        [ApiErrorType.OFFLINE]: 'You appear to be offline. Reconnect and try searching again.',
+        [ApiErrorType.TIMEOUT_ERROR]: 'Searching timed out. Try again.',
+        [ApiErrorType.NETWORK_ERROR]: 'We could not reach the search service. Try again in a moment.',
+    });
 }
 
 /**
@@ -90,7 +103,7 @@ export function InstantSearch({
                 setSelectedIndex(-1);
             } catch (err) {
                 console.error('Search error:', err);
-                setError('Failed to search. Please try again.');
+                setError(getInstantSearchError(err));
                 setResults([]);
                 setIsOpen(true);
                 setSelectedIndex(-1);

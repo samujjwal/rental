@@ -8,6 +8,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { BookingStatus, PropertyStatus, PaymentStatus, RefundStatus } from '@rental-portal/database';
 
 export interface AnalyticsDashboard {
   period: { start: Date; end: Date };
@@ -123,8 +124,8 @@ export class AnalyticsWarehouseService {
     });
 
     const total = bookings.length;
-    const confirmed = bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'COMPLETED').length;
-    const cancelled = bookings.filter(b => b.status === 'CANCELLED').length;
+    const confirmed = bookings.filter(b => b.status === BookingStatus.CONFIRMED || b.status === BookingStatus.COMPLETED).length;
+    const cancelled = bookings.filter(b => b.status === BookingStatus.CANCELLED).length;
     const completionRate = total > 0 ? (confirmed / total) * 100 : 0;
     
     const totalValue = bookings.reduce((sum, b) => sum + Number(b.totalPrice || 0), 0);
@@ -159,7 +160,7 @@ export class AnalyticsWarehouseService {
     const payments = await this.prisma.payment.findMany({
       where: {
         createdAt: { gte: start, lte: end },
-        status: 'SUCCEEDED',
+        status: PaymentStatus.SUCCEEDED,
       },
       include: { booking: true },
     });
@@ -169,7 +170,7 @@ export class AnalyticsWarehouseService {
     const ownerEarnings = total - platformFees;
 
     const refunds = await this.prisma.refund.findMany({
-      where: { createdAt: { gte: start, lte: end }, status: 'COMPLETED' },
+      where: { createdAt: { gte: start, lte: end }, status: RefundStatus.COMPLETED },
     });
     const totalRefunds = refunds.reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
@@ -179,7 +180,7 @@ export class AnalyticsWarehouseService {
     const previousPayments = await this.prisma.payment.findMany({
       where: {
         createdAt: { gte: previousStart, lt: start },
-        status: 'SUCCEEDED',
+        status: PaymentStatus.SUCCEEDED,
       },
     });
     const previousTotal = previousPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -273,7 +274,7 @@ export class AnalyticsWarehouseService {
 
     // Top performers by revenue
     const topListings = await this.prisma.listing.findMany({
-      where: { status: 'AVAILABLE' },
+      where: { status: PropertyStatus.AVAILABLE },
       orderBy: { totalBookings: 'desc' },
       take: 10,
       select: { id: true, title: true },
@@ -283,7 +284,7 @@ export class AnalyticsWarehouseService {
     const topPerformers = await Promise.all(
       topListings.map(async (listing: any) => {
         const revenue = await this.prisma.booking.aggregate({
-          where: { listingId: listing.id, status: 'COMPLETED' },
+          where: { listingId: listing.id, status: BookingStatus.COMPLETED },
           _sum: { totalPrice: true },
         });
         return {
@@ -316,8 +317,9 @@ export class AnalyticsWarehouseService {
       }),
     ]);
 
-    // Estimate page views from session data
-    const pageViews = sessions.length * 5; // Approximation
+    // Page views cannot be derived from session data alone without a proper analytics store.
+    // Report zero rather than returning a fabricated estimate.
+    const pageViews = 0;
 
     // Calculate conversion rate (bookings / searches)
     const bookings = await this.prisma.booking.count({

@@ -1,7 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  AI_PROVIDER_PORT,
+  type AiProviderPort,
+} from '../../ai/ports/ai-provider.port';
+import {
+  PROMPT_CONCIERGE_INTENT_CLASSIFY,
+  PROMPT_CONCIERGE_GENERATE_RESPONSE,
+} from '../../ai/prompts/prompt-registry';
 
 /**
  * AI Concierge Agent System (V5 Prompt 3)
@@ -27,6 +35,7 @@ export class AiConciergeService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(AI_PROVIDER_PORT) private readonly aiProvider: AiProviderPort,
   ) {}
 
   /**
@@ -133,62 +142,33 @@ export class AiConciergeService {
 
   /**
    * Classify user intent from message text.
-   * Uses LLM-based classification when OPENAI_API_KEY is available,
-   * falls back to keyword pattern matching.
+   * Uses AI provider when available, falls back to keyword pattern matching.
    */
   async classifyIntent(message: string): Promise<{ name: string; confidence: number }> {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const { promptId, version: promptVersion, systemPrompt } = PROMPT_CONCIERGE_INTENT_CLASSIFY;
 
-    if (apiKey) {
-      return this.classifyIntentWithLLM(message, apiKey);
-    }
+    const result = await this.aiProvider.complete({
+      promptId,
+      promptVersion,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message },
+      ],
+      maxTokens: 60,
+      temperature: 0,
+    });
 
-    return this.classifyIntentWithPatterns(message);
-  }
-
-  /**
-   * LLM-based intent classification using OpenAI function calling.
-   */
-  private async classifyIntentWithLLM(
-    message: string,
-    apiKey: string,
-  ): Promise<{ name: string; confidence: number }> {
-    try {
-      const model = this.configService.get<string>('OPENAI_MODEL') || 'gpt-3.5-turbo';
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Classify the user message into exactly one of these intents: SEARCH_LISTING, BOOKING_HELP, PRICE_INQUIRY, DISPUTE_HELP, HOST_ADVICE, RECOMMENDATION, ACCOUNT_HELP, GENERAL. Respond with JSON: {"intent":"...","confidence":0.0-1.0}',
-            },
-            { role: 'user', content: message },
-          ],
-          max_tokens: 60,
-          temperature: 0,
-          response_format: { type: 'json_object' },
-        }),
-      });
-
-      if (!response.ok) {
-        this.logger.warn(`OpenAI intent classification failed: ${response.status}`);
-        return this.classifyIntentWithPatterns(message);
+    if (result.fromProvider && result.content) {
+      try {
+        const parsed = JSON.parse(result.content) as { intent?: string; confidence?: number };
+        if (parsed.intent) {
+          return { name: parsed.intent, confidence: parsed.confidence ?? 0.9 };
+        }
+      } catch {
+        this.logger.warn(
+          `LLM intent response not valid JSON [${promptId}@${promptVersion}]: ${result.content}`,
+        );
       }
-
-      const data = await response.json();
-      const parsed = JSON.parse(data?.choices?.[0]?.message?.content || '{}');
-      if (parsed.intent) {
-        return { name: parsed.intent, confidence: parsed.confidence ?? 0.9 };
-      }
-    } catch (error) {
-      this.logger.warn('LLM intent classification error, falling back to patterns', error);
     }
 
     return this.classifyIntentWithPatterns(message);
@@ -220,8 +200,8 @@ export class AiConciergeService {
   }
 
   /**
-   * Generate an AI response using OpenAI LLM with conversation history.
-   * Falls back to template responses when no API key is configured.
+   * Generate an AI response using the AI provider with conversation history.
+   * Falls back to template responses when the provider is unavailable.
    */
   async generateResponse(
     intent: { name: string; confidence: number },
@@ -229,99 +209,45 @@ export class AiConciergeService {
     context: Record<string, any>,
     history: Array<{ role: string; content: string }>,
   ): Promise<{ text: string; suggestions: string[] }> {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const { promptId, version: promptVersion, systemPrompt } = PROMPT_CONCIERGE_GENERATE_RESPONSE;
 
-    if (apiKey) {
-      return this.generateResponseWithLLM(intent, message, context, history, apiKey);
-    }
+    // Build messages: base system prompt + dynamic context + history + user message
+    const dynamicContext =
+      `Current intent: ${intent.name} (confidence: ${intent.confidence})\n` +
+      `User context: ${JSON.stringify(context)}\n\n` +
+      `Also provide exactly 3 short suggested follow-up actions. ` +
+      `Respond ONLY with valid JSON: {"text":"your response","suggestions":["action1","action2","action3"]}`;
 
-    return this.generateTemplateResponse(intent);
-  }
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemPrompt },
+      { role: 'system', content: dynamicContext },
+      // Last 10 conversation turns
+      ...history.slice(-10).map((t) => ({
+        role: (t.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: t.content,
+      })),
+      { role: 'user', content: message },
+    ];
 
-  /**
-   * LLM-powered response generation with full conversation context.
-   */
-  private async generateResponseWithLLM(
-    intent: { name: string; confidence: number },
-    message: string,
-    context: Record<string, any>,
-    history: Array<{ role: string; content: string }>,
-    apiKey: string,
-  ): Promise<{ text: string; suggestions: string[] }> {
-    try {
-      const model = this.configService.get<string>('OPENAI_MODEL') || 'gpt-3.5-turbo';
+    const result = await this.aiProvider.complete({
+      promptId,
+      promptVersion,
+      messages,
+      maxTokens: 300,
+      temperature: 0.7,
+    });
 
-      const systemPrompt = `You are a helpful AI concierge for a global rental platform (like Airbnb). 
-Your role is to assist users with finding rentals, booking help, pricing questions, dispute resolution, hosting advice, and general platform guidance.
-
-Current intent: ${intent.name} (confidence: ${intent.confidence})
-User context: ${JSON.stringify(context)}
-
-Guidelines:
-- Be concise, warm, and professional
-- Provide actionable information
-- If the user asks about specific listings, guide them to search
-- For disputes, be empathetic and guide through the resolution process
-- For pricing, explain factors that affect pricing (location, season, demand)
-- Always end with a helpful suggestion or next step
-- Keep responses under 150 words
-
-Also provide exactly 3 short suggested follow-up actions as a JSON array in this format:
-Respond ONLY with valid JSON: {"text":"your response","suggestions":["action1","action2","action3"]}`;
-
-      const messages: Array<{ role: string; content: string }> = [
-        { role: 'system', content: systemPrompt },
-      ];
-
-      // Add conversation history (last 10 turns)
-      const recentHistory = history.slice(-10);
-      for (const turn of recentHistory) {
-        messages.push({
-          role: turn.role === 'user' ? 'user' : 'assistant',
-          content: turn.content,
-        });
+    if (result.fromProvider && result.content) {
+      try {
+        const parsed = JSON.parse(result.content) as { text?: string; suggestions?: string[] };
+        return {
+          text: parsed.text || result.content,
+          suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+        };
+      } catch {
+        // JSON parse failed; use raw content as plain text
+        return { text: result.content, suggestions: [] };
       }
-
-      // Add current message
-      messages.push({ role: 'user', content: message });
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          max_tokens: 300,
-          temperature: 0.7,
-          response_format: { type: 'json_object' },
-        }),
-      });
-
-      if (!response.ok) {
-        this.logger.warn(`OpenAI response generation failed: ${response.status}`);
-        return this.generateTemplateResponse(intent);
-      }
-
-      const data = await response.json();
-      const content = data?.choices?.[0]?.message?.content?.trim();
-
-      if (content) {
-        try {
-          const parsed = JSON.parse(content);
-          return {
-            text: parsed.text || content,
-            suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-          };
-        } catch {
-          // If JSON parsing fails, use raw text
-          return { text: content, suggestions: [] };
-        }
-      }
-    } catch (error) {
-      this.logger.error('LLM response generation failed', error);
     }
 
     return this.generateTemplateResponse(intent);

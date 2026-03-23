@@ -80,7 +80,7 @@ describe('InsuranceVerificationService', () => {
 
       expect(result.passed).toBe(false);
       expect(result.confidence).toBe(0);
-      expect(result.flags).toContain('Policy not found');
+      expect(result.flags).toContain('Policy record not found');
     });
 
     it('should require manual verification for found policies', async () => {
@@ -92,8 +92,11 @@ describe('InsuranceVerificationService', () => {
       const result = await service.runAutomatedChecks('policy-1');
 
       expect(result.passed).toBe(false);
-      expect(result.confidence).toBe(0.5);
-      expect(result.flags).toContain('Manual verification required');
+      expect(result.requiresManualReview).toBe(true);
+      expect(result.confidence).toBe(0);
+      expect(result.flags).toContain(
+        'Queued for manual admin verification — automated OCR/carrier checks are not yet enabled'
+      );
     });
   });
 
@@ -101,7 +104,7 @@ describe('InsuranceVerificationService', () => {
     it('should return true for known providers', async () => {
       cache.get.mockResolvedValue(null); // Force cache miss
 
-      const result = await service.verifyProvider('State Farm');
+      const result = await service.verifyProvider('Shikhar Insurance');
 
       expect(result).toBe(true);
     });
@@ -109,7 +112,7 @@ describe('InsuranceVerificationService', () => {
     it('should be case-insensitive', async () => {
       cache.get.mockResolvedValue(null);
 
-      const result = await service.verifyProvider('state farm');
+      const result = await service.verifyProvider('shikhar insurance');
 
       expect(result).toBe(true);
     });

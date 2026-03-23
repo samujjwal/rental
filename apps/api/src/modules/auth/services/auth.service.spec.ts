@@ -245,6 +245,33 @@ describe('AuthService', () => {
         }),
       );
     });
+
+    it('should sanitize profile names before persisting', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (passwordService.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      (prismaService.user.create as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        firstName: 'alert("xss")',
+        lastName: 'Doe',
+      });
+      (tokenService.generateTokens as jest.Mock).mockResolvedValue(mockTokens);
+      (tokenService.createSession as jest.Mock).mockResolvedValue(undefined);
+
+      await service.register({
+        ...registerDto,
+        firstName: '<script>alert("xss")</script>',
+        lastName: '<b>Doe</b>',
+      });
+
+      expect(prismaService.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            firstName: 'alert("xss")',
+            lastName: 'Doe',
+          }),
+        }),
+      );
+    });
   });
 
   describe('login', () => {

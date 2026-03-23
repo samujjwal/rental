@@ -86,7 +86,7 @@ export function CreateListingScreen({ navigation }: Props) {
         categoryId,
         title,
         description,
-        type: "PROPERTY",
+        type: "OTHER",
         slug,
         address: address.trim(),
         zipCode: zipCode.trim() || undefined,

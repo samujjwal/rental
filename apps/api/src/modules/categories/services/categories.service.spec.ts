@@ -51,6 +51,9 @@ describe('CategoriesService', () => {
         count: jest.fn().mockResolvedValue(0),
         aggregate: jest.fn().mockResolvedValue({ _avg: {}, _sum: {} }),
       },
+      booking: {
+        count: jest.fn().mockResolvedValue(0),
+      },
     };
 
     const mockCacheService = {
@@ -361,6 +364,7 @@ describe('CategoriesService', () => {
         _avg: { basePrice: 150.50 },
         _sum: { totalBookings: 500 },
       });
+      (prismaService.booking.count as jest.Mock).mockResolvedValue(500);
 
       const result = await service.getStats('cat-123');
 

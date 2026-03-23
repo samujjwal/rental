@@ -1,4 +1,4 @@
-import { Injectable, Logger, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { StorageService } from '@/common/storage/storage.service';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
@@ -20,6 +20,7 @@ export class BulkOperationsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly notifications: NotificationsService,
+    @Inject(forwardRef(() => BookingStateMachineService))
     private readonly bookingStateMachine: BookingStateMachineService,
   ) {}
 

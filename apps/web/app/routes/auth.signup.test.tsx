@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -48,7 +49,7 @@ vi.mock("~/lib/validation/auth", () => ({
   },
 }));
 vi.mock("~/components/ui", () => ({
-  UnifiedButton: ({ children, ...p }: any) => <button {...p}>{children}</button>,
+  UnifiedButton: ({ children, loading, leftIcon, fullWidth, ...p }: any) => <button {...p}>{children}</button>,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 vi.mock("react-hook-form", () => ({
@@ -58,7 +59,7 @@ vi.mock("react-hook-form", () => ({
 vi.mock("@hookform/resolvers/zod", () => ({ zodResolver: () => vi.fn() }));
 vi.mock("lucide-react", () => ({ Eye: IconStub, EyeOff: IconStub, UserPlus: IconStub }));
 
-import Signup, { clientLoader, clientAction } from "./auth.signup";
+import Signup, { clientLoader, clientAction, getSignupError } from "./auth.signup";
 
 function makeFormReq(fields: Record<string, string>) {
   const fd = new FormData();
@@ -135,6 +136,45 @@ describe("auth.signup route", () => {
       expect((r as any).error).toBe("Email already exists");
     });
 
+    it("uses actionable offline copy on API failure", async () => {
+      mocks.signup.mockRejectedValue(new Error("Network Error"));
+      const online = window.navigator.onLine;
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      const r = await clientAction({ request: makeFormReq(validSignup) } as any);
+      expect((r as any).error).toBe(
+        "You appear to be offline. Reconnect and try creating your account again."
+      );
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: online,
+      });
+    });
+
+    it("uses timeout-specific copy on API failure", async () => {
+      mocks.signup.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+      const r = await clientAction({ request: makeFormReq(validSignup) } as any);
+      expect((r as any).error).toBe("Account creation timed out. Try again.");
+    });
+
+    it("uses conflict-specific copy without a backend message", async () => {
+      mocks.signup.mockRejectedValue(
+        new AxiosError("Conflict", undefined, undefined, undefined, {
+          status: 409,
+          statusText: "Conflict",
+          headers: {},
+          config: { headers: {} } as any,
+          data: {},
+        } as any)
+      );
+      const r = await clientAction({ request: makeFormReq(validSignup) } as any);
+      expect((r as any).error).toBe(
+        "An account with these details already exists. Review the form and try again."
+      );
+    });
+
     it("slices overlong fields", async () => {
       mocks.signup.mockResolvedValue({ user: { id: "u1" }, accessToken: "at", refreshToken: "rt" });
       mocks.createUserSession.mockResolvedValue(new Response("", { status: 302 }));
@@ -156,6 +196,21 @@ describe("auth.signup route", () => {
       mocks.useActionData.mockReturnValue({ error: "Email already exists" });
       render(<Signup />);
       expect(screen.getByText(/Email already exists/)).toBeInTheDocument();
+    });
+
+    it("associates the server error with key signup inputs", () => {
+      mocks.useActionData.mockReturnValue({ error: "Email already exists" });
+      render(<Signup />);
+      expect(screen.getByLabelText(/email/i)).toHaveAttribute("aria-describedby", "signup-form-error");
+      expect(screen.getByLabelText(/first name/i)).toHaveAttribute("aria-describedby", "signup-form-error");
+    });
+  });
+
+  describe("getSignupError", () => {
+    it("preserves plain thrown errors", () => {
+      expect(getSignupError(new Error("Registration blocked"), "fallback")).toBe(
+        "Registration blocked"
+      );
     });
   });
 });

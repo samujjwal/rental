@@ -239,7 +239,7 @@ export class CategoriesService {
       categoryId: category.id,
       listingCount: listingCount,
       averagePrice: aggregate._avg.basePrice || 0,
-      totalBookings: 0, // Placeholder
+      totalBookings: await this.prisma.booking.count({ where: { listing: { categoryId: id } } }),
     };
   }
 

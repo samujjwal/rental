@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { testUsers } from "./helpers/fixtures";
 import { loginAs } from "./helpers/test-utils";
 
+const API_BASE_URL = process.env.E2E_API_URL || "http://localhost:3400/api";
+
 /**
  * Smoke Tests - Quick validation that core functionality works
  * These tests should run fast and cover the happy path
@@ -97,7 +99,7 @@ test.describe("Smoke Tests - Critical Paths", () => {
 test.describe("Smoke Tests - API Endpoints", () => {
   test("auth endpoints are accessible", async ({ request }) => {
     // Just check that the auth endpoint doesn't 404
-    const response = await request.post("/api/auth/login", {
+    const response = await request.post(`${API_BASE_URL}/auth/login`, {
       data: {
         email: "test@test.com",
         password: "wrong"
@@ -111,7 +113,7 @@ test.describe("Smoke Tests - API Endpoints", () => {
   });
 
   test("listings endpoint is accessible", async ({ request }) => {
-    const response = await request.get("/api/listings", {
+    const response = await request.get(`${API_BASE_URL}/listings`, {
       failOnStatusCode: false
     });
     

@@ -9,13 +9,34 @@ export class ImageModerationService {
   constructor(private readonly config: ConfigService) {}
 
   /**
-   * Moderate image content
-   * In production: Use AWS Rekognition, Google Vision API, or Cloudflare Images
+   * Moderate image content.
+   *
+   * When FEATURE_IMAGE_MODERATION=true (and a moderation provider is configured)
+   * this calls the real API. Otherwise it flags every image for manual human review,
+   * which is the safest default — images will not be auto-approved.
    */
   async moderateImage(imageUrl: string): Promise<{
     flags: ModerationFlag[];
     confidence: number;
   }> {
+    const featureEnabled = this.config.get<string>('FEATURE_IMAGE_MODERATION') === 'true';
+
+    if (!featureEnabled) {
+      // Fail-safe: require a human to approve every image rather than auto-passing.
+      return {
+        flags: [
+          {
+            type: 'PENDING_HUMAN_REVIEW',
+            severity: 'MEDIUM',
+            confidence: 1,
+            description:
+              'Automated image moderation is disabled. Image requires manual review before publishing.',
+          },
+        ],
+        confidence: 0,
+      };
+    }
+
     const flags: ModerationFlag[] = [];
 
     try {
@@ -103,8 +124,9 @@ export class ImageModerationService {
   }
 
   /**
-   * Call image moderation API (placeholder)
-   * In production: Implement AWS Rekognition or Google Vision API
+   * Call image moderation API.
+   * Configure a provider by setting FEATURE_IMAGE_MODERATION=true and implementing
+   * one of the provider methods below (moderateWithRekognition / moderateWithVision).
    */
   private async callImageModerationAPI(imageUrl: string): Promise<any> {
     // AWS Rekognition example:

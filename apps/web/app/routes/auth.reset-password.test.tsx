@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -51,7 +52,11 @@ vi.mock("react-hook-form", () => ({
 vi.mock("@hookform/resolvers/zod", () => ({ zodResolver: () => vi.fn() }));
 vi.mock("lucide-react", () => ({ Eye: IconStub, EyeOff: IconStub, CheckCircle: IconStub, Info: IconStub }));
 
-import ResetPassword, { clientLoader, clientAction } from "./auth.reset-password";
+import ResetPassword, {
+  clientLoader,
+  clientAction,
+  getResetPasswordError,
+} from "./auth.reset-password";
 
 function makeFormReq(fields: Record<string, string>) {
   const fd = new FormData();
@@ -147,12 +152,78 @@ describe("auth.reset-password route", () => {
       } as any);
       expect(r.success).toBe(false);
     });
+
+    it("preserves backend reset-password errors", async () => {
+      mocks.resetPassword.mockRejectedValue({
+        response: { data: { message: "Reset link expired" } },
+      });
+      const r = await clientAction({
+        request: makeFormReq({
+          intent: "reset-password", token: "validtoken1234",
+          password: "NewPass123!", confirmPassword: "NewPass123!",
+        }),
+      } as any);
+      expect(r.error).toBe("Reset link expired");
+    });
+
+    it("uses actionable offline copy", async () => {
+      mocks.resetPassword.mockRejectedValue(new Error("Network Error"));
+      const online = window.navigator.onLine;
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      const r = await clientAction({
+        request: makeFormReq({
+          intent: "reset-password", token: "validtoken1234",
+          password: "NewPass123!", confirmPassword: "NewPass123!",
+        }),
+      } as any);
+      expect(r.error).toBe(
+        "You appear to be offline. Reconnect and try resetting your password again."
+      );
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: online,
+      });
+    });
+
+    it("uses timeout-specific copy", async () => {
+      mocks.resetPassword.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+      const r = await clientAction({
+        request: makeFormReq({
+          intent: "reset-password", token: "validtoken1234",
+          password: "NewPass123!", confirmPassword: "NewPass123!",
+        }),
+      } as any);
+      expect(r.error).toBe("Resetting the password timed out. Try again.");
+    });
+  });
+
+  describe("getResetPasswordError", () => {
+    it("preserves plain thrown errors", () => {
+      expect(getResetPasswordError(new Error("Token expired"), "fallback")).toBe(
+        "Token expired"
+      );
+    });
   });
 
   describe("ResetPassword component", () => {
     it("renders form", () => {
       render(<ResetPassword />);
       expect(screen.getAllByText(/reset|new password|set/i).length).toBeGreaterThan(0);
+    });
+
+    it("associates the server error with reset password fields", () => {
+      mocks.useActionData.mockReturnValue({ success: false, error: "Reset link expired" });
+      render(<ResetPassword />);
+      expect(screen.getByLabelText(/^new password$/i, { selector: "input" })).toHaveAttribute(
+        "aria-describedby",
+        "reset-password-form-error"
+      );
+      expect(
+        screen.getByLabelText(/^confirm new password$/i, { selector: "input" })
+      ).toHaveAttribute("aria-describedby", "reset-password-form-error");
     });
   });
 });

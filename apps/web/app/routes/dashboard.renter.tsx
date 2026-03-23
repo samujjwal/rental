@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
 import { useMemo } from "react";
-import { useLoaderData, Link, redirect } from "react-router";
+import { useLoaderData, Link, redirect, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useDashboardState } from "~/hooks/useDashboardState";
 import {
@@ -42,6 +42,7 @@ import {
   CollapsibleSection,
   ContextualHelp,
   FirstTimeHelp,
+  UnifiedButton,
 } from "~/components/ui";
 import { PortalPageLayout } from "~/components/layout";
 import { RecentActivity } from "~/components/dashboard/RecentActivity";
@@ -53,6 +54,8 @@ import { renterNavSections } from "~/config/navigation";
 import { useDashboardPreferences } from "~/hooks/useDashboardPreferences";
 import { notificationsApi } from "~/lib/api/notifications";
 import { messagingApi } from "~/lib/api/messaging";
+import { requestNavigation } from "~/lib/navigation";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Renter Dashboard | GharBatai Rentals" }];
@@ -85,6 +88,42 @@ const safeDateLabel = (value: unknown, pattern: string): string => {
 const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
   return text || fallback;
+};
+
+const getRenterDashboardLoadError = (
+  error: unknown,
+  failedSections: string[] = []
+): string => {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  const sectionSuffix =
+    failedSections.length > 0
+      ? ` Some sections could not be loaded: ${failedSections.join(", ")}.`
+      : "";
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return `You appear to be offline. Reconnect and try loading the renter dashboard again.${sectionSuffix}`;
+  }
+
+  return getActionableErrorMessage(
+    error,
+    `Unable to load the renter dashboard right now.${sectionSuffix}`,
+    {
+      [ApiErrorType.OFFLINE]: `You appear to be offline. Reconnect and try loading the renter dashboard again.${sectionSuffix}`,
+      [ApiErrorType.TIMEOUT_ERROR]: `Loading the renter dashboard timed out. Try again.${sectionSuffix}`,
+      [ApiErrorType.NETWORK_ERROR]: `We could not reach the dashboard service. Try again in a moment.${sectionSuffix}`,
+    }
+  );
 };
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
@@ -129,6 +168,9 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
           : null
       )
       .filter(Boolean) as string[];
+    const firstRejectedReason = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected"
+    )?.reason;
 
     const bookings = Array.isArray(bookingsResponse) ? bookingsResponse : [];
     const favoritesRaw = Array.isArray(favoritesResponse.favorites)
@@ -209,6 +251,10 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
         typeof unreadMsgs?.count === "number" ? unreadMsgs.count : 0,
       urgentPaymentBookingId,
       failedSections,
+      error:
+        failedSections.length > 0
+          ? getRenterDashboardLoadError(firstRejectedReason, failedSections)
+          : null,
     };
   } catch (error) {
     return {
@@ -225,7 +271,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       unreadNotifications: 0,
       unreadMessages: 0,
       urgentPaymentBookingId: null,
-      error: "Failed to load renter dashboard data",
+      error: getRenterDashboardLoadError(error),
     };
   }
 }
@@ -463,6 +509,7 @@ function ListingCard({
 
 export default function RenterDashboardRoute() {
   const { t } = useTranslation();
+  const revalidator = useRevalidator();
   const {
     stats,
     recentBookings,
@@ -479,20 +526,21 @@ export default function RenterDashboardRoute() {
   // P0.1 FIX: Consolidated state management to prevent race conditions and stale closures
   // All derived state is computed atomically in a single useMemo
   const { userActivityLevel, showFirstTimeHelp, personalizedRecommendations } = useDashboardState(recentBookings);
-  const banner = error ? (
+  const banner = error && (!failedSections || failedSections.length === 0) ? (
     <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
       {error}
     </div>
   ) : failedSections && failedSections.length > 0 ? (
     <div className="bg-warning/10 border border-warning/20 rounded-lg p-4">
       <p className="text-sm text-warning-foreground">
-        Some sections failed to load: {failedSections.join(", ")}.{" "}
-        <button
-          onClick={() => window.location.reload()}
-          className="underline font-medium"
+        {error || `Some sections failed to load: ${failedSections.join(", ")}.`}{" "}
+        <UnifiedButton
+          variant="ghost"
+          className="h-auto p-0 underline font-medium"
+          onClick={() => revalidator.revalidate()}
         >
           Retry
-        </button>
+        </UnifiedButton>
       </p>
     </div>
   ) : null;
@@ -897,7 +945,7 @@ export default function RenterDashboardRoute() {
           description="This is your personal hub for managing rentals, favorites, and messages. Start by browsing items or create your first booking."
           action={{
             label: "Browse Items",
-            onClick: () => window.location.href = "/search"
+            onClick: () => requestNavigation("/search")
           }}
           onDismiss={() => {
             // Could persist dismissal in localStorage

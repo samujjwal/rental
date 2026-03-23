@@ -19,6 +19,7 @@ import { useAuthStore } from "~/lib/store/auth";
 import { cn } from "~/lib/utils";
 import { loginSchema, type LoginInput } from "~/lib/validation/auth";
 import { getUser } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -43,6 +44,44 @@ function sanitizeRedirectPath(redirectTo?: string | null) {
     return "/";
   }
   return normalized;
+}
+
+export function getLoginError(
+  error: unknown,
+  fallbackMessage = "Login failed. Please try again."
+): string {
+  const hasTransportContext = Boolean(
+    error &&
+      typeof error === "object" &&
+      ("response" in error || "code" in error || "isAxiosError" in error)
+  );
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try signing in again.";
+  }
+
+  if (hasTransportContext) {
+    return getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try signing in again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Sign in timed out. Try again.",
+    });
+  }
+
+  if (error instanceof Error) {
+    return error.message || fallbackMessage;
+  }
+
+  return fallbackMessage;
 }
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
@@ -96,13 +135,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
 
     return sessionResponse;
   } catch (error: unknown) {
-    const errorMessage =
-      error && typeof error === "object" && "response" in error
-        ? (error as { response?: { data?: { message?: string } } }).response
-            ?.data?.message
-        : error instanceof Error
-          ? error.message
-          : "Login failed. Please try again.";
+    const errorMessage = getLoginError(error);
 
     // If MFA code is required, signal the UI to show MFA input
     if (errorMessage === "MFA code required") {
@@ -140,6 +173,10 @@ export default function Login() {
     reValidateMode: "onChange",
   });
 
+  const actionErrorId = actionData?.error ? "login-form-error" : undefined;
+  const emailErrorId = errors.email ? "login-email-error" : undefined;
+  const passwordErrorId = errors.password ? "login-password-error" : undefined;
+
   // Update auth store when login succeeds
   useEffect(() => {
     if (actionData && !actionData.error && typeof window !== "undefined") {
@@ -169,7 +206,7 @@ export default function Login() {
             {/* Error Message */}
             {actionData?.error && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <p className="text-sm text-destructive">{actionData.error}</p>
+                <p id="login-form-error" className="text-sm text-destructive">{actionData.error}</p>
               </div>
             )}
 
@@ -188,6 +225,8 @@ export default function Login() {
                 maxLength={320}
                 {...register("email")}
                 onBlur={() => trigger("email")}
+                aria-invalid={!!errors.email}
+                aria-describedby={emailErrorId || actionErrorId}
                 className={cn(
                   "flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background",
                   "placeholder:text-muted-foreground",
@@ -201,7 +240,7 @@ export default function Login() {
                 required
               />
               {errors.email && (
-                <p className="text-xs text-destructive">{errors.email.message}</p>
+                <p id="login-email-error" className="text-xs text-destructive">{errors.email.message}</p>
               )}
             </div>
 
@@ -221,6 +260,8 @@ export default function Login() {
                   maxLength={1024}
                   {...register("password")}
                   onBlur={() => trigger("password")}
+                  aria-invalid={!!errors.password}
+                  aria-describedby={passwordErrorId || actionErrorId}
                   className={cn(
                     "flex h-10 w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm ring-offset-background",
                     "placeholder:text-muted-foreground",
@@ -247,7 +288,7 @@ export default function Login() {
                 </button>
               </div>
               {errors.password && (
-                <p className="text-xs text-destructive">{errors.password.message}</p>
+                <p id="login-password-error" className="text-xs text-destructive">{errors.password.message}</p>
               )}
             </div>
 
@@ -267,6 +308,7 @@ export default function Login() {
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={6}
+                  aria-describedby="login-mfa-help"
                   className={cn(
                     "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
                     "placeholder:text-muted-foreground",
@@ -275,7 +317,7 @@ export default function Login() {
                   placeholder={t('auth.login.mfaPlaceholder')}
                   required
                 />
-                <p className="text-xs text-muted-foreground">
+                <p id="login-mfa-help" className="text-xs text-muted-foreground">
                   {t('auth.login.mfaHelp')}
                 </p>
               </div>

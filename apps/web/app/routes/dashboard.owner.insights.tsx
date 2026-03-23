@@ -1,6 +1,6 @@
 import type { MetaFunction } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link, redirect, useLocation } from "react-router";
+import { useLoaderData, Link, redirect, useLocation, useRevalidator } from "react-router";
 import { useState } from "react";
 import {
   Lightbulb,
@@ -21,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  UnifiedButton,
   RouteErrorBoundary,
 } from "~/components/ui";
 import { PortalPageLayout } from "~/components/layout";
@@ -30,6 +31,7 @@ import { analyticsApi, type InsightData } from "~/lib/api/analytics";
 import { ownerNavSections } from "~/config/navigation";
 import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -45,6 +47,13 @@ const safeNumber = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+export function getOwnerInsightsLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load insights", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading insights timed out. Try again.",
+  });
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -80,10 +89,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       data: null,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load insights",
+      error: getOwnerInsightsLoadError(error),
     };
   }
 }
@@ -157,6 +163,7 @@ export default function OwnerInsightsPage() {
   const { t } = useTranslation();
   const { data, error } = useLoaderData<typeof clientLoader>();
   const { pathname } = useLocation();
+  const { revalidate } = useRevalidator();
   const [selectedTab, setSelectedTab] = useState<
     "insights" | "trends" | "optimization"
   >("insights");
@@ -204,7 +211,12 @@ export default function OwnerInsightsPage() {
       banner={
         error ? (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-            {error}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <p>{error}</p>
+              <UnifiedButton type="button" variant="outline" onClick={() => revalidate()}>
+                Try Again
+              </UnifiedButton>
+            </div>
           </div>
         ) : null
       }

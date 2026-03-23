@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 const TOKEN_KEY = 'auth_access_token';
 const REFRESH_KEY = 'auth_refresh_token';
 const USER_KEY = 'auth_user';
+const BIOMETRIC_KEY = 'auth_biometric_enabled';
 
 /** Convenience named export so modules can `import { getToken }` */
 export async function getToken(): Promise<string | null> {
@@ -38,6 +39,7 @@ export const authStore = {
       SecureStore.deleteItemAsync(TOKEN_KEY),
       SecureStore.deleteItemAsync(REFRESH_KEY),
       SecureStore.deleteItemAsync(USER_KEY),
+      SecureStore.deleteItemAsync(BIOMETRIC_KEY),
     ]);
   },
 
@@ -51,6 +53,19 @@ export const authStore = {
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
+    }
+  },
+
+  async setBiometricEnabled(enabled: boolean): Promise<void> {
+    await SecureStore.setItemAsync(BIOMETRIC_KEY, enabled ? '1' : '0');
+  },
+
+  async isBiometricEnabled(): Promise<boolean> {
+    try {
+      const val = await SecureStore.getItemAsync(BIOMETRIC_KEY);
+      return val === '1';
+    } catch {
+      return false;
     }
   },
 };

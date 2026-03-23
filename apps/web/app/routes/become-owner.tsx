@@ -28,6 +28,7 @@ import { UnifiedButton } from "~/components/ui";
 import { cn } from "~/lib/utils";
 import { formatCurrency } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -35,6 +36,13 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "Start earning by renting out your items" },
   ];
 };
+
+export function getBecomeOwnerError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to become an owner", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Upgrade request timed out. Try again.",
+  });
+}
 
 export async function clientAction({ request }: { request: Request }) {
   const currentUser = await getUser(request);
@@ -65,10 +73,7 @@ export async function clientAction({ request }: { request: Request }) {
   } catch (error: unknown) {
     return {
       success: false,
-      message:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to become an owner",
+      message: getBecomeOwnerError(error),
     };
   }
 }

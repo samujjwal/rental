@@ -35,6 +35,11 @@ import {
   getPortalNavSections,
   resolvePortalNavRole,
 } from "~/config/navigation";
+import {
+  ApiErrorType,
+  getActionableErrorMessage,
+  parseApiError,
+} from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Messages | GharBatai Rentals" }];
@@ -66,6 +71,154 @@ const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
   return text || fallback;
 };
+
+function getMessagesResponseMessage(error: unknown): string | undefined {
+  return error && typeof error === "object" && "response" in error
+    ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+    : undefined;
+}
+
+const PRESERVED_MESSAGES_ROUTE_ERRORS = new Set([
+  "You are not part of this booking conversation.",
+  "Unable to resolve conversation participant.",
+  "Invalid listing conversation target.",
+]);
+
+function getMessagesContextualError(
+  error: unknown,
+  fallbackMessage: string,
+  overrides: Partial<Record<ApiErrorType, string>> = {}
+): string {
+  const responseMessage = getMessagesResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (
+    error instanceof Error &&
+    PRESERVED_MESSAGES_ROUTE_ERRORS.has(error.message)
+  ) {
+    return error.message;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return overrides[ApiErrorType.OFFLINE] || fallbackMessage;
+  }
+
+  const parsed = parseApiError(error);
+  if (parsed.type === ApiErrorType.UNKNOWN_ERROR) {
+    return fallbackMessage;
+  }
+
+  return overrides[parsed.type] || parsed.message || fallbackMessage;
+}
+
+export function getMessagesLoadError(
+  error: unknown,
+  fallbackMessage = "Failed to load messages. Please try again."
+): string {
+  const responseMessage = getMessagesResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading messages again.";
+  }
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading messages again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading messages timed out. Try again.",
+  });
+}
+
+export function getMessagesConversationLoadError(error: unknown): string {
+  return getMessagesContextualError(
+    error,
+    "Unable to load this conversation right now. Try again.",
+    {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading this conversation again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Loading this conversation timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not load this conversation right now. Try again in a moment.",
+    }
+  );
+}
+
+export function getMessagesStartConversationError(
+  error: unknown,
+  fallbackMessage = "Failed to start conversation. Please try again."
+): string {
+  const responseMessage = getMessagesResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try starting the conversation again.";
+  }
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.CONFLICT]: "This conversation already exists. Refresh and open it again.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try starting the conversation again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Starting the conversation timed out. Try again.",
+  });
+}
+
+export function getMessagesBookingBootstrapError(error: unknown): string {
+  return getMessagesContextualError(
+    error,
+    "Unable to open the conversation for this booking right now. Try again.",
+    {
+      [ApiErrorType.CONFLICT]: "This conversation already exists. Refresh and open it again.",
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try opening the booking conversation again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Opening the booking conversation timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not open the booking conversation right now. Try again in a moment.",
+    }
+  );
+}
+
+export function getMessagesListingBootstrapError(error: unknown): string {
+  return getMessagesContextualError(
+    error,
+    "Unable to start a conversation for this listing right now. Try again.",
+    {
+      [ApiErrorType.CONFLICT]: "This conversation already exists. Refresh and open it again.",
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try starting the listing conversation again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Starting the listing conversation timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not start the listing conversation right now. Try again in a moment.",
+    }
+  );
+}
+
+export function getMessagesSendError(
+  error: unknown,
+  fallbackMessage = "Failed to send message. Please try again."
+): string {
+  const responseMessage = getMessagesResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try sending the message again.";
+  }
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try sending the message again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Sending the message timed out. Try again.",
+  });
+}
+
+export function getMessagesAttachmentError(
+  error: unknown,
+  fallbackMessage = "Failed to upload attachments. Please try again."
+): string {
+  const responseMessage = getMessagesResponseMessage(error);
+  if (responseMessage) {
+    return responseMessage;
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try uploading attachments again.";
+  }
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try uploading attachments again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Uploading attachments timed out. Try again.",
+  });
+}
 
 interface TransformedConversation {
   id: string;
@@ -211,7 +364,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
         messages = apiMessages;
         await messagingApi.markAsRead(selectedConversationId);
       } catch (error) {
-        toast.error("Failed to load messages for this conversation.");
+        toast.error(getMessagesConversationLoadError(error));
       }
     }
 
@@ -228,7 +381,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       rawMessages: [],
       currentUserId: user.id,
       portalRole,
-      error: "Failed to load messages. Please try again.",
+      error: getMessagesLoadError(error),
     };
   }
 }
@@ -263,6 +416,7 @@ export default function Messages() {
   const [selectedConversation, setSelectedConversation] = useState<
     string | null
   >(searchParams.get("conversation") || (conversations[0]?.id ?? null));
+  const conversationParam = searchParams.get("conversation");
 
   // Pass selectedConversation so the socket auto-rejoins on reconnect
   const { socket, isConnected } = useSocket(selectedConversation);
@@ -278,6 +432,10 @@ export default function Messages() {
     setConversationsList(conversations);
   }, [rawConversations, currentUserId]); // Update when loader data changes
 
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [rawMessages, currentUserId]);
+
   const [newMessage, setNewMessage] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -288,18 +446,32 @@ export default function Messages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (
-      selectedConversation &&
-      conversationsList.some((c) => c.id === selectedConversation)
-    ) {
+    const conversationExists = (id: string | null) =>
+      Boolean(id && conversationsList.some((conversation) => conversation.id === id));
+
+    if (conversationParam && conversationExists(conversationParam)) {
+      if (selectedConversation !== conversationParam) {
+        setSelectedConversation(conversationParam);
+      }
       return;
     }
+
+    if (selectedConversation && conversationExists(selectedConversation)) {
+      return;
+    }
+
     if (conversationsList.length > 0) {
-      setSelectedConversation(conversationsList[0].id);
+      const fallbackConversationId = conversationsList[0].id;
+      if (selectedConversation !== fallbackConversationId) {
+        setSelectedConversation(fallbackConversationId);
+      }
       return;
     }
-    setSelectedConversation(null);
-  }, [conversationsList, selectedConversation]);
+
+    if (selectedConversation !== null) {
+      setSelectedConversation(null);
+    }
+  }, [conversationParam, conversationsList, selectedConversation]);
 
   // Fetch messages when conversation changes
   const fetchMessages = useCallback(
@@ -330,7 +502,7 @@ export default function Messages() {
           )
         );
       } catch (error) {
-        toast.error("Failed to load messages. Please try again.");
+        toast.error(getMessagesConversationLoadError(error));
       } finally {
         setIsLoadingMessages(false);
       }
@@ -501,7 +673,7 @@ export default function Messages() {
         setShowMobileChat(true);
         await fetchMessages(conversation.id);
       } catch (err) {
-        toast.error("Failed to start conversation. Please try again.");
+        toast.error(getMessagesBookingBootstrapError(err));
       } finally {
         if (isActive) setIsStartingConversation(false);
       }
@@ -569,7 +741,7 @@ export default function Messages() {
         setShowMobileChat(true);
         await fetchMessages(conversation.id);
       } catch (err) {
-        toast.error("Failed to start conversation. Please try again.");
+        toast.error(getMessagesListingBootstrapError(err));
       } finally {
         if (isActive) setIsStartingConversation(false);
       }
@@ -601,8 +773,16 @@ export default function Messages() {
   }, [messages]);
 
   useEffect(() => {
-    if (!selectedConversation) return;
     const next = new URLSearchParams(searchParams);
+
+    if (!selectedConversation) {
+      if (next.has("conversation")) {
+        next.delete("conversation");
+        setSearchParams(next, { replace: true });
+      }
+      return;
+    }
+
     if (next.get("conversation") !== selectedConversation) {
       next.set("conversation", selectedConversation);
       setSearchParams(next, { replace: true });
@@ -743,7 +923,7 @@ export default function Messages() {
         );
       }
     } catch (error) {
-      toast.error("Failed to send message. Please try again.");
+      toast.error(getMessagesSendError(error));
       // Remove optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMessage.id));
       setNewMessage(messageContent); // Restore the message
@@ -774,7 +954,7 @@ export default function Messages() {
         [...prev, ...urls].slice(0, MAX_ATTACHMENTS)
       );
     } catch (error) {
-      toast.error("Failed to upload attachments. Please try again.");
+      toast.error(getMessagesAttachmentError(error));
     } finally {
       setIsUploading(false);
     }
@@ -816,12 +996,13 @@ export default function Messages() {
               <strong>Offline —</strong> real-time messaging is unavailable. Messages you send will
               be delivered, but you won&apos;t receive new ones until reconnected.
             </span>
-            <button
-              onClick={() => window.location.reload()}
-              className="ml-auto flex-shrink-0 underline font-medium hover:no-underline"
+            <UnifiedButton
+              variant="ghost"
+              className="ml-auto h-auto flex-shrink-0 p-0 underline font-medium hover:no-underline"
+              onClick={() => revalidator.revalidate()}
             >
               Reconnect
-            </button>
+            </UnifiedButton>
           </div>
         ) : null
       }

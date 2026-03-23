@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -58,7 +59,7 @@ vi.mock("react-hook-form", () => ({
 vi.mock("@hookform/resolvers/zod", () => ({ zodResolver: () => vi.fn() }));
 vi.mock("lucide-react", () => ({ Eye: IconStub, EyeOff: IconStub, LogIn: IconStub }));
 
-import Login, { clientLoader, clientAction } from "./auth.login";
+import Login, { clientLoader, clientAction, getLoginError } from "./auth.login";
 
 function makeFormReq(fields: Record<string, string>) {
   const fd = new FormData();
@@ -198,6 +199,39 @@ describe("auth.login route", () => {
       } as any);
       expect((result as any).error).toBe("Invalid credentials");
     });
+
+    it("uses actionable offline copy", async () => {
+      mocks.login.mockRejectedValue(new Error("Network Error"));
+      const online = window.navigator.onLine;
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      const result = await clientAction({
+        request: makeFormReq({ intent: "login", email: "a@b.com", password: "Pass1234!" }),
+      } as any);
+      expect((result as any).error).toBe(
+        "You appear to be offline. Reconnect and try signing in again."
+      );
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: online,
+      });
+    });
+
+    it("uses timeout-specific copy", async () => {
+      mocks.login.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+      const result = await clientAction({
+        request: makeFormReq({ intent: "login", email: "a@b.com", password: "Pass1234!" }),
+      } as any);
+      expect((result as any).error).toBe("Sign in timed out. Try again.");
+    });
+  });
+
+  describe("getLoginError", () => {
+    it("preserves plain thrown errors", () => {
+      expect(getLoginError(new Error("Network error"), "fallback")).toBe("Network error");
+    });
   });
 
   // ── Component ─────────────────────────────────────────────────────
@@ -212,6 +246,16 @@ describe("auth.login route", () => {
       mocks.useActionData.mockReturnValue({ error: "Bad credentials" });
       render(<Login />);
       expect(screen.getByText(/Bad credentials/)).toBeInTheDocument();
+    });
+
+    it("associates the server error with login fields", () => {
+      mocks.useActionData.mockReturnValue({ error: "Bad credentials" });
+      render(<Login />);
+      expect(screen.getByLabelText(/email/i)).toHaveAttribute("aria-describedby", "login-form-error");
+      expect(screen.getByLabelText(/^password$/i, { selector: "input" })).toHaveAttribute(
+        "aria-describedby",
+        "login-form-error"
+      );
     });
   });
 });

@@ -103,6 +103,18 @@ export class PaymentsController {
     }
 
     const normalizedStatus = String(booking.status || '').toUpperCase();
+    if (normalizedStatus === 'PENDING_PAYMENT') {
+      const existingPayment = await this.paymentData.getLatestPaymentForBooking(bookingId);
+      const existingClientSecret = this.getReusableClientSecret(existingPayment, booking.paymentIntentId);
+
+      if (existingPayment?.paymentIntentId && existingClientSecret) {
+        return {
+          paymentIntentId: existingPayment.paymentIntentId,
+          clientSecret: existingClientSecret,
+        };
+      }
+    }
+
     if (normalizedStatus === 'PAYMENT_FAILED') {
       await this.stateMachine.transition(
         bookingId,
@@ -131,6 +143,10 @@ export class PaymentsController {
         status: 'PENDING',
         paymentIntentId: paymentResult.paymentIntentId,
         stripePaymentIntentId: paymentResult.paymentIntentId,
+        metadata: {
+          clientSecret: paymentResult.clientSecret,
+          providerId: paymentResult.providerId ?? null,
+        },
       }, tx);
 
       return paymentResult;
@@ -554,6 +570,29 @@ export class PaymentsController {
     return ['ADMIN', 'SUPER_ADMIN', 'SUPPORT_ADMIN', 'FINANCE_ADMIN'].includes(
       String(role || '').toUpperCase(),
     );
+  }
+
+  private getReusableClientSecret(
+    payment: { paymentIntentId?: string | null; status?: string | null; metadata?: string | null } | null | undefined,
+    bookingPaymentIntentId?: string | null,
+  ): string | null {
+    if (!payment?.paymentIntentId || !bookingPaymentIntentId) {
+      return null;
+    }
+
+    if (payment.paymentIntentId !== bookingPaymentIntentId) {
+      return null;
+    }
+
+    const normalizedStatus = String(payment.status || '').toUpperCase();
+    if (!['PENDING', 'PROCESSING'].includes(normalizedStatus)) {
+      return null;
+    }
+
+    const metadata = this.parsePaymentMetadata(payment.metadata);
+    return typeof metadata.clientSecret === 'string' && metadata.clientSecret.trim().length > 0
+      ? metadata.clientSecret
+      : null;
   }
 
   private parsePaymentMetadata(metadata: string | null | undefined): Record<string, unknown> {

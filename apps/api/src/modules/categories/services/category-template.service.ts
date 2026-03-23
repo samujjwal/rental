@@ -1,5 +1,20 @@
 import { Injectable } from '@nestjs/common';
 
+/**
+ * UI field descriptor for category-specific listing attributes.
+ * Derived from the canonical CATEGORY_TEMPLATES JSON Schema — clients must
+ * consume this from the API rather than maintaining their own static registries.
+ */
+export interface CategoryFieldDefinition {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'select' | 'boolean' | 'multiselect';
+  required?: boolean;
+  min?: number;
+  max?: number;
+  options?: Array<{ value: string; label: string }>;
+}
+
 // Define template schemas for each category
 export const CATEGORY_TEMPLATES = {
   spaces: {
@@ -377,5 +392,91 @@ export class CategoryTemplateService {
 
   getAllCategoryTemplates(): Record<string, Record<string, any>> {
     return CATEGORY_TEMPLATES;
+  }
+
+  /**
+   * Convert the JSON Schema for a category into a UI field descriptor array.
+   * This is the canonical source for category-specific form fields consumed by
+   * web and mobile clients. Clients should fetch this endpoint rather than
+   * maintaining their own static category field registries.
+   *
+   * Mapping rules (JSON Schema → CategoryFieldDefinition):
+   *  string (no enum)      → text
+   *  string (with enum)    → select
+   *  number                → number (min/max preserved)
+   *  boolean               → boolean
+   *  array (items w/ enum) → multiselect
+   *  object/other          → skipped (too complex for simple field rendering)
+   */
+  getCategoryFieldDefinitions(categorySlug: string): CategoryFieldDefinition[] {
+    const template = this.getTemplate(categorySlug);
+    if (!template?.properties) return [];
+
+    const fields: CategoryFieldDefinition[] = [];
+
+    for (const [key, rawSchema] of Object.entries(template.properties)) {
+      const schema = rawSchema as Record<string, any>;
+      const label = this.toLabel(key);
+
+      if (schema.type === 'boolean') {
+        fields.push({ key, label, type: 'boolean', required: !!schema.required });
+        continue;
+      }
+
+      if (schema.type === 'number') {
+        fields.push({
+          key,
+          label,
+          type: 'number',
+          required: !!schema.required,
+          min: schema.minimum,
+          max: schema.maximum,
+        });
+        continue;
+      }
+
+      if (schema.type === 'string' && Array.isArray(schema.enum)) {
+        fields.push({
+          key,
+          label,
+          type: 'select',
+          required: !!schema.required,
+          options: schema.enum.map((v: string) => ({ value: v, label: this.toLabel(v) })),
+        });
+        continue;
+      }
+
+      if (schema.type === 'string') {
+        fields.push({ key, label, type: 'text', required: !!schema.required });
+        continue;
+      }
+
+      if (
+        schema.type === 'array' &&
+        schema.items?.type === 'string' &&
+        Array.isArray(schema.items?.enum)
+      ) {
+        fields.push({
+          key,
+          label,
+          type: 'multiselect',
+          required: !!schema.required,
+          options: schema.items.enum.map((v: string) => ({ value: v, label: this.toLabel(v) })),
+        });
+        continue;
+      }
+
+      // Skip complex nested objects — they require custom UI and cannot be
+      // safely auto-generated from schema alone.
+    }
+
+    return fields;
+  }
+
+  private toLabel(key: string): string {
+    return key
+      .replace(/_/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AxiosError } from "axios";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
 const m = vi.hoisted(() => ({
@@ -43,7 +44,7 @@ vi.mock("lucide-react", () => ({
   Activity: IconStub, Server: IconStub, Zap: IconStub,
 }));
 
-import { clientLoader, clientAction } from "../system/database";
+import { clientLoader, clientAction, getAdminDatabaseError } from "../system/database";
 
 function form(fields: Record<string, string>) {
   const fd = new FormData();
@@ -75,6 +76,16 @@ describe("admin/system/database", () => {
       const res = await clientLoader({ request: new Request("http://l/") } as any);
       expect(res.health).toBeNull();
       expect(res.error).toBe("timeout");
+    });
+
+    it("returns actionable offline loader copy", async () => {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: false,
+      });
+      m.getSystemHealth.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+      const res = await clientLoader({ request: new Request("http://l/") } as any);
+      expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
     });
   });
 
@@ -139,7 +150,18 @@ describe("admin/system/database", () => {
         request: form({ intent: "clearCache", confirmed: "true" }),
       } as any);
       expect(res.success).toBe(false);
-      expect(res.error).toMatch(/clear.*cache/i);
+      expect(res.error).toBe("oops");
+    });
+  });
+
+  describe("error helper", () => {
+    it("preserves backend response messages", () => {
+      expect(
+        getAdminDatabaseError(
+          { response: { data: { message: "Vacuum blocked by maintenance window" } } },
+          "Failed to run vacuum"
+        )
+      ).toBe("Vacuum blocked by maintenance window");
     });
   });
 });

@@ -172,19 +172,43 @@ describe('PaymentsController', () => {
       paymentData.getBookingForPayment.mockResolvedValue({
         renterId: 'u1',
         status: 'PENDING_PAYMENT',
+        paymentIntentId: null,
         totalPrice: 1000,
         currency: 'NPR',
         renter: { stripeCustomerId: 'cus_123' },
       } as any);
+      paymentData.getLatestPaymentForBooking.mockResolvedValue(null as any);
       stripe.createPaymentIntent.mockResolvedValue({ paymentIntentId: 'pi_123', clientSecret: 'cs' } as any);
       const result = await controller.createPaymentIntent('b1', 'u1');
       expect(result.paymentIntentId).toBe('pi_123');
+    });
+
+    it('reuses the latest open payment intent when the booking already has one', async () => {
+      paymentData.getBookingForPayment.mockResolvedValue({
+        renterId: 'u1',
+        status: 'PENDING_PAYMENT',
+        paymentIntentId: 'pi_existing',
+        totalPrice: 1000,
+        currency: 'NPR',
+        renter: { stripeCustomerId: 'cus_123' },
+      } as any);
+      paymentData.getLatestPaymentForBooking.mockResolvedValue({
+        paymentIntentId: 'pi_existing',
+        status: 'PENDING',
+        metadata: JSON.stringify({ clientSecret: 'cs_existing' }),
+      } as any);
+
+      const result = await controller.createPaymentIntent('b1', 'u1');
+
+      expect(result).toEqual({ paymentIntentId: 'pi_existing', clientSecret: 'cs_existing' });
+      expect(stripe.createPaymentIntent).not.toHaveBeenCalled();
     });
 
     it('retries payment-failed bookings before creating the intent', async () => {
       paymentData.getBookingForPayment.mockResolvedValue({
         renterId: 'u1',
         status: 'PAYMENT_FAILED',
+        paymentIntentId: 'pi_failed',
         totalPrice: 1000,
         currency: 'NPR',
         renter: { stripeCustomerId: 'cus_123' },
@@ -194,6 +218,7 @@ describe('PaymentsController', () => {
         newState: 'PENDING_PAYMENT',
         message: 'Retry started',
       } as any);
+      paymentData.getLatestPaymentForBooking.mockResolvedValue(null as any);
       stripe.createPaymentIntent.mockResolvedValue({ paymentIntentId: 'pi_123', clientSecret: 'cs' } as any);
 
       const result = await controller.createPaymentIntent('b1', 'u1');
@@ -211,6 +236,7 @@ describe('PaymentsController', () => {
       paymentData.getBookingForPayment.mockResolvedValue({
         renterId: 'other-user',
         status: 'PENDING_PAYMENT',
+        paymentIntentId: null,
       } as any);
       await expect(controller.createPaymentIntent('b1', 'u1')).rejects.toThrow(ForbiddenException);
     });
@@ -219,6 +245,7 @@ describe('PaymentsController', () => {
       paymentData.getBookingForPayment.mockResolvedValue({
         renterId: 'u1',
         status: 'APPROVED',
+        paymentIntentId: null,
       } as any);
       await expect(controller.createPaymentIntent('b1', 'u1')).rejects.toThrow(BadRequestException);
     });

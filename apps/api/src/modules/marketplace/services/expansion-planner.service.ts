@@ -65,6 +65,11 @@ export class ExpansionPlannerService {
     const marketSize = this.estimateMarketSize(country);
     const competitorDensity = this.estimateCompetition(country);
 
+    this.logger.warn(
+      `Market evaluation for '${country}' uses static hardcoded estimates for marketSize and competitorDensity. ` +
+      'These are not live data — connect a market intelligence API for accurate scores.',
+    );
+
     // Determine what's needed
     const blockers: string[] = [];
     const recommendations: string[] = [];
@@ -99,6 +104,12 @@ export class ExpansionPlannerService {
     ) / 100;
 
     // Persist evaluation
+    // NOTE: marketSize and competitorDensity are static hardcoded estimates.
+    // The notes field records this so admin dashboards can surface the caveat.
+    const estimateNote =
+      'marketSize and competitorDensity are STATIC_ESTIMATE values (not live data). ' +
+      'Connect a market intelligence API (e.g. Statista, SimilarWeb) to replace them.';
+
     await this.prisma.marketOpportunity.upsert({
       where: { country },
       update: {
@@ -112,6 +123,7 @@ export class ExpansionPlannerService {
         requiresArchChange,
         policyPackOnly,
         evaluatedAt: new Date(),
+        notes: estimateNote,
       },
       create: {
         country,
@@ -125,6 +137,7 @@ export class ExpansionPlannerService {
         requiresArchChange,
         policyPackOnly,
         status: 'EVALUATED',
+        notes: estimateNote,
       },
     });
 

@@ -1,13 +1,34 @@
-name: Deploy to DigitalOcean
+# DEPRECATED — Legacy deploy workflow (npm / Node 18 / root SSH / git pull on host)
+#
+# This workflow is RETIRED as the supported deployment path. It is preserved for
+# emergency rollback reference only and must NOT be extended or used for normal
+# deployments.
+#
+# Use deploy-production.yml for all production deployments:
+#   - Node 20 + pnpm
+#   - Container-based image build and push to GHCR
+#   - No direct SSH git pull on production hosts
+#
+# This file has no push trigger; it can only be run manually if absolutely
+# required for emergency recovery. Remove it after full container pipeline is
+# validated for your environment.
+
+name: Deploy to DigitalOcean (DEPRECATED)
 
 on:
-  push:
-    branches: [main]
+  # Intentionally no push trigger — this workflow is retired.
+  # Only kept for emergency rollback reference.
   workflow_dispatch:
+    inputs:
+      confirm_deprecated:
+        description: 'Type CONFIRM to acknowledge this workflow is deprecated'
+        required: true
+        default: ''
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm_deprecated == 'CONFIRM' }}
     steps:
       - uses: actions/checkout@v3
       

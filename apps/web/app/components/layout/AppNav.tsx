@@ -7,7 +7,7 @@
  * there is a single implementation instead of two diverging copies.
  */
 import { Link, useLocation, useNavigate } from "react-router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Bell,
   Building2,
@@ -64,6 +64,9 @@ export function AppNav() {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const avatarMenuRef = useRef<HTMLDivElement>(null);
+  const unreadPollInFlightRef = useRef(false);
+  const unreadPollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unreadCountsRef = useRef({ notifications: 0, messages: 0 });
   useScrollLock(mobileMenuOpen);
 
   const initials = isAuthenticated
@@ -72,32 +75,97 @@ export function AppNav() {
       ).toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"
     : null;
 
-  // ── Single unread-count polling loop (60 s interval) ──────────────────────
+  const syncUnreadCounts = useCallback((nextNotifications: number, nextMessages: number) => {
+    if (nextNotifications !== unreadCountsRef.current.notifications) {
+      unreadCountsRef.current.notifications = nextNotifications;
+      setUnreadNotifications(nextNotifications);
+    }
+    if (nextMessages !== unreadCountsRef.current.messages) {
+      unreadCountsRef.current.messages = nextMessages;
+      setUnreadMessages(nextMessages);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!isAuthenticated) return;
+    unreadCountsRef.current = {
+      notifications: unreadNotifications,
+      messages: unreadMessages,
+    };
+  }, [unreadMessages, unreadNotifications]);
+
+  // ── Completion-aware unread-count polling loop ────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated) {
+      if (unreadPollTimeoutRef.current !== null) {
+        clearTimeout(unreadPollTimeoutRef.current);
+        unreadPollTimeoutRef.current = null;
+      }
+      unreadPollInFlightRef.current = false;
+      syncUnreadCounts(0, 0);
+      return;
+    }
+
     let cancelled = false;
+
+    const clearScheduledPoll = () => {
+      if (unreadPollTimeoutRef.current !== null) {
+        clearTimeout(unreadPollTimeoutRef.current);
+        unreadPollTimeoutRef.current = null;
+      }
+    };
+
+    const queueNextPoll = () => {
+      if (cancelled) {
+        return;
+      }
+      clearScheduledPoll();
+      unreadPollTimeoutRef.current = setTimeout(() => {
+        unreadPollTimeoutRef.current = null;
+        void fetchCounts();
+      }, 60_000);
+    };
+
     const fetchCounts = async () => {
+      if (unreadPollInFlightRef.current || cancelled) {
+        return;
+      }
+
+      unreadPollInFlightRef.current = true;
       try {
         const [notifs, msgs] = await Promise.allSettled([
           notificationsApi.getUnreadCount(),
           messagingApi.getUnreadCount(),
         ]);
-        if (cancelled) return;
-        if (notifs.status === "fulfilled")
-          setUnreadNotifications(Number(notifs.value?.count || 0));
-        if (msgs.status === "fulfilled")
-          setUnreadMessages(Number(msgs.value?.count || 0));
+        if (cancelled) {
+          return;
+        }
+
+        const nextNotifications =
+          notifs.status === "fulfilled"
+            ? Number(notifs.value?.count || 0)
+            : unreadCountsRef.current.notifications;
+        const nextMessages =
+          msgs.status === "fulfilled"
+            ? Number(msgs.value?.count || 0)
+            : unreadCountsRef.current.messages;
+
+        syncUnreadCounts(nextNotifications, nextMessages);
       } catch {
-        // Non-critical
+        // Non-critical.
+      } finally {
+        unreadPollInFlightRef.current = false;
+        queueNextPoll();
       }
     };
-    fetchCounts();
-    const interval = setInterval(fetchCounts, 60_000);
+
+    void fetchCounts();
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      unreadPollInFlightRef.current = false;
+      clearScheduledPoll();
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, syncUnreadCounts]);
 
   // ── Close avatar dropdown on outside click ─────────────────────────────────
   useEffect(() => {
@@ -253,6 +321,7 @@ export function AppNav() {
                   }
                   onClick={() => {
                     if (unreadNotifications > 0) {
+                      unreadCountsRef.current.notifications = 0;
                       setUnreadNotifications(0);
                       notificationsApi.markAllAsRead().catch(() => {});
                     }
@@ -275,7 +344,10 @@ export function AppNav() {
                         )
                       : t("nav.messages")
                   }
-                  onClick={() => setUnreadMessages(0)}
+                  onClick={() => {
+                    unreadCountsRef.current.messages = 0;
+                    setUnreadMessages(0);
+                  }}
                 >
                   <MessageCircle className="w-5 h-5" />
                   <UnreadBadge count={unreadMessages} />

@@ -6,11 +6,34 @@ import {
 } from '@nestjs/common';
 import { i18nNotFound, i18nForbidden, i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { CacheService } from '@/common/cache/cache.service';
 import {
   UserRole,
   PropertyStatus,
   UserStatus,
 } from '@rental-portal/database';
+
+/** Fields that must never be returned to admin API responses. */
+const SENSITIVE_USER_FIELDS = [
+  'passwordHash',
+  'mfaSecret',
+  'mfaBackupCodes',
+  'passwordResetToken',
+  'emailVerificationToken',
+  'governmentIdNumber',
+] as const;
+
+type SensitiveField = (typeof SENSITIVE_USER_FIELDS)[number];
+
+function stripSensitiveFields<T extends Record<string, unknown>>(
+  user: T,
+): Omit<T, SensitiveField> {
+  const safe = { ...user };
+  for (const field of SENSITIVE_USER_FIELDS) {
+    delete (safe as Record<string, unknown>)[field];
+  }
+  return safe as Omit<T, SensitiveField>;
+}
 
 /**
  * Extracted from admin.service.ts — handles user CRUD,
@@ -18,7 +41,10 @@ import {
  */
 @Injectable()
 export class AdminUsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   private async verifyAdmin(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
@@ -85,7 +111,7 @@ export class AdminUsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return { users, total };
+    return { users: users.map(stripSensitiveFields), total };
   }
 
   /**
@@ -111,7 +137,7 @@ export class AdminUsersService {
       throw i18nNotFound('auth.userNotFound');
     }
 
-    return user;
+    return stripSensitiveFields(user);
   }
 
   /**
@@ -172,23 +198,32 @@ export class AdminUsersService {
       });
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: targetUserId },
       data: {
         status: suspend ? UserStatus.SUSPENDED : UserStatus.ACTIVE,
       },
-    }).then(async (updated) => {
-      await this.prisma.auditLog.create({
-        data: {
-          userId: adminId,
-          action: suspend ? 'ADMIN_USER_SUSPENDED' : 'ADMIN_USER_ACTIVATED',
-          entityType: 'User',
-          entityId: targetUserId,
-          oldValues: JSON.stringify({ status: user.status }),
-          newValues: JSON.stringify({ status: updated.status }),
-        },
-      });
-      return updated;
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: suspend ? 'ADMIN_USER_SUSPENDED' : 'ADMIN_USER_ACTIVATED',
+        entityType: 'User',
+        entityId: targetUserId,
+        oldValues: JSON.stringify({ status: user.status }),
+        newValues: JSON.stringify({ status: updated.status }),
+      },
+    });
+
+    // F-13: Invalidate the Redis user cache so the next request re-fetches the
+    // suspended/activated status.  Also delete all DB sessions so existing
+    // tokens become invalid immediately.
+    await Promise.all([
+      this.cache.del(`user:${targetUserId}`),
+      this.prisma.session.deleteMany({ where: { userId: targetUserId } }),
+    ]);
+
+    return updated;
   }
 }

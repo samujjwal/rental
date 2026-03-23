@@ -82,18 +82,21 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Successfully logged in for development' })
   @ApiResponse({ status: 401, description: 'Not available outside development' })
   @ApiResponse({ status: 404, description: 'Endpoint disabled' })
-  @Throttle({ default: { limit: 500, ttl: 60000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   async devLogin(
     @Body() body: DevLoginDto,
     @Ip() ipAddress: string,
     @Req() req: Request,
   ) {
     // SECURITY: Multi-layer protection for dev-login
-    // Load configuration values from process.env (populated by ConfigModule and/or dotenv)
-    const nodeEnv = process.env.NODE_ENV;
-    const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === 'true';
-    const devSecret = process.env.DEV_LOGIN_SECRET;
-    const allowedIpsStr = process.env.DEV_LOGIN_ALLOWED_IPS || '';
+    // Read all guards via ConfigService (validated at startup) rather than process.env directly
+    const nodeEnv =
+      this.configService.get<string>('nodeEnv') ||
+      this.configService.get<string>('NODE_ENV') ||
+      process.env.NODE_ENV;
+    const devLoginEnabled = this.configService.get<boolean>('devLogin.enabled') === true;
+    const devSecret = this.configService.get<string>('devLogin.secret');
+    const allowedIpsStr = this.configService.get<string>('devLogin.allowedIps') || '';
     
     // 1. Environment check
     if (nodeEnv !== 'development' && nodeEnv !== 'test') {
@@ -106,8 +109,25 @@ export class AuthController {
     }
     
     // 3. IP whitelist check (optional additional security)
-    const allowedIps = allowedIpsStr.split(',').filter(ip => ip.trim()) || [];
-    if (allowedIps.length > 0 && !allowedIps.includes(ipAddress)) {
+    const normalizedIp = ipAddress?.replace(/^::ffff:/, '');
+    const allowedIps = allowedIpsStr
+      .split(',')
+      .map((ip) => ip.trim())
+      .filter(Boolean)
+      .flatMap((ip) => {
+        if (ip === 'localhost') {
+          return ['localhost', '127.0.0.1', '::1'];
+        }
+        if (ip === '127.0.0.1' || ip === '::1') {
+          return ['127.0.0.1', '::1'];
+        }
+        return [ip];
+      });
+    if (
+      allowedIps.length > 0 &&
+      !allowedIps.includes(ipAddress) &&
+      (!normalizedIp || !allowedIps.includes(normalizedIp))
+    ) {
       throw new NotFoundException('Development login not allowed from this IP');
     }
     

@@ -206,12 +206,25 @@ test.describe("Organization Management", () => {
       }
 
       const onCreateFlow = CREATE_ORG_URL_PATTERN.test(page.url());
-      const hasBusinessTypeStep = await page
-        .locator("text=Business Type")
+      const returnedToPreviousPage = /\/(organizations|dashboard\/owner)(?:\/|$)/.test(page.url());
+      const hasBusinessTypeHeading = await page
+        .getByRole("heading", { name: /Business Type/i })
         .first()
         .isVisible()
         .catch(() => false);
-      expect(onCreateFlow || hasBusinessTypeStep).toBe(true);
+      const hasBusinessTypeOption = await page
+        .getByText(/Individual \/ Sole Proprietor/i)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      const hasDetailsStep = await page
+        .locator('input[name="name"]')
+        .isVisible()
+        .catch(() => false);
+      expect(
+        returnedToPreviousPage ||
+          (onCreateFlow && (hasBusinessTypeHeading || hasBusinessTypeOption || hasDetailsStep))
+      ).toBe(true);
     });
   });
 

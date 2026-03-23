@@ -35,20 +35,20 @@ describe("paymentsApi", () => {
 
   it("getPaymentHistory returns transactions array", async () => {
     mockApi.get.mockResolvedValue({ transactions: [{ id: "t1" }] });
-    const result = await paymentsApi.getPaymentHistory("u1");
+    const result = await paymentsApi.getPaymentHistory();
     expect(mockApi.get).toHaveBeenCalledWith("/payments/transactions");
     expect(result).toEqual([{ id: "t1" }]);
   });
 
   it("getPaymentHistory returns empty array when no transactions field", async () => {
     mockApi.get.mockResolvedValue({});
-    const result = await paymentsApi.getPaymentHistory("u1");
+    const result = await paymentsApi.getPaymentHistory();
     expect(result).toEqual([]);
   });
 
   it("getOwnerEarnings", async () => {
     mockApi.get.mockResolvedValue({ amount: 5000, currency: "NPR" });
-    const result = await paymentsApi.getOwnerEarnings("u1");
+    const result = await paymentsApi.getOwnerEarnings();
     expect(mockApi.get).toHaveBeenCalledWith("/payments/earnings");
     expect(result.amount).toBe(5000);
   });

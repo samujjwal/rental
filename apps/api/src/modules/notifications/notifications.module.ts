@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
 import { NotificationsService } from './services/notifications.service';
 import { NotificationsController } from './controllers/notifications.controller';
 import { AdminNotificationsController } from './controllers/admin-notifications.controller';
@@ -12,7 +13,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Module({
-  imports: [EventEmitterModule.forRoot()],
+  imports: [EventEmitterModule.forRoot(), BullModule.registerQueue({ name: 'notifications' })],
   controllers: [NotificationsController, AdminNotificationsController, InAppNotificationController],
   providers: [
     NotificationsService,

@@ -3,6 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { AdminAnalyticsService } from './admin-analytics.service';
 import { AdminUsersService } from './admin-users.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { CacheService } from '@/common/cache/cache.service';
 import { UserRole, UserStatus, PropertyStatus } from '@rental-portal/database';
 
 describe('AdminAnalyticsService', () => {
@@ -246,6 +247,9 @@ describe('AdminUsersService', () => {
         findMany: jest.fn(),
         update: jest.fn(),
       },
+      session: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       listing: {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
@@ -258,6 +262,13 @@ describe('AdminUsersService', () => {
       providers: [
         AdminUsersService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: CacheService,
+          useValue: {
+            del: jest.fn().mockResolvedValue(undefined),
+            deletePattern: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 

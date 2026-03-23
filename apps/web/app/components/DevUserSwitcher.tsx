@@ -47,22 +47,21 @@ const DEV_USERS: DevUser[] = [
 ];
 
 export function DevUserSwitcher() {
+  // F-40 fix: ALL hooks must be called unconditionally before any early return.
   const navigate = useNavigate();
   const [isLoggingIn, setIsLoggingIn] = useState<string | null>(null);
   const defaultDevPassword =
     import.meta.env.MODE === "development"
       ? import.meta.env.VITE_DEV_LOGIN_PASSWORD ?? "password123"
       : "";
-  const devSecret = import.meta.env.VITE_DEV_LOGIN_SECRET;
   const [devPassword, setDevPassword] = useState(defaultDevPassword);
   const [errorMessage, setErrorMessage] = useState("");
   const normalizeRole = (role?: string) => String(role || "").toUpperCase();
 
-  // Only show in development
+  // Only show in development — conditional return AFTER all hooks.
   if (import.meta.env.MODE !== "development") {
     return null;
   }
-
   const handleQuickLogin = async (
     user: DevUser,
     redirectTo?: string
@@ -80,15 +79,9 @@ export function DevUserSwitcher() {
       useAuthStore.getState().clearAuth();
 
       let response;
-      if (import.meta.env.MODE === "development") {
-        try {
-          response = await authApi.devLogin({ email, role: roleKey, secret: devSecret });
-        } catch {
-          response = await authApi.login({ email, password: devPassword });
-        }
-      } else {
-        response = await authApi.login({ email, password: devPassword });
-      }
+      // Use password-based dev login; the /auth/dev-config endpoint was
+      // removed (F-01 fix).
+      response = await authApi.login({ email, password: devPassword });
 
       const loggedInRole = normalizeRole(response.user.role);
       if (roleKey === "ADMIN" || roleKey === "SUPER_ADMIN") {

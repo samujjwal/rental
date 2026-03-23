@@ -150,10 +150,21 @@ export const insuranceApi = {
     limit?: number;
     status?: InsuranceStatus;
   }): Promise<InsurancePoliciesResponse> => {
-    const response = await api.get<InsurancePoliciesResponse>("/insurance/policies/me", {
-      params,
-    });
-    return response;
+    try {
+      const response = await api.get<InsurancePoliciesResponse>("/insurance/policies/me", {
+        params,
+      });
+      return response;
+    } catch (error: any) {
+      // 404 means endpoint doesn't exist or no policies — treat as empty list
+      if (error?.response?.status === 404) {
+        return {
+          data: [],
+          pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+        } as InsurancePoliciesResponse;
+      }
+      throw error;
+    }
   },
 
   // Get a specific policy by ID

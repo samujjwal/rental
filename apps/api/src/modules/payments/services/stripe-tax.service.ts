@@ -134,6 +134,11 @@ export class StripeTaxService {
         taxable: calculation.tax_amount_exclusive > 0 || calculation.tax_amount_inclusive > 0,
       };
 
+      // Persist asynchronously — log on failure but do not block the response.
+      this.saveTaxCalculation(request, result, calculation.id).catch((err) =>
+        this.logger.error('Failed to persist tax calculation record', err),
+      );
+
       return result;
     } catch (error) {
       // CRITICAL: Stripe Tax API call failed — do NOT silently apply a hardcoded rate.
@@ -293,14 +298,19 @@ export class StripeTaxService {
 
       // Calculate totals
       let totalIncome = 0;
-      const totalTax = 0;
+      let totalTax = 0;
       let totalExpenses = 0;
 
       for (const booking of bookings) {
         if (booking.listing.ownerId === userId) {
           // Owner income
           totalIncome += toNumber(booking.totalPrice);
-          // totalTax would be calculated from payments in a real implementation
+          // Sum tax amounts from associated payments
+          for (const payment of booking.payments) {
+            if ((payment as any).taxAmount) {
+              totalTax += toNumber((payment as any).taxAmount);
+            }
+          }
         } else {
           // Renter expenses
           totalExpenses += toNumber(booking.totalPrice);
@@ -336,6 +346,7 @@ export class StripeTaxService {
           firstName: true,
           lastName: true,
           country: true,
+          governmentIdNumber: true,
           addressLine1: true,
           addressLine2: true,
           city: true,
@@ -356,7 +367,7 @@ export class StripeTaxService {
       const formData = {
         recipient: {
           name: `${user.firstName} ${user.lastName}`,
-          taxId: 'N/A', // Would be stored in user profile in production
+          taxId: user.governmentIdNumber ?? 'N/A',
           address: {
             line1: user.addressLine1,
             line2: user.addressLine2,
@@ -379,14 +390,20 @@ export class StripeTaxService {
         generatedAt: new Date(),
       };
 
-      // Save 1099 form to database (simplified - would use proper schema in production)
-      // const savedForm = await this.prisma.taxForm.create({
-      //   data: { userId, type: 'FORM_1099', year, formData, generatedAt: new Date() },
-      // });
+      // Persist the 1099 form record so it can be retrieved later
+      const savedForm = await this.prisma.taxForm.create({
+        data: {
+          userId,
+          type: 'FORM_1099',
+          year,
+          formData: formData as any,
+          generatedAt: new Date(),
+        },
+      });
 
-      this.logger.log(`1099 form generated for user ${userId}, year ${year}`);
+      this.logger.log(`1099 form generated and saved for user ${userId}, year ${year}, formId ${savedForm.id}`);
 
-      return { ...formData, id: 'mock_id' };
+      return { ...formData, id: savedForm.id };
     } catch (error) {
       this.logger.error('Failed to generate 1099 form', error);
       throw error;
@@ -397,16 +414,22 @@ export class StripeTaxService {
    * Get supported tax jurisdictions
    */
   async getSupportedJurisdictions(): Promise<any[]> {
+    if (!this.stripe) {
+      this.logger.warn('getSupportedJurisdictions called but Stripe is not configured');
+      return [];
+    }
+
     try {
-      // Return mock jurisdictions for now
-      return [
-        { country: this.config.get<string>('platform.country', ''), supported: true, taxRates: [] },
-        { country: 'US', state: 'CA', supported: true, taxRates: [] },
-        { country: 'US', state: 'NY', supported: true, taxRates: [] },
-        { country: 'US', state: 'TX', supported: true, taxRates: [] },
-      ];
+      const registrations = await this.stripe.tax.registrations.list({ status: 'active', limit: 100 });
+      return registrations.data.map((reg) => ({
+        country: reg.country,
+        state: (reg.country_options as any)?.[reg.country.toLowerCase()]?.state ?? undefined,
+        supported: true,
+        registrationId: reg.id,
+        activeFrom: new Date(reg.active_from * 1000),
+      }));
     } catch (error) {
-      this.logger.error('Failed to get supported jurisdictions', error);
+      this.logger.error('Failed to get supported jurisdictions from Stripe', error);
       return [];
     }
   }
@@ -458,13 +481,29 @@ export class StripeTaxService {
   private async saveTaxCalculation(
     request: TaxCalculationRequest,
     result: TaxCalculationResult,
+    stripeTaxId?: string,
   ): Promise<void> {
     try {
-      // Save to database (simplified - would use proper schema in production)
-      // await this.prisma.taxCalculation.create({
-      //   data: { amount: result.amount, tax: result.tax, requestData: request, resultData: result },
-      // });
-      this.logger.log('Tax calculation saved (mock implementation)');
+      await this.prisma.taxCalculation.create({
+        data: {
+          bookingId: request.bookingId ?? null,
+          listingId: request.listingId ?? null,
+          stripeTaxId: stripeTaxId ?? null,
+          amount: result.amount,
+          taxAmount: result.tax,
+          totalAmount: result.total,
+          taxRate: result.taxRate,
+          currency: request.currency,
+          jurisdiction: result.jurisdiction ?? null,
+          taxBreakdown: result.taxBreakdown as any,
+          customerAddress: request.customerAddress ? (request.customerAddress as any) : undefined,
+          taxable: result.taxable,
+        },
+      });
+      this.logger.log(
+        `Tax calculation persisted: amount=${result.amount} tax=${result.tax} ` +
+          `currency=${request.currency} stripe_id=${stripeTaxId ?? 'n/a'}`,
+      );
     } catch (error) {
       this.logger.error('Failed to save tax calculation', error);
     }

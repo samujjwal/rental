@@ -95,8 +95,21 @@ export class StorageController {
   @Delete('file')
   @ApiOperation({ summary: 'Delete file from S3' })
   @ApiResponse({ status: 200, description: 'File deleted successfully' })
-  async deleteFile(@Body('key') key: string) {
+  async deleteFile(
+    @Body('key') key: string,
+    @CurrentUser('id') currentUserId: string,
+    @CurrentUser('role') currentUserRole: string,
+  ) {
     const sanitizedKey = key.replace(/\.\.\//g, '').replace(/^\/+/, '');
+
+    // F-02: Ownership check — only allow deleting files under the user's own
+    // path prefix (users/{userId}/) or if the caller is an admin.
+    const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN'].includes(currentUserRole);
+    const isOwnFile = sanitizedKey.startsWith(`users/${currentUserId}/`);
+    if (!isAdmin && !isOwnFile) {
+      throw new ForbiddenException('You do not have permission to delete this file');
+    }
+
     await this.s3StorageService.deleteFile(sanitizedKey);
     return { status: 'deleted' };
   }

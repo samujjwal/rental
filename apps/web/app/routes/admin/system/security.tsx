@@ -17,6 +17,7 @@ import {
 import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -77,6 +78,24 @@ const MAX_IP_WHITELIST_ENTRIES = 200;
 const IPV4_WITH_OPTIONAL_CIDR =
   /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\/(?:[0-9]|[12]\d|3[0-2]))?$/;
 
+export function getAdminSecurityError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Security settings request timed out. Try again.",
+    })
+  );
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -89,10 +108,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       settings: defaultSettings,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load security settings",
+      error: getAdminSecurityError(error, "Failed to load security settings"),
     };
   }
 }
@@ -209,13 +225,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   } catch (error: unknown) {
     return {
       success: false,
-      error:
-        (error &&
-          typeof error === "object" &&
-          "response" in error &&
-          (error as { response?: { data?: { message?: string } } }).response
-            ?.data?.message) ||
-        "Failed to update settings",
+      error: getAdminSecurityError(error, "Failed to update settings"),
     };
   }
 }

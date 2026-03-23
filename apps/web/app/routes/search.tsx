@@ -1,5 +1,5 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useSearchParams, Form, useNavigation, useSubmit, useNavigate } from "react-router";
+import { useLoaderData, useSearchParams, Form, useNavigation, useSubmit, useNavigate, useRevalidator } from "react-router";
 import { Search, SlidersHorizontal, X, Grid3X3, List, Map } from "lucide-react";
 import { listingsApi } from "~/lib/api/listings";
 import { geoApi } from "~/lib/api/geo";
@@ -21,6 +21,7 @@ import {
   RouteErrorBoundary,
   Alert,
 } from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 import { ListingsMap } from "~/components/map/ListingsMap";
 import type { ListingMarkerData } from "~/components/map/ListingMarker";
 import { LocationAutocomplete } from "~/components/search/LocationAutocomplete";
@@ -79,6 +80,22 @@ const boundsEqual = (
     Math.abs(first[1][1] - second[1][1]) < BOUNDS_EPSILON
   );
 };
+
+export function getSearchResultsError(error: unknown): string {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading search results again.";
+  }
+
+  return getActionableErrorMessage(
+    error,
+    "Failed to load search results. Please try again.",
+    {
+      [ApiErrorType.OFFLINE]:
+        "You appear to be offline. Reconnect and try loading search results again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Loading search results timed out. Try again.",
+    }
+  );
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -184,7 +201,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       },
       categories: [],
       searchParams,
-      error: "Failed to load search results. Please try again.",
+      error: getSearchResultsError(error),
     };
   }
 }
@@ -218,13 +235,31 @@ export default function SearchPage() {
   }, []);
   const [mapBounds, setMapBounds] = useState<SearchBounds | null>(null);
   const [highlightedListingId, setHighlightedListingId] = useState<string | undefined>();
-  const [mapOnly, setMapOnly] = useState(false);
+  const [mapOnly, setMapOnly] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return (
+      localStorage.getItem("searchViewMode") === "map" &&
+      localStorage.getItem("searchMapOnly") === "true"
+    );
+  });
   const [locationValue, setLocationValue] = useState(searchParams.location || "");
   const [subbarScrolled, setSubbarScrolled] = useState(false);
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
 
   // Initialize view mode from localStorage or default to grid
-  const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "map">(() => {
+    if (typeof window === "undefined") {
+      return "grid";
+    }
+
+    const savedViewMode = localStorage.getItem("searchViewMode");
+    return savedViewMode === "list" || savedViewMode === "map"
+      ? savedViewMode
+      : "grid";
+  });
 
   useEffect(() => {
     const savedViewMode = localStorage.getItem("searchViewMode") as
@@ -235,8 +270,10 @@ export default function SearchPage() {
       setViewMode(savedViewMode);
     }
     const savedMapOnly = localStorage.getItem("searchMapOnly");
-    if (savedMapOnly === "true") {
+    if (savedViewMode === "map" && savedMapOnly === "true") {
       setMapOnly(true);
+    } else {
+      setMapOnly(false);
     }
   }, []);
 
@@ -809,12 +846,23 @@ export default function SearchPage() {
           <main className={cn("flex-1", viewMode === "map" && "flex gap-6")}>
             {/* Error Alert */}
             {error && (
-              <Alert
-                type="error"
-                title={t("search.error", "Search Error")}
-                message={error}
-                className="mb-6"
-              />
+              <div className="mb-6 space-y-3">
+                <Alert
+                  type="error"
+                  title={t("search.error", "Search Error")}
+                  message={error}
+                />
+                <div className="flex flex-wrap gap-3">
+                  <UnifiedButton variant="outline" onClick={() => revalidator.revalidate()}>
+                    {t("errors.tryAgain", "Try Again")}
+                  </UnifiedButton>
+                  {activeFiltersCount > 0 && (
+                    <UnifiedButton variant="ghost" onClick={clearFilters}>
+                      {t("search.clearFilters", "Clear all")}
+                    </UnifiedButton>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Listings */}

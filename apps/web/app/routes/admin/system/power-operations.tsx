@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import {
@@ -14,9 +14,9 @@ import {
 } from "lucide-react";
 import { Link } from "react-router";
 import { adminApi } from "~/lib/api/admin";
-import { UnifiedButton } from "~/components/ui";
+import { Dialog, DialogFooter, RouteErrorBoundary, UnifiedButton } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
-import { RouteErrorBoundary } from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 interface Operation {
   id: string;
@@ -40,20 +40,32 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === "string") return error.message;
-  if (typeof error === "object" && error !== null) {
-    const record = error as Record<string, unknown>;
-    const response = record.response as Record<string, unknown> | undefined;
-    const data = response?.data as Record<string, unknown> | undefined;
-    const message = data?.message;
-    if (typeof message === "string" && message.trim().length > 0) return message;
-  }
-  return "Unknown error";
+export function getPowerOperationsError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Power operation request timed out. Try again.",
+    })
+  );
+}
+
+function getOperationFailureMessage(operationName: string, error: unknown): string {
+  return `${operationName} failed: ${getPowerOperationsError(error, "Unknown error")}`;
 }
 
 export default function PowerOperationsPage() {
   const { t } = useTranslation();
+  const progressFrameRef = useRef<number | null>(null);
+  const progressStartTimeRef = useRef<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeOperation, setActiveOperation] = useState<string | null>(null);
   const [operationProgress, setOperationProgress] = useState(0);
@@ -67,6 +79,32 @@ export default function PowerOperationsPage() {
     if (toast) { const t = setTimeout(() => setToast(null), 6000); return () => clearTimeout(t); }
   }, [toast]);
 
+  const clearProgressAnimation = useCallback(() => {
+    if (progressFrameRef.current !== null) {
+      cancelAnimationFrame(progressFrameRef.current);
+      progressFrameRef.current = null;
+    }
+    progressStartTimeRef.current = null;
+  }, []);
+
+  const animateProgress = useCallback((timestamp: number) => {
+    if (progressStartTimeRef.current === null) {
+      progressStartTimeRef.current = timestamp;
+    }
+
+    const elapsed = timestamp - progressStartTimeRef.current;
+    const nextProgress = Math.min(90, Math.round(elapsed / 20));
+    setOperationProgress(nextProgress);
+
+    if (nextProgress < 90) {
+      progressFrameRef.current = requestAnimationFrame(animateProgress);
+    } else {
+      progressFrameRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearProgressAnimation(), [clearProgressAnimation]);
+
   const showNotification = (message: string, severity: "success" | "error" | "warning" | "info") => setToast({ message, severity });
 
   const executeOperation = async (operation: Operation) => {
@@ -79,15 +117,15 @@ export default function PowerOperationsPage() {
     setActiveOperation(operation.id);
     setOperationProgress(0);
     try {
-      const interval = setInterval(() => {
-        setOperationProgress((prev) => { if (prev >= 90) { clearInterval(interval); return 90; } return prev + 10; });
-      }, 200);
+      clearProgressAnimation();
+      progressFrameRef.current = requestAnimationFrame(animateProgress);
       await operation.action();
-      clearInterval(interval);
+      clearProgressAnimation();
       setOperationProgress(100);
       showNotification(`${operation.name} completed successfully`, "success");
     } catch (error: unknown) {
-      showNotification(`${operation.name} failed: ${getErrorMessage(error)}`, "error");
+      clearProgressAnimation();
+      showNotification(getOperationFailureMessage(operation.name, error), "error");
     } finally {
       setLoading(false);
       setActiveOperation(null);
@@ -113,6 +151,8 @@ export default function PowerOperationsPage() {
       id: "clear-cache", name: t("admin.clearAllCache"),
       description: t("admin.clearAllCacheDesc"),
       icon: <Database className="h-4 w-4" />,
+      danger: true,
+      requiresConfirmation: true,
       action: async () => { await adminApi.clearCache("all"); },
     },
   ];
@@ -133,7 +173,10 @@ export default function PowerOperationsPage() {
       });
       showNotification("Logs fetched successfully", "success");
     } catch (error: unknown) {
-      showNotification(`Failed to fetch logs: ${getErrorMessage(error)}`, "error");
+      showNotification(
+        `Failed to fetch logs: ${getPowerOperationsError(error, "Unknown error")}`,
+        "error"
+      );
       setQueryResult(null);
     } finally { setLoading(false); setActiveOperation(null); }
   };
@@ -260,29 +303,44 @@ export default function PowerOperationsPage() {
         </div>
       </div>
 
-      {/* Confirmation Dialog */}
-      {confirmDialog.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setConfirmDialog({ open: false, operation: null })}>
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 px-6 py-4 border-b">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              <h3 className="text-lg font-semibold">{t("admin.confirmDangerousOp")}</h3>
-            </div>
-            <div className="px-6 py-4 space-y-3">
-              <p className="text-sm">{t("admin.aboutToPerformDangerous")}</p>
-              <p className="font-semibold">{confirmDialog.operation?.name}</p>
-              <p className="text-sm text-muted-foreground">{confirmDialog.operation?.description}</p>
-              <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-                {t("admin.cannotBeUndone")}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 px-6 py-4 border-t">
-              <UnifiedButton onClick={() => setConfirmDialog({ open: false, operation: null })} variant="outline">{t("admin.cancel")}</UnifiedButton>
-              <UnifiedButton variant="destructive" onClick={() => confirmDialog.operation && performOperation(confirmDialog.operation)} disabled={loading}>{t("admin.proceed")}</UnifiedButton>
-            </div>
+      <Dialog
+        open={confirmDialog.open}
+        onClose={() => {
+          if (loading) return;
+          setConfirmDialog({ open: false, operation: null });
+        }}
+        title={t("admin.confirmDangerousOp")}
+        description={t("admin.aboutToPerformDangerous")}
+        size="sm"
+      >
+        <div className="space-y-3">
+          <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{t("admin.cannotBeUndone")}</span>
+          </div>
+          <div>
+            <p className="font-semibold">{confirmDialog.operation?.name}</p>
+            <p className="text-sm text-muted-foreground">{confirmDialog.operation?.description}</p>
           </div>
         </div>
-      )}
+        <DialogFooter>
+          <UnifiedButton
+            onClick={() => setConfirmDialog({ open: false, operation: null })}
+            variant="outline"
+            disabled={loading}
+          >
+            {t("admin.cancel")}
+          </UnifiedButton>
+          <UnifiedButton
+            variant="destructive"
+            onClick={() => confirmDialog.operation && void performOperation(confirmDialog.operation)}
+            loading={loading && !!confirmDialog.operation}
+            disabled={loading}
+          >
+            {t("admin.proceed")}
+          </UnifiedButton>
+        </DialogFooter>
+      </Dialog>
 
       {/* Toast Notification */}
       {toast && (

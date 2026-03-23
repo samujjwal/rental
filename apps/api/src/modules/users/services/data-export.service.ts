@@ -4,14 +4,13 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 
 export interface UserDataExport {
   exportedAt: string;
-  profile: Record<string, any>;
+  profile: Record<string, unknown>;
   bookings: any[];
   listings: any[];
   reviews: any[];
   messages: any[];
   favorites: any[];
   notifications: any[];
-  sessions: any[];
 }
 
 @Injectable()
@@ -33,7 +32,7 @@ export class DataExportService {
     }
 
     // Fetch all user data in parallel
-    const [bookings, listings, reviewsGiven, reviewsReceived, messages, favorites, notifications, sessions] =
+    const [bookings, listings, reviewsGiven, reviewsReceived, messages, favorites, notifications] =
       await Promise.all([
         this.prisma.booking.findMany({
           where: { renterId: userId },
@@ -109,26 +108,46 @@ export class DataExportService {
           orderBy: { createdAt: 'desc' },
           take: 500,
         }),
-        this.prisma.session.findMany({
-          where: { userId },
-          select: {
-            id: true,
-            ipAddress: true,
-            userAgent: true,
-            createdAt: true,
-            expiresAt: true,
-          },
-        }),
       ]);
 
-    // Sanitize profile
-    const {
-      passwordHash,
-      mfaSecret,
-      emailVerificationToken,
-      passwordResetToken,
-      ...profileData
-    } = user;
+    // Explicit profile allowlist — only portable, non-sensitive fields are exported.
+    // Fields intentionally excluded: passwordHash, mfaSecret, mfaBackupCodes,
+    // emailVerificationToken, passwordResetToken, passwordResetExpires, lastLoginIp,
+    // loginAttempts, lockedUntil, stripeCustomerId, stripeConnectId,
+    // stripeChargesEnabled, stripePayoutsEnabled, stripeOnboardingComplete,
+    // governmentIdNumber, googleId, appleId, deletedAt.
+    // Sessions (ipAddress, userAgent) are excluded as operational/fingerprinting data.
+    const profileData: Record<string, unknown> = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      dateOfBirth: user.dateOfBirth,
+      phone: user.phone,
+      profilePhotoUrl: user.profilePhotoUrl,
+      bio: user.bio,
+      role: user.role,
+      status: user.status,
+      averageRating: user.averageRating,
+      totalReviews: user.totalReviews,
+      responseRate: user.responseRate,
+      responseTime: user.responseTime,
+      emailVerified: user.emailVerified,
+      phoneVerified: user.phoneVerified,
+      mfaEnabled: user.mfaEnabled,
+      idVerificationStatus: user.idVerificationStatus,
+      addressLine1: user.addressLine1,
+      addressLine2: user.addressLine2,
+      city: user.city,
+      state: user.state,
+      postalCode: user.postalCode,
+      country: user.country,
+      subscriptionStatus: user.subscriptionStatus,
+      subscriptionPlan: user.subscriptionPlan,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
 
     return {
       exportedAt: new Date().toISOString(),
@@ -146,7 +165,6 @@ export class DataExportService {
         addedAt: f.createdAt,
       })),
       notifications,
-      sessions,
     };
   }
 }

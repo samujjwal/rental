@@ -5,6 +5,7 @@
  * providing complete audit trail and temporal querying capabilities.
  */
 
+import { randomUUID } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
@@ -74,7 +75,13 @@ export class EventSourcingService {
         eventType: event.eventType,
         version,
         payload: JSON.stringify(event.payload),
-        metadata: JSON.stringify(event.metadata),
+        // metadata is a Json column — pass object directly, not JSON.stringify
+        metadata: {
+          ...event.metadata,
+          // Auto-generate correlationId if not provided so events are always
+          // traceable by correlation without requiring callers to supply it.
+          correlationId: event.metadata.correlationId ?? randomUUID(),
+        },
         timestamp: event.timestamp,
       },
     });
@@ -90,9 +97,10 @@ export class EventSourcingService {
   }
 
   /**
-   * Get event stream for aggregate
+   * Get event stream for aggregate.
+   * Returns null when no events exist for the aggregate or the event store is not configured.
    */
-  async getEventStream(aggregateId: string, fromVersion?: number): Promise<EventStream> {
+  async getEventStream(aggregateId: string, fromVersion?: number): Promise<EventStream | null> {
     const eventStore = this.getEventStoreDelegate();
     if (!eventStore) {
       return null;
@@ -159,7 +167,8 @@ export class EventSourcingService {
     const events = await eventStore.findMany({
       where: {
         metadata: {
-          contains: `"correlationId":"${correlationId}"`,
+          path: ['correlationId'],
+          equals: correlationId,
         },
       },
       orderBy: { timestamp: 'asc' },
@@ -389,13 +398,15 @@ export class EventSourcingService {
       eventType: stored.eventType,
       version: stored.version,
       payload: JSON.parse(stored.payload),
-      metadata: JSON.parse(stored.metadata),
+      // metadata is a Json column — Prisma returns it as a plain object already
+      metadata: (stored.metadata ?? {}) as DomainEvent['metadata'],
       timestamp: stored.timestamp,
     };
   }
 
   private generateEventId(): string {
-    return `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Use crypto.randomUUID() for collision-safe IDs under high concurrency
+    return `evt-${randomUUID()}`;
   }
 
   private replayEvents(events: DomainEvent[], initialState: any = null): any {

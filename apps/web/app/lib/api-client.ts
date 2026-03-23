@@ -1,10 +1,65 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
+import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig } from "axios";
 import { useAuthStore } from "./store/auth";
 import { requestNavigation } from "~/lib/navigation";
 import { toast } from "sonner";
+import { ApiErrorType, parseApiError } from "~/lib/api-error";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3400/api";
+
+function getRuntimeApiBaseUrl(): string {
+  if (typeof window === "undefined") {
+    return API_BASE_URL;
+  }
+
+  const runtimeApiUrl =
+    (window as Window & { __APP_ENV__?: { API_URL?: string } }).__APP_ENV__?.API_URL ||
+    document.documentElement.dataset.apiUrl;
+
+  return runtimeApiUrl || API_BASE_URL;
+}
+
+type ApiRequestConfig = AxiosRequestConfig & {
+  suppressErrorToast?: boolean;
+  disableIdempotency?: boolean;
+  allowOffline?: boolean;
+};
+
+const IDEMPOTENT_METHODS = new Set(["post", "put", "patch", "delete"]);
+const AUTH_URL_EXCLUSIONS = ["/auth/login", "/auth/refresh", "/auth/logout"];
+
+function createRequestId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function shouldAttachIdempotencyKey(config: ApiRequestConfig) {
+  const method = String(config.method || "get").toLowerCase();
+  if (!IDEMPOTENT_METHODS.has(method)) return false;
+  if (config.disableIdempotency) return false;
+  const url = String(config.url || "");
+  return !AUTH_URL_EXCLUSIONS.some((segment) => url.includes(segment));
+}
+
+function setHeader(config: ApiRequestConfig, key: string, value: string) {
+  if (!config.headers) {
+    config.headers = {};
+  }
+  const headers = config.headers as Record<string, string>;
+  headers[key] = value;
+}
+
+function shouldToastError(config: ApiRequestConfig | undefined, type: ApiErrorType) {
+  if (config?.suppressErrorToast) return false;
+  return [
+    ApiErrorType.OFFLINE,
+    ApiErrorType.NETWORK_ERROR,
+    ApiErrorType.TIMEOUT_ERROR,
+    ApiErrorType.SERVER_ERROR,
+  ].includes(type);
+}
 
 class ApiClient {
   private client: AxiosInstance;
@@ -23,6 +78,29 @@ class ApiClient {
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
       (config) => {
+        const requestConfig = config as ApiRequestConfig;
+        requestConfig.baseURL = getRuntimeApiBaseUrl();
+
+        if (
+          typeof window !== "undefined" &&
+          navigator.onLine === false &&
+          !requestConfig.allowOffline
+        ) {
+          return Promise.reject(
+            new AxiosError(
+              "You appear to be offline. Check your connection and try again.",
+              "ERR_NETWORK",
+              config
+            )
+          );
+        }
+
+        const requestId = createRequestId();
+        setHeader(requestConfig, "X-Request-Id", requestId);
+        if (shouldAttachIdempotencyKey(requestConfig)) {
+          setHeader(requestConfig, "Idempotency-Key", requestId);
+        }
+
         // Skip adding token for auth routes
         if (
           config.url?.includes("/auth/login") ||
@@ -47,24 +125,30 @@ class ApiClient {
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
+        const parsedError = parseApiError(error);
         const authStore = useAuthStore.getState();
         const hadAccessToken = Boolean(authStore.accessToken);
+
+        if (shouldToastError(originalRequest as ApiRequestConfig | undefined, parsedError.type)) {
+          if (typeof window !== "undefined") {
+            toast.error(parsedError.message, {
+              description:
+                parsedError.type === ApiErrorType.TIMEOUT_ERROR
+                  ? "The service is responding slowly. Retry when ready."
+                  : parsedError.type === ApiErrorType.OFFLINE
+                    ? "Reconnect to continue."
+                    : parsedError.statusCode
+                      ? `Server error (${parsedError.statusCode})`
+                      : undefined,
+            });
+          }
+        }
 
         // Handle rate limiting (429)
         if (error.response?.status === 429) {
           if (typeof window !== "undefined") {
             toast.error("Too many requests. Please try again later.", {
               description: "Rate limit exceeded",
-            });
-          }
-          return Promise.reject(error);
-        }
-
-        // Handle server errors (5xx)
-        if (error.response?.status >= 500) {
-          if (typeof window !== "undefined") {
-            toast.error("Something went wrong on our end. Please try again later.", {
-              description: `Server error (${error.response.status})`,
             });
           }
           return Promise.reject(error);
@@ -125,7 +209,7 @@ class ApiClient {
     );
   }
 
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async get<T>(url: string, config?: ApiRequestConfig): Promise<T> {
     const response = await this.client.get<T>(url, config);
     return response.data;
   }
@@ -133,7 +217,7 @@ class ApiClient {
   async post<T>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig
+    config?: ApiRequestConfig
   ): Promise<T> {
     const response = await this.client.post<T>(url, data, config);
     return response.data;
@@ -142,7 +226,7 @@ class ApiClient {
   async put<T>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig
+    config?: ApiRequestConfig
   ): Promise<T> {
     const response = await this.client.put<T>(url, data, config);
     return response.data;
@@ -151,13 +235,13 @@ class ApiClient {
   async patch<T>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig
+    config?: ApiRequestConfig
   ): Promise<T> {
     const response = await this.client.patch<T>(url, data, config);
     return response.data;
   }
 
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async delete<T>(url: string, config?: ApiRequestConfig): Promise<T> {
     const response = await this.client.delete<T>(url, config);
     return response.data;
   }

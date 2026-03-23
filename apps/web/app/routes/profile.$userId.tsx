@@ -1,6 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import type { ComponentType } from "react";
-import { useLoaderData, Link, redirect, useNavigate } from "react-router";
+import { useLoaderData, Link, redirect, useNavigate, useRevalidator } from "react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -21,8 +21,9 @@ import { useAuthStore } from "~/lib/store/auth";
 import type { Listing } from "~/types/listing";
 import type { Review } from "~/types/review";
 import { format } from "date-fns";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
 import { isAppEntityId } from "~/utils/entity-id";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction<typeof clientLoader> = ({ data }) => {
   const firstName = data?.user?.firstName || "";
@@ -51,6 +52,30 @@ const safeInitial = (value: unknown): string => {
   const text = safeText(value, "U");
   return text.charAt(0).toUpperCase();
 };
+
+export function getProfileLoadError(error: unknown): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading this profile again.";
+  }
+
+  return getActionableErrorMessage(error, "Failed to load profile. Please try again.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading this profile again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading this profile timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not reach the profile service. Try again in a moment.",
+  });
+}
 
 const getStoredAuthUserId = (): string | null => {
   const storeUserId = useAuthStore.getState().user?.id;
@@ -131,7 +156,18 @@ export async function clientLoader({ params }: LoaderFunctionArgs) {
       },
     };
   } catch (error) {
-    throw redirect("/");
+    return {
+      user: null,
+      listings: [],
+      reviews: [],
+      stats: {
+        totalListings: 0,
+        activeListings: 0,
+        averageRating: 0,
+        totalReviews: 0,
+      },
+      error: getProfileLoadError(error),
+    };
   }
 }
 
@@ -268,19 +304,52 @@ function ListingCard({ listing }: { listing: Listing }) {
 
 export default function ProfileRoute() {
   const { t } = useTranslation();
-  const { user, listings, reviews, stats } = useLoaderData<typeof clientLoader>();
+  const { user, listings, reviews, stats, error } = useLoaderData<typeof clientLoader>();
   const { user: currentUser } = useAuthStore();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [activeTab, setActiveTab] = useState<"listings" | "reviews">(
     "listings"
   );
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     const activeUserId = currentUser?.id ?? getStoredAuthUserId();
     if (activeUserId && activeUserId === user.id) {
       navigate("/", { replace: true });
     }
-  }, [currentUser?.id, navigate, user.id]);
+  }, [currentUser?.id, navigate, user]);
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-card rounded-lg shadow-md p-8 border border-border">
+            <h1 className="text-2xl font-bold text-foreground mb-3">
+              {t("profile.unavailable", "Profile unavailable")}
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              {error || t("profile.loadFailed", "Failed to load profile. Please try again.")}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <UnifiedButton onClick={() => revalidator.revalidate()}>
+                {t("common.retry", "Retry")}
+              </UnifiedButton>
+              <Link
+                to="/"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-input text-foreground hover:bg-accent transition-colors"
+              >
+                {t("common.backHome", "Back home")}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const memberSince = user.createdAt
     ? safeDateLabel(user.createdAt, "MMMM yyyy")

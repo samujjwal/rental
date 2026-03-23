@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import {
@@ -24,6 +24,7 @@ export interface LedgerEntryDto {
 
 @Injectable()
 export class LedgerService {
+  private readonly logger = new Logger(LedgerService.name);
   private readonly defaultCurrency: string;
 
   constructor(
@@ -134,12 +135,12 @@ export class LedgerService {
         ],
       });
 
-      // 4. Record owner earnings as payable
-      const ownerEarnings = amounts.subtotal; // Assuming subtotal is what owner gets before platform fee deduction?
-      // Actually standard: Owner Earnings = Total - ServiceFee - PlatformFee.
-      // The parameter says 'subtotal'. Let's stick to the logic provided in params.
-      // previous code: const ownerEarnings = amounts.subtotal - amounts.platformFee;
-      const calculatedOwnerEarnings = roundForCurrency(amounts.subtotal - amounts.platformFee, amounts.currency);
+      // 4. Record owner earnings as payable.
+      // The caller (webhook service) already computes subtotal as:
+      //   subtotal = total - serviceFee - platformFee - depositAmount - taxAmount
+      // So `amounts.subtotal` IS the owner's net earned amount — do NOT subtract
+      // platformFee again (that would double-deduct the platform's cut).
+      const calculatedOwnerEarnings = roundForCurrency(amounts.subtotal, amounts.currency);
 
       await tx.ledgerEntry.createMany({
         data: [
@@ -238,6 +239,17 @@ export class LedgerService {
     payoutId: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx: any) => {
+      // F-22 fix: Guard against duplicate ledger entries on BullMQ retries.
+      // If a ledger entry with this payoutId already exists, skip silently.
+      const existing = await tx.ledgerEntry.findFirst({
+        where: { referenceId: payoutId },
+        select: { id: true },
+      });
+      if (existing) {
+        this.logger.warn(`recordPayoutWithBooking: ledger entries for payout ${payoutId} already exist — skipping duplicate write`);
+        return;
+      }
+
       await tx.ledgerEntry.createMany({
         data: [
           {
@@ -249,6 +261,7 @@ export class LedgerService {
             amount: amount,
             currency,
             description: `Payout ${payoutId}`,
+            referenceId: payoutId,
             status: LedgerEntryStatus.SETTLED,
           },
           {
@@ -260,6 +273,7 @@ export class LedgerService {
             amount: amount,
             currency,
             description: `Payout ${payoutId}`,
+            referenceId: payoutId,
             status: LedgerEntryStatus.SETTLED,
           },
         ],

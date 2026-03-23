@@ -10,6 +10,84 @@ import type {
   Category,
 } from "~/types/listing";
 
+/**
+ * UI field descriptor for category-specific listing attributes.
+ * Matches the shape returned by GET /categories/slug/:slug/fields.
+ * Use this instead of the deprecated static CategoryField type in ~/lib/category-fields.
+ */
+export interface CategoryFieldDefinition {
+  key: string;
+  label: string;
+  type: "text" | "number" | "select" | "boolean" | "multiselect";
+  required?: boolean;
+  placeholder?: string;
+  unit?: string;
+  group?: string;
+  min?: number;
+  max?: number;
+  options?: Array<{ value: string; label: string }>;
+}
+
+export interface CategoryFieldDefinitionGroup {
+  label: string;
+  fields: CategoryFieldDefinition[];
+}
+
+/**
+ * Group field definitions by their `group` property for sectioned rendering.
+ * Fields without a group are placed under "Details".
+ */
+export function groupCategoryFieldDefinitions(
+  fields: CategoryFieldDefinition[],
+): CategoryFieldDefinitionGroup[] {
+  const groups = new Map<string, CategoryFieldDefinition[]>();
+  for (const field of fields) {
+    const key = field.group ?? "Details";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(field);
+  }
+  return Array.from(groups.entries()).map(([label, fieldList]) => ({
+    label,
+    fields: fieldList,
+  }));
+}
+
+/**
+ * Format a category field value for display.
+ * Handles boolean, select, multiselect, and number-with-unit fields.
+ * Returns "—" for absent or empty values.
+ */
+export function formatCategoryFieldValue(
+  field: CategoryFieldDefinition,
+  value: unknown,
+): string {
+  if (value === null || value === undefined || value === "") return "—";
+
+  if (field.type === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (field.type === "select" && field.options) {
+    const option = field.options.find((o) => o.value === value);
+    return option?.label ?? String(value);
+  }
+
+  if (field.type === "multiselect" && Array.isArray(value) && field.options) {
+    return value
+      .map((v: unknown) => {
+        const option = field.options!.find((o) => o.value === v);
+        return option?.label ?? String(v);
+      })
+      .join(", ");
+  }
+
+  if (field.type === "number" && field.unit) {
+    return `${value} ${field.unit}`;
+  }
+
+  return String(value);
+}
+
 // Circuit breaker for search requests
 import { CircuitBreaker } from "~/lib/api-error";
 const searchCircuitBreaker = new CircuitBreaker(5, 30000);
@@ -318,6 +396,15 @@ export const listingsApi = {
 
   async getCategories(): Promise<Category[]> {
     return api.get<Category[]>("/categories");
+  },
+
+  /**
+   * Fetch the canonical UI field definitions for a category from the API.
+   * Use this instead of the static `getCategoryFields()` from ~/lib/category-fields.
+   * The server is the single source of truth for category field schemas.
+   */
+  async getCategoryFieldDefinitions(slug: string): Promise<CategoryFieldDefinition[]> {
+    return api.get<CategoryFieldDefinition[]>(`/categories/slug/${encodeURIComponent(slug)}/fields`);
   },
 
   async getFeaturedListings(limit = 8): Promise<Listing[]> {

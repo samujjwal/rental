@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -38,7 +39,7 @@ vi.mock("~/components/ui/error-state", () => ({
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 
-import { clientLoader } from "./organizations._index";
+import { clientLoader, getOrganizationsIndexLoadError } from "./organizations._index";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -77,6 +78,21 @@ describe("clientLoader", () => {
     expect(r.error).toBe("Network failure");
   });
 
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+    mocks.getMyOrganizations.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/organizations"),
+    } as any)) as any;
+
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
   it("handles non-array organizations safely", async () => {
     mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
     mocks.getMyOrganizations.mockResolvedValue({ organizations: null });
@@ -85,6 +101,12 @@ describe("clientLoader", () => {
     } as any)) as any;
     expect(r.organizations).toEqual([]);
     expect(r.error).toBeNull();
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getOrganizationsIndexLoadError(new Error("org service unavailable"))).toBe(
+      "org service unavailable"
+    );
   });
 });
 

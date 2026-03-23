@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
@@ -28,7 +29,7 @@ vi.mock("lucide-react", () => ({
   AlertCircle: IconStub, AlertTriangle: IconStub, Info: IconStub,
 }));
 
-import { clientLoader } from "./analytics";
+import { clientLoader, getAdminAnalyticsLoadError } from "./analytics";
 
 describe("admin/analytics", () => {
   beforeEach(() => {
@@ -62,5 +63,29 @@ describe("admin/analytics", () => {
     const res = await clientLoader({ request: new Request("http://l/admin/analytics") } as any);
     expect(res.analytics).toBeNull();
     expect(res.error).toBe("timeout");
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    m.getAdminAnalytics.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const res = await clientLoader({ request: new Request("http://l/admin/analytics") } as any);
+
+    expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getAdminAnalyticsLoadError(new Error("analytics unavailable"))).toBe(
+      "analytics unavailable"
+    );
   });
 });

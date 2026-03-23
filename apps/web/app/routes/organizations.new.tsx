@@ -17,6 +17,7 @@ import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { getUser } from "~/utils/auth";
 import { APP_PHONE_PLACEHOLDER } from "~/config/locale";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -31,6 +32,32 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     return redirect("/auth/login");
   }
   return null;
+}
+
+export function getCreateOrganizationError(
+  error: unknown,
+  fallback = "Failed to create organization"
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: unknown }).response === "object" &&
+    (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+
+  if (responseMessage) {
+    return String(responseMessage);
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try creating the organization again.";
+  }
+
+  return getActionableErrorMessage(error, fallback, {
+    [ApiErrorType.CONFLICT]: "An organization with these details already exists. Review the form and try again.",
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try creating the organization again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Creating the organization is taking too long. Try again.",
+  });
 }
 
 export async function clientAction({ request }: ActionFunctionArgs) {
@@ -104,17 +131,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     const organization = await organizationsApi.createOrganization(data);
     return redirect(`/organizations/${organization.id}/settings`);
   } catch (error: unknown) {
-    const message =
-      typeof error === "object" &&
-      error !== null &&
-      "response" in error &&
-      typeof (error as { response?: unknown }).response === "object" &&
-      (error as { response?: { data?: { message?: unknown } } }).response?.data?.message
-        ? String((error as { response: { data: { message: unknown } } }).response.data.message)
-        : error instanceof Error
-          ? error.message
-          : "Failed to create organization";
-    return { error: message };
+    return { error: getCreateOrganizationError(error) };
   }
 }
 

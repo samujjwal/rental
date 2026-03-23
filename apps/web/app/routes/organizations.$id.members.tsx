@@ -5,12 +5,14 @@ import { useState } from "react";
 import { cn } from "~/lib/utils";
 import { PageSkeleton } from "~/components/ui";
 import { RouteErrorBoundary } from "~/components/ui/error-state";
+import { Dialog, DialogFooter, UnifiedButton } from "~/components/ui";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { OrganizationMember, OrganizationRole } from "~/lib/api/organizations";
 import { getUser } from "~/utils/auth";
 import { APP_LOCALE } from "~/config/locale";
 import { useTranslation } from "react-i18next";
 import { isAppEntityId } from "~/utils/entity-id";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const ErrorBoundary = RouteErrorBoundary;
 
@@ -33,6 +35,40 @@ const safeInitial = (value: unknown): string => {
   const name = typeof value === "string" ? value.trim() : "";
   return (name.charAt(0) || "U").toUpperCase();
 };
+
+export function getOrganizationMembersLoadError(error: unknown): string {
+  return getActionableErrorMessage(
+    error,
+    "Failed to load organization members. Please try again.",
+    {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Loading members timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not reach the organization service. Try again in a moment.",
+    }
+  );
+}
+
+export function getOrganizationMembersMutationError(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "This request timed out. Try again.",
+      [ApiErrorType.CONFLICT]: "This organization changed while you were working. Refresh and try again.",
+    })
+  );
+}
 
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -71,15 +107,50 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
       },
       canManageMembers,
       currentUserId: user.id,
+      error: null,
     };
-  } catch {
-    return redirect("/organizations");
+  } catch (error) {
+    return {
+      organization: null,
+      canManageMembers: false,
+      currentUserId: user.id,
+      error: getOrganizationMembersLoadError(error),
+    };
   }
 }
 
 export default function OrganizationMembers() {
-  const { organization, canManageMembers, currentUserId } = useLoaderData<typeof clientLoader>();
+  const { organization, canManageMembers, currentUserId, error: loadError } = useLoaderData<typeof clientLoader>();
   const revalidator = useRevalidator();
+
+  if (!organization) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-4">
+            <Link to="/organizations" className="text-primary hover:text-primary/80">
+              ← Back to organizations
+            </Link>
+          </div>
+          <div className="bg-card rounded-lg shadow-md p-8 border border-border">
+            <h1 className="text-2xl font-bold text-foreground mb-3">Members unavailable</h1>
+            <p className="text-muted-foreground mb-6">
+              {loadError ?? "Failed to load organization members. Please try again."}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <UnifiedButton onClick={() => revalidator.revalidate()}>Retry</UnifiedButton>
+              <Link
+                to="/organizations"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-input text-foreground hover:bg-accent transition-colors"
+              >
+                Back to organizations
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<OrganizationRole>("MEMBER");
@@ -88,7 +159,12 @@ export default function OrganizationMembers() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [removalConfirmation, setRemovalConfirmation] = useState("");
   const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"invite" | "role" | "remove" | null>(null);
   const { t } = useTranslation();
+
+  const isInviteSubmitting = pendingAction === "invite";
+  const isRoleSubmitting = pendingAction === "role";
+  const isRemoveSubmitting = pendingAction === "remove";
 
   const getUserDisplayName = (member: OrganizationMember) => {
     const lastName = member.user.lastName ? ` ${member.user.lastName}` : "";
@@ -111,6 +187,7 @@ export default function OrganizationMembers() {
         return;
       }
       setErrorMessage(null);
+      setPendingAction("invite");
       await organizationsApi.inviteMember(organization.id, {
         email: email.toLowerCase(),
         role: inviteRole,
@@ -119,7 +196,11 @@ export default function OrganizationMembers() {
       setShowInviteModal(false);
       revalidator.revalidate();
     } catch (error) {
-      setErrorMessage("Unable to send invite. Please try again.");
+      setErrorMessage(
+        getOrganizationMembersMutationError(error, "Unable to send invite. Please try again.")
+      );
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -146,12 +227,17 @@ export default function OrganizationMembers() {
     }
     try {
       setErrorMessage(null);
+      setPendingAction("role");
       await organizationsApi.updateMemberRole(organization.id, memberUserId, { role: newRole });
       setShowRoleModal(false);
       setSelectedMember(null);
       revalidator.revalidate();
     } catch (error) {
-      setErrorMessage("Unable to update role. Please try again.");
+      setErrorMessage(
+        getOrganizationMembersMutationError(error, "Unable to update role. Please try again.")
+      );
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -174,13 +260,18 @@ export default function OrganizationMembers() {
     }
     try {
       setErrorMessage(null);
+      setPendingAction("remove");
       await organizationsApi.removeMember(organization.id, memberUserId);
       setRemovalConfirmation("");
       setShowRemoveModal(false);
       setSelectedMember(null);
       revalidator.revalidate();
     } catch (error) {
-      setErrorMessage("Unable to remove member. Please try again.");
+      setErrorMessage(
+        getOrganizationMembersMutationError(error, "Unable to remove member. Please try again.")
+      );
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -373,82 +464,121 @@ export default function OrganizationMembers() {
       </div>
 
       {/* Invite Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-foreground mb-4">
-              {t("organizations.inviteTeamMember")}
-            </h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  {t("organizations.emailAddress")}
-                </label>
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="colleague@example.com"
-                  maxLength={320}
-                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  {t("organizations.role")}
-                </label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) =>
-                    setInviteRole(e.target.value as OrganizationRole)
-                  }
-                  className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
-                >
-                  <option value="MEMBER">{t("organizations.memberCreateListings")}</option>
-                  <option value="ADMIN">{t("organizations.adminManageTeam")}</option>
-                </select>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {getRoleDescription(inviteRole)}
-                </p>
-              </div>
+      <Dialog
+        open={showInviteModal}
+        onClose={() => {
+          if (!isInviteSubmitting) {
+            setShowInviteModal(false);
+          }
+        }}
+        title={t("organizations.inviteTeamMember")}
+        size="md"
+      >
+        <div className="space-y-4">
+          {showInviteModal && errorMessage ? (
+            <div
+              id="invite-member-error"
+              className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {errorMessage}
             </div>
+          ) : null}
 
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={handleInvite}
-                disabled={!inviteEmail.trim()}
-                className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {t("organizations.sendInvite")}
-              </button>
-            </div>
+          <div>
+            <label htmlFor="invite-email" className="block text-sm font-medium text-foreground mb-1">
+              {t("organizations.emailAddress")}
+            </label>
+            <input
+              id="invite-email"
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="colleague@example.com"
+              maxLength={320}
+              aria-invalid={showInviteModal && !!errorMessage}
+              aria-describedby={showInviteModal && errorMessage ? "invite-member-error" : undefined}
+              className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="invite-role" className="block text-sm font-medium text-foreground mb-1">
+              {t("organizations.role")}
+            </label>
+            <select
+              id="invite-role"
+              value={inviteRole}
+              onChange={(e) =>
+                setInviteRole(e.target.value as OrganizationRole)
+              }
+              aria-describedby="invite-role-description"
+              className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+            >
+              <option value="MEMBER">{t("organizations.memberCreateListings")}</option>
+              <option value="ADMIN">{t("organizations.adminManageTeam")}</option>
+            </select>
+            <p id="invite-role-description" className="mt-1 text-xs text-muted-foreground">
+              {getRoleDescription(inviteRole)}
+            </p>
           </div>
         </div>
-      )}
+
+        <DialogFooter>
+          <UnifiedButton
+            type="button"
+            variant="outline"
+            onClick={() => setShowInviteModal(false)}
+            disabled={isInviteSubmitting}
+          >
+            {t("common.cancel")}
+          </UnifiedButton>
+          <UnifiedButton
+            type="button"
+            onClick={handleInvite}
+            loading={isInviteSubmitting}
+            disabled={!inviteEmail.trim() || isInviteSubmitting}
+          >
+            {t("organizations.sendInvite")}
+          </UnifiedButton>
+        </DialogFooter>
+      </Dialog>
 
       {/* Change Role Modal */}
-      {showRoleModal && selectedMember && (
-        <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-foreground mb-4">
-              {t("organizations.changeRoleFor", { name: getUserDisplayName(selectedMember) })}
-            </h3>
+      <Dialog
+        open={showRoleModal && !!selectedMember}
+        onClose={() => {
+          if (!isRoleSubmitting) {
+            setShowRoleModal(false);
+            setSelectedMember(null);
+          }
+        }}
+        title={
+          selectedMember
+            ? t("organizations.changeRoleFor", { name: getUserDisplayName(selectedMember) })
+            : t("organizations.changeRole")
+        }
+        size="md"
+      >
+        {showRoleModal && errorMessage ? (
+          <div
+            id="change-role-error"
+            className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {errorMessage}
+          </div>
+        ) : null}
 
-            <div className="space-y-2">
-              {mutableRoles.map((role) => (
+        <div className="space-y-2">
+          {selectedMember
+            ? mutableRoles.map((role) => (
                 <button
                   key={role}
+                  type="button"
                   onClick={() => handleUpdateRole(selectedMember.userId, role)}
+                  disabled={isRoleSubmitting}
+                  aria-describedby={showRoleModal && errorMessage ? "change-role-error" : undefined}
                   className={cn(
-                    "w-full text-left px-4 py-3 border rounded-md hover:bg-muted",
+                    "w-full text-left px-4 py-3 border rounded-md hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60",
                     selectedMember.role === role
                       ? "border-primary bg-primary/5"
                       : "border-input"
@@ -459,60 +589,91 @@ export default function OrganizationMembers() {
                     {getRoleDescription(role)}
                   </div>
                 </button>
-              ))}
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setShowRoleModal(false)}
-                className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
-              >
-                {t("common.cancel")}
-              </button>
-            </div>
-          </div>
+              ))
+            : null}
         </div>
-      )}
+
+        <DialogFooter>
+          <UnifiedButton
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setShowRoleModal(false);
+              setSelectedMember(null);
+            }}
+            disabled={isRoleSubmitting}
+          >
+            {t("common.cancel")}
+          </UnifiedButton>
+        </DialogFooter>
+      </Dialog>
 
       {/* Remove Member Modal */}
-      {showRemoveModal && selectedMember && (
-        <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-foreground mb-2">
-              {t("organizations.removeConfirmTitle", { name: getUserDisplayName(selectedMember) })}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t("organizations.removeAccessDesc")}
-            </p>
-            <input
-              type="text"
-              value={removalConfirmation}
-              onChange={(e) => setRemovalConfirmation(e.target.value)}
-              placeholder={t("organizations.typeRemove")}
-              maxLength={16}
-              className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
-            />
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowRemoveModal(false);
-                  setRemovalConfirmation("");
-                }}
-                className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={() => handleRemoveMember(selectedMember.userId)}
-                disabled={removalConfirmation.trim().toUpperCase() !== "REMOVE"}
-                className="px-4 py-2 text-sm font-medium text-destructive-foreground bg-destructive rounded-md hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {t("organizations.removeMember")}
-              </button>
-            </div>
+      <Dialog
+        open={showRemoveModal && !!selectedMember}
+        onClose={() => {
+          if (!isRemoveSubmitting) {
+            setShowRemoveModal(false);
+            setSelectedMember(null);
+            setRemovalConfirmation("");
+          }
+        }}
+        title={
+          selectedMember
+            ? t("organizations.removeConfirmTitle", { name: getUserDisplayName(selectedMember) })
+            : t("organizations.removeMember")
+        }
+        description={t("organizations.removeAccessDesc")}
+        size="md"
+      >
+        {showRemoveModal && errorMessage ? (
+          <div
+            id="remove-member-error"
+            className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {errorMessage}
           </div>
-        </div>
-      )}
+        ) : null}
+
+        <label htmlFor="remove-member-confirmation" className="block text-sm font-medium text-foreground mb-2">
+          {t("organizations.typeRemove")}
+        </label>
+        <input
+          id="remove-member-confirmation"
+          type="text"
+          value={removalConfirmation}
+          onChange={(e) => setRemovalConfirmation(e.target.value)}
+          placeholder={t("organizations.typeRemove")}
+          maxLength={16}
+          aria-invalid={showRemoveModal && !!errorMessage}
+          aria-describedby={showRemoveModal && errorMessage ? "remove-member-error" : undefined}
+          className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+        />
+
+        <DialogFooter>
+          <UnifiedButton
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setShowRemoveModal(false);
+              setSelectedMember(null);
+              setRemovalConfirmation("");
+            }}
+            disabled={isRemoveSubmitting}
+          >
+            {t("common.cancel")}
+          </UnifiedButton>
+          <UnifiedButton
+            type="button"
+            variant="destructive"
+            onClick={() => selectedMember && handleRemoveMember(selectedMember.userId)}
+            loading={isRemoveSubmitting}
+            disabled={removalConfirmation.trim().toUpperCase() !== "REMOVE" || isRemoveSubmitting}
+          >
+            {t("organizations.removeMember")}
+          </UnifiedButton>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }

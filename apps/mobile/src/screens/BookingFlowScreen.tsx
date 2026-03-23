@@ -31,6 +31,13 @@ export function BookingFlowScreen({ navigation, route }: Props) {
   const [availability, setAvailability] = useState<"idle" | "checking" | "available" | "unavailable">("idle");
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [loadingListing, setLoadingListing] = useState(false);
+  const [pricingBreakdown, setPricingBreakdown] = useState<{
+    days: number;
+    basePrice: number;
+    subtotal: number;
+    serviceFee: number;
+    total: number;
+  } | null>(null);
 
   const formatDateStr = (d: Date) => d.toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -54,22 +61,33 @@ export function BookingFlowScreen({ navigation, route }: Props) {
     }
   };
 
-  /** Calculate estimated pricing breakdown from listing data and selected dates */
-  const pricingBreakdown = React.useMemo(() => {
-    if (!listing || !startDate || !endDate) return null;
+  /** Fetch server-calculated pricing when listing and dates are all known */
+  useEffect(() => {
+    if (!listing || !startDate || !endDate) {
+      setPricingBreakdown(null);
+      return;
+    }
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const diffMs = end.getTime() - start.getTime();
-    const days = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-    const basePrice = listing.pricePerDay ?? listing.basePrice ?? 0;
-    const subtotal = basePrice * days;
-    // Use server-provided rates when available, fall back to defaults
-    const serviceFeeRate = listing.serviceFeeRate ?? (listing.fees?.serviceFeePercent ? (listing.fees.serviceFeePercent / 100) : 0.05);
-    const taxRate = listing.taxRate ?? (listing.fees?.taxPercent ? (listing.fees.taxPercent / 100) : 0.13);
-    const serviceFee = Math.round(subtotal * serviceFeeRate * 100) / 100;
-    const tax = Math.round(subtotal * taxRate * 100) / 100;
-    const total = Math.round((subtotal + serviceFee + tax) * 100) / 100;
-    return { days, basePrice, subtotal, serviceFee, serviceFeeRate, tax, taxRate, total };
+    if (end <= start) {
+      setPricingBreakdown(null);
+      return;
+    }
+    let cancelled = false;
+    mobileClient.calculatePrice(listing.id, startDate, endDate).then((result) => {
+      if (cancelled) return;
+      const basePrice = listing.pricePerDay ?? listing.basePrice ?? 0;
+      setPricingBreakdown({
+        days: result.totalDays,
+        basePrice,
+        subtotal: result.subtotal,
+        serviceFee: result.serviceFee,
+        total: result.totalAmount,
+      });
+    }).catch(() => {
+      if (!cancelled) setPricingBreakdown(null);
+    });
+    return () => { cancelled = true; };
   }, [listing, startDate, endDate]);
 
   useEffect(() => {
@@ -264,10 +282,6 @@ export function BookingFlowScreen({ navigation, route }: Props) {
           <View style={styles.pricingRow}>
             <Text style={styles.pricingLabel}>Service fee</Text>
             <Text style={styles.pricingValue}>{formatCurrency(pricingBreakdown.serviceFee)}</Text>
-          </View>
-          <View style={styles.pricingRow}>
-            <Text style={styles.pricingLabel}>Tax ({Math.round((pricingBreakdown.taxRate) * 100)}%)</Text>
-            <Text style={styles.pricingValue}>{formatCurrency(pricingBreakdown.tax)}</Text>
           </View>
           <View style={[styles.pricingRow, styles.pricingTotal]}>
             <Text style={styles.pricingTotalLabel}>Total</Text>

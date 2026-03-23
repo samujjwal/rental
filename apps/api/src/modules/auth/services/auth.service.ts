@@ -19,6 +19,7 @@ import { User, UserRole, UserStatus } from '@rental-portal/database';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { EmailService } from '@/common/email/email.service';
+import { sanitizePlainText } from '@/common/utils/sanitize';
 import { FieldEncryptionService } from '@/common/encryption/field-encryption.service';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
@@ -94,6 +95,8 @@ export class AuthService {
       renter: UserRole.CUSTOMER,
     };
     const resolvedRole = (dto.role && roleMap[dto.role.toLowerCase()]) || UserRole.USER;
+    const sanitizedFirstName = sanitizePlainText(dto.firstName);
+    const sanitizedLastName = dto.lastName ? sanitizePlainText(dto.lastName) : null;
 
     // Create user, tokens, and session atomically
     const txResult = await this.prisma.$transaction(async (tx: any) => {
@@ -102,12 +105,18 @@ export class AuthService {
           email: dto.email.toLowerCase(),
           username: dto.email.toLowerCase(), // Use email as username
           passwordHash,
-          firstName: dto.firstName,
-          lastName: dto.lastName ?? null,
+          firstName: sanitizedFirstName,
+          lastName: sanitizedLastName,
           phone: dto.phone ?? dto.phoneNumber ?? null,
           dateOfBirth: dto.dateOfBirth,
           role: resolvedRole,
-          status: process.env.NODE_ENV === 'development' ? UserStatus.ACTIVE : UserStatus.PENDING_VERIFICATION,
+          // Always start as PENDING_VERIFICATION regardless of environment, so
+          // email-verification flows are exercised consistently in dev/staging.
+          // Set AUTO_VERIFY_ON_REGISTER=true in .env to skip verification in
+          // non-production environments (e.g. seeded test users).
+          status: this.configService.get<string>('AUTO_VERIFY_ON_REGISTER') === 'true'
+            ? UserStatus.ACTIVE
+            : UserStatus.PENDING_VERIFICATION,
         },
       });
 
@@ -166,13 +175,14 @@ export class AuthService {
       );
     }
 
-    // Check status
+    // Verify password BEFORE checking status to avoid leaking account existence via
+    // different error messages (user enumeration / OWASP A07).
+    const isPasswordValid = await this.passwordService.verify(dto.password, user.passwordHash);
+
+    // Check status only after password validation succeeds
     if (user.status !== UserStatus.ACTIVE) {
       throw i18nUnauthorized('auth.accountLocked');
     }
-
-    // Verify password
-    const isPasswordValid = await this.passwordService.verify(dto.password, user.passwordHash);
 
     if (!isPasswordValid) {
       // Atomic increment of login attempts to prevent race conditions
@@ -255,8 +265,11 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponse> {
-    const nodeEnv = this.configService.get<string>('NODE_ENV');
-    if (nodeEnv !== 'development') {
+    const nodeEnv =
+      this.configService.get<string>('nodeEnv') ||
+      this.configService.get<string>('NODE_ENV') ||
+      process.env.NODE_ENV;
+    if (nodeEnv !== 'development' && nodeEnv !== 'test') {
       throw i18nUnauthorized('auth.devLoginOnly');
     }
 
@@ -281,20 +294,6 @@ export class AuthService {
           },
         })
       : null;
-
-    if (!user && preferredRole) {
-      user = await this.prisma.user.findFirst({
-        where: { role: preferredRole, status: UserStatus.ACTIVE },
-        orderBy: { createdAt: 'asc' },
-      });
-    }
-
-    if (!user) {
-      user = await this.prisma.user.findFirst({
-        where: { status: UserStatus.ACTIVE },
-        orderBy: { createdAt: 'asc' },
-      });
-    }
 
     if (!user) {
       throw i18nUnauthorized('auth.noDevUser');
@@ -444,8 +443,9 @@ export class AuthService {
 
     if (user && user.status === UserStatus.ACTIVE) {
       // Cache sanitized user for 15 minutes (strip sensitive fields)
-      await this.cacheService.set(`user:${userId}`, this.stripSensitiveForCache(user), 900);
-      return user;
+      const safeUser = this.stripSensitiveForCache(user);
+      await this.cacheService.set(`user:${userId}`, safeUser, 900);
+      return safeUser as User;
     }
 
     return null;

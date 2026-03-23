@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AxiosError } from "axios";
 
 /* ─── Mocks ───────────────────────────────────────────────────────── */
 const mocks = vi.hoisted(() => ({
@@ -46,7 +47,7 @@ vi.mock("~/components/ui/error-state", () => ({
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 
-import { clientLoader } from "./organizations.$id.listings";
+import { clientLoader, getOrganizationListingsLoadError } from "./organizations.$id.listings";
 
 const VALID_ID = "ckx1234567890abcdefghijkl";
 
@@ -127,5 +128,28 @@ describe("organizations.$id.listings clientLoader", () => {
     } as any)) as any;
     expect(r.error).toBe("Connection lost");
     expect(r.organization).toBeNull();
+  });
+
+  it("returns actionable offline loader copy", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.getUser.mockResolvedValue({ id: "u1", role: "owner" });
+    mocks.getMyOrganizations.mockResolvedValue({
+      organizations: [{ id: VALID_ID }],
+    });
+    mocks.getOrganization.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    const r = (await clientLoader({
+      params: { id: VALID_ID },
+      request: new Request("http://localhost/organizations/" + VALID_ID + "/listings"),
+    } as any)) as any;
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+  });
+});
+
+describe("organizations.$id.listings loader helper", () => {
+  it("keeps plain thrown errors when provided", () => {
+    expect(getOrganizationListingsLoadError(new Error("Connection lost"))).toBe("Connection lost");
   });
 });

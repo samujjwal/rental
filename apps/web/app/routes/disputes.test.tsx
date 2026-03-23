@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -34,6 +35,7 @@ const mocks: Record<string, any> = {
   }),
   useLoaderData: vi.fn(),
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
+  useRevalidator: vi.fn(() => ({ revalidate: vi.fn() })),
 };
 
 vi.mock("react-router", () => ({
@@ -41,6 +43,7 @@ vi.mock("react-router", () => ({
   redirect: (...a: any[]) => mocks.redirect(...a),
   useLoaderData: () => mocks.useLoaderData(),
   useSearchParams: () => mocks.useSearchParams(),
+  useRevalidator: () => mocks.useRevalidator(),
 }));
 vi.mock("~/utils/auth", () => ({
   getUser: (...a: any[]) => mocks.getUser(...a),
@@ -62,16 +65,27 @@ vi.mock("~/components/ui", () => ({
   Pagination: () => <nav data-testid="pagination" />,
   UnifiedButton: ({ children, ...p }: any) => <button {...p}>{children}</button>,
 }));
+vi.mock("~/components/ui/empty-state", () => ({
+  EmptyStatePresets: {
+    NoDisputesFiltered: () => <div data-testid="empty-disputes-filtered" />,
+  },
+}));
 vi.mock("~/components/ui/skeleton", () => ({
   StatCardSkeleton: () => <div />,
   Skeleton: () => <div />,
 }));
 
-import { clientLoader } from "./disputes";
+import { clientLoader, getDisputesListError } from "./disputes";
 
 const authUser = { id: "u1", email: "u@test.com", role: "renter" };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
+});
 
 /* ================================================================== */
 /*  clientLoader                                                       */
@@ -147,5 +161,41 @@ describe("clientLoader", () => {
     expect(r.disputes).toEqual([]);
     expect(r.stats.total).toBe(0);
     expect(r.error).toBeTruthy();
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getMyDisputes.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/disputes"),
+    } as any)) as any;
+
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: previousOnline });
+  });
+
+  it("uses timeout-specific copy on loader failure", async () => {
+    mocks.getUser.mockResolvedValue(authUser);
+    mocks.getMyDisputes.mockRejectedValue(new AxiosError("timeout", "ECONNABORTED"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/disputes"),
+    } as any)) as any;
+
+    expect(r.error).toBe("Loading disputes timed out. Try again.");
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getDisputesListError(new Error("disputes unavailable"))).toBe("disputes unavailable");
+  });
+
+  it("uses timeout-specific helper copy", () => {
+    expect(getDisputesListError(new AxiosError("timeout", "ECONNABORTED"))).toBe(
+      "Loading disputes timed out. Try again."
+    );
   });
 });

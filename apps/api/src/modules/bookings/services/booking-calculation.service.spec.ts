@@ -258,7 +258,7 @@ describe('BookingCalculationService', () => {
       const cancelDate = new Date(bookingBase.startDate.getTime() - 100 * 60 * 60 * 1000);
       const result = await service.calculateRefund('booking-1', cancelDate);
 
-      expect(result.reason).toBe('Cancelled more than 48 hours before start');
+      expect(result.reason).toBe('Cancelled more than 48 hours before start — full refund');
       expect(result.refundAmount).toBeGreaterThan(0);
     });
 
@@ -277,7 +277,7 @@ describe('BookingCalculationService', () => {
       const cancelDate = new Date(bookingBase.startDate.getTime() - 12 * 60 * 60 * 1000);
       const result = await service.calculateRefund('booking-1', cancelDate);
 
-      expect(result.reason).toBe('Cancelled less than 24 hours before start');
+      expect(result.reason).toBe('Cancelled less than 24 hours before start — no refund');
       expect(result.penalty).toBeGreaterThan(0);
     });
   });

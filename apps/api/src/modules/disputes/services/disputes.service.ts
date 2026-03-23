@@ -6,9 +6,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
-import { CacheService } from '@/common/cache/cache.service';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { escapeHtml } from '@/common/utils/sanitize';
 import {
   Dispute,
@@ -98,9 +100,10 @@ export class DisputesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-    private readonly cacheService: CacheService,
     private readonly notificationsService: NotificationsService,
     private readonly stateMachine: BookingStateMachineService,
+    private readonly config: ConfigService,
+    @InjectQueue('payments') private readonly paymentsQueue: Queue,
   ) {}
 
   /**
@@ -213,8 +216,23 @@ export class DisputesService {
       );
     }
 
-    // Notify Admin (hardcoded or configured email)
-    // await this.emailService.sendEmail('admin@rentals.com', 'New Dispute Created', ...);
+    // Notify admin about the new dispute
+    const adminEmail = this.config.get<string>('ADMIN_DISPUTES_EMAIL') ?? this.config.get<string>('email.adminDisputesEmail');
+    if (adminEmail) {
+      await this.emailService.sendEmail(
+        adminEmail,
+        `New Dispute Created: ${escapeHtml(title)}`,
+        `<p>A new dispute has been opened.</p>
+         <p><strong>Booking:</strong> #${escapeHtml(booking.id)}</p>
+         <p><strong>Type:</strong> ${escapeHtml(type)}</p>
+         <p><strong>Description:</strong> ${escapeHtml(description)}</p>
+         <p>Please log in to the admin panel to review.</p>`,
+      ).catch((err: Error) => {
+        this.logger.error(`Failed to send admin dispute notification to ${adminEmail}: ${err.message}`);
+      });
+    } else {
+      this.logger.warn('ADMIN_DISPUTES_EMAIL not configured — admin dispute notification skipped.');
+    }
 
     // Transition booking to DISPUTED state
     try {
@@ -525,20 +543,18 @@ export class DisputesService {
 
     // Side effects (cache publish, state transitions) run after transaction commits
     if (dto.status && ['RESOLVED', 'CLOSED'].includes(dto.status)) {
-      // If there's a resolved amount, trigger deposit capture
       if (dto.resolvedAmount && dto.resolvedAmount > 0) {
-        await this.cacheService.publish('booking:deposit-capture', {
+        await this.paymentsQueue.add('capture-deposit', {
           bookingId: dispute.bookingId,
           amount: dto.resolvedAmount,
           currency: (dispute as any).booking?.currency || 'USD',
           timestamp: new Date().toISOString(),
-        });
-      } else if (dto.status === 'CLOSED' && !dto.resolvedAmount) {
-        // If closed without amount, release deposit
-        await this.cacheService.publish('booking:deposit-release', {
-          bookingId: dispute.bookingId,
-          currency: (dispute as any).booking?.currency || 'USD',
-          timestamp: new Date().toISOString(),
+        }, {
+          jobId: `deposit-capture:${dispute.bookingId}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 3000 },
+          removeOnComplete: 100,
+          removeOnFail: false,
         });
       }
 
@@ -619,14 +635,6 @@ export class DisputesService {
     }) as unknown as Dispute;
 
     // Side effects run after transaction commits
-
-    // Only release deposit if dispute is still OPEN/UNDER_REVIEW (not already resolved)
-    if (['OPEN', 'UNDER_REVIEW'].includes(dispute.status as string)) {
-      await this.cacheService.publish('booking:deposit-release', {
-        bookingId: dispute.bookingId,
-        timestamp: new Date().toISOString(),
-      });
-    }
 
     // Transition booking back from DISPUTED.
     // If the initiator (non-admin) is closing/withdrawing, the dispute is effectively

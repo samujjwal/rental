@@ -12,6 +12,7 @@ import {
 } from "~/lib/api/favorites";
 import { toast } from "~/lib/toast";
 import { useAuthStore } from "~/lib/store/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 /**
  * Query keys for favorites
@@ -25,6 +26,34 @@ export const favoritesKeys = {
     [...favoritesKeys.details(), listingId] as const,
   count: () => [...favoritesKeys.all, "count"] as const,
 };
+
+export function getFavoritesMutationError(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  const responseMessage =
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try again.";
+  }
+
+  return getActionableErrorMessage(error, fallbackMessage, {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Favorites request timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not update favorites right now. Try again in a moment.",
+    [ApiErrorType.CONFLICT]: "Your favorites changed elsewhere. Refresh and try again.",
+  });
+}
 
 /**
  * Hook to get all favorites
@@ -123,7 +152,7 @@ export function useAddFavorite() {
       if (context?.previousCount !== undefined) {
         queryClient.setQueryData(favoritesKeys.count(), context.previousCount);
       }
-      toast.error("Failed to add favorite");
+      toast.error(getFavoritesMutationError(error, "Failed to add favorite"));
     },
     onSuccess: (data, { listingId }) => {
       // Update with real data
@@ -184,7 +213,7 @@ export function useRemoveFavorite() {
       if (context?.previousCount !== undefined) {
         queryClient.setQueryData(favoritesKeys.count(), context.previousCount);
       }
-      toast.error("Failed to remove favorite");
+      toast.error(getFavoritesMutationError(error, "Failed to remove favorite"));
     },
     onSuccess: (_data, _variables) => {
       toast.success("Removed from favorites");
@@ -255,7 +284,7 @@ export function useToggleFavorite() {
       if (context?.previousCount !== undefined) {
         queryClient.setQueryData(favoritesKeys.count(), context.previousCount);
       }
-      toast.error("Failed to update favorite");
+      toast.error(getFavoritesMutationError(error, "Failed to update favorite"));
     },
     onSuccess: (data, { listingId }, _context) => {
       // Update with real data
@@ -288,8 +317,8 @@ export function useBulkAddFavorites() {
       queryClient.invalidateQueries({ queryKey: favoritesKeys.all });
       toast.success("Added to favorites");
     },
-    onError: () => {
-      toast.error("Failed to add favorites");
+    onError: (error) => {
+      toast.error(getFavoritesMutationError(error, "Failed to add favorites"));
     },
   });
 }
@@ -306,8 +335,8 @@ export function useBulkRemoveFavorites() {
       queryClient.invalidateQueries({ queryKey: favoritesKeys.all });
       toast.success("Removed from favorites");
     },
-    onError: () => {
-      toast.error("Failed to remove favorites");
+    onError: (error) => {
+      toast.error(getFavoritesMutationError(error, "Failed to remove favorites"));
     },
   });
 }
@@ -324,8 +353,8 @@ export function useClearAllFavorites() {
       queryClient.invalidateQueries({ queryKey: favoritesKeys.all });
       toast.success("All favorites cleared");
     },
-    onError: () => {
-      toast.error("Failed to clear favorites");
+    onError: (error) => {
+      toast.error(getFavoritesMutationError(error, "Failed to clear favorites"));
     },
   });
 }

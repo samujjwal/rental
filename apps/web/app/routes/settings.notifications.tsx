@@ -1,11 +1,12 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, useActionData, useLoaderData, redirect } from "react-router";
-import { useState } from "react";
+import { Form, Link, useActionData, useLoaderData, useNavigation, useRevalidator, redirect } from "react-router";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { User, Bell, Shield, CreditCard } from "lucide-react";
 import { notificationsApi, type NotificationPreferences } from "~/lib/api/notifications";
 import { getUser } from "~/utils/auth";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 const DEFAULT_PREFS: NotificationPreferences = {
   email: true,
@@ -18,6 +19,22 @@ const DEFAULT_PREFS: NotificationPreferences = {
   messageAlerts: true,
   marketingEmails: false,
 };
+
+export function getSettingsNotificationsError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    error && typeof error === "object" && "response" in error
+      ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      : undefined;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Saving preferences timed out. Try again.",
+      [ApiErrorType.CONFLICT]: "Your notification settings changed elsewhere. Refresh and try again.",
+    })
+  );
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -32,10 +49,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     // Return default preferences if API fails
     return {
       preferences: DEFAULT_PREFS,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load preferences",
+      error: getSettingsNotificationsError(error, "Failed to load preferences"),
     };
   }
 }
@@ -97,13 +111,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   } catch (error: unknown) {
     return {
       success: false,
-      message:
-        error && typeof error === "object" && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response
-              ?.data?.message ||
-            (error as { message?: string }).message ||
-            "Failed to update preferences"
-          : "Failed to update preferences",
+      message: getSettingsNotificationsError(error, "Failed to update preferences"),
     };
   }
 }
@@ -120,11 +128,21 @@ export default function NotificationSettings() {
   const { preferences: initialPreferences, error: loadError } =
     useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
+  const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const [preferences, setPreferences] =
     useState<NotificationPreferences>({
       ...DEFAULT_PREFS,
       ...initialPreferences,
     });
+  const isSubmitting = navigation.state === "submitting";
+
+  useEffect(() => {
+    setPreferences({
+      ...DEFAULT_PREFS,
+      ...initialPreferences,
+    });
+  }, [initialPreferences]);
 
   const channelPrefs: Array<{
     key: keyof NotificationPreferences;
@@ -238,7 +256,14 @@ export default function NotificationSettings() {
           {/* Error Messages */}
           {(loadError || actionData?.success === false) && (
             <div className="mx-6 mt-6 bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded">
-              {loadError || actionData?.message}
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <span>{loadError || actionData?.message}</span>
+                {loadError ? (
+                  <UnifiedButton variant="outline" size="sm" onClick={() => revalidator.revalidate()}>
+                    {t("errors.tryAgain", "Try Again")}
+                  </UnifiedButton>
+                ) : null}
+              </div>
             </div>
           )}
 
@@ -268,6 +293,7 @@ export default function NotificationSettings() {
                       onChange={(e) =>
                         updatePreference(pref.key, e.target.checked)
                       }
+                      disabled={isSubmitting}
                       className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
                     />
                   </label>
@@ -299,6 +325,7 @@ export default function NotificationSettings() {
                       onChange={(e) =>
                         updatePreference(pref.key, e.target.checked)
                       }
+                      disabled={isSubmitting}
                       className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
                     />
                   </label>
@@ -320,6 +347,7 @@ export default function NotificationSettings() {
                     });
                     setPreferences(newPrefs);
                   }}
+                  disabled={isSubmitting}
                   className="text-primary hover:text-primary/80"
                 >
                   {t("settings.notificationSettings.enableAll")}
@@ -333,6 +361,7 @@ export default function NotificationSettings() {
                     });
                     setPreferences(newPrefs);
                   }}
+                  disabled={isSubmitting}
                   className="text-primary hover:text-primary/80"
                 >
                   {t("settings.notificationSettings.disableAll")}
@@ -346,12 +375,13 @@ export default function NotificationSettings() {
                   name="preferences"
                   value={JSON.stringify(preferences)}
                 />
-                <button
+                <UnifiedButton
                   type="submit"
-                  className="px-6 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
+                  loading={isSubmitting}
+                  disabled={isSubmitting}
                 >
                   {t("settings.notificationSettings.savePreferences")}
-                </button>
+                </UnifiedButton>
               </Form>
             </div>
           </div>

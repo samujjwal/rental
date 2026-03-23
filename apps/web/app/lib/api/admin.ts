@@ -186,7 +186,7 @@ export interface SystemHealth {
   services: {
     database: { status: string; latency: number };
     redis: { status: string; latency: number };
-    elasticsearch?: { status: string; latency: number };
+    opensearch?: { status: string; latency: number };
     storage?: { status: string; latency: number };
     queues?: { status: string; latency: number; totalBacklog?: number };
     scheduler?: { status: string; latency: number; cronJobs?: number; intervals?: number };

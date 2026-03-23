@@ -29,6 +29,7 @@ import { formatCurrency } from "~/lib/utils";
 import { getUser } from "~/utils/auth";
 import { toast } from "~/lib/toast";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 import { PortalPageLayout } from "~/components/layout";
 import {
   getPortalNavSections,
@@ -58,6 +59,65 @@ export const meta: MetaFunction = () => {
 type BookingWithTransitions = Booking & {
   availableTransitions: BookingTransition[];
 };
+
+type BookingModalIntent = "cancel" | "reject";
+
+export function getBookingsActionError(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.CONFLICT]: "This booking changed while you were working. Refresh and review the latest status before trying again.",
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "The booking request timed out. Refresh and try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not reach the server. Try again in a moment.",
+    })
+  );
+}
+
+export function getBookingsLoadError(error: unknown): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  if (responseMessage) {
+    return responseMessage;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Reconnect and try loading bookings again.";
+  }
+
+  return getActionableErrorMessage(error, "Failed to load bookings. Please try again.", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try loading bookings again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading bookings timed out. Try again.",
+    [ApiErrorType.NETWORK_ERROR]: "We could not reach the booking service. Try again in a moment.",
+  });
+}
+
+export function getBookingsUnavailableActionError(
+  intent: BookingModalIntent
+): string {
+  if (intent === "reject") {
+    return "This booking request no longer needs a decline action. Refresh and review the latest booking status.";
+  }
+
+  return "This booking can no longer be cancelled from the list. Refresh and review the latest booking status.";
+}
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -128,7 +188,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       status,
       canViewOwner,
       portalRole,
-      error: "Failed to load bookings. Please try again.",
+      error: getBookingsLoadError(error),
     };
   }
 }
@@ -343,6 +403,8 @@ export default function BookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingWithTransitions | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [modalIntent, setModalIntent] = useState<BookingModalIntent>("cancel");
+  const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const isLoading = navigation.state === "loading";
@@ -400,6 +462,68 @@ export default function BookingsPage() {
     setSearchParams(params);
   };
 
+  const closeCancelModal = () => {
+    if (pendingActionKey) {
+      return;
+    }
+    setShowCancelModal(false);
+    setSelectedBooking(null);
+    setCancelReason("");
+    setModalIntent("cancel");
+  };
+
+  const openCancelModal = (
+    booking: BookingWithTransitions,
+    intent: BookingModalIntent
+  ) => {
+    if (pendingActionKey) {
+      return;
+    }
+    setSelectedBooking(booking);
+    setModalIntent(intent);
+    setCancelReason("");
+    setShowCancelModal(true);
+  };
+
+  const runBookingAction = async ({
+    bookingId,
+    intent,
+    optimisticStatus,
+    action,
+    successMessage,
+    fallbackErrorMessage,
+  }: {
+    bookingId: string;
+    intent: string;
+    optimisticStatus: Booking["status"];
+    action: () => Promise<unknown>;
+    successMessage: string;
+    fallbackErrorMessage: string;
+  }) => {
+    const actionKey = `${bookingId}:${intent}`;
+    if (pendingActionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+    setOptimisticStatuses((prev) => ({ ...prev, [bookingId]: optimisticStatus }));
+
+    try {
+      await action();
+      toast.success(successMessage);
+      revalidator.revalidate();
+    } catch (error) {
+      setOptimisticStatuses((prev) => {
+        const next = { ...prev };
+        delete next[bookingId];
+        return next;
+      });
+      toast.error(getBookingsActionError(error, fallbackErrorMessage));
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
   const handleCancelBooking = async () => {
     if (!selectedBooking) return;
     const normalizedReason = cancelReason
@@ -408,107 +532,82 @@ export default function BookingsPage() {
     if (!normalizedReason) return;
 
     const bookingId = selectedBooking.id;
-    const prevStatus = selectedBooking.status;
+    const transitionSet = new Set<BookingTransition>(
+      selectedBooking.availableTransitions ?? []
+    );
+    const actionIntent = modalIntent === "reject" ? "reject" : "cancel";
 
-    // Optimistically update status
-    setOptimisticStatuses((prev) => ({ ...prev, [bookingId]: "CANCELLED" }));
-    setShowCancelModal(false);
-    setCancelReason("");
+    closeCancelModal();
 
-    try {
-      const transitionSet = new Set<BookingTransition>(
-        selectedBooking.availableTransitions ?? []
-      );
-      if (transitionSet.has("OWNER_REJECT")) {
-        await bookingsApi.rejectBooking(bookingId, normalizedReason);
-      } else if (transitionSet.has("CANCEL")) {
-        await bookingsApi.cancelBooking(bookingId, normalizedReason);
-      } else {
-        throw new Error("Booking cannot be cancelled in its current state.");
-      }
-      toast.success("Booking cancelled successfully");
-      revalidator.revalidate();
-    } catch (error) {
-      // Rollback optimistic update
-      setOptimisticStatuses((prev) => {
-        const next = { ...prev };
-        delete next[bookingId];
-        return next;
+    if (actionIntent === "reject" && transitionSet.has("OWNER_REJECT")) {
+      await runBookingAction({
+        bookingId,
+        intent: actionIntent,
+        optimisticStatus: "CANCELLED",
+        action: () => bookingsApi.rejectBooking(bookingId, normalizedReason),
+        successMessage: "Booking declined successfully",
+        fallbackErrorMessage: "Failed to decline booking. Please try again.",
       });
-      toast.error("Failed to cancel booking. Please try again.");
+      return;
     }
+
+    if (transitionSet.has("CANCEL")) {
+      await runBookingAction({
+        bookingId,
+        intent: actionIntent,
+        optimisticStatus: "CANCELLED",
+        action: () => bookingsApi.cancelBooking(bookingId, normalizedReason),
+        successMessage: "Booking cancelled successfully",
+        fallbackErrorMessage: "Failed to cancel booking. Please try again.",
+      });
+      return;
+    }
+
+    toast.error(getBookingsUnavailableActionError(actionIntent));
   };
 
   const handleConfirmBooking = async (bookingId: string) => {
-    // Optimistically update status
-    setOptimisticStatuses((prev) => ({ ...prev, [bookingId]: "CONFIRMED" }));
-
-    try {
-      await bookingsApi.approveBooking(bookingId);
-      toast.success("Booking confirmed");
-      revalidator.revalidate();
-    } catch (error) {
-      setOptimisticStatuses((prev) => {
-        const next = { ...prev };
-        delete next[bookingId];
-        return next;
-      });
-      toast.error("Failed to confirm booking. Please try again.");
-    }
+    await runBookingAction({
+      bookingId,
+      intent: "confirm",
+      optimisticStatus: "CONFIRMED",
+      action: () => bookingsApi.approveBooking(bookingId),
+      successMessage: "Booking confirmed",
+      fallbackErrorMessage: "Failed to confirm booking. Please try again.",
+    });
   };
 
   const handleCompleteBooking = async (bookingId: string) => {
-    setOptimisticStatuses((prev) => ({ ...prev, [bookingId]: "COMPLETED" }));
-
-    try {
-      await bookingsApi.approveReturn(bookingId);
-      toast.success("Booking completed");
-      revalidator.revalidate();
-    } catch (error) {
-      setOptimisticStatuses((prev) => {
-        const next = { ...prev };
-        delete next[bookingId];
-        return next;
-      });
-      toast.error("Failed to complete booking. Please try again.");
-    }
+    await runBookingAction({
+      bookingId,
+      intent: "complete",
+      optimisticStatus: "COMPLETED",
+      action: () => bookingsApi.approveReturn(bookingId),
+      successMessage: "Booking completed",
+      fallbackErrorMessage: "Failed to complete booking. Please try again.",
+    });
   };
 
   const handleStartBooking = async (bookingId: string) => {
-    setOptimisticStatuses((prev) => ({ ...prev, [bookingId]: "IN_PROGRESS" }));
-
-    try {
-      await bookingsApi.startBooking(bookingId);
-      toast.success("Booking started");
-      revalidator.revalidate();
-    } catch (error) {
-      setOptimisticStatuses((prev) => {
-        const next = { ...prev };
-        delete next[bookingId];
-        return next;
-      });
-      toast.error("Failed to start booking. Please try again.");
-    }
+    await runBookingAction({
+      bookingId,
+      intent: "start",
+      optimisticStatus: "IN_PROGRESS",
+      action: () => bookingsApi.startBooking(bookingId),
+      successMessage: "Booking started",
+      fallbackErrorMessage: "Failed to start booking. Please try again.",
+    });
   };
 
   const handleRequestReturn = async (bookingId: string) => {
-    setOptimisticStatuses((prev) => ({
-      ...prev,
-      [bookingId]: "AWAITING_RETURN_INSPECTION",
-    }));
-
-    try {
-      await bookingsApi.requestReturn(bookingId);
-      toast.success("Return requested");
-      revalidator.revalidate();
-    } catch (error) {
-      setOptimisticStatuses((prev) => {
-        const next = { ...prev };
-        delete next[bookingId];
-        return next;
-      });
-      toast.error("Failed to request return. Please try again.");
-    }
+    await runBookingAction({
+      bookingId,
+      intent: "request_return",
+      optimisticStatus: "AWAITING_RETURN_INSPECTION",
+      action: () => bookingsApi.requestReturn(bookingId),
+      successMessage: "Return requested",
+      fallbackErrorMessage: "Failed to request return. Please try again.",
+    });
   };
 
   const formatDate = (dateString: string) => safeDateLabel(dateString);
@@ -528,7 +627,12 @@ export default function BookingsPage() {
       sidebarSections={getPortalNavSections(portalRole)}
       banner={
         error ? (
-          <Alert type="error" title="Error Loading Bookings" message={error} />
+          <div className="space-y-3">
+            <Alert type="error" title="Error Loading Bookings" message={error} />
+            <UnifiedButton variant="outline" onClick={() => revalidator.revalidate()}>
+              {t("errors.tryAgain", "Try Again")}
+            </UnifiedButton>
+          </div>
         ) : null
       }
       containerSize="large"
@@ -619,7 +723,14 @@ export default function BookingsPage() {
       {/* Empty State */}
       {!isLoading && bookings.length === 0 && !error && (
         <Card className="p-12">
-          <EmptyStatePresets.NoBookings />
+          {status ? (
+            <EmptyStatePresets.NoBookingsFiltered
+              statusLabel={statusLabel(status)}
+              onClearFilter={() => handleStatusFilter("")}
+            />
+          ) : (
+            <EmptyStatePresets.NoBookings />
+          )}
         </Card>
       )}
 
@@ -645,6 +756,8 @@ export default function BookingsPage() {
               booking.listing?.images?.[0];
             const guidance = getBookingStateGuidance(statusKey, isRenter);
             const paymentStatusLabel = String(booking.paymentStatus).toUpperCase();
+            const bookingActionPending =
+              pendingActionKey !== null && pendingActionKey.startsWith(`${bookingId}:`);
             const paymentStatusTone =
               paymentStatusLabel === "PAID"
                 ? "text-success"
@@ -788,6 +901,7 @@ export default function BookingsPage() {
                       <UnifiedButton
                         variant="outline"
                         leftIcon={<MessageSquare className="w-4 h-4" />}
+                        disabled={bookingActionPending}
                       >
                         {t("bookings.actions.message", "Message")}
                       </UnifiedButton>
@@ -796,11 +910,9 @@ export default function BookingsPage() {
                     {transitionSet.has("CANCEL") && (
                         <UnifiedButton
                           variant="destructive"
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setShowCancelModal(true);
-                          }}
+                          onClick={() => openCancelModal(booking, "cancel")}
                           leftIcon={<X className="w-4 h-4" />}
+                          disabled={bookingActionPending}
                         >
                           {t("common.cancel")}
                         </UnifiedButton>
@@ -811,21 +923,21 @@ export default function BookingsPage() {
                         <UnifiedButton
                           onClick={() => {
                             if (bookingId) {
-                              handleConfirmBooking(bookingId);
+                              void handleConfirmBooking(bookingId);
                             }
                           }}
                           variant="success"
                           leftIcon={<CheckCircle className="w-4 h-4" />}
+                          loading={pendingActionKey === `${bookingId}:confirm`}
+                          disabled={bookingActionPending}
                         >
                           {t("common.confirm")}
                         </UnifiedButton>
                         <UnifiedButton
                           variant="destructive"
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setShowCancelModal(true);
-                          }}
+                          onClick={() => openCancelModal(booking, "reject")}
                           leftIcon={<X className="w-4 h-4" />}
+                          disabled={bookingActionPending}
                         >
                           {t("bookings.actions.decline", "Decline")}
                         </UnifiedButton>
@@ -841,6 +953,7 @@ export default function BookingsPage() {
                         >
                           <UnifiedButton
                             leftIcon={<Banknote className="w-4 h-4" />}
+                            disabled={bookingActionPending}
                           >
                             {statusKey === "payment_failed"
                               ? t("bookings.actions.retryPayment", "Retry Payment")
@@ -853,10 +966,12 @@ export default function BookingsPage() {
                       <UnifiedButton
                         onClick={() => {
                           if (bookingId) {
-                            handleStartBooking(bookingId);
+                            void handleStartBooking(bookingId);
                           }
                         }}
                         leftIcon={<CheckCircle className="w-4 h-4" />}
+                        loading={pendingActionKey === `${bookingId}:start`}
+                        disabled={bookingActionPending}
                       >
                         {t("bookings.actions.startBooking", "Start Booking")}
                       </UnifiedButton>
@@ -866,10 +981,12 @@ export default function BookingsPage() {
                       <UnifiedButton
                         onClick={() => {
                           if (bookingId) {
-                            handleCompleteBooking(bookingId);
+                            void handleCompleteBooking(bookingId);
                           }
                         }}
                         leftIcon={<CheckCircle className="w-4 h-4" />}
+                        loading={pendingActionKey === `${bookingId}:complete`}
+                        disabled={bookingActionPending}
                       >
                         {t("bookings.actions.approveReturn", "Approve Return")}
                       </UnifiedButton>
@@ -879,10 +996,12 @@ export default function BookingsPage() {
                       <UnifiedButton
                         onClick={() => {
                           if (bookingId) {
-                            handleRequestReturn(bookingId);
+                            void handleRequestReturn(bookingId);
                           }
                         }}
                         leftIcon={<CheckCircle className="w-4 h-4" />}
+                        loading={pendingActionKey === `${bookingId}:request_return`}
+                        disabled={bookingActionPending}
                       >
                         {t("bookings.actions.requestReturn", "Request Return")}
                       </UnifiedButton>
@@ -926,20 +1045,30 @@ export default function BookingsPage() {
       {/* Cancel Modal */}
       <Dialog
         open={showCancelModal && !!selectedBooking}
-        onClose={() => {
-          setShowCancelModal(false);
-          setCancelReason("");
-        }}
-        title={t("bookings.details.cancelBooking")}
-        description={t(
-          "bookings.cancelConfirmation",
-          "Are you sure you want to cancel this booking? This action cannot be undone."
-        )}
+        onClose={closeCancelModal}
+        title={
+          modalIntent === "reject"
+            ? t("bookings.actions.decline", "Decline")
+            : t("bookings.details.cancelBooking")
+        }
+        description={
+          modalIntent === "reject"
+            ? t(
+                "bookings.declineConfirmation",
+                "Declining this request will close the current booking request for the renter."
+              )
+            : t(
+                "bookings.cancelConfirmation",
+                "Are you sure you want to cancel this booking? This action cannot be undone."
+              )
+        }
         size="md"
       >
         <div className="mb-6">
           <label className="block text-sm font-medium text-foreground mb-2">
-            {t("bookings.cancelReason", "Reason for cancellation")}
+            {modalIntent === "reject"
+              ? t("bookings.declineReason", "Reason for declining")
+              : t("bookings.cancelReason", "Reason for cancellation")}
           </label>
           <textarea
             value={cancelReason}
@@ -953,27 +1082,32 @@ export default function BookingsPage() {
               "bookings.cancelPlaceholder",
               "Please provide a reason..."
             )}
+            disabled={pendingActionKey !== null}
             className="w-full px-4 py-3 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
           />
+          <div className="mt-2 text-right text-xs text-muted-foreground">
+            {cancelReason.trim().length}/{MAX_CANCELLATION_REASON_LENGTH}
+          </div>
         </div>
         <DialogFooter>
           <UnifiedButton
             variant="outline"
-            onClick={() => {
-              setShowCancelModal(false);
-              setCancelReason("");
-            }}
+            onClick={closeCancelModal}
             className="flex-1"
+            disabled={pendingActionKey !== null}
           >
             {t("bookings.keepBooking", "Keep Booking")}
           </UnifiedButton>
           <UnifiedButton
             variant="destructive"
-            onClick={handleCancelBooking}
-            disabled={cancelReason.trim().length === 0}
+            onClick={() => void handleCancelBooking()}
+            disabled={cancelReason.trim().length === 0 || pendingActionKey !== null}
+            loading={pendingActionKey !== null}
             className="flex-1"
           >
-            {t("bookings.details.cancelBooking")}
+            {modalIntent === "reject"
+              ? t("bookings.actions.decline", "Decline")
+              : t("bookings.details.cancelBooking")}
           </UnifiedButton>
         </DialogFooter>
       </Dialog>

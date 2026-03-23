@@ -1,11 +1,14 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 .pnp
 .pnp.js
 
 # Testing
 coverage/
 .nyc_output
+test-results/
+outputs/
 playwright-report/
 test-results/
 blob-report/
@@ -19,6 +22,7 @@ build/
 out/
 
 # Environment
+.expo/
 .env
 .env.local
 .env.development.local
@@ -46,6 +50,8 @@ lerna-debug.log*
 
 # Turbo
 .turbo/
+**/.turbo/
+.windsurf/
 
 # Prisma
 prisma/.env
@@ -53,7 +59,9 @@ prisma/.env
 # Temporary files
 *.tmp
 *.temp
+*.tsbuildinfo
 .cache/
+tools/outputs/
 
 # Deployment artifacts
 backups/

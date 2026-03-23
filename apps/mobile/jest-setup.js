@@ -61,6 +61,20 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// ── expo-local-authentication: avoid native biometric module loading in tests ─
+jest.mock('expo-local-authentication', () => ({
+  AuthenticationType: {
+    FINGERPRINT: 1,
+    FACIAL_RECOGNITION: 2,
+    IRIS: 3,
+  },
+  hasHardwareAsync: jest.fn().mockResolvedValue(true),
+  isEnrolledAsync: jest.fn().mockResolvedValue(true),
+  supportedAuthenticationTypesAsync: jest.fn().mockResolvedValue([1, 2]),
+  authenticateAsync: jest.fn().mockResolvedValue({ success: true }),
+  cancelAuthenticate: jest.fn(),
+}), { virtual: true });
+
 const originalConsoleError = console.error;
 console.error = (...args) => {
   if (

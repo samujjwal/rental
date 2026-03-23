@@ -437,6 +437,19 @@ function createMobileClient(config: MobileClientConfig = {}) {
         `/payments/transactions?page=${page}&limit=${limit}`,
       ),
 
+    calculatePrice: (listingId: string, startDate: string, endDate: string) =>
+      request<{
+        totalDays: number;
+        pricePerDay: number;
+        subtotal: number;
+        serviceFee: number;
+        platformFee: number;
+        totalAmount: number;
+      }>('/bookings/calculate-price', {
+        method: 'POST',
+        body: JSON.stringify({ listingId, startDate, endDate }),
+      }),
+
     createBooking: (payload: any) =>
       request<BookingResponse>('/bookings', {
         method: 'POST',

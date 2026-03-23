@@ -18,6 +18,7 @@ import {
 import { adminApi } from "~/lib/api/admin";
 import { UnifiedButton , RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const meta: MetaFunction = () => {
   return [
@@ -70,6 +71,24 @@ const defaultSettings: NotificationSettings = {
 const MIN_NOTIFICATIONS_PER_HOUR = 1;
 const MAX_NOTIFICATIONS_PER_HOUR = 10000;
 
+export function getAdminNotificationsError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Notification settings request timed out. Try again.",
+    })
+  );
+}
+
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -82,10 +101,7 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       settings: defaultSettings,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load notification settings",
+      error: getAdminNotificationsError(error, "Failed to load notification settings"),
     };
   }
 }
@@ -162,13 +178,7 @@ export async function clientAction({ request }: ActionFunctionArgs) {
   } catch (error: unknown) {
     return {
       success: false,
-      error:
-        (error &&
-          typeof error === "object" &&
-          "response" in error &&
-          (error as { response?: { data?: { message?: string } } }).response
-            ?.data?.message) ||
-        "Failed to update settings",
+      error: getAdminNotificationsError(error, "Failed to update settings"),
     };
   }
 }

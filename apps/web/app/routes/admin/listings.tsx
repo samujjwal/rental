@@ -1,7 +1,7 @@
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useLoaderData, Form, useNavigation, useActionData } from "react-router";
+import { useLoaderData, Form, useNavigation, useActionData, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle,
   XCircle,
@@ -14,20 +14,27 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { adminApi, type AdminListing } from "~/lib/api/admin";
-import { UnifiedButton, RouteErrorBoundary } from "~/components/ui";
+import { Dialog, DialogFooter, UnifiedButton, RouteErrorBoundary } from "~/components/ui";
 import { requireAdmin } from "~/utils/auth";
 import { formatCurrency, formatDate } from "~/lib/utils";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error !== null) {
-    const rec = error as Record<string, unknown>;
-    const msg = (rec.response as Record<string, unknown> | undefined)?.data as
-      | Record<string, unknown>
-      | undefined;
-    if (typeof msg?.message === "string") return msg.message;
-  }
-  return "Unknown error";
+export function getAdminListingsError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Listing moderation request timed out. Try again.",
+    })
+  );
 }
 
 export const meta: MetaFunction = () => [
@@ -41,7 +48,11 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     const res = await adminApi.getPendingListings();
     return { listings: res.listings ?? [], total: res.total ?? 0, error: null };
   } catch (error) {
-    return { listings: [], total: 0, error: getErrorMessage(error) };
+    return {
+      listings: [],
+      total: 0,
+      error: getAdminListingsError(error, "Failed to load listings"),
+    };
   }
 }
 
@@ -63,7 +74,11 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     }
     return { success: false, message: null, error: "Unknown action" };
   } catch (error) {
-    return { success: false, message: null, error: getErrorMessage(error) };
+    return {
+      success: false,
+      message: null,
+      error: getAdminListingsError(error, "Failed to update listing"),
+    };
   }
 }
 
@@ -103,7 +118,10 @@ function ListingCard({
   onReject: (listing: AdminListing) => void;
 }) {
   const navigation = useNavigation();
-  const isSubmitting = navigation.state === "submitting";
+  const isApproving =
+    navigation.state === "submitting" &&
+    navigation.formData?.get("intent") === "approve" &&
+    navigation.formData?.get("listingId") === listing.id;
   const reviewChecklist = getReviewChecklist(listing);
   const verificationLabel = humanizeStatus(listing.verificationStatus);
   const moderationLabel = humanizeStatus(listing.moderationStatus);
@@ -205,13 +223,12 @@ function ListingCard({
               variant="primary"
               size="sm"
               className="w-full"
-              disabled={isSubmitting}
+              loading={isApproving}
+              disabled={isApproving}
             >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
+              {!isApproving ? (
                 <CheckCircle className="h-4 w-4" />
-              )}
+              ) : null}
               Approve
             </UnifiedButton>
           </Form>
@@ -221,7 +238,7 @@ function ListingCard({
             size="sm"
             className="flex-1"
             onClick={() => onReject(listing)}
-            disabled={isSubmitting}
+            disabled={navigation.state === "submitting"}
           >
             <XCircle className="h-4 w-4" />
             Reject
@@ -235,64 +252,83 @@ function ListingCard({
 function RejectModal({
   listing,
   onClose,
+  error,
 }: {
   listing: AdminListing;
   onClose: () => void;
+  error?: string | null;
 }) {
   const navigation = useNavigation();
-  const isSubmitting = navigation.state === "submitting";
+  const isSubmitting =
+    navigation.state === "submitting" &&
+    navigation.formData?.get("intent") === "reject" &&
+    navigation.formData?.get("listingId") === listing.id;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">Reject Listing</h2>
-        <p className="text-sm text-gray-600">
-          You are rejecting: <span className="font-medium">{listing.title}</span>
-        </p>
+    <Dialog
+      open
+      onClose={() => {
+        if (!isSubmitting) {
+          onClose();
+        }
+      }}
+      title="Reject Listing"
+      description={`You are rejecting: ${listing.title}`}
+      size="md"
+    >
+      <Form method="post">
+        <input type="hidden" name="intent" value="reject" />
+        <input type="hidden" name="listingId" value={listing.id} />
 
-        <Form method="post" onSubmit={onClose}>
-          <input type="hidden" name="intent" value="reject" />
-          <input type="hidden" name="listingId" value={listing.id} />
-
-          <div className="space-y-2 mb-4">
-            <label
-              htmlFor="reason"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Reason (optional — shown to owner)
-            </label>
-            <textarea
-              id="reason"
-              name="reason"
-              rows={3}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="e.g. Photos are unclear, description incomplete..."
-            />
+        {error ? (
+          <div
+            id="reject-listing-error"
+            className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {error}
           </div>
+        ) : null}
 
-          <div className="flex justify-end gap-3">
-            <UnifiedButton
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </UnifiedButton>
-            <UnifiedButton
-              type="submit"
-              variant="destructive"
-              size="sm"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Confirm Reject
-            </UnifiedButton>
-          </div>
-        </Form>
-      </div>
-    </div>
+        <div className="space-y-2 mb-4">
+          <label
+            htmlFor="reject-listing-reason"
+            className="block text-sm font-medium text-gray-700"
+          >
+            Reason (optional - shown to owner)
+          </label>
+          <textarea
+            id="reject-listing-reason"
+            name="reason"
+            rows={3}
+            disabled={isSubmitting}
+            aria-describedby={error ? "reject-listing-error" : undefined}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            placeholder="e.g. Photos are unclear, description incomplete..."
+          />
+        </div>
+
+        <DialogFooter>
+          <UnifiedButton
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </UnifiedButton>
+          <UnifiedButton
+            type="submit"
+            variant="destructive"
+            size="sm"
+            loading={isSubmitting}
+            disabled={isSubmitting}
+          >
+            Confirm Reject
+          </UnifiedButton>
+        </DialogFooter>
+      </Form>
+    </Dialog>
   );
 }
 
@@ -301,6 +337,13 @@ export default function AdminListingsPage() {
   const actionData = useActionData<typeof clientAction>();
   const { t } = useTranslation();
   const [rejectTarget, setRejectTarget] = useState<AdminListing | null>(null);
+  const revalidator = useRevalidator();
+
+  useEffect(() => {
+    if (actionData?.success) {
+      setRejectTarget(null);
+    }
+  }, [actionData?.success]);
 
   return (
     <div className="space-y-6">
@@ -333,9 +376,16 @@ export default function AdminListingsPage() {
 
       {/* Load error */}
       {error && (
-        <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4 flex items-center gap-2 text-yellow-800">
-          <AlertTriangle className="h-5 w-5 shrink-0" />
-          <span className="text-sm">Failed to load listings: {error}</span>
+        <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4 text-yellow-800">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+              <span className="text-sm">Failed to load listings: {error}</span>
+            </div>
+            <UnifiedButton variant="outline" size="sm" onClick={() => revalidator.revalidate()}>
+              Retry
+            </UnifiedButton>
+          </div>
         </div>
       )}
 
@@ -363,7 +413,11 @@ export default function AdminListingsPage() {
 
       {/* Reject modal */}
       {rejectTarget && (
-        <RejectModal listing={rejectTarget} onClose={() => setRejectTarget(null)} />
+        <RejectModal
+          listing={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          error={actionData?.error}
+        />
       )}
     </div>
   );

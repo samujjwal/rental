@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GeoDistributionService } from './geo-distribution.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('GeoDistributionService', () => {
   let service: GeoDistributionService;
@@ -20,6 +21,12 @@ describe('GeoDistributionService', () => {
       providers: [
         GeoDistributionService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

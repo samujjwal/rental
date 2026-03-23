@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
@@ -33,7 +34,7 @@ vi.mock("lucide-react", () => ({
   AlertCircle: IconStub, Search: IconStub,
 }));
 
-import { clientLoader } from "./audit";
+import { clientLoader, getAuditLogsLoadError } from "./audit";
 
 describe("admin/system/audit", () => {
   beforeEach(() => {
@@ -72,5 +73,27 @@ describe("admin/system/audit", () => {
     const res = await clientLoader({ request: new Request("http://l/admin/system/audit") } as any);
     expect(res.logs).toEqual([]);
     expect(res.error).toBe("timeout");
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    m.getAuditLogs.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const res = await clientLoader({ request: new Request("http://l/admin/system/audit") } as any);
+
+    expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getAuditLogsLoadError(new Error("backend unavailable"))).toBe("backend unavailable");
   });
 });

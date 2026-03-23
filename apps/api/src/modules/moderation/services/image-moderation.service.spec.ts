@@ -18,27 +18,45 @@ describe('ImageModerationService', () => {
   });
 
   describe('moderateImage', () => {
-    it('should return clean result for accessible image', async () => {
-      // HEAD request succeeds
-      mockFetch.mockResolvedValueOnce({ ok: true });
+    it('should require manual review when automated moderation is disabled', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'FEATURE_IMAGE_MODERATION' ? 'false' : undefined,
+      );
 
       const result = await service.moderateImage('https://example.com/image.jpg');
 
       expect(result).toBeDefined();
-      expect(result.confidence).toBeDefined();
-      expect(Array.isArray(result.flags)).toBe(true);
+      expect(result.confidence).toBe(0);
+      expect(result.flags).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'PENDING_HUMAN_REVIEW',
+          }),
+        ]),
+      );
     });
 
-    it('should flag inaccessible images', async () => {
-      // HEAD request fails
+    it('should flag inaccessible images when automated moderation is enabled', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'FEATURE_IMAGE_MODERATION' ? 'true' : undefined,
+      );
       mockFetch.mockResolvedValueOnce({ ok: false });
 
       const result = await service.moderateImage('https://bad-url.com/missing.jpg');
 
       expect(result).toBeDefined();
+      expect(result.flags).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'IMAGE_INACCESSIBLE' }),
+        ]),
+      );
+      expect(result.confidence).toBe(0.5);
     });
 
-    it('should handle network errors gracefully', async () => {
+    it('should handle network errors gracefully when automated moderation is enabled', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'FEATURE_IMAGE_MODERATION' ? 'true' : undefined,
+      );
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       const result = await service.moderateImage('https://example.com/image.jpg');
@@ -53,7 +71,10 @@ describe('ImageModerationService', () => {
       expect(result.confidence).toBe(0.5);
     });
 
-    it('should return confidence 0.5 when no API result available', async () => {
+    it('should return confidence 0.5 when no API result is available and automated moderation is enabled', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'FEATURE_IMAGE_MODERATION' ? 'true' : undefined,
+      );
       mockFetch.mockResolvedValueOnce({ ok: true }); // HEAD success
 
       const result = await service.moderateImage('https://example.com/safe.jpg');
@@ -107,6 +128,9 @@ describe('ImageModerationService', () => {
 
   describe('checkImageAccessibility (via moderateImage)', () => {
     it('should call HEAD on image URL', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'FEATURE_IMAGE_MODERATION' ? 'true' : undefined,
+      );
       mockFetch.mockResolvedValueOnce({ ok: true });
 
       await service.moderateImage('https://example.com/test.jpg');
@@ -118,6 +142,9 @@ describe('ImageModerationService', () => {
     });
 
     it('should handle fetch rejection gracefully', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'FEATURE_IMAGE_MODERATION' ? 'true' : undefined,
+      );
       mockFetch.mockRejectedValueOnce(new Error('DNS failure'));
 
       const result = await service.moderateImage('https://invalid.xyz/img.jpg');

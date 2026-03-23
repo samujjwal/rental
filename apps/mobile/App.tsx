@@ -17,6 +17,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { SignupScreen } from './src/screens/SignupScreen';
 import { ForgotPasswordScreen } from './src/screens/ForgotPasswordScreen';
 import { ResetPasswordScreen } from './src/screens/ResetPasswordScreen';
+import { TwoFactorScreen } from './src/screens/TwoFactorScreen';
 
 // Modal & detail screens
 import { ListingScreen } from './src/screens/ListingScreen';
@@ -73,6 +74,7 @@ export type RootStackParamList = {
   Signup: undefined;
   ForgotPassword: undefined;
   ResetPassword: undefined;
+  TwoFactor: { email: string; password: string };
 
   // Main tab navigator
   Main: undefined;
@@ -153,6 +155,7 @@ function RootNavigator() {
           <Stack.Screen name="Signup" component={SignupScreen} />
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+          <Stack.Screen name="TwoFactor" component={TwoFactorScreen} />
           {/* Allow browsing without auth */}
           <Stack.Screen name="Main" component={TabNavigator} />
         </Stack.Group>
@@ -171,6 +174,7 @@ function RootNavigator() {
             <Stack.Screen name="Signup" component={SignupScreen} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+            <Stack.Screen name="TwoFactor" component={TwoFactorScreen} />
           </Stack.Group>
 
           {/* Auth-required detail screens */}

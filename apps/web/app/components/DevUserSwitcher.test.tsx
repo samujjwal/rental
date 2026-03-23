@@ -119,7 +119,7 @@ describe('DevUserSwitcher', () => {
   });
 
   it('calls devLogin when user button is clicked', async () => {
-    mockAuthApi.devLogin.mockResolvedValue({
+    mockAuthApi.login.mockResolvedValue({
       user: { id: '1', role: 'ADMIN' },
       accessToken: 'tok',
       refreshToken: 'ref',
@@ -127,16 +127,15 @@ describe('DevUserSwitcher', () => {
     renderSwitcher();
     fireEvent.click(screen.getByText('Admin'));
     await waitFor(() => {
-      expect(mockAuthApi.devLogin).toHaveBeenCalledWith({
+      expect(mockAuthApi.login).toHaveBeenCalledWith({
         email: 'admin@rental-portal.com',
-        role: 'ADMIN',
-        secret: 'e2e-test-secret-12345',
+        password: 'password123',
       });
     });
   });
 
   it('navigates to /admin for admin users', async () => {
-    mockAuthApi.devLogin.mockResolvedValue({
+    mockAuthApi.login.mockResolvedValue({
       user: { id: '1', role: 'ADMIN' },
       accessToken: 'tok',
       refreshToken: 'ref',
@@ -149,7 +148,7 @@ describe('DevUserSwitcher', () => {
   });
 
   it('navigates to /dashboard for host users', async () => {
-    mockAuthApi.devLogin.mockResolvedValue({
+    mockAuthApi.login.mockResolvedValue({
       user: { id: '2', role: 'HOST' },
       accessToken: 'tok',
       refreshToken: 'ref',
@@ -162,7 +161,7 @@ describe('DevUserSwitcher', () => {
   });
 
   it('displays error message on login failure', async () => {
-    mockAuthApi.devLogin.mockRejectedValue(new Error('Network error'));
+    mockAuthApi.login.mockRejectedValue(new Error('Network error'));
     renderSwitcher();
     fireEvent.click(screen.getByText('Admin'));
     await waitFor(() => {
@@ -171,7 +170,7 @@ describe('DevUserSwitcher', () => {
   });
 
   it('shows error if admin login returns non-admin role', async () => {
-    mockAuthApi.devLogin.mockResolvedValue({
+    mockAuthApi.login.mockResolvedValue({
       user: { id: '1', role: 'USER' },
       accessToken: 'tok',
       refreshToken: 'ref',

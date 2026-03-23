@@ -9,6 +9,7 @@ import { RouteErrorBoundary } from "~/components/ui/error-state";
 import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
 import { isAppEntityId } from "~/utils/entity-id";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const ErrorBoundary = RouteErrorBoundary;
 
@@ -25,6 +26,13 @@ const safeText = (value: unknown, fallback = ""): string => {
   const text = typeof value === "string" ? value : "";
   return text || fallback;
 };
+
+export function getOrganizationListingsLoadError(error: unknown): string {
+  return getActionableErrorMessage(error, "Failed to load organization", {
+    [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+    [ApiErrorType.TIMEOUT_ERROR]: "Loading organization listings timed out. Try again.",
+  });
+}
 
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -51,10 +59,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
   } catch (error: unknown) {
     return {
       organization: null,
-      error:
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message?: string }).message)
-          : "Failed to load organization",
+      error: getOrganizationListingsLoadError(error),
     };
   }
 }

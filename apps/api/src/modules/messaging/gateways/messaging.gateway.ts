@@ -89,6 +89,9 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       this.userSockets.get(userId)!.add(client.id);
       await this.addPresenceToRedis(userId, client.id);
 
+      // F-17 fix: Join the user's named room so the Redis adapter can route
+      // events (e.g. message_read) to this socket even from other pods.
+      client.join(`user:${userId}`);
       this.logger.log(`Client connected: ${client.id} (User: ${userId})`);
 
       // Emit online status to user's contacts
@@ -295,15 +298,13 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       const userId = client.userId;
       const message = await this.messagesService.markAsRead(data.messageId, userId);
 
-      // Notify sender
-      const senderSockets = this.getUserSockets(message.senderId);
-      for (const socketId of senderSockets) {
-        this.server.to(socketId).emit('message_read', {
-          messageId: message.id,
-          conversationId: message.conversationId,
-          readBy: userId,
-        });
-      }
+      // F-17 fix: Use the Redis adapter room `user:<senderId>` instead of the
+      // local userSockets Map.  Room routing is propagated across all pods.
+      this.server.to(`user:${message.senderId}`).emit('message_read', {
+        messageId: message.id,
+        conversationId: message.conversationId,
+        readBy: userId,
+      });
 
       return { success: true };
     } catch (error) {

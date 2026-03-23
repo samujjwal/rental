@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -12,12 +13,14 @@ const mocks = vi.hoisted(() => ({
   useLoaderData: vi.fn(),
   useActionData: vi.fn(),
   useNavigation: vi.fn(() => ({ state: "idle" })),
+  useRevalidator: vi.fn(() => ({ revalidate: vi.fn(), state: "idle" })),
 }));
 
 vi.mock("react-router", () => ({
   useLoaderData: () => mocks.useLoaderData(),
   useActionData: () => mocks.useActionData(),
   useNavigation: () => mocks.useNavigation(),
+  useRevalidator: () => mocks.useRevalidator(),
   Form: ({ children, ...p }: any) => <form {...p}>{children}</form>,
 }));
 vi.mock("~/utils/auth", () => ({
@@ -46,6 +49,8 @@ vi.mock("lucide-react", () => ({
 }));
 vi.mock("~/components/ui", () => ({
   UnifiedButton: ({ children, ...p }: any) => <button {...p}>{children}</button>,
+  Dialog: ({ open, children }: any) => (open ? <div>{children}</div> : null),
+  DialogFooter: ({ children }: any) => <div>{children}</div>,
   RouteErrorBoundary: ({ children }: any) => <div>{children}</div>,
 }));
 vi.mock("~/lib/utils", () => ({
@@ -54,7 +59,11 @@ vi.mock("~/lib/utils", () => ({
   formatDate: (d: any) => "2025-01-01",
 }));
 
-import AdminListingsPage, { clientLoader, clientAction } from "./listings";
+import AdminListingsPage, {
+  clientLoader,
+  clientAction,
+  getAdminListingsError,
+} from "./listings";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -91,6 +100,27 @@ describe("admin/listings clientLoader", () => {
     } as any)) as any;
     expect(r.listings).toEqual([]);
     expect(r.error).toBe("Server error");
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.requireAdmin.mockResolvedValue(undefined);
+    mocks.getPendingListings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const r = (await clientLoader({
+      request: new Request("http://localhost/admin/listings"),
+    } as any)) as any;
+
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
   });
 });
 
@@ -143,6 +173,35 @@ describe("admin/listings clientAction", () => {
     const r = (await clientAction({ request: actionRequest(fd) } as any)) as any;
     expect(r.success).toBe(false);
     expect(r.error).toBe("Approval failed");
+  });
+
+  it("uses actionable offline copy for action failures", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.requireAdmin.mockResolvedValue(undefined);
+    mocks.approveListing.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    const fd = new FormData();
+    fd.append("intent", "approve");
+    fd.append("listingId", "l1");
+
+    const r = (await clientAction({ request: actionRequest(fd) } as any)) as any;
+
+    expect(r.success).toBe(false);
+    expect(r.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("preserves backend response messages in helper", () => {
+    expect(
+      getAdminListingsError({ response: { data: { message: "Review queue locked" } } }, "fallback")
+    ).toBe("Review queue locked");
   });
 });
 

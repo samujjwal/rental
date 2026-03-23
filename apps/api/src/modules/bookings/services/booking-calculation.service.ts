@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 // import { i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
@@ -24,14 +24,36 @@ export interface PriceCalculation {
 
 @Injectable()
 export class BookingCalculationService {
+  private readonly logger = new Logger(BookingCalculationService.name);
   private readonly platformFeeRate: number;
   private readonly serviceFeeRate: number;
+
+  /**
+   * Fallback cancellation tiers loaded from configuration.
+   * Operators can override via DEFAULT_CANCELLATION_POLICY env var (JSON).
+   * Applied only when the PolicyEngine has no rules for a booking.
+   */
+  private readonly defaultCancellationTiers: Array<{
+    minHoursBefore: number;
+    maxHoursBefore: number | null;
+    refundPercentage: number;
+    label: string;
+  }>;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     @Optional() private readonly policyEngine?: PolicyEngineService,
   ) {
+    this.defaultCancellationTiers =
+      this.config.get<Array<{ minHoursBefore: number; maxHoursBefore: number | null; refundPercentage: number; label: string }>>(
+        'defaultCancellationPolicy',
+      ) ?? [
+        { minHoursBefore: 48, maxHoursBefore: null, refundPercentage: 1.0, label: 'Cancelled more than 48 hours before start — full refund' },
+        { minHoursBefore: 24, maxHoursBefore: 48, refundPercentage: 0.5, label: 'Cancelled 24–48 hours before start — 50% refund' },
+        { minHoursBefore: 0, maxHoursBefore: 24, refundPercentage: 0.0, label: 'Cancelled less than 24 hours before start — no refund' },
+      ];
+
     this.platformFeeRate = (this.config.get<number>('fees.platformFeePercent', 10)) / 100;
     this.serviceFeeRate = (this.config.get<number>('fees.serviceFeePercent', 5)) / 100;
   }
@@ -360,19 +382,32 @@ export class BookingCalculationService {
           flatPenalty = cancellation.flatPenalty;
         } else {
           // No CANCELLATION rules — fall through to hardcoded defaults
+          this.logger.warn(
+            `PolicyEngine returned no CANCELLATION rules for booking ${booking.id ?? 'unknown'} — ` +
+            'using hardcoded fallback tiers. Seed default cancellation policies in PolicyEngine to avoid this.',
+          );
           this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
             refundPercentage = pct;
             reason = msg;
           });
         }
-      } catch {
+      } catch (err) {
         // PolicyEngine error — fall back to hardcoded defaults
+        this.logger.warn(
+          `PolicyEngine threw an error evaluating CANCELLATION for booking ${booking.id ?? 'unknown'} — ` +
+          'falling back to hardcoded tiers. Check PolicyEngine configuration.',
+          err instanceof Error ? err.stack : String(err),
+        );
         this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
           refundPercentage = pct;
           reason = msg;
         });
       }
     } else {
+      this.logger.warn(
+        `PolicyEngineService not available for booking ${booking.id ?? 'unknown'} — ` +
+        'using hardcoded cancellation fallback tiers.',
+      );
       this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
         refundPercentage = pct;
         reason = msg;
@@ -408,24 +443,41 @@ export class BookingCalculationService {
   }
 
   /**
-   * Default hardcoded cancellation tiers (fallback when PolicyEngine has no rules).
-   * @deprecated Will be removed once all jurisdictions have CANCELLATION PolicyRules.
+   * Applies the platform-level default cancellation tiers (loaded from configuration).
+   * These tiers are the fallback when the PolicyEngine has no rules for this booking.
+   * Override via the DEFAULT_CANCELLATION_POLICY environment variable.
+   *
+   * @deprecated Per-listing or global PolicyEngine rules should be configured
+   * so this fallback is never reached in production.
    */
   private applyDefaultCancellationPolicy(
     hoursUntilStart: number,
     booking: any,
     apply: (refundPercentage: number, reason: string) => void,
   ): void {
-    if (!booking.listing.cancellationPolicy) {
-      if (hoursUntilStart >= 48) {
-        apply(1.0, 'Cancelled more than 48 hours before start');
-      } else if (hoursUntilStart >= 24) {
-        apply(0.5, 'Cancelled 24-48 hours before start');
-      } else {
-        apply(0, 'Cancelled less than 24 hours before start');
-      }
+    // If the listing has its own `cancellationPolicy` field (legacy free-text),
+    // honour it as a full-refund pass-through until PolicyEngine rules exist.
+    if (booking.listing?.cancellationPolicy) {
+      apply(1.0, 'Per listing cancellation policy — full refund');
+      return;
+    }
+
+    // Find the first matching tier (tiers are expected to be sorted most-permissive first).
+    const tier = this.defaultCancellationTiers.find((t) => {
+      const aboveMin = hoursUntilStart >= t.minHoursBefore;
+      const belowMax = t.maxHoursBefore === null || hoursUntilStart < t.maxHoursBefore;
+      return aboveMin && belowMax;
+    });
+
+    if (tier) {
+      apply(tier.refundPercentage, tier.label);
     } else {
-      apply(1.0, 'Per cancellation policy');
+      // Hours don't match any tier — apply most restrictive (last tier).
+      const lastTier = this.defaultCancellationTiers[this.defaultCancellationTiers.length - 1];
+      apply(
+        lastTier?.refundPercentage ?? 0,
+        lastTier?.label ?? 'No matching cancellation tier — no refund',
+      );
     }
   }
 }

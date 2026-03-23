@@ -23,9 +23,10 @@ import {
 import { useState } from "react";
 import { getUser } from "~/utils/auth";
 import { authApi } from "~/lib/api/auth";
-import { RouteErrorBoundary } from "~/components/ui";
+import { RouteErrorBoundary, UnifiedButton } from "~/components/ui";
 import { Card, CardContent } from "~/components/ui/card";
 import { useTranslation } from "react-i18next";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export async function clientLoader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -58,9 +59,26 @@ export async function clientAction({ request }: ActionFunctionArgs) {
     await authApi.changePassword({ currentPassword, newPassword });
     return { success: true };
   } catch (err: unknown) {
-    const msg =
-      err instanceof Error ? err.message : "Failed to change password.";
-    return { error: msg };
+    const responseMessage =
+      err && typeof err === "object" && "response" in err
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+        : undefined;
+    const hasTransportContext = Boolean(
+      err &&
+        typeof err === "object" &&
+        ("response" in err || "code" in err || "isAxiosError" in err)
+    );
+    return {
+      error:
+        responseMessage ||
+        (hasTransportContext
+          ? getActionableErrorMessage(err, "Failed to change password.", {
+              [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+              [ApiErrorType.TIMEOUT_ERROR]: "Changing your password timed out. Try again.",
+              [ApiErrorType.CONFLICT]: "Your password state changed elsewhere. Refresh and try again.",
+            })
+          : "Failed to change password."),
+    };
   }
 }
 
@@ -78,6 +96,10 @@ export default function SettingsSecurityPage() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const actionErrorId = actionData && "error" in actionData && actionData.error
+    ? "security-settings-password-error"
+    : undefined;
+  const newPasswordHintId = "security-settings-password-hint";
 
   return (
     <div className="min-h-screen bg-background">
@@ -150,7 +172,7 @@ export default function SettingsSecurityPage() {
                 {actionData && "error" in actionData && actionData.error && (
                   <div className="flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 mb-4">
                     <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
-                    <p className="text-sm text-destructive">{actionData.error}</p>
+                    <p id="security-settings-password-error" className="text-sm text-destructive">{actionData.error}</p>
                   </div>
                 )}
 
@@ -170,11 +192,15 @@ export default function SettingsSecurityPage() {
                         type={showCurrent ? "text" : "password"}
                         autoComplete="current-password"
                         required
+                        disabled={isSubmitting}
+                        aria-invalid={!!actionErrorId}
+                        aria-describedby={actionErrorId}
                         className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                       />
                       <button
                         type="button"
                         onClick={() => setShowCurrent((v) => !v)}
+                        disabled={isSubmitting}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         aria-label={showCurrent ? "Hide password" : "Show password"}
                       >
@@ -203,11 +229,15 @@ export default function SettingsSecurityPage() {
                         autoComplete="new-password"
                         required
                         minLength={8}
+                        disabled={isSubmitting}
+                        aria-invalid={!!actionErrorId}
+                        aria-describedby={[newPasswordHintId, actionErrorId].filter(Boolean).join(" ") || undefined}
                         className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNew((v) => !v)}
+                        disabled={isSubmitting}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         aria-label={showNew ? "Hide password" : "Show password"}
                       >
@@ -218,7 +248,7 @@ export default function SettingsSecurityPage() {
                         )}
                       </button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p id="security-settings-password-hint" className="text-xs text-muted-foreground mt-1">
                       {t("settings.securitySettings.passwordMinLength", "Minimum 8 characters.")}
                     </p>
                   </div>
@@ -238,11 +268,15 @@ export default function SettingsSecurityPage() {
                         type={showConfirm ? "text" : "password"}
                         autoComplete="new-password"
                         required
+                        disabled={isSubmitting}
+                        aria-invalid={!!actionErrorId}
+                        aria-describedby={actionErrorId}
                         className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirm((v) => !v)}
+                        disabled={isSubmitting}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         aria-label={showConfirm ? "Hide password" : "Show password"}
                       >
@@ -256,16 +290,15 @@ export default function SettingsSecurityPage() {
                   </div>
 
                   <div className="pt-1">
-                    <button
+                    <UnifiedButton
                       type="submit"
                       disabled={isSubmitting}
-                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      loading={isSubmitting}
                     >
-                      <Key className="w-4 h-4" />
                       {isSubmitting
                         ? t("settings.securitySettings.saving", "Saving…")
                         : t("settings.securitySettings.updatePassword", "Update Password")}
-                    </button>
+                    </UnifiedButton>
                   </div>
                 </Form>
               </CardContent>

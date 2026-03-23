@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon" />);
@@ -35,7 +36,7 @@ vi.mock("lucide-react", () => ({
   Activity: IconStub, HardDrive: IconStub, LucideIcon: IconStub,
 }));
 
-import { clientLoader } from "./_index";
+import { clientLoader, getSystemSettingsLoadError } from "./_index";
 
 describe("admin/system/_index", () => {
   beforeEach(() => {
@@ -63,5 +64,27 @@ describe("admin/system/_index", () => {
     expect(res.generalSettings).toBeNull();
     expect(res.systemHealth).toBeNull();
     expect(res.error).toBe("oops");
+  });
+
+  it("uses actionable offline copy on loader failure", async () => {
+    const previousOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    m.getGeneralSettings.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+
+    const res = await clientLoader({ request: new Request("http://l/") } as any);
+
+    expect(res.error).toBe("You appear to be offline. Reconnect and try again.");
+
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: previousOnline,
+    });
+  });
+
+  it("preserves plain thrown error messages in helper", () => {
+    expect(getSystemSettingsLoadError(new Error("service unavailable"))).toBe("service unavailable");
   });
 });

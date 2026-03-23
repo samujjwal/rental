@@ -61,13 +61,16 @@ export const options = {
     },
   },
   thresholds: {
-    http_req_duration: ['p(95)<800', 'p(99)<2000'],
-    http_req_failed: ['rate<0.05'],
-    search_latency: ['p(95)<600'],
-    booking_latency: ['p(95)<1000'],
+    // Aligned with docs/SLO.md §6 — SLO Baseline Thresholds
+    // Note: user-journey runs multi-scenario load (ramping + spike) so p95/p99
+    // windows accommodate higher percentile latency seen under peak concurrency.
+    http_req_duration: ['p(95)<500', 'p(99)<1000'],
+    http_req_failed: ['rate<0.01'],
+    search_latency: ['p(95)<400'],
+    booking_latency: ['p(95)<800'],
     auth_latency: ['p(95)<500'],
-    listing_latency: ['p(95)<400'],
-    failed_checks: ['rate<0.1'],
+    listing_latency: ['p(95)<300'],
+    failed_checks: ['rate<0.02'],
   },
 };
 

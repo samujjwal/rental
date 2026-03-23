@@ -1,16 +1,18 @@
 
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, useLoaderData, useActionData, useNavigate, Link, redirect } from "react-router";
+import { Form, useLoaderData, useActionData, useNavigate, useRevalidator, Link, redirect, useNavigation } from "react-router";
 import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
 import { PageSkeleton } from "~/components/ui";
 import { RouteErrorBoundary } from "~/components/ui/error-state";
+import { Dialog, DialogFooter, UnifiedButton } from "~/components/ui";
 import { organizationsApi } from "~/lib/api/organizations";
 import type { Organization as ApiOrganization } from "~/lib/api/organizations";
 import { getUser } from "~/utils/auth";
 import { APP_PHONE_PLACEHOLDER } from "~/config/locale";
 import { useTranslation } from "react-i18next";
 import { isAppEntityId } from "~/utils/entity-id";
+import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
 export const ErrorBoundary = RouteErrorBoundary;
 
@@ -30,6 +32,37 @@ async function getOrganizationMembershipRole(userId: string, organizationId: str
   const members = await organizationsApi.getMembers(organizationId);
   const currentMember = members.members.find((member) => member.userId === userId);
   return currentMember?.role;
+}
+
+export function getOrganizationSettingsLoadError(error: unknown): string {
+  return getActionableErrorMessage(
+    error,
+    "Failed to load organization settings. Please try again.",
+    {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "Loading organization settings timed out. Try again.",
+      [ApiErrorType.NETWORK_ERROR]: "We could not reach the organization service. Try again in a moment.",
+    }
+  );
+}
+
+export function getOrganizationSettingsActionError(error: unknown, fallbackMessage: string): string {
+  const responseMessage =
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      ? (error as { response: { data: { message: string } } }).response.data.message
+      : null;
+
+  return (
+    responseMessage ||
+    getActionableErrorMessage(error, fallbackMessage, {
+      [ApiErrorType.OFFLINE]: "You appear to be offline. Reconnect and try again.",
+      [ApiErrorType.TIMEOUT_ERROR]: "This organization request timed out. Try again.",
+      [ApiErrorType.CONFLICT]: "This organization changed while you were editing it. Refresh and try again.",
+    })
+  );
 }
 
 export async function clientLoader({ params, request }: LoaderFunctionArgs) {
@@ -53,9 +86,9 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     const organization = (await organizationsApi.getOrganization(
       params.id
     )) as Organization;
-    return { organization };
-  } catch {
-    return redirect("/organizations");
+    return { organization, error: null };
+  } catch (error) {
+    return { organization: null, error: getOrganizationSettingsLoadError(error) };
   }
 }
 
@@ -141,10 +174,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          error && typeof error === "object" && "message" in error
-            ? String((error as { message?: string }).message)
-            : "Failed to update organization",
+        error: getOrganizationSettingsActionError(error, "Failed to update organization"),
       };
     }
   }
@@ -167,10 +197,7 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
     } catch (error: unknown) {
       return {
         success: false,
-        error:
-          error && typeof error === "object" && "message" in error
-            ? String((error as { message?: string }).message)
-            : "Failed to deactivate organization",
+        error: getOrganizationSettingsActionError(error, "Failed to deactivate organization"),
       };
     }
   }
@@ -179,12 +206,45 @@ export async function clientAction({ request, params }: ActionFunctionArgs) {
 }
 
 export default function OrganizationSettings() {
-  const { organization } = useLoaderData<typeof clientLoader>();
+  const { organization, error: loadError } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
+  const navigation = useNavigation();
+
+  if (!organization) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-4">
+            <Link to="/organizations" className="text-primary hover:text-primary/80">
+              ← Back to organizations
+            </Link>
+          </div>
+          <div className="bg-card rounded-lg shadow-md p-8 border border-border">
+            <h1 className="text-2xl font-bold text-foreground mb-3">Settings unavailable</h1>
+            <p className="text-muted-foreground mb-6">
+              {loadError ?? "Failed to load organization settings. Please try again."}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <UnifiedButton onClick={() => revalidator.revalidate()}>Retry</UnifiedButton>
+              <Link
+                to="/organizations"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-input text-foreground hover:bg-accent transition-colors"
+              >
+                Back to organizations
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivateConfirmation, setDeactivateConfirmation] = useState("");
   const { t } = useTranslation();
+  const isSubmitting = navigation.state === "submitting";
+  const isDeactivating = isSubmitting && navigation.formData?.get("_action") === "deactivate";
 
   useEffect(() => {
     if (actionData?.redirect) {
@@ -550,57 +610,72 @@ export default function OrganizationSettings() {
       </div>
 
       {/* Deactivate Confirmation Modal */}
-      {showDeactivateModal && (
-        <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-foreground mb-4">
-              {t("organizations.deactivateConfirm")}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              {t("organizations.deactivateConfirmDesc")}
-            </p>
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-foreground mb-2">
-                {t("organizations.typeDeactivate")}
-              </label>
-              <input
-                type="text"
-                name="deactivateConfirmation"
-                value={deactivateConfirmation}
-                onChange={(event) => setDeactivateConfirmation(event.target.value)}
-                maxLength={20}
-                className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
-                autoComplete="off"
-              />
-            </div>
-            <Form method="post" className="flex justify-end space-x-3">
-              <input type="hidden" name="_action" value="deactivate" />
-              <input
-                type="hidden"
-                name="deactivateConfirmation"
-                value={deactivateConfirmation}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setDeactivateConfirmation("");
-                  setShowDeactivateModal(false);
-                }}
-                className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-md hover:bg-muted"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                type="submit"
-                disabled={deactivateConfirmation.trim().toUpperCase() !== "DEACTIVATE"}
-                className="px-4 py-2 text-sm font-medium text-destructive-foreground bg-destructive rounded-md hover:bg-destructive/90"
-              >
-                {t("organizations.deactivate")}
-              </button>
-            </Form>
+      <Dialog
+        open={showDeactivateModal}
+        onClose={() => {
+          if (!isDeactivating) {
+            setDeactivateConfirmation("");
+            setShowDeactivateModal(false);
+          }
+        }}
+        title={t("organizations.deactivateConfirm")}
+        description={t("organizations.deactivateConfirmDesc")}
+      >
+        {showDeactivateModal && actionData?.error ? (
+          <div
+            id="deactivate-organization-error"
+            className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {actionData.error}
           </div>
+        ) : null}
+        <div className="mb-6">
+          <label htmlFor="deactivate-confirmation" className="block text-sm font-medium text-foreground mb-2">
+            {t("organizations.typeDeactivate")}
+          </label>
+          <input
+            id="deactivate-confirmation"
+            type="text"
+            name="deactivateConfirmation"
+            value={deactivateConfirmation}
+            onChange={(event) => setDeactivateConfirmation(event.target.value)}
+            maxLength={20}
+            autoComplete="off"
+            aria-invalid={showDeactivateModal && !!actionData?.error}
+            aria-describedby={showDeactivateModal && actionData?.error ? "deactivate-organization-error" : undefined}
+            className="w-full border border-input rounded-md px-3 py-2 focus:outline-none focus:ring-ring focus:border-primary"
+          />
         </div>
-      )}
+        <Form method="post">
+          <input type="hidden" name="_action" value="deactivate" />
+          <input
+            type="hidden"
+            name="deactivateConfirmation"
+            value={deactivateConfirmation}
+          />
+          <DialogFooter>
+            <UnifiedButton
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDeactivateConfirmation("");
+                setShowDeactivateModal(false);
+              }}
+              disabled={isDeactivating}
+            >
+              {t("common.cancel")}
+            </UnifiedButton>
+            <UnifiedButton
+              type="submit"
+              variant="destructive"
+              loading={isDeactivating}
+              disabled={deactivateConfirmation.trim().toUpperCase() !== "DEACTIVATE" || isDeactivating}
+            >
+              {t("organizations.deactivate")}
+            </UnifiedButton>
+          </DialogFooter>
+        </Form>
+      </Dialog>
     </div>
   );
 }

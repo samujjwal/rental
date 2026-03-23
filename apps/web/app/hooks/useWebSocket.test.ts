@@ -1,6 +1,11 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
-import { useWebSocket, useBookingWebSocket, useNotificationWebSocket } from '~/hooks/useWebSocket';
+import {
+  getWebSocketConnectionError,
+  useWebSocket,
+  useBookingWebSocket,
+  useNotificationWebSocket,
+} from '~/hooks/useWebSocket';
 import { useAuthStore } from '~/lib/store/auth';
 import { toast } from '~/lib/toast';
 
@@ -88,10 +93,28 @@ describe('useWebSocket', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     MockWebSocket.instances = [];
+    vi.spyOn(window, 'dispatchEvent');
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(true);
     vi.mocked(useAuthStore).mockReturnValue({
       user: mockUser,
       accessToken: 'test-token'
     } as any);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('maps websocket connection errors to actionable offline and reconnect copy', () => {
+    expect(getWebSocketConnectionError()).toBe(
+      'We could not connect to real-time updates right now.'
+    );
+    expect(getWebSocketConnectionError({ exhaustedRetries: true })).toBe(
+      'We could not reconnect to real-time updates. Try again in a moment.'
+    );
+    expect(getWebSocketConnectionError({ isOffline: true })).toBe(
+      'You appear to be offline. Reconnect to resume real-time updates.'
+    );
   });
 
   it('connects to WebSocket on mount', async () => {
@@ -112,7 +135,7 @@ describe('useWebSocket', () => {
     });
   });
 
-  it('includes authentication token in URL', () => {
+  it('sends authentication as the first message after connect', async () => {
     const config = {
       url: 'ws://localhost:3001/test',
       reconnectInterval: 100,
@@ -122,10 +145,16 @@ describe('useWebSocket', () => {
 
     renderHook(() => useWebSocket(config));
 
-    // Check if WebSocket was created with token
-    expect(getLatestSocket().url).toBe(
-      'ws://localhost:3001/test?token=test-token'
-    );
+    const ws = getLatestSocket();
+    expect(ws.url).toBe('ws://localhost:3001/test');
+
+    await waitFor(() => {
+      expect(ws.sentMessages).toHaveLength(1);
+      expect(JSON.parse(ws.sentMessages[0])).toEqual({
+        type: 'auth',
+        token: 'test-token',
+      });
+    });
   });
 
   it('sends messages when connected', async () => {
@@ -148,8 +177,12 @@ describe('useWebSocket', () => {
 
     // Check if message was sent
     const ws = getLatestSocket();
-    expect(ws.sentMessages).toHaveLength(1);
-    const sentMessage = JSON.parse(ws.sentMessages[0]);
+    expect(ws.sentMessages).toHaveLength(2);
+    expect(JSON.parse(ws.sentMessages[0])).toEqual({
+      type: 'auth',
+      token: 'test-token',
+    });
+    const sentMessage = JSON.parse(ws.sentMessages[1]);
     expect(sentMessage).toMatchObject({
       type: 'test_type',
       data: { data: 'test' },
@@ -207,6 +240,16 @@ describe('useWebSocket', () => {
 
     expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
       'Booking booking-123 has been confirmed!'
+    );
+    expect(window.dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'booking:update',
+        detail: expect.objectContaining({
+          bookingId: 'booking-123',
+          status: 'confirmed',
+          previousStatus: 'pending',
+        }),
+      })
     );
   });
 
@@ -359,13 +402,44 @@ describe('useWebSocket', () => {
     await waitFor(() => {
       expect(result.current.isConnected).toBe(false);
       expect([
-        'Connection error',
-        'Failed to connect after multiple attempts',
+        'We could not connect to real-time updates right now.',
+        'We could not reconnect to real-time updates. Try again in a moment.',
       ]).toContain(result.current.error);
       expect(['connecting', 'reconnecting', 'disconnected', 'error']).toContain(
         result.current.connectionStatus
       );
     });
+  });
+
+  it('surfaces offline websocket recovery copy when disconnected', async () => {
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+
+    const config = {
+      url: 'ws://localhost:3001/test',
+      reconnectInterval: 100,
+      maxReconnectAttempts: 0,
+      heartbeatInterval: 1000
+    };
+
+    const { result } = renderHook(() => useWebSocket(config));
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(true);
+    });
+
+    act(() => {
+      getLatestSocket().simulateError();
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe(
+        'You appear to be offline. Reconnect to resume real-time updates.'
+      );
+    });
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
+      'You appear to be offline. Reconnect to resume real-time updates.'
+    );
   });
 
   it('sends heartbeat messages', async () => {
@@ -416,7 +490,7 @@ describe('useBookingWebSocket', () => {
     MockWebSocket.instances = [];
   });
 
-  it('creates booking-specific WebSocket config', () => {
+  it('creates booking-specific WebSocket config', async () => {
     vi.mocked(useAuthStore).mockReturnValue({
       user: { id: 'user-123', accessToken: 'test-token' },
       accessToken: 'test-token'
@@ -424,9 +498,14 @@ describe('useBookingWebSocket', () => {
 
     renderHook(() => useBookingWebSocket('booking-123'));
 
-    expect(getLatestSocket().url).toBe(
-      'ws://localhost:3001/bookings/booking-123?token=test-token'
-    );
+    const ws = getLatestSocket();
+    expect(ws.url).toMatch(/\/bookings\/booking-123$/);
+    await waitFor(() => {
+      expect(JSON.parse(ws.sentMessages[0])).toEqual({
+        type: 'auth',
+        token: 'test-token',
+      });
+    });
   });
 });
 
@@ -436,7 +515,7 @@ describe('useNotificationWebSocket', () => {
     MockWebSocket.instances = [];
   });
 
-  it('creates notification-specific WebSocket config', () => {
+  it('creates notification-specific WebSocket config', async () => {
     vi.mocked(useAuthStore).mockReturnValue({
       user: { id: 'user-123', accessToken: 'test-token' },
       accessToken: 'test-token'
@@ -444,8 +523,13 @@ describe('useNotificationWebSocket', () => {
 
     renderHook(() => useNotificationWebSocket());
 
-    expect(getLatestSocket().url).toBe(
-      'ws://localhost:3001/notifications?token=test-token'
-    );
+    const ws = getLatestSocket();
+    expect(ws.url).toMatch(/\/notifications$/);
+    await waitFor(() => {
+      expect(JSON.parse(ws.sentMessages[0])).toEqual({
+        type: 'auth',
+        token: 'test-token',
+      });
+    });
   });
 });

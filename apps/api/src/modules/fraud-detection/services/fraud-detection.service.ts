@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { EventsService } from '@/common/events/events.service';
+import { FxService } from '@/common/fx/fx.service';
 import { PropertyStatus, toNumber } from '@rental-portal/database';
 
 export enum RiskLevel {
@@ -34,6 +35,7 @@ export class FraudDetectionService {
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
     private readonly events: EventsService,
+    private readonly fx: FxService,
   ) {}
 
   async getHighRiskUsers(limit = 20): Promise<any[]> {
@@ -193,11 +195,28 @@ export class FraudDetectionService {
     userId: string;
     listingId: string;
     totalPrice: number;
+    currency?: string;
     startDate: Date;
     endDate: Date;
   }): Promise<FraudCheckResult> {
     const flags: FraudFlag[] = [];
     let riskScore = 0;
+
+    // Normalise totalPrice to USD for threshold comparisons (F-14 fix).
+    // Thresholds are defined in USD; using native-currency amounts on a NPR
+    // platform produced false risk scores (NPR 500 ≈ USD 3.75).
+    let totalPriceUsd = bookingData.totalPrice;
+    if (bookingData.currency && bookingData.currency !== 'USD') {
+      try {
+        const converted = await this.fx.convert(bookingData.totalPrice, bookingData.currency, 'USD');
+        totalPriceUsd = converted.amount;
+      } catch {
+        // FX unavailable — use raw amount but log so ops can investigate.
+        this.logger.warn(
+          `FraudDetection: could not convert ${bookingData.currency} to USD — using raw amount ${bookingData.totalPrice}`,
+        );
+      }
+    }
 
     // Check user risk first
     const userRisk = await this.checkUserRisk(bookingData.userId);
@@ -231,24 +250,24 @@ export class FraudDetectionService {
         (Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24),
       );
 
-      if (accountAgeDays < 30 && bookingData.totalPrice > 500) {
+      if (accountAgeDays < 30 && totalPriceUsd > 500) {
         riskScore += 20;
         flags.push({
           type: 'HIGH_VALUE_NEW_USER',
           severity: 'HIGH',
-          description: `High-value booking ($${bookingData.totalPrice}) from account < 30 days old`,
-          metadata: { accountAgeDays, totalPrice: bookingData.totalPrice },
+          description: `High-value booking (USD ${totalPriceUsd.toFixed(2)}) from account < 30 days old`,
+          metadata: { accountAgeDays, totalPrice: bookingData.totalPrice, totalPriceUsd },
         });
       }
 
       // Check first booking protection
-      if (user.bookings.length === 0 && bookingData.totalPrice > 300) {
+      if (user.bookings.length === 0 && totalPriceUsd > 300) {
         riskScore += 15;
         flags.push({
           type: 'FIRST_HIGH_VALUE_BOOKING',
           severity: 'MEDIUM',
-          description: 'First booking exceeds $300',
-          metadata: { totalPrice: bookingData.totalPrice },
+          description: `First booking exceeds USD 300 (${totalPriceUsd.toFixed(2)})`,
+          metadata: { totalPrice: bookingData.totalPrice, totalPriceUsd },
         });
       }
     }
@@ -475,6 +494,7 @@ export class FraudDetectionService {
     userId: string;
     listingId: string;
     totalPrice: number;
+    currency?: string;
     startDate: Date;
     endDate: Date;
   }): Promise<FraudCheckResult> {
