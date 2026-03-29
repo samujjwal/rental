@@ -2,7 +2,8 @@ import { useCallback, useMemo } from "react";
 import { useLocaleStore } from "~/lib/store/locale";
 import { APP_CURRENCY, APP_TIMEZONE } from "~/config/locale";
 import {
-  CURRENCY_INTL_LOCALE,
+  getCurrencyDecimals,
+  getCurrencyIntlLocale,
   type SupportedCurrency,
 } from "@rental-portal/shared-types";
 
@@ -18,18 +19,25 @@ export function useLocaleFormatters(overrideCurrency?: string) {
   const currency = (overrideCurrency ?? storeCurrency ?? APP_CURRENCY) as SupportedCurrency;
   const intlLocale = useMemo(() => {
     if (language === "ne") return "ne-NP";
-    return CURRENCY_INTL_LOCALE[currency] ?? "en-US";
+    return getCurrencyIntlLocale(currency);
   }, [language, currency]);
 
   const formatCurrency = useCallback(
     (value: number, currencyOverride?: string) => {
-      const curr = currencyOverride ?? currency;
-      return new Intl.NumberFormat(intlLocale, {
-        style: "currency",
-        currency: curr,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }).format(value);
+      const curr = (currencyOverride ?? currency).trim().toUpperCase();
+      try {
+        return new Intl.NumberFormat(intlLocale, {
+          style: "currency",
+          currency: curr,
+          minimumFractionDigits: 0,
+          maximumFractionDigits: getCurrencyDecimals(curr),
+        }).format(value);
+      } catch {
+        return value.toLocaleString(intlLocale, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: getCurrencyDecimals(curr),
+        });
+      }
     },
     [intlLocale, currency],
   );

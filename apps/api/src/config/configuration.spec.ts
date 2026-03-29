@@ -39,9 +39,25 @@ describe('configuration', () => {
     expect(configuration().platform.supportedLocales).toEqual(['en', 'ne', 'hi']);
   });
 
+  it('filters empty and duplicate SUPPORTED_LOCALES entries', () => {
+    process.env.SUPPORTED_LOCALES = 'en, ne, , en';
+    expect(configuration().platform.supportedLocales).toEqual(['en', 'ne']);
+  });
+
   it('splits SUPPORTED_CURRENCIES into array', () => {
     process.env.SUPPORTED_CURRENCIES = 'NPR,USD';
     expect(configuration().platform.supportedCurrencies).toEqual(['NPR', 'USD']);
+  });
+
+  it('filters empty and duplicate SUPPORTED_CURRENCIES entries', () => {
+    process.env.SUPPORTED_CURRENCIES = 'NPR, USD, , NPR';
+    expect(configuration().platform.supportedCurrencies).toEqual(['NPR', 'USD']);
+  });
+
+  it('prefers PLATFORM_COUNTRY_CODE over legacy PLATFORM_COUNTRY', () => {
+    process.env.PLATFORM_COUNTRY = 'Nepal';
+    process.env.PLATFORM_COUNTRY_CODE = 'NP';
+    expect(configuration().platform.country).toBe('NP');
   });
 
   /* ── database ── */

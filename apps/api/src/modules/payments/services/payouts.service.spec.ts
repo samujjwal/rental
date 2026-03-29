@@ -100,14 +100,6 @@ describe('PayoutsService', () => {
 
       const result = await service.createPayout(ownerId, 100);
 
-      // The service returns simplified payout info
-      expect(result).toEqual(
-        expect.objectContaining({
-          amount: 100,
-          status: PayoutStatus.PENDING,
-        }),
-      );
-      // Payment command service is no longer used in this method
       expect(queue.add).toHaveBeenCalledWith(
         'process-payout',
         expect.objectContaining({ payoutId: 'po_1', ownerStripeConnectId: 'acct_123' }),

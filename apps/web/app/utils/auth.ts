@@ -25,6 +25,20 @@ function getServerApiBaseUrl(): string {
   return apiUrl.replace(/\/$/, "");
 }
 
+function normalizeAuthUser<T extends Record<string, unknown>>(user: T): T & { phoneNumber?: string } {
+  const phoneNumber =
+    typeof user.phoneNumber === "string"
+      ? user.phoneNumber
+      : typeof user.phone === "string"
+        ? user.phone
+        : undefined;
+
+  return {
+    ...user,
+    ...(phoneNumber ? { phoneNumber } : {}),
+  };
+}
+
 async function getUserFromServerApi(token: string): Promise<User> {
   const response = await fetch(`${getServerApiBaseUrl()}/auth/me`, {
     headers: {
@@ -41,7 +55,7 @@ async function getUserFromServerApi(token: string): Promise<User> {
     };
   }
 
-  return response.json() as Promise<User>;
+  return normalizeAuthUser(await response.json() as User) as User;
 }
 
 export const sessionStorage = createCookieSessionStorage({
@@ -112,14 +126,15 @@ export async function getUser(request: Request): Promise<User | null> {
       const rawUser = typeof window !== "undefined"
         ? await api.get<User>("/auth/me")
         : await getUserFromServerApi(token);
+      const normalizedUser = normalizeAuthUser(rawUser as Record<string, unknown>) as User;
       const normalizedRole = (() => {
-        const role = String((rawUser as { role?: unknown }).role || "").toUpperCase();
+        const role = String((normalizedUser as { role?: unknown }).role || "").toUpperCase();
         if (role === "ADMIN" || role === "SUPER_ADMIN") return "admin";
         if (role === "HOST" || role === "OWNER") return "owner";
         return "renter";
       })();
       return {
-        ...rawUser,
+        ...normalizedUser,
         role: normalizedRole,
       };
     } catch (error) {

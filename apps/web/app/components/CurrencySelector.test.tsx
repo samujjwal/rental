@@ -3,8 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 
 // Mock shared-types
 vi.mock("@rental-portal/shared-types", () => ({
-  SUPPORTED_CURRENCIES: ["NPR", "USD", "INR"] as const,
-  CURRENCY_CONFIG: {},
+  getSupportedCurrencies: () => ["NPR", "USD", "INR"],
   getCurrencySymbol: (code: string) => code,
 }));
 

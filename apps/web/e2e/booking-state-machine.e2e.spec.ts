@@ -79,11 +79,8 @@ test.describe('Booking State Machine E2E', () => {
     // Confirm approval
     await page.click('button:has-text("Confirm")');
     
-    // Wait for state to update
-    await page.waitForTimeout(1000);
-    
-    // Should now be in confirmed state
-    await expect(page.locator('text=Confirmed')).toBeVisible();
+    // Wait for state to update - use explicit wait instead of timeout
+    await expect(page.locator('text=Confirmed')).toBeVisible({ timeout: 5000 });
   });
 
   test('should show cancelled state alert', async ({ page }) => {
@@ -203,11 +200,10 @@ test.describe('Booking State Machine E2E', () => {
     });
     
     // Should show toast notification
-    await expect(page.locator('text=Booking pending-booking-id has been confirmed!')).toBeVisible();
+    await expect(page.locator('text=Booking pending-booking-id has been confirmed!')).toBeVisible({ timeout: 3000 });
     
-    // Should update UI state
-    await page.waitForTimeout(1000);
-    await expect(page.locator('text=Confirmed')).toBeVisible();
+    // Should update UI state - wait for status change
+    await expect(page.locator('text=Confirmed')).toBeVisible({ timeout: 3000 });
   });
 
   test('should handle accessibility', async ({ page }) => {

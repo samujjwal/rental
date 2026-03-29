@@ -9,7 +9,7 @@ import { getUser } from "~/utils/auth";
 import { useTranslation } from "react-i18next";
 import { ApiErrorType, getActionableErrorMessage } from "~/lib/api-error";
 
-const ORG_CREATE_PATH = "/organizations/create";
+const ORG_CREATE_PATH = "/organizations/new";
 
 export const ErrorBoundary = RouteErrorBoundary;
 

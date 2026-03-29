@@ -116,12 +116,21 @@ Use this path when you want deterministic local verification without disturbing 
 # Start the isolated API + web preview pair
 pnpm run dev:isolated
 
+# Start the isolated stack in the fail-open mode required by
+# the browser-first manual booking unhappy-path lane
+pnpm run dev:isolated:manual
+
 # Faster restart when builds are already fresh
 pnpm run dev:isolated:skip-build
+
+# Faster restart for the fail-open manual lane
+pnpm run dev:isolated:manual:skip-build
 
 # Run isolated Playwright suites against the validated stack
 pnpm run test:e2e:web:isolated
 pnpm run test:e2e:web:isolated:core
+pnpm run test:e2e:web:isolated:manual
+pnpm run test:e2e:web:isolated:manual:chromium
 pnpm run test:e2e:web:isolated:comprehensive
 ```
 
@@ -136,6 +145,7 @@ Important notes:
 - The isolated runner sets `ALLOW_DEV_LOGIN=true`, `STRIPE_TEST_BYPASS=true`, `DISABLE_THROTTLE=true`, and the local `CORS_ORIGINS` needed for the `127.0.0.1:3403 -> 3402` browser path.
 - The web preview is rebuilt against `VITE_API_URL=http://127.0.0.1:3402/api` so client-side route loaders do not silently fall back to `http://localhost:3400/api`.
 - You can override ports safely, for example: `API_PORT=3412 WEB_PORT=3413 pnpm run dev:isolated:skip-build`.
+- For the browser-first manual Playwright lane, use `pnpm run dev:isolated:manual` or set `SAFETY_CHECKS_FAIL_OPEN=true` yourself in local or CI-like validation. The manual unhappy-path booking tests intentionally exercise decline, checkout cancellation, and payment-retry flows, and those setups are blocked by the default fail-closed compliance gate.
 
 ## 📚 API Documentation
 

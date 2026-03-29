@@ -422,19 +422,19 @@ test.describe("Complete End-to-End User Journeys", () => {
   test.describe("Journey 4: Organization Management", () => {
     test("Owner creates organization", async ({ page }) => {
       await loginAs(page, testUsers.owner);
-      await page.goto("/organizations/create");
+      await page.goto("/organizations/new");
 
-      if (!page.url().includes("/organizations/create")) {
+      if (!page.url().includes("/organizations/new")) {
         await page.goto("/organizations");
         const createBtn = page
           .locator(
-            'a[href="/organizations/create"], button:has-text("Create Organization"), button:has-text("Create Your First Organization")',
+            'a[href="/organizations/new"], button:has-text("Create Organization"), button:has-text("Create Your First Organization")',
           )
           .first();
         if (await createBtn.isVisible()) await createBtn.click();
       }
 
-      if (!page.url().includes("/organizations/create")) {
+      if (!page.url().includes("/organizations/new")) {
         await expect(page.locator("body")).toBeVisible();
         return;
       }
@@ -472,7 +472,7 @@ test.describe("Complete End-to-End User Journeys", () => {
       const url = page.url();
       expect(
         /\/organizations\/.+\/settings/.test(url) ||
-          url.includes("/organizations/create") ||
+          url.includes("/organizations/new") ||
           /\/organizations\/?$/.test(url),
       ).toBe(true);
     });

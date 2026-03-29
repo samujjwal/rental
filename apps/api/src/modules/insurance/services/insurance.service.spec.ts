@@ -328,9 +328,4 @@ describe('InsuranceService', () => {
       expect(callArg.getMonth()).toBe(expiringDate.getMonth());
     });
   });
-  /*
-  // TODO: Move these tests to insurance-policy.service.spec.ts
-  describe('getPoliciesByUser', ...);
-  describe('renewPolicy', ...);
-  */
 });

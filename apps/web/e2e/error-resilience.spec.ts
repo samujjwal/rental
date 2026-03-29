@@ -111,10 +111,10 @@ test.describe('Error Scenarios & Resilience', () => {
     await userPage.locator('[data-testid="login-btn"]').click();
     
     // Try to access admin page
-    await userPage.goto(`${BASE_URL}/admin/dashboard`);
+    await userPage.goto(`${BASE_URL}/admin`);
     
     // Should redirect to 403 or home
-    expect(userPage.url()).not.toContain('/admin/dashboard');
+    expect(userPage.url()).not.toContain('/admin');
     
     await userPage.close();
   });
@@ -189,7 +189,7 @@ test.describe('Error Scenarios & Resilience', () => {
     
     // Try to create listing
     await page.locator('[data-testid="create-listing-btn"]').click();
-    await page.goto(`${BASE_URL}/listings/create`);
+    await page.goto(`${BASE_URL}/listings/new`);
     
     await page.locator('[data-testid="title"]').fill('New Listing');
     await page.locator('[data-testid="submit"]').click();
@@ -245,7 +245,7 @@ test.describe('Error Scenarios & Resilience', () => {
   });
 
   test('Image upload failure with retry', async ({ page, context }) => {
-    await page.goto(`${BASE_URL}/listings/create`);
+    await page.goto(`${BASE_URL}/listings/new`);
     
     // Mock image upload to fail first time
     let attemptCount = 0;

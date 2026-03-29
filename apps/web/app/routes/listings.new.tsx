@@ -314,7 +314,7 @@ export default function CreateListing() {
       // Update data with real image URLs
       const payload = {
         ...parsed,
-        images: finalImages,
+        photos: finalImages,
         categorySpecificData: Object.keys(categorySpecificData).length > 0 ? categorySpecificData : undefined,
       };
 
@@ -403,7 +403,11 @@ export default function CreateListing() {
         return;
       }
 
-      const payload = { ...parsed, images: finalImages, categorySpecificData: Object.keys(categorySpecificData).length > 0 ? categorySpecificData : undefined };
+      const payload = {
+        ...parsed,
+        photos: finalImages,
+        categorySpecificData: Object.keys(categorySpecificData).length > 0 ? categorySpecificData : undefined,
+      };
       clearSavedDraft();
       const formData = new FormData();
       formData.append("intent", "create");

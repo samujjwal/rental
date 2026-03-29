@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { APP_CURRENCY, APP_LOCALE, APP_TIMEZONE } from "~/config/locale";
+import { getCurrencyDecimals, getCurrencySymbol } from "@rental-portal/shared-types";
 
 /**
  * Utility function to merge Tailwind CSS classes with proper precedence.
@@ -23,12 +24,20 @@ export function formatCurrency(
   currency: string = APP_CURRENCY,
   locale: string = APP_LOCALE,
 ): string {
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value);
+  const code = currency.trim().toUpperCase();
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: getCurrencyDecimals(code),
+    }).format(value);
+  } catch {
+    return `${getCurrencySymbol(code, locale)} ${value.toLocaleString(APP_LOCALE, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: getCurrencyDecimals(code),
+    })}`.trim();
+  }
 }
 
 /**

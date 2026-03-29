@@ -3,6 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
+vi.mock("~/config/locale", () => ({
+  APP_PHONE_PLACEHOLDER: "+977-XXXXXXXXXX",
+}));
+
 const IconStub = vi.hoisted(() => (props: any) => <span data-testid="icon-stub" />);
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -190,6 +194,11 @@ describe("auth.signup route", () => {
     it("renders signup form", () => {
       render(<Signup />);
       expect(screen.getByRole('heading', { name: 'Create Account' })).toBeInTheDocument();
+    });
+
+    it("uses the configured phone placeholder", () => {
+      render(<Signup />);
+      expect(screen.getByLabelText(/phone/i)).toHaveAttribute("placeholder", "+977-XXXXXXXXXX");
     });
 
     it("shows error from action data", () => {

@@ -1002,13 +1002,7 @@ export default function BookingDetail() {
                 )}
               </div>
               <button
-                onClick={() =>
-                  navigate(
-                    listingId && messageParticipantId
-                      ? `/messages?listing=${listingId}&participant=${messageParticipantId}`
-                      : `/messages?booking=${booking.id}`
-                  )
-                }
+                onClick={() => navigate(`/messages?booking=${booking.id}`)}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-background"
               >
                 <MessageCircle className="w-4 h-4" />

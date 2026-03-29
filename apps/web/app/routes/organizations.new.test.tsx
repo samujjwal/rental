@@ -1,6 +1,6 @@
 import { AxiosError } from "axios";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 /* ─── Mocks ───────────────────────────────────────────────────────── */
@@ -57,6 +57,7 @@ import {
   clientLoader,
   clientAction,
   getCreateOrganizationError,
+  default as OrganizationsNew,
 } from "./organizations.new";
 
 beforeEach(() => vi.clearAllMocks());
@@ -235,6 +236,15 @@ describe("clientAction", () => {
     expect(r.error).toBe(
       "An organization with these details already exists. Review the form and try again."
     );
+  });
+});
+
+describe("organizations.new component", () => {
+  it("uses the configured phone placeholder", () => {
+    render(<OrganizationsNew />);
+    fireEvent.click(screen.getByLabelText(/limited liability company/i));
+    fireEvent.click(screen.getByRole("button", { name: "common.next" }));
+    expect(screen.getByPlaceholderText("+977-XXXXXXXXXX")).toBeInTheDocument();
   });
 });
 

@@ -1,7 +1,14 @@
 import { create } from "zustand";
 import i18n from "~/i18n";
 import type { SupportedLanguage } from "~/i18n";
-import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@rental-portal/shared-types";
+import {
+  getDefaultCurrency,
+  getSupportedCurrencies,
+  type SupportedCurrency,
+} from "@rental-portal/shared-types";
+
+const DEFAULT_CURRENCY = getDefaultCurrency() as SupportedCurrency;
+const SUPPORTED_CURRENCIES = getSupportedCurrencies();
 
 interface LocaleState {
   language: SupportedLanguage;
@@ -22,7 +29,7 @@ function getInitialLanguage(): SupportedLanguage {
 function getInitialCurrency(): SupportedCurrency {
   if (typeof window === "undefined") return DEFAULT_CURRENCY;
   const stored = localStorage.getItem("currency-preference");
-  if (stored && (SUPPORTED_CURRENCIES as readonly string[]).includes(stored)) {
+  if (stored && SUPPORTED_CURRENCIES.includes(stored)) {
     return stored as SupportedCurrency;
   }
   return DEFAULT_CURRENCY;

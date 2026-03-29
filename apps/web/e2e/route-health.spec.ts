@@ -1,122 +1,185 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { ensureSeedData } from "./helpers/seed-data";
+import { loginAsAdmin, loginAsOwner, loginAsRenter } from "./helpers/test-utils";
 
-type RouteCase = {
+type RouteExpectation = {
   path: string;
-  kind: "public" | "protected";
+  expectedUrl: RegExp;
 };
 
-const ROUTES: RouteCase[] = [
-  { path: "/", kind: "public" },
-  { path: "/about", kind: "public" },
-  { path: "/careers", kind: "public" },
-  { path: "/press", kind: "public" },
-  { path: "/how-it-works", kind: "public" },
-  { path: "/insurance", kind: "public" },
-  { path: "/owner-guide", kind: "public" },
-  { path: "/earnings", kind: "public" },
-  { path: "/help", kind: "public" },
-  { path: "/contact", kind: "public" },
-  { path: "/safety", kind: "public" },
-  { path: "/terms", kind: "public" },
-  { path: "/privacy", kind: "public" },
-  { path: "/cookies", kind: "public" },
-  { path: "/auth/login", kind: "public" },
-  { path: "/auth/signup", kind: "public" },
-  { path: "/auth/forgot-password", kind: "public" },
-  { path: "/auth/reset-password?token=test-token", kind: "public" },
-  { path: "/search", kind: "public" },
-  { path: "/listings", kind: "public" },
-  { path: "/listings/1", kind: "public" },
-  { path: "/dashboard", kind: "protected" },
-  { path: "/dashboard/owner", kind: "protected" },
-  { path: "/dashboard/owner/calendar", kind: "protected" },
-  { path: "/dashboard/owner/earnings", kind: "protected" },
-  { path: "/dashboard/owner/insights", kind: "protected" },
-  { path: "/dashboard/owner/performance", kind: "protected" },
-  { path: "/dashboard/renter", kind: "protected" },
-  { path: "/bookings", kind: "protected" },
-  { path: "/bookings/1", kind: "protected" },
-  { path: "/checkout/1", kind: "protected" },
-  { path: "/listings/new", kind: "protected" },
-  { path: "/listings/1/edit", kind: "protected" },
-  { path: "/messages", kind: "protected" },
-  { path: "/favorites", kind: "protected" },
-  { path: "/become-owner", kind: "protected" },
-  { path: "/disputes", kind: "protected" },
-  { path: "/disputes/1", kind: "protected" },
-  { path: "/payments", kind: "protected" },
-  { path: "/reviews", kind: "protected" },
-  { path: "/settings", kind: "protected" },
-  { path: "/insurance/upload", kind: "protected" },
-  { path: "/disputes/new/1", kind: "protected" },
-  { path: "/organizations", kind: "protected" },
-  { path: "/organizations/create", kind: "protected" },
-  { path: "/organizations/1/settings", kind: "protected" },
-  { path: "/organizations/1/members", kind: "protected" },
-  { path: "/organizations/1/listings", kind: "protected" },
-  { path: "/profile/1", kind: "protected" },
-  { path: "/settings/profile", kind: "protected" },
-  { path: "/settings/notifications", kind: "protected" },
-  { path: "/admin", kind: "protected" },
-  { path: "/admin/analytics", kind: "protected" },
-  { path: "/admin/entities/users", kind: "protected" },
-  { path: "/admin/disputes", kind: "protected" },
-  { path: "/admin/fraud", kind: "protected" },
-  { path: "/admin/system", kind: "protected" },
-  { path: "/admin/system/general", kind: "protected" },
-  { path: "/admin/system/database", kind: "protected" },
-  { path: "/admin/system/notifications", kind: "protected" },
-  { path: "/admin/system/security", kind: "protected" },
-  { path: "/admin/system/api-keys", kind: "protected" },
-  { path: "/admin/system/backups", kind: "protected" },
-  { path: "/admin/system/email", kind: "protected" },
-  { path: "/admin/system/environment", kind: "protected" },
-  { path: "/admin/system/logs", kind: "protected" },
-  { path: "/admin/system/audit", kind: "protected" },
-  { path: "/admin/system/power-operations", kind: "protected" },
+const PUBLIC_ROUTES: RouteExpectation[] = [
+  { path: "/", expectedUrl: routePattern("/") },
+  { path: "/about", expectedUrl: routePattern("/about") },
+  { path: "/careers", expectedUrl: routePattern("/careers") },
+  { path: "/press", expectedUrl: routePattern("/press") },
+  { path: "/how-it-works", expectedUrl: routePattern("/how-it-works") },
+  { path: "/insurance", expectedUrl: routePattern("/insurance") },
+  { path: "/owner-guide", expectedUrl: routePattern("/owner-guide") },
+  { path: "/earnings", expectedUrl: routePattern("/earnings") },
+  { path: "/help", expectedUrl: routePattern("/help") },
+  { path: "/contact", expectedUrl: routePattern("/contact") },
+  { path: "/safety", expectedUrl: routePattern("/safety") },
+  { path: "/terms", expectedUrl: routePattern("/terms") },
+  { path: "/privacy", expectedUrl: routePattern("/privacy") },
+  { path: "/cookies", expectedUrl: routePattern("/cookies") },
+  { path: "/auth/login", expectedUrl: routePattern("/auth/login") },
+  { path: "/auth/signup", expectedUrl: routePattern("/auth/signup") },
+  { path: "/auth/forgot-password", expectedUrl: routePattern("/auth/forgot-password") },
+  {
+    path: "/auth/reset-password?token=test-token",
+    expectedUrl: /\/auth\/reset-password(?:\?|$)/,
+  },
+  { path: "/search", expectedUrl: routePattern("/search") },
+  { path: "/listings", expectedUrl: routePattern("/listings") },
 ];
 
-test.describe("Route Health (Desktop + Mobile)", () => {
-  for (const routeCase of ROUTES) {
-    test(`loads ${routeCase.path}`, async ({ page }) => {
-      const response = await page.goto(routeCase.path, {
-        waitUntil: "domcontentloaded",
-      });
+const RENTER_ROUTES: RouteExpectation[] = [
+  { path: "/dashboard", expectedUrl: /\/dashboard(?:\/renter)?(?:$|[?#])/ },
+  { path: "/dashboard/renter", expectedUrl: routePattern("/dashboard/renter") },
+  { path: "/bookings", expectedUrl: routePattern("/bookings") },
+  { path: "/messages", expectedUrl: routePattern("/messages") },
+  { path: "/favorites", expectedUrl: routePattern("/favorites") },
+  { path: "/become-owner", expectedUrl: routePattern("/become-owner") },
+  { path: "/disputes", expectedUrl: routePattern("/disputes") },
+  { path: "/payments", expectedUrl: routePattern("/payments") },
+  { path: "/reviews", expectedUrl: routePattern("/reviews") },
+  { path: "/settings", expectedUrl: routePattern("/settings/profile") },
+  { path: "/settings/profile", expectedUrl: routePattern("/settings/profile") },
+  { path: "/settings/notifications", expectedUrl: routePattern("/settings/notifications") },
+  { path: "/insurance/upload", expectedUrl: routePattern("/insurance/upload") },
+  { path: "/organizations", expectedUrl: routePattern("/organizations") },
+  { path: "/organizations/new", expectedUrl: routePattern("/organizations/new") },
+];
 
-      // React Router SPA routes often return 200 for initial document load.
-      if (response) {
-        expect(response.status()).toBeLessThan(500);
-      }
+const OWNER_ROUTES: RouteExpectation[] = [
+  { path: "/dashboard/owner", expectedUrl: routePattern("/dashboard/owner") },
+  { path: "/dashboard/owner/calendar", expectedUrl: routePattern("/dashboard/owner/calendar") },
+  { path: "/dashboard/owner/earnings", expectedUrl: routePattern("/dashboard/owner/earnings") },
+  { path: "/dashboard/owner/insights", expectedUrl: routePattern("/dashboard/owner/insights") },
+  { path: "/dashboard/owner/performance", expectedUrl: routePattern("/dashboard/owner/performance") },
+  { path: "/listings/new", expectedUrl: routePattern("/listings/new") },
+];
 
-      await page.waitForLoadState('domcontentloaded');
+const ADMIN_ROUTES: RouteExpectation[] = [
+  { path: "/admin", expectedUrl: routePattern("/admin") },
+  { path: "/admin/analytics", expectedUrl: routePattern("/admin/analytics") },
+  { path: "/admin/entities/users", expectedUrl: routePattern("/admin/entities/users") },
+  { path: "/admin/entities/listings", expectedUrl: routePattern("/admin/entities/listings") },
+  { path: "/admin/entities/bookings", expectedUrl: routePattern("/admin/entities/bookings") },
+  { path: "/admin/entities/payments", expectedUrl: routePattern("/admin/entities/payments") },
+  { path: "/admin/entities/organizations", expectedUrl: routePattern("/admin/entities/organizations") },
+  { path: "/admin/disputes", expectedUrl: routePattern("/admin/disputes") },
+  { path: "/admin/system", expectedUrl: routePattern("/admin/system") },
+  { path: "/admin/system/general", expectedUrl: routePattern("/admin/system/general") },
+  { path: "/admin/system/database", expectedUrl: routePattern("/admin/system/database") },
+  { path: "/admin/system/notifications", expectedUrl: routePattern("/admin/system/notifications") },
+  { path: "/admin/system/security", expectedUrl: routePattern("/admin/system/security") },
+  { path: "/admin/system/api-keys", expectedUrl: routePattern("/admin/system/api-keys") },
+  { path: "/admin/system/backups", expectedUrl: routePattern("/admin/system/backups") },
+  { path: "/admin/system/email", expectedUrl: routePattern("/admin/system/email") },
+  { path: "/admin/system/environment", expectedUrl: routePattern("/admin/system/environment") },
+  { path: "/admin/system/logs", expectedUrl: routePattern("/admin/system/logs") },
+  { path: "/admin/system/audit", expectedUrl: routePattern("/admin/system/audit") },
+  { path: "/admin/system/power-operations", expectedUrl: routePattern("/admin/system/power-operations") },
+  { path: "/admin/diagnostics", expectedUrl: routePattern("/admin/diagnostics") },
+];
 
-      const url = page.url();
-      const onLogin = /\/auth\/login/.test(url);
-      const onExpectedPath = url.includes(routeCase.path);
-      const isDynamicDetail = /^\/(bookings|disputes|profile|checkout)\/[^/]+$/.test(
-        routeCase.path
-      );
-      const parentPath = routeCase.path.substring(
-        0,
-        routeCase.path.lastIndexOf("/")
-      );
-      const onParentPath = isDynamicDetail && url.includes(parentPath);
-      const onBookings = url.includes("/bookings");
-      const onHome = url === "http://localhost:3401/" || url.endsWith(":3401");
-
-      if (routeCase.kind === "protected") {
-        expect(
-          onExpectedPath || onLogin || onParentPath || onBookings || onHome,
-          `Expected protected route "${routeCase.path}" to load or redirect to login, got "${url}"`
-        ).toBeTruthy();
-      } else {
-        expect(
-          onExpectedPath || onLogin,
-          `Expected public route "${routeCase.path}" to render, got "${url}"`
-        ).toBeTruthy();
-      }
-
-      await expect(page.locator("body")).toBeVisible();
-    });
+function routePattern(path: string): RegExp {
+  if (path === "/") {
+    return /\/(?:$|[?#])/;
   }
+
+  return new RegExp(`${escapeForRegex(path)}(?:$|[?#])`);
+}
+
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function openAndAssertRoute(
+  page: Page,
+  route: RouteExpectation,
+  options: { allowLoginRedirect?: boolean } = {}
+) {
+  const response = await page.goto(route.path, { waitUntil: "domcontentloaded" });
+
+  if (response) {
+    expect(response.status()).toBeLessThan(500);
+  }
+
+  await page.waitForLoadState("domcontentloaded");
+
+  if (options.allowLoginRedirect && /\/auth\/login/.test(page.url())) {
+    await expect(page).toHaveURL(/\/auth\/login(?:$|[?#])/);
+  } else {
+    await expect(page).toHaveURL(route.expectedUrl);
+  }
+
+  await expect(page.locator("body")).toBeVisible();
+}
+
+test.describe("Route Health", () => {
+  test.describe("public routes", () => {
+    for (const route of PUBLIC_ROUTES) {
+      test(`loads ${route.path}`, async ({ page }) => {
+        await openAndAssertRoute(page, route);
+      });
+    }
+
+    test("loads a seeded listing detail route", async ({ page }) => {
+      const { listing } = await ensureSeedData(page);
+      await openAndAssertRoute(page, {
+        path: `/listings/${listing.id}`,
+        expectedUrl: routePattern(`/listings/${listing.id}`),
+      });
+    });
+  });
+
+  test.describe("anonymous access control", () => {
+    for (const route of [
+      { path: "/dashboard/renter", expectedUrl: /\/auth\/login(?:$|[?#])/ },
+      { path: "/organizations", expectedUrl: /\/auth\/login(?:$|[?#])/ },
+      { path: "/admin", expectedUrl: /\/auth\/login(?:$|[?#])/ },
+    ]) {
+      test(`redirects ${route.path} to login`, async ({ page }) => {
+        await openAndAssertRoute(page, route, { allowLoginRedirect: true });
+      });
+    }
+  });
+
+  test.describe("renter routes", () => {
+    test.beforeEach(async ({ page }) => {
+      await loginAsRenter(page);
+    });
+
+    for (const route of RENTER_ROUTES) {
+      test(`loads ${route.path}`, async ({ page }) => {
+        await openAndAssertRoute(page, route);
+      });
+    }
+  });
+
+  test.describe("owner routes", () => {
+    test.beforeEach(async ({ page }) => {
+      await loginAsOwner(page);
+    });
+
+    for (const route of OWNER_ROUTES) {
+      test(`loads ${route.path}`, async ({ page }) => {
+        await openAndAssertRoute(page, route);
+      });
+    }
+  });
+
+  test.describe("admin routes", () => {
+    test.beforeEach(async ({ page }) => {
+      await loginAsAdmin(page);
+    });
+
+    for (const route of ADMIN_ROUTES) {
+      test(`loads ${route.path}`, async ({ page }) => {
+        await openAndAssertRoute(page, route);
+      });
+    }
+  });
 });

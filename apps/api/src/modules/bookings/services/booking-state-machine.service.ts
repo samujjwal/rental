@@ -463,6 +463,7 @@ export class BookingStateMachineService {
         break;
 
       case BookingStatus.AWAITING_RETURN_INSPECTION:
+        await this.createReturnConditionReport(bookingId);
         // Notify owner that the renter has requested a return inspection
         await this.notifyOwnerReturnRequested(bookingId, booking);
         break;
@@ -525,6 +526,48 @@ export class BookingStateMachineService {
         damages: '[]',
         status: 'PENDING',
         reportType: 'CHECK_IN',
+        checklistData: '[]',
+      },
+    });
+  }
+
+  private async createReturnConditionReport(bookingId: string): Promise<void> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        listingId: true,
+        listing: {
+          select: {
+            ownerId: true,
+          },
+        },
+      },
+    });
+
+    if (!booking?.listing?.ownerId) return;
+
+    const existing = await this.prisma.conditionReport.findFirst({
+      where: {
+        bookingId: booking.id,
+        reportType: 'CHECK_OUT',
+      },
+    });
+
+    if (existing) return;
+
+    await this.prisma.conditionReport.create({
+      data: {
+        bookingId: booking.id,
+        propertyId: booking.listingId,
+        createdBy: booking.listing.ownerId,
+        checkIn: false,
+        checkOut: true,
+        photos: [],
+        notes: '',
+        damages: '[]',
+        status: 'PENDING',
+        reportType: 'CHECK_OUT',
         checklistData: '[]',
       },
     });

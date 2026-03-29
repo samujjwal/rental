@@ -6,9 +6,15 @@ This directory contains comprehensive end-to-end tests for the rental portal web
 
 ### Coverage Lanes
 
-- `manual-critical-ui-journeys.spec.ts`: browser-first, manual-style critical path coverage. Uses the real login form, a dedicated request-based listing fixture, the listing page calendar, booking detail actions, booking-thread messaging, checkout guard redirects, owner rejection, renter checkout cancellation, payment-failed retry recovery, the dispute form, and the admin dispute modal. This is the closest lane to human QA behavior, with payment only bridged at the external provider boundary.
+- `manual-critical-ui-journeys.spec.ts`: browser-first, manual-style critical path coverage. Uses the real login form, the real owner listing creation UI, a dedicated request-based listing fixture for deterministic booking setup, the listing page calendar, booking detail actions, booking-thread messaging, checkout guard redirects, owner rejection, renter checkout cancellation, payment-failed retry recovery, the dispute form, and the admin dispute modal. This is the closest lane to human QA behavior, with payment only bridged at the external provider boundary.
+- The unhappy-path booking tests in the manual lane assume a non-production degraded local API: run the isolated stack with `SAFETY_CHECKS_FAIL_OPEN=true` so compliance gating does not block browser-first booking creation before the decline, cancellation, and payment-retry scenarios start.
 - `ujlt-v2-comprehensive-journeys.spec.ts`: deep lifecycle and state-machine coverage. This suite is intentionally API-assisted so it can validate complete continuation logic, side effects, and admin/system outcomes without relying on long UI setup for every transition.
-- Most other suites in this directory are hybrid: they exercise real UI surfaces but may still use seeded auth, direct API setup, or targeted shortcuts where that gives better determinism.
+- Route-aligned suites such as `route-health.spec.ts`, `admin-flows.spec.ts`, `insurance-flows.spec.ts`, `static-pages.spec.ts`, `organizations-flows.spec.ts`, and `settings-flows.spec.ts` are the authoritative hybrid lanes. Legacy broad "comprehensive" suites should not be treated as coverage proof unless they are explicitly verified against the current router.
+- The currently known exploratory suites are ignored by default in Playwright discovery: `file-upload-workflows-comprehensive.spec.ts`, `help-support-comprehensive.spec.ts`, `multi-language-comprehensive.spec.ts`, `organization-management-comprehensive.spec.ts`, `payment-integration-comprehensive.spec.ts`, `profile-management.spec.ts`, `profile-management-comprehensive.spec.ts`, `stripe-payments.spec.ts`, and `websocket-realtime-comprehensive.spec.ts`. Opt back in only for investigation with `PLAYWRIGHT_INCLUDE_EXPLORATORY=true`.
+- Current retained-suite status on rebuilt isolated Chromium stacks:
+  - Strict rebuilt stack (`SAFETY_CHECKS_FAIL_OPEN=false`): `insurance-flows.spec.ts`, `static-pages.spec.ts`, `organizations-flows.spec.ts`, and `settings-flows.spec.ts` are green.
+  - Manual rebuilt stack (`SAFETY_CHECKS_FAIL_OPEN=true`): `manual-critical-ui-journeys.spec.ts` is green.
+  - If you edit web code and rerun Playwright against an already-running `start:isolated:skip-build` preview, you can get false negatives from stale client assets. Rebuild the web app or start a fresh isolated stack before treating browser failures as product defects.
 
 Use the manual lane when the question is "can a user really do this through the browser?" Use UJLT when the question is "does the full lifecycle and all related side effects hold together end to end?"
 
@@ -178,6 +184,12 @@ Located in `helpers/test-utils.ts`:
 pnpm --filter @rental-portal/web run test:e2e
 ```
 
+To include the ignored exploratory suites in an ad hoc run:
+
+```bash
+PLAYWRIGHT_INCLUDE_EXPLORATORY=true pnpm --filter @rental-portal/web run test:e2e
+```
+
 ### Run the full suite
 
 ```bash
@@ -187,7 +199,14 @@ pnpm --filter @rental-portal/web run test:e2e:full
 ### Run the browser-first manual lane
 
 ```bash
-pnpm --filter @rental-portal/web run test:e2e:manual -- --project=chromium
+pnpm run dev:isolated:manual
+pnpm run test:e2e:web:isolated:manual:chromium
+```
+
+If you are already inside `apps/web`, the equivalent web-local command is:
+
+```bash
+pnpm run test:e2e:manual:isolated:chromium
 ```
 
 ### Run the deep lifecycle lane

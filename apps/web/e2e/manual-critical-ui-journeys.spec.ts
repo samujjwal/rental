@@ -1,8 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
-import { ensureSeedData } from "./helpers/seed-data";
+import { ensureSeedData, resetSeedCache } from "./helpers/seed-data";
 import { expectAnyVisible, loginAsUi, testUsers } from "./helpers/test-utils";
 
 const API = process.env.E2E_API_URL ?? "http://localhost:3400/api";
+const TEST_IMAGE_BUFFER = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlH0n0AAAAASUVORK5CYII=",
+  "base64",
+);
 
 let bookingId: string | null = null;
 let listingId: string | null = null;
@@ -12,6 +16,8 @@ let ownerConversationReply: string | null = null;
 let bookingStartDate: string | null = null;
 let bookingEndDate: string | null = null;
 let manualRequestListingId: string | null = null;
+let checkInReportNote: string | null = null;
+let checkOutReportNote: string | null = null;
 
 interface ListingCandidate {
   id: string;
@@ -94,9 +100,9 @@ async function createManualRequestListing(
   page: Page,
   options: { dayOffset: number; titlePrefix?: string },
 ): Promise<ManualListingWindow> {
-  const seed = await ensureSeedData(page);
+  let seed = await ensureSeedData(page);
   const uniqueSuffix = Date.now();
-  const createResponse = await page.request.post(`${API}/listings`, {
+  const createListing = async () => page.request.post(`${API}/listings`, {
     headers: {
       Authorization: `Bearer ${seed.ownerToken}`,
       "Content-Type": "application/json",
@@ -108,11 +114,11 @@ async function createManualRequestListing(
       basePrice: 30,
       securityDeposit: 250,
       location: {
-        city: "Nashville",
-        state: "TN",
-        country: "US",
-        address: "123 Test Street",
-        postalCode: "00001",
+        city: "Kathmandu",
+        state: "Bagmati",
+        country: "Nepal",
+        address: "Durbar Marg 1",
+        postalCode: "44600",
       },
       deliveryOptions: { pickup: true, delivery: false, shipping: false },
       condition: "excellent",
@@ -123,6 +129,13 @@ async function createManualRequestListing(
       photos: [{ url: `${API}/health`, order: 0 }],
     },
   });
+
+  let createResponse = await createListing();
+  if (createResponse.status() === 401) {
+    resetSeedCache();
+    seed = await ensureSeedData(page);
+    createResponse = await createListing();
+  }
 
   if (!createResponse.ok()) {
     throw new Error(`Unable to create a manual request listing: ${createResponse.status()} ${await createResponse.text()}`);
@@ -156,6 +169,65 @@ async function createManualRequestListing(
     startDate,
     endDate,
   };
+}
+
+async function createOwnerListingThroughUi(page: Page): Promise<string> {
+  const uniqueSuffix = Date.now();
+  const listingTitle = `Manual UI owner listing guitar ${uniqueSuffix}`;
+
+  await loginAsUi(page, testUsers.owner);
+  await page.goto("/listings/new");
+  await expect(page).toHaveURL((url) => url.pathname === "/listings/new");
+
+  await page.locator('input[name="title"]').first().fill(listingTitle);
+  await page.locator('textarea[name="description"]').first().fill(
+    "Manual browser-first owner listing creation coverage that fills the real listing form and verifies the created listing detail page.",
+  );
+  await page.locator('input[name="location.city"]').first().fill("Kathmandu");
+  await page.locator('input[name="location.address"]').first().fill("Durbar Marg 1");
+  await page.locator('input[name="location.state"]').first().fill("Bagmati");
+  await page.locator('input[name="location.country"]').first().fill("Nepal");
+  await page.locator('input[name="location.postalCode"]').first().fill("44600");
+
+  const categorySelect = page.locator('[data-testid="category-select"]').first();
+  await expect(categorySelect).toBeVisible({ timeout: 10000 });
+  const optionCount = await categorySelect.locator("option").count();
+  expect(optionCount).toBeGreaterThan(0);
+  if (optionCount > 1) {
+    const categoryOptions = await categorySelect.locator("option").allTextContents();
+    const musicalInstrumentIndex = categoryOptions.findIndex((option) => /musical instrument/i.test(option));
+    if (musicalInstrumentIndex > 0) {
+      await categorySelect.selectOption({ index: musicalInstrumentIndex });
+    } else {
+      await categorySelect.selectOption({ index: 1 });
+    }
+  }
+
+  await page.locator('input[type="file"]').first().setInputFiles({
+    name: `manual-owner-listing-${uniqueSuffix}.png`,
+    mimeType: "image/png",
+    buffer: TEST_IMAGE_BUFFER,
+  });
+  await expect(page.locator('[data-testid="image-preview"]').first()).toBeVisible({ timeout: 15000 });
+
+  const createButton = page.locator('[data-testid="create-listing-button"]').first();
+  await expect(createButton).toBeVisible({ timeout: 10000 });
+  await createButton.click();
+
+  await page.waitForURL(
+    (url) => url.pathname.startsWith("/listings/") && url.pathname !== "/listings/new",
+    { timeout: 30000 },
+  );
+  const createdListingId = page.url().match(/\/listings\/([^/?#]+)/)?.[1] ?? null;
+  expect(createdListingId).not.toBe("new");
+  expect(createdListingId).toBeTruthy();
+
+  await expectAnyVisible(page, [
+    `text=${listingTitle}`,
+    "text=/Request to Book|Book Instantly|Edit Listing|Owner/i",
+  ]);
+
+  return createdListingId as string;
 }
 
 async function bypassPaymentConfirmation(page: Page, currentBookingId: string): Promise<void> {
@@ -197,7 +269,114 @@ async function openBookingConversation(page: Page, currentBookingId: string): Pr
   await expect(messageButton).toBeVisible({ timeout: 10000 });
   await messageButton.click();
   await expect(page).toHaveURL((url) => url.pathname === "/messages", { timeout: 15000 });
+  await page.waitForURL((url) => url.pathname === "/messages" && Boolean(url.searchParams.get("conversation")), {
+    timeout: 15000,
+  });
   await expect(page.locator('[data-testid="message-composer"]')).toBeVisible({ timeout: 15000 });
+}
+
+async function expectChatBubble(page: Page, message: string, alignment: "start" | "end"): Promise<void> {
+  await expect(
+    page.locator(`div.justify-${alignment}`).filter({ hasText: message }).last(),
+  ).toBeVisible({ timeout: 15000 });
+}
+
+async function waitForBookingStatus(page: Page, currentBookingId: string, expectedStatus: string): Promise<void> {
+  const seed = await ensureSeedData(page);
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const response = await page.request.get(`${API}/bookings/${currentBookingId}`, {
+      headers: { Authorization: `Bearer ${seed.ownerToken}` },
+    });
+
+    if (response.ok()) {
+      const booking = (await response.json()) as { status?: string };
+      if (booking.status === expectedStatus) {
+        return;
+      }
+    }
+
+    await page.waitForTimeout(1000);
+  }
+
+  throw new Error(`Booking ${currentBookingId} did not reach ${expectedStatus}`);
+}
+
+async function waitForConditionReport(page: Page, currentBookingId: string, reportType: string): Promise<void> {
+  const seed = await ensureSeedData(page);
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const response = await page.request.get(`${API}/bookings/${currentBookingId}/condition-reports`, {
+      headers: { Authorization: `Bearer ${seed.renterToken}` },
+    });
+
+    if (response.ok()) {
+      const reports = (await response.json()) as Array<{ reportType?: string }>;
+      if (reports.some((report) => report.reportType === reportType)) {
+        return;
+      }
+    }
+
+    await page.waitForTimeout(1000);
+  }
+
+  throw new Error(`Booking ${currentBookingId} did not expose condition report ${reportType}`);
+}
+
+async function openConditionReport(page: Page, currentBookingId: string): Promise<void> {
+  await page.goto(`/bookings/${currentBookingId}/condition-report`);
+  await expect(page).toHaveURL(
+    (url) => url.pathname === `/bookings/${currentBookingId}/condition-report`,
+    { timeout: 15000 },
+  );
+  await expect(page.getByRole("heading", { name: "Condition Reports" })).toBeVisible({ timeout: 10000 });
+}
+
+async function saveConditionReport(
+  page: Page,
+  options: {
+    sectionHeading: string;
+    notes?: string;
+    damages?: string;
+    photos?: string[];
+  },
+): Promise<void> {
+  const section = page.locator("div.mb-6").filter({
+    has: page.getByRole("heading", { name: options.sectionHeading }),
+  }).first();
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const sectionVisible = await section.isVisible().catch(() => false);
+    if (sectionVisible) {
+      break;
+    }
+    await page.waitForTimeout(1000);
+    await page.reload({ waitUntil: "domcontentloaded" });
+  }
+
+  await expect(section).toBeVisible({ timeout: 10000 });
+  const form = section.locator("form").first();
+  await expect(form).toBeVisible({ timeout: 10000 });
+
+  if (options.notes !== undefined) {
+    await form.locator('textarea[name="notes"]').fill(options.notes);
+  }
+  if (options.damages !== undefined) {
+    await form.locator('textarea[name="damages"]').fill(options.damages);
+  }
+  if (options.photos !== undefined) {
+    await form.locator('input[name="photos"]').fill(JSON.stringify(options.photos));
+  }
+
+  await form.getByRole("button", { name: /Save Report/i }).click();
+  await expect(section.getByText("Report saved successfully.")).toBeVisible({ timeout: 15000 });
+
+  if (options.notes) {
+    await expect(section.locator("p").filter({ hasText: options.notes }).first()).toBeVisible({ timeout: 15000 });
+  }
+  if (options.damages) {
+    await expect(section.locator("p").filter({ hasText: options.damages }).first()).toBeVisible({ timeout: 15000 });
+  }
 }
 
 async function requestBookingThroughUi(
@@ -250,6 +429,14 @@ async function adminForceBookingStatus(page: Page, currentBookingId: string, sta
 }
 
 test.describe.serial("Manual Critical UI Journeys", () => {
+  test("owner creates a listing through the real listing creation UI", async ({ page }) => {
+    const createdListingId = await createOwnerListingThroughUi(page);
+
+    await page.goto(`/listings/${createdListingId}`);
+    await expect(page).toHaveURL((url) => url.pathname === `/listings/${createdListingId}`);
+    await expect(page.locator("body")).toContainText(/Manual UI owner listing/);
+  });
+
   test("renter logs in through the UI and requests a booking from the listing page", async ({ page }) => {
     listingId = await ensureManualRequestListing(page);
     expect(bookingStartDate).toBeTruthy();
@@ -295,11 +482,16 @@ test.describe.serial("Manual Critical UI Journeys", () => {
     await loginAsUi(page, testUsers.owner);
     await openBooking(page, bookingId as string);
 
-    const confirmButton = page.locator('button:has-text("Confirm Booking")').first();
+    const confirmButton = page.getByRole("button", { name: /^Confirm Booking$/ }).first();
     await expect(confirmButton).toBeVisible({ timeout: 10000 });
     await confirmButton.click();
 
-    await expect(confirmButton).toBeHidden({ timeout: 15000 });
+    await expectAnyVisible(page, [
+      "text=Booking confirmed successfully",
+      "text=Pending Payment",
+      "text=Awaiting payment",
+    ]);
+    await openBooking(page, bookingId as string);
     await expectAnyVisible(page, [
       "text=Pending Payment",
       "text=Payment",
@@ -318,18 +510,18 @@ test.describe.serial("Manual Critical UI Journeys", () => {
     const composer = page.locator('[data-testid="message-composer"]');
     await composer.fill(renterConversationMessage);
     await composer.press("Enter");
-    await expect(page.locator(`text=${renterConversationMessage}`)).toBeVisible({ timeout: 15000 });
+    await expectChatBubble(page, renterConversationMessage, "end");
 
     await loginAsUi(page, testUsers.owner);
     await openBookingConversation(page, bookingId as string);
-    await expect(page.locator(`text=${renterConversationMessage}`)).toBeVisible({ timeout: 15000 });
+    await expectChatBubble(page, renterConversationMessage, "start");
     await page.locator('[data-testid="message-composer"]').fill(ownerConversationReply);
     await page.locator('[data-testid="message-composer"]').press("Enter");
-    await expect(page.locator(`text=${ownerConversationReply}`)).toBeVisible({ timeout: 15000 });
+    await expectChatBubble(page, ownerConversationReply, "end");
 
     await loginAsUi(page, testUsers.renter);
     await openBookingConversation(page, bookingId as string);
-    await expect(page.locator(`text=${ownerConversationReply}`)).toBeVisible({ timeout: 15000 });
+    await expectChatBubble(page, ownerConversationReply, "start");
   });
 
   test("checkout access is guarded correctly and the renter reaches the real checkout UI", async ({ page }) => {
@@ -369,25 +561,44 @@ test.describe.serial("Manual Critical UI Journeys", () => {
     });
   });
 
-  test("owner starts the rental and renter requests the return using UI actions", async ({ page }) => {
+  test("owner starts the rental, renter completes the check-in report, and renter requests return", async ({ page }) => {
     expect(bookingId).toBeTruthy();
 
     await loginAsUi(page, testUsers.owner);
     await openBooking(page, bookingId as string);
 
-    const startButton = page.locator('button:has-text("Start Rental"), button:has-text("Start")').first();
+    const startButton = page.getByRole("button", { name: /^Start Rental$/ }).first();
     await expect(startButton).toBeVisible({ timeout: 10000 });
     await startButton.click();
-    await expect(startButton).toBeHidden({ timeout: 15000 });
+    await waitForBookingStatus(page, bookingId as string, "IN_PROGRESS");
+    await waitForConditionReport(page, bookingId as string, "CHECK_IN");
+    await openBooking(page, bookingId as string);
+
+    await loginAsUi(page, testUsers.renter);
+    checkInReportNote = `Manual check-in report ${Date.now()} for booking ${bookingId}`;
+
+    await openConditionReport(page, bookingId as string);
+    await saveConditionReport(page, {
+      sectionHeading: "Check-In Report",
+      notes: checkInReportNote,
+      damages: "",
+      photos: [`${API}/health?check-in=${bookingId}`],
+    });
+
+    await loginAsUi(page, testUsers.owner);
+    await openConditionReport(page, bookingId as string);
+    await expect(page.getByText(checkInReportNote)).toBeVisible({ timeout: 15000 });
 
     await loginAsUi(page, testUsers.renter);
     await openBooking(page, bookingId as string);
 
-    const requestReturnButton = page.locator('button:has-text("Request Return")').first();
+    const requestReturnButton = page.getByRole("button", { name: /^Request Return$/ }).first();
     await expect(requestReturnButton).toBeVisible({ timeout: 10000 });
     await requestReturnButton.click();
 
-    await expect(requestReturnButton).toBeHidden({ timeout: 15000 });
+    await waitForBookingStatus(page, bookingId as string, "AWAITING_RETURN_INSPECTION");
+    await waitForConditionReport(page, bookingId as string, "CHECK_OUT");
+    await openBooking(page, bookingId as string);
     await expectAnyVisible(page, [
       "text=Awaiting Return Inspection",
       "text=Inspect & Approve the Return",
@@ -399,12 +610,23 @@ test.describe.serial("Manual Critical UI Journeys", () => {
     expect(bookingId).toBeTruthy();
 
     await loginAsUi(page, testUsers.owner);
+    checkOutReportNote = `Manual return inspection ${Date.now()} for booking ${bookingId}`;
+
+    await openConditionReport(page, bookingId as string);
+    await saveConditionReport(page, {
+      sectionHeading: "Check-Out / Return Inspection Report",
+      notes: checkOutReportNote,
+      damages: "No damage found during the manual browser-first inspection.",
+      photos: [`${API}/health?check-out=${bookingId}`],
+    });
+
     await openBooking(page, bookingId as string);
 
-    const approveReturnButton = page.locator('button:has-text("Approve Return")').first();
+    const approveReturnButton = page.getByRole("button", { name: /^Approve Return$/ }).first();
     await expect(approveReturnButton).toBeVisible({ timeout: 10000 });
     await approveReturnButton.click();
-    await expect(approveReturnButton).toBeHidden({ timeout: 15000 });
+    await waitForBookingStatus(page, bookingId as string, "COMPLETED");
+    await openBooking(page, bookingId as string);
 
     await loginAsUi(page, testUsers.renter);
     await openBooking(page, bookingId as string);

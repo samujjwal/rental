@@ -7,6 +7,20 @@ import type {
   ResetPasswordRequest,
 } from "~/types/auth";
 
+function normalizeAuthUser<T extends Record<string, unknown>>(user: T): T & { phoneNumber?: string } {
+  const phoneNumber =
+    typeof user.phoneNumber === "string"
+      ? user.phoneNumber
+      : typeof user.phone === "string"
+        ? user.phone
+        : undefined;
+
+  return {
+    ...user,
+    ...(phoneNumber ? { phoneNumber } : {}),
+  };
+}
+
 export const authApi = {
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     return api.post<AuthResponse>("/auth/login", credentials);
@@ -50,6 +64,6 @@ export const authApi = {
   },
 
   async getCurrentUser() {
-    return api.get("/auth/me");
+    return normalizeAuthUser(await api.get("/auth/me"));
   },
 };

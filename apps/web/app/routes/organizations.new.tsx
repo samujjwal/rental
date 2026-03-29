@@ -1,8 +1,8 @@
 
 import type { MetaFunction, ActionFunctionArgs } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
-import { useNavigate, useActionData, Form, useNavigation, redirect } from "react-router";
-import { useState } from "react";
+import { useNavigate, useActionData, Form, useNavigation, useSubmit, redirect } from "react-router";
+import { useRef, useState } from "react";
 import {
   ArrowLeft,
   Building2,
@@ -162,11 +162,70 @@ export default function NewOrganizationPage() {
   const actionData = useActionData<{ error?: string }>();
   const navigation = useNavigation();
   const navigate = useNavigate();
+  const submit = useSubmit();
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [selectedType, setSelectedType] = useState<BusinessType | null>(null);
   const [step, setStep] = useState(1);
+  const [formValues, setFormValues] = useState({
+    name: "",
+    description: "",
+    email: "",
+    phoneNumber: "",
+    taxId: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "Nepal",
+  });
   const { t } = useTranslation();
 
   const isSubmitting = navigation.state === "submitting";
+
+  const collectFormValues = (form: HTMLFormElement | null) => {
+    if (!form) {
+      return formValues;
+    }
+
+    const formData = new FormData(form);
+
+    return {
+      ...formValues,
+      name: String(formData.get("name") ?? formValues.name),
+      description: String(formData.get("description") ?? formValues.description),
+      email: String(formData.get("email") ?? formValues.email),
+      phoneNumber: String(formData.get("phoneNumber") ?? formValues.phoneNumber),
+      taxId: String(formData.get("taxId") ?? formValues.taxId),
+      addressLine1: String(formData.get("addressLine1") ?? formValues.addressLine1),
+      addressLine2: String(formData.get("addressLine2") ?? formValues.addressLine2),
+      city: String(formData.get("city") ?? formValues.city),
+      state: String(formData.get("state") ?? formValues.state),
+      postalCode: String(formData.get("postalCode") ?? formValues.postalCode),
+      country: String(formData.get("country") ?? formValues.country),
+    };
+  };
+
+  const handleCreateOrganization = (form: HTMLFormElement | null) => {
+    if (!selectedType) {
+      return;
+    }
+
+    const nextValues = collectFormValues(form);
+    setFormValues(nextValues);
+
+    const formData = new FormData();
+    formData.set("intent", "create-organization");
+    formData.set("businessType", selectedType);
+
+    Object.entries(nextValues).forEach(([key, value]) => {
+      if (value) {
+        formData.set(key, value);
+      }
+    });
+
+    submit(formData, { method: "post" });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -234,8 +293,7 @@ export default function NewOrganizationPage() {
           </div>
         )}
 
-        <Form method="post" className="bg-card border rounded-lg p-6 space-y-6">
-          <input type="hidden" name="intent" value="create-organization" />
+        <Form ref={formRef} method="post" className="bg-card border rounded-lg p-6 space-y-6">
           {step === 1 && (
             <>
               <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -303,8 +361,6 @@ export default function NewOrganizationPage() {
                 <Users className="w-5 h-5 text-primary" />
                 {t("organizations.orgDetails")}
               </h2>
-              <input type="hidden" name="businessType" value={selectedType || ""} />
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-foreground mb-1">
@@ -315,6 +371,10 @@ export default function NewOrganizationPage() {
                     name="name"
                     required
                     maxLength={120}
+                    value={formValues.name}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, name: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="Acme Rentals Inc."
                   />
@@ -328,6 +388,10 @@ export default function NewOrganizationPage() {
                     name="description"
                     rows={3}
                     maxLength={2000}
+                    value={formValues.description}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, description: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="Tell us about your rental business..."
                   />
@@ -342,6 +406,10 @@ export default function NewOrganizationPage() {
                     name="email"
                     required
                     maxLength={254}
+                    value={formValues.email}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, email: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="contact@acmerentals.com"
                   />
@@ -355,6 +423,10 @@ export default function NewOrganizationPage() {
                     type="tel"
                     name="phoneNumber"
                     maxLength={20}
+                    value={formValues.phoneNumber}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, phoneNumber: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder={APP_PHONE_PLACEHOLDER}
                   />
@@ -368,6 +440,10 @@ export default function NewOrganizationPage() {
                     type="text"
                     name="taxId"
                     maxLength={50}
+                    value={formValues.taxId}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, taxId: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="XX-XXXXXXX"
                   />
@@ -378,7 +454,13 @@ export default function NewOrganizationPage() {
                 <UnifiedButton type="button" variant="outline" onClick={() => setStep(1)}>
                   {t("common.back")}
                 </UnifiedButton>
-                <UnifiedButton type="button" onClick={() => setStep(3)}>
+                <UnifiedButton
+                  type="button"
+                  onClick={() => {
+                    setFormValues(collectFormValues(formRef.current));
+                    setStep(3);
+                  }}
+                >
                   {t("common.next")}
                 </UnifiedButton>
               </div>
@@ -391,8 +473,6 @@ export default function NewOrganizationPage() {
                 <Shield className="w-5 h-5 text-primary" />
                 {t("organizations.businessAddress")}
               </h2>
-              <input type="hidden" name="businessType" value={selectedType || ""} />
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-foreground mb-1">
@@ -402,6 +482,10 @@ export default function NewOrganizationPage() {
                     type="text"
                     name="addressLine1"
                     maxLength={120}
+                    value={formValues.addressLine1}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, addressLine1: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="123 Business St"
                   />
@@ -415,6 +499,10 @@ export default function NewOrganizationPage() {
                     type="text"
                     name="addressLine2"
                     maxLength={120}
+                    value={formValues.addressLine2}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, addressLine2: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="Suite 100"
                   />
@@ -428,6 +516,10 @@ export default function NewOrganizationPage() {
                     type="text"
                     name="city"
                     maxLength={80}
+                    value={formValues.city}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, city: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="Kathmandu"
                   />
@@ -441,6 +533,10 @@ export default function NewOrganizationPage() {
                     type="text"
                     name="state"
                     maxLength={80}
+                    value={formValues.state}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, state: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="Bagmati"
                   />
@@ -454,6 +550,10 @@ export default function NewOrganizationPage() {
                     type="text"
                     name="postalCode"
                     maxLength={20}
+                    value={formValues.postalCode}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, postalCode: event.target.value }))
+                    }
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                     placeholder="44600"
                   />
@@ -466,7 +566,10 @@ export default function NewOrganizationPage() {
                   <input
                     type="text"
                     name="country"
-                    defaultValue="Nepal"
+                    value={formValues.country}
+                    onChange={(event) =>
+                      setFormValues((current) => ({ ...current, country: event.target.value }))
+                    }
                     maxLength={80}
                     className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring"
                   />
@@ -477,7 +580,11 @@ export default function NewOrganizationPage() {
                 <UnifiedButton type="button" variant="outline" onClick={() => setStep(2)}>
                   {t("common.back")}
                 </UnifiedButton>
-                <UnifiedButton type="submit" disabled={isSubmitting}>
+                <UnifiedButton
+                  type="button"
+                  onClick={() => handleCreateOrganization(formRef.current)}
+                  disabled={isSubmitting}
+                >
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />

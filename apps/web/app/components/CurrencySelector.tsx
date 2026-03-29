@@ -1,10 +1,12 @@
 import { useLocaleStore } from "~/lib/store/locale";
 import {
-  SUPPORTED_CURRENCIES,
+  getSupportedCurrencies,
   getCurrencySymbol,
   type SupportedCurrency,
 } from "@rental-portal/shared-types";
 import { cn } from "~/lib/utils";
+
+const SUPPORTED_CURRENCIES = getSupportedCurrencies();
 
 /**
  * Build dynamic labels from Intl.NumberFormat — NO hardcoded symbols.

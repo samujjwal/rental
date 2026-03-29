@@ -182,17 +182,14 @@ function getExpectedPostLoginPattern(role: TestUser["role"]): RegExp {
 }
 
 async function clearAuthState(page: Page): Promise<void> {
-  // Navigate to about:blank first to detach from any app-controlled page.
-  // This prevents protocol errors when clearing cookies while the app is
-  // mid-navigation (e.g. /auth/logout triggers a redirect chain).
-  await page.goto("about:blank").catch(() => {});
-  await page.context().clearCookies();
+  await page.goto("/", { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
+  await page.goto("/auth/logout", { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
   await page.evaluate(() => {
     localStorage.clear();
     sessionStorage.clear();
-  }).catch(() => {
-    // about:blank may not have storage access in some browsers — safe to ignore.
   });
+  await page.context().clearCookies();
+  await page.goto("about:blank").catch(() => {});
 }
 
 async function loginThroughUi(page: Page, user: TestUser): Promise<void> {

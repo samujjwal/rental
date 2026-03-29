@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const includeDebugSuites = process.env.PLAYWRIGHT_INCLUDE_DEBUG === "true";
+const includeExploratorySuites =
+  process.env.PLAYWRIGHT_INCLUDE_EXPLORATORY === "true";
 const htmlReportOutput =
   process.env.PLAYWRIGHT_HTML_REPORT ||
   (process.env.CI
@@ -20,6 +22,17 @@ const resolvedBaseUrl =
 // mode).  Skip auto-launching webServer processes to avoid port conflicts and
 // stale-server issues on teardown.
 const useExternalServers = !!process.env.PLAYWRIGHT_BASE_URL;
+const exploratorySuiteIgnores = [
+  "**/file-upload-workflows-comprehensive.spec.ts",
+  "**/help-support-comprehensive.spec.ts",
+  "**/multi-language-comprehensive.spec.ts",
+  "**/organization-management-comprehensive.spec.ts",
+  "**/payment-integration-comprehensive.spec.ts",
+  "**/profile-management.spec.ts",
+  "**/profile-management-comprehensive.spec.ts",
+  "**/stripe-payments.spec.ts",
+  "**/websocket-realtime-comprehensive.spec.ts",
+];
 
 /**
  * Playwright configuration for E2E testing
@@ -27,9 +40,12 @@ const useExternalServers = !!process.env.PLAYWRIGHT_BASE_URL;
  */
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: includeDebugSuites
-    ? []
-    : ["**/debug-*.spec.ts", "**/diagnostic.spec.ts"],
+  testIgnore: [
+    ...(includeDebugSuites
+      ? []
+      : ["**/debug-*.spec.ts", "**/diagnostic.spec.ts"]),
+    ...(includeExploratorySuites ? [] : exploratorySuiteIgnores),
+  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1,

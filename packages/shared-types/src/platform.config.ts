@@ -1,96 +1,418 @@
 /**
- * Platform Configuration — Country-agnostic, data-driven configuration system.
+ * Platform configuration with validated runtime getters.
  *
- * This file provides DYNAMIC configuration that reads from environment variables
- * and database tables (CountryConfig, CurrencyConfig, LocaleConfig) at runtime.
+ * This module still exposes deprecated constants for compatibility, but new
+ * code should prefer getter functions so configuration is normalized on access.
  *
- * NO hardcoded country, currency, locale, or timezone constants.
- * All values are resolved from: env vars → DB config → fallback defaults.
- *
- * Seed data (NEPAL_LOCATIONS, NEPALI_FIRST_NAMES, etc.) has been moved to
- * packages/database/prisma/seed.ts where it belongs.
+ * Until the DB-backed config tables fully replace env-based configuration, the
+ * fallback defaults intentionally match the current production baseline.
  */
 
 import { getCurrencyDecimals } from './currency.utils';
 
-// ─── Supported Locales (loaded from env / DB at runtime) ─────────────────────
+type RuntimeEnv = Record<string, string | undefined>;
 
-/**
- * Get supported locales from environment or provide reasonable defaults.
- * In production, these should come from the LocaleConfig table.
- */
-export function getSupportedLocales(): string[] {
-  if (typeof process !== 'undefined' && process.env?.SUPPORTED_LOCALES) {
-    return process.env.SUPPORTED_LOCALES.split(',').map((s) => s.trim());
-  }
-  return ['en']; // Bare minimum: English
+interface CurrencyLegacyConfig {
+  code: string;
+  symbol: string;
+  symbolNe?: string;
+  name: string;
+  nameNe: string;
+  decimals: number;
+  symbolPosition: 'before' | 'after';
 }
 
-/**
- * Get the default locale from environment.
- */
-export function getDefaultLocale(): string {
-  if (typeof process !== 'undefined' && process.env?.DEFAULT_LOCALE) {
-    return process.env.DEFAULT_LOCALE;
+export interface PlatformRuntimeConfig {
+  supportedLocales: string[];
+  defaultLocale: string;
+  supportedCurrencies: string[];
+  defaultCurrency: string;
+  defaultTimezone: string;
+  platformCountryCode: string;
+  platformCountryName: string;
+  phoneCountryCode: string;
+  phonePlaceholder: string;
+  defaultMapCenter: [number, number];
+  localeLabels: Record<string, string>;
+  localeNativeLabels: Record<string, string>;
+  currencyConfig: Record<string, CurrencyLegacyConfig>;
+  currencyIntlLocale: Record<string, string>;
+}
+
+const FALLBACK_LOCALES = ['en', 'ne'] as const;
+const FALLBACK_CURRENCIES = ['NPR', 'USD', 'INR'] as const;
+const FALLBACK_DEFAULT_LOCALE = 'en';
+const FALLBACK_DEFAULT_CURRENCY = 'NPR';
+const FALLBACK_DEFAULT_TIMEZONE = 'Asia/Kathmandu';
+const FALLBACK_COUNTRY_CODE = 'NP';
+const FALLBACK_COUNTRY_NAME = 'Nepal';
+const FALLBACK_PHONE_COUNTRY_CODE = '+977';
+const FALLBACK_PHONE_PLACEHOLDER = '+977 9812345678';
+const FALLBACK_MAP_CENTER: [number, number] = [27.7172, 85.324];
+
+const KNOWN_LOCALE_LABELS: Record<string, string> = {
+  en: 'English',
+  ne: 'Nepali',
+};
+
+const KNOWN_LOCALE_NATIVE_LABELS: Record<string, string> = {
+  en: 'English',
+  ne: 'नेपाली',
+};
+
+const KNOWN_CURRENCY_CONFIG: Record<string, CurrencyLegacyConfig> = {
+  USD: {
+    code: 'USD',
+    symbol: '$',
+    name: 'US Dollar',
+    nameNe: 'अमेरिकी डलर',
+    decimals: 2,
+    symbolPosition: 'before',
+  },
+  NPR: {
+    code: 'NPR',
+    symbol: 'Rs.',
+    symbolNe: 'रु',
+    name: 'Nepalese Rupee',
+    nameNe: 'नेपाली रुपैयाँ',
+    decimals: 2,
+    symbolPosition: 'before',
+  },
+  INR: {
+    code: 'INR',
+    symbol: '₹',
+    name: 'Indian Rupee',
+    nameNe: 'भारतीय रुपैयाँ',
+    decimals: 2,
+    symbolPosition: 'before',
+  },
+};
+
+const KNOWN_CURRENCY_INTL_LOCALES: Record<string, string> = {
+  NPR: 'en-IN',
+  USD: 'en-US',
+  INR: 'en-IN',
+};
+
+function getRuntimeEnv(): RuntimeEnv {
+  if (typeof process === 'undefined' || !process.env) {
+    return {};
   }
-  return 'en';
+  return process.env as RuntimeEnv;
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function parseList(
+  rawValue: string | undefined,
+  normalizeItem: (value: string) => string | undefined,
+  fallback: readonly string[],
+): string[] {
+  if (!rawValue) {
+    return [...fallback];
+  }
+
+  const values = unique(
+    rawValue
+      .split(',')
+      .map((entry) => normalizeItem(entry))
+      .filter((entry): entry is string => Boolean(entry)),
+  );
+
+  return values.length > 0 ? values : [...fallback];
+}
+
+function normalizeLocale(locale: string | undefined): string | undefined {
+  const trimmed = locale?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    new Intl.NumberFormat(trimmed).format(1);
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeCurrencyCode(currency: string | undefined): string | undefined {
+  const trimmed = currency?.trim().toUpperCase();
+  if (!trimmed || !/^[A-Z]{3}$/.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function normalizeCountryCode(countryCode: string | undefined): string | undefined {
+  const trimmed = countryCode?.trim().toUpperCase();
+  if (!trimmed || !/^[A-Z]{2}$/.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function normalizeCountryName(countryName: string | undefined): string | undefined {
+  const trimmed = countryName?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeTimeZone(timeZone: string | undefined): string | undefined {
+  const trimmed = timeZone?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: trimmed }).format(new Date());
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizePhoneCountryCode(phoneCountryCode: string | undefined): string | undefined {
+  const trimmed = phoneCountryCode?.trim();
+  if (!trimmed || !/^\+\d{1,4}$/.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function normalizeMapCoordinate(
+  rawValue: string | undefined,
+  min: number,
+  max: number,
+): number | undefined {
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value < min || value > max) {
+    return undefined;
+  }
+
+  return value;
+}
+
+function getSafeCurrencySymbol(currencyCode: string, locale: string): string {
+  try {
+    const parts = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currencyCode,
+    }).formatToParts(0);
+    return parts.find((part) => part.type === 'currency')?.value ?? currencyCode;
+  } catch {
+    return currencyCode;
+  }
+}
+
+function inferSymbolPosition(currencyCode: string, locale: string): 'before' | 'after' {
+  try {
+    const parts = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currencyCode,
+    }).formatToParts(1);
+    const currencyIndex = parts.findIndex((part) => part.type === 'currency');
+    const integerIndex = parts.findIndex((part) => part.type === 'integer');
+    if (currencyIndex !== -1 && integerIndex !== -1 && currencyIndex > integerIndex) {
+      return 'after';
+    }
+  } catch {
+    return 'before';
+  }
+
+  return 'before';
+}
+
+function buildLocaleLabels(locales: readonly string[]): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (const locale of locales) {
+    labels[locale] = KNOWN_LOCALE_LABELS[locale] ?? locale;
+  }
+  return labels;
+}
+
+function buildLocaleNativeLabels(locales: readonly string[]): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (const locale of locales) {
+    labels[locale] = KNOWN_LOCALE_NATIVE_LABELS[locale] ?? locale;
+  }
+  return labels;
+}
+
+function buildPhonePlaceholder(phoneCountryCode: string): string {
+  if (phoneCountryCode === FALLBACK_PHONE_COUNTRY_CODE) {
+    return FALLBACK_PHONE_PLACEHOLDER;
+  }
+  return `${phoneCountryCode} 555 123 4567`;
+}
+
+function buildCurrencyConfigEntry(currencyCode: string, defaultLocale: string): CurrencyLegacyConfig {
+  const knownConfig = KNOWN_CURRENCY_CONFIG[currencyCode];
+  if (knownConfig) {
+    return knownConfig;
+  }
+
+  return {
+    code: currencyCode,
+    symbol: getSafeCurrencySymbol(currencyCode, defaultLocale),
+    name: currencyCode,
+    nameNe: currencyCode,
+    decimals: getCurrencyDecimals(currencyCode),
+    symbolPosition: inferSymbolPosition(currencyCode, defaultLocale),
+  };
+}
+
+function buildCurrencyConfigMap(currencies: readonly string[], defaultLocale: string): Record<string, CurrencyLegacyConfig> {
+  const config: Record<string, CurrencyLegacyConfig> = {};
+  for (const currency of currencies) {
+    config[currency] = buildCurrencyConfigEntry(currency, defaultLocale);
+  }
+  return config;
+}
+
+function buildCurrencyIntlLocaleMap(currencies: readonly string[], defaultLocale: string): Record<string, string> {
+  const config: Record<string, string> = {};
+  for (const currency of currencies) {
+    config[currency] = KNOWN_CURRENCY_INTL_LOCALES[currency] ?? defaultLocale;
+  }
+  return config;
+}
+
+export function getPlatformConfig(env: RuntimeEnv = getRuntimeEnv()): PlatformRuntimeConfig {
+  const supportedLocales = parseList(env.SUPPORTED_LOCALES, normalizeLocale, FALLBACK_LOCALES);
+  const defaultLocale = normalizeLocale(env.DEFAULT_LOCALE) ?? FALLBACK_DEFAULT_LOCALE;
+  if (!supportedLocales.includes(defaultLocale)) {
+    supportedLocales.unshift(defaultLocale);
+  }
+
+  const supportedCurrencies = parseList(
+    env.SUPPORTED_CURRENCIES,
+    normalizeCurrencyCode,
+    FALLBACK_CURRENCIES,
+  );
+  const defaultCurrency =
+    normalizeCurrencyCode(env.DEFAULT_CURRENCY) ?? FALLBACK_DEFAULT_CURRENCY;
+  if (!supportedCurrencies.includes(defaultCurrency)) {
+    supportedCurrencies.unshift(defaultCurrency);
+  }
+
+  const platformCountryCode =
+    normalizeCountryCode(env.PLATFORM_COUNTRY_CODE) ??
+    normalizeCountryCode(env.PLATFORM_COUNTRY) ??
+    FALLBACK_COUNTRY_CODE;
+
+  const platformCountryName =
+    normalizeCountryName(env.PLATFORM_COUNTRY_NAME) ??
+    (normalizeCountryCode(env.PLATFORM_COUNTRY) ? undefined : normalizeCountryName(env.PLATFORM_COUNTRY)) ??
+    FALLBACK_COUNTRY_NAME;
+
+  const phoneCountryCode =
+    normalizePhoneCountryCode(env.PHONE_COUNTRY_CODE) ?? FALLBACK_PHONE_COUNTRY_CODE;
+
+  const defaultMapLat =
+    normalizeMapCoordinate(env.DEFAULT_MAP_CENTER_LAT ?? env.DEFAULT_MAP_LATITUDE, -90, 90) ??
+    FALLBACK_MAP_CENTER[0];
+  const defaultMapLng =
+    normalizeMapCoordinate(env.DEFAULT_MAP_CENTER_LNG ?? env.DEFAULT_MAP_LONGITUDE, -180, 180) ??
+    FALLBACK_MAP_CENTER[1];
+
+  const currencyKeys = unique([
+    ...supportedCurrencies,
+    defaultCurrency,
+    ...Object.keys(KNOWN_CURRENCY_CONFIG),
+  ]);
+
+  return {
+    supportedLocales,
+    defaultLocale,
+    supportedCurrencies,
+    defaultCurrency,
+    defaultTimezone:
+      normalizeTimeZone(env.DEFAULT_TIMEZONE) ?? FALLBACK_DEFAULT_TIMEZONE,
+    platformCountryCode,
+    platformCountryName,
+    phoneCountryCode,
+    phonePlaceholder:
+      normalizeCountryName(env.PHONE_PLACEHOLDER) ?? buildPhonePlaceholder(phoneCountryCode),
+    defaultMapCenter: [defaultMapLat, defaultMapLng],
+    localeLabels: buildLocaleLabels(supportedLocales),
+    localeNativeLabels: buildLocaleNativeLabels(supportedLocales),
+    currencyConfig: buildCurrencyConfigMap(currencyKeys, defaultLocale),
+    currencyIntlLocale: buildCurrencyIntlLocaleMap(currencyKeys, defaultLocale),
+  };
+}
+
+// ─── Supported Locales (loaded from env / DB at runtime) ─────────────────────
+
+export function getSupportedLocales(): string[] {
+  return getPlatformConfig().supportedLocales;
+}
+
+export function getDefaultLocale(): string {
+  return getPlatformConfig().defaultLocale;
 }
 
 // ─── Supported Currencies (loaded from env / DB at runtime) ──────────────────
 
-/**
- * Get supported currencies from environment or provide reasonable defaults.
- * In production, these should come from the CurrencyConfig table.
- */
 export function getSupportedCurrencies(): string[] {
-  if (typeof process !== 'undefined' && process.env?.SUPPORTED_CURRENCIES) {
-    return process.env.SUPPORTED_CURRENCIES.split(',').map((s) => s.trim());
-  }
-  return ['USD']; // Bare minimum: US Dollar
+  return getPlatformConfig().supportedCurrencies;
 }
 
-/**
- * Get the default currency from environment.
- */
 export function getDefaultCurrency(): string {
-  if (typeof process !== 'undefined' && process.env?.DEFAULT_CURRENCY) {
-    return process.env.DEFAULT_CURRENCY;
-  }
-  return 'USD';
+  return getPlatformConfig().defaultCurrency;
 }
 
 // ─── Timezone ────────────────────────────────────────────────────────────────
 
-/**
- * Get the default timezone from environment.
- */
 export function getDefaultTimezone(): string {
-  if (typeof process !== 'undefined' && process.env?.DEFAULT_TIMEZONE) {
-    return process.env.DEFAULT_TIMEZONE;
-  }
-  return 'UTC';
+  return getPlatformConfig().defaultTimezone;
 }
 
 // ─── Country ─────────────────────────────────────────────────────────────────
 
-/**
- * Get the platform country code from environment.
- */
 export function getPlatformCountryCode(): string {
-  if (typeof process !== 'undefined' && process.env?.PLATFORM_COUNTRY) {
-    return process.env.PLATFORM_COUNTRY;
-  }
-  return '';
+  return getPlatformConfig().platformCountryCode;
 }
 
-/**
- * Get phone country code from environment.
- */
+export function getPlatformCountryName(): string {
+  return getPlatformConfig().platformCountryName;
+}
+
 export function getPhoneCountryCode(): string {
-  if (typeof process !== 'undefined' && process.env?.PHONE_COUNTRY_CODE) {
-    return process.env.PHONE_COUNTRY_CODE;
-  }
-  return '';
+  return getPlatformConfig().phoneCountryCode;
+}
+
+export function getPhonePlaceholder(): string {
+  return getPlatformConfig().phonePlaceholder;
+}
+
+export function getDefaultMapCenter(): [number, number] {
+  return getPlatformConfig().defaultMapCenter;
+}
+
+export function getLocaleLabels(): Record<string, string> {
+  return getPlatformConfig().localeLabels;
+}
+
+export function getLocaleNativeLabels(): Record<string, string> {
+  return getPlatformConfig().localeNativeLabels;
+}
+
+export function getCurrencyConfig(currencyCode?: string): CurrencyLegacyConfig {
+  const config = getPlatformConfig();
+  const code = normalizeCurrencyCode(currencyCode) ?? config.defaultCurrency;
+  return config.currencyConfig[code] ?? buildCurrencyConfigEntry(code, config.defaultLocale);
+}
+
+export function getCurrencyIntlLocale(currencyCode?: string): string {
+  const config = getPlatformConfig();
+  const code = normalizeCurrencyCode(currencyCode) ?? config.defaultCurrency;
+  return config.currencyIntlLocale[code] ?? config.defaultLocale;
 }
 
 // ─── Currency Formatting (uses Intl — no hardcoded symbols) ──────────────────
@@ -111,24 +433,32 @@ export function formatCurrency(
   locale?: string,
 ): string {
   if (amount == null || Number.isNaN(amount)) return '';
-  const code = currency || getDefaultCurrency();
+  const code = normalizeCurrencyCode(currency) ?? getDefaultCurrency();
   const decimals = getCurrencyDecimals(code);
-  // Use the provided locale, or try to infer a reasonable one
-  const displayLocale = locale || getDefaultLocale();
-  return new Intl.NumberFormat(displayLocale, {
-    style: 'currency',
-    currency: code,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-  }).format(amount);
+  const displayLocale = normalizeLocale(locale) ?? getCurrencyIntlLocale(code);
+
+  try {
+    return new Intl.NumberFormat(displayLocale, {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: decimals,
+    }).format(amount);
+  } catch {
+    const rounded = amount.toLocaleString(getDefaultLocale(), {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: decimals,
+    });
+    return `${getCurrencySymbol(code, displayLocale)} ${rounded}`.trim();
+  }
 }
 
 /**
  * Return just the symbol for a given currency code using Intl (no hardcoded map).
  */
 export function getCurrencySymbol(currencyCode?: string, locale?: string): string {
-  const code = currencyCode || getDefaultCurrency();
-  const displayLocale = locale || getDefaultLocale();
+  const code = normalizeCurrencyCode(currencyCode) ?? getDefaultCurrency();
+  const displayLocale = normalizeLocale(locale) ?? getCurrencyIntlLocale(code);
   try {
     const parts = new Intl.NumberFormat(displayLocale, {
       style: 'currency',
@@ -167,17 +497,17 @@ export const DEFAULT_TIMEZONE = getDefaultTimezone();
 /** @deprecated Use getPlatformCountryCode() or read from config */
 export const PLATFORM_COUNTRY_CODE = getPlatformCountryCode();
 
-/** @deprecated Use env var or read from CountryConfig table */
-export const PLATFORM_COUNTRY = (typeof process !== 'undefined' && process.env?.PLATFORM_COUNTRY_NAME) || '';
+/** @deprecated Use getPlatformCountryName() or read from CountryConfig table */
+export const PLATFORM_COUNTRY = getPlatformCountryName();
 
 /** @deprecated Use getPhoneCountryCode() or read from CountryConfig table */
 export const PHONE_COUNTRY_CODE = getPhoneCountryCode();
 
-/** @deprecated Remove hardcoded placeholder */
-export const PHONE_PLACEHOLDER = '';
+/** @deprecated Use getPhonePlaceholder() or config service */
+export const PHONE_PLACEHOLDER = getPhonePlaceholder();
 
-/** @deprecated Use DB-backed map center per country */
-export const DEFAULT_MAP_CENTER: [number, number] = [0, 0];
+/** @deprecated Use getDefaultMapCenter() or DB-backed map center */
+export const DEFAULT_MAP_CENTER: [number, number] = getDefaultMapCenter();
 
 // ─── Legacy Currency Config (backward compat) ───────────────────────────────
 // These should be read from CurrencyConfig DB table in production.
@@ -190,42 +520,13 @@ export const CURRENCY_CONFIG: Record<string, {
   nameNe: string;
   decimals: number;
   symbolPosition: 'before' | 'after';
-}> = {
-  USD: {
-    code: 'USD',
-    symbol: '$',
-    name: 'US Dollar',
-    nameNe: 'अमेरिकी डलर',
-    decimals: 2,
-    symbolPosition: 'before',
-  },
-  NPR: {
-    code: 'NPR',
-    symbol: 'Rs.',
-    symbolNe: 'रु',
-    name: 'Nepalese Rupee',
-    nameNe: 'नेपाली रुपैयाँ',
-    decimals: 2,
-    symbolPosition: 'before',
-  },
-  INR: {
-    code: 'INR',
-    symbol: '₹',
-    name: 'Indian Rupee',
-    nameNe: 'भारतीय रुपैयाँ',
-    decimals: 2,
-    symbolPosition: 'before',
-  },
-};
+}> = getPlatformConfig().currencyConfig;
 
-export const CURRENCY_INTL_LOCALE: Record<string, string> = {
-  NPR: 'en-IN',
-  USD: 'en-US',
-  INR: 'en-IN',
-};
+export const CURRENCY_INTL_LOCALE: Record<string, string> =
+  getPlatformConfig().currencyIntlLocale;
 
-export const LOCALE_LABELS: Record<string, string> = {};
-export const LOCALE_NATIVE_LABELS: Record<string, string> = {};
+export const LOCALE_LABELS: Record<string, string> = getLocaleLabels();
+export const LOCALE_NATIVE_LABELS: Record<string, string> = getLocaleNativeLabels();
 
 // ─── Seed Data Types (structures preserved, data moved to seed.ts) ──────────
 

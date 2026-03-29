@@ -15,11 +15,12 @@ vi.mock("~/config/locale", () => ({
 }));
 
 vi.mock("@rental-portal/shared-types", () => ({
-  CURRENCY_INTL_LOCALE: {
-    NPR: "ne-NP",
-    USD: "en-US",
-    INR: "en-IN",
-  },
+  getCurrencyDecimals: vi.fn((currency: string) => (currency === "JPY" ? 0 : 2)),
+  getCurrencyIntlLocale: vi.fn((currency?: string) => {
+    if (currency === "USD") return "en-US";
+    if (currency === "INR") return "en-IN";
+    return "ne-NP";
+  }),
 }));
 
 const { useLocaleFormatters } = await import("~/hooks/useLocaleFormatters");

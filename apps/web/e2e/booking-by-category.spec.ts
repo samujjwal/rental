@@ -84,7 +84,14 @@ async function assertBookingPanel(page: Page): Promise<void> {
 }
 
 async function submitBooking(page: Page, message?: string): Promise<void> {
-  await page.waitForTimeout(1500);
+  // Wait for booking form to be ready
+  await expectAnyVisible(page, [
+    'button:has-text("Book Instantly")',
+    'button:has-text("Request to Book")',
+    'button:has-text("Confirm Booking")',
+    "textarea",
+  ]);
+  
   if (message) {
     const textarea = page.locator("textarea").first();
     if (await textarea.isVisible().catch(() => false)) {
@@ -296,7 +303,14 @@ function buildCategoryBookingSuites(params: {
       await loginAs(page, testUsers.renter);
       await openListing(page, listing.id);
       await fillDatesAndCheck(page, START, END);
-      await page.waitForTimeout(1000);
+      
+      // Wait for booking form to be ready
+      await expectAnyVisible(page, [
+        "textarea",
+        'button:has-text("Book Instantly")',
+        'button:has-text("Request to Book")',
+      ]);
+      
       const textarea = page.locator("textarea").first();
       if (await textarea.isVisible().catch(() => false)) {
         await textarea.fill("I will handle this with great care.");
@@ -466,7 +480,10 @@ function buildCategoryBookingSuites(params: {
           futureDate(30 + pagesChecked * 5),
           futureDate(33 + pagesChecked * 5)
         );
-        await page.waitForTimeout(1000);
+        // Verify price is displayed
+        await expectAnyVisible(page, [
+          "text=/Total|Subtotal|Price|per day/i",
+        ]);
         pagesChecked++;
       }
       expect(pagesChecked).toBe(3);

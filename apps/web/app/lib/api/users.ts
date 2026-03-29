@@ -1,13 +1,27 @@
 import { api } from "~/lib/api-client";
 import type { User, PublicUser } from "~/types/user";
 
+function normalizeUser<T extends Record<string, unknown>>(user: T): T & { phoneNumber?: string } {
+  const phoneNumber =
+    typeof user.phoneNumber === "string"
+      ? user.phoneNumber
+      : typeof user.phone === "string"
+        ? user.phone
+        : undefined;
+
+  return {
+    ...user,
+    ...(phoneNumber ? { phoneNumber } : {}),
+  };
+}
+
 export const usersApi = {
   async getUserById(userId: string): Promise<PublicUser> {
-    return api.get<PublicUser>(`/users/${userId}`);
+    return normalizeUser(await api.get<PublicUser>(`/users/${userId}`));
   },
 
   async getCurrentUser(): Promise<User> {
-    return api.get<User>("/users/me");
+    return normalizeUser(await api.get<User>("/users/me")) as User;
   },
 
   async getUserStats(): Promise<{
@@ -26,7 +40,7 @@ export const usersApi = {
   },
 
   async updateCurrentUser(data: Partial<User>): Promise<User> {
-    return api.patch<User>("/users/me", data);
+    return normalizeUser(await api.patch<User>("/users/me", data)) as User;
   },
 
   async deleteAccount(): Promise<{ message: string }> {
@@ -34,6 +48,6 @@ export const usersApi = {
   },
 
   async upgradeToOwner(): Promise<User> {
-    return api.post<User>("/users/upgrade-to-owner");
+    return normalizeUser(await api.post<User>("/users/upgrade-to-owner")) as User;
   },
 };

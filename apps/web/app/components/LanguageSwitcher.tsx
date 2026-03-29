@@ -1,6 +1,8 @@
 import { useLocaleStore } from "~/lib/store/locale";
 import { SUPPORTED_LANGUAGES } from "~/i18n";
-import { LOCALE_NATIVE_LABELS } from "@rental-portal/shared-types";
+import { getLocaleNativeLabels } from "@rental-portal/shared-types";
+
+const LOCALE_NATIVE_LABELS = getLocaleNativeLabels();
 
 const LANG_LABELS: Record<string, string> = {
   en: LOCALE_NATIVE_LABELS.en,

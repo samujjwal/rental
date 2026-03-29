@@ -53,7 +53,6 @@ export {
   MessageType,
   ResolutionType,
   AvailabilityStatus,
-  AvailabilityMode,
   AvailabilitySlotStatus,
   PriceLineType,
   PolicyType,

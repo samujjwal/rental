@@ -1,5 +1,5 @@
 import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, Link, redirect, useLoaderData, useActionData, useNavigation, useRevalidator } from "react-router";
+import { Form, Link, redirect, useLoaderData, useActionData, useNavigation, useRevalidator, useSubmit } from "react-router";
 import { useRef, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
@@ -145,6 +145,12 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
     return {
       user: {
         ...user,
+        phoneNumber:
+          ("phoneNumber" in user && typeof user.phoneNumber === "string"
+            ? user.phoneNumber
+            : "phone" in user && typeof user.phone === "string"
+              ? user.phone
+              : undefined) || undefined,
         totalBookings: stats.bookingsAsRenter ?? 0,
         totalListings: stats.listingsCount ?? 0,
         averageRating: stats.averageRating ?? null,
@@ -291,6 +297,54 @@ interface User {
   averageRating?: number | null;
 }
 
+type ProfileFormUser = Partial<User> & {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  phoneNumber?: string | null;
+};
+
+function getProfileFormValues(
+  user: ProfileFormUser | null | undefined,
+  storedUser: ProfileFormUser | null | undefined,
+) {
+  const effectiveUser = user || storedUser;
+  const pickText = (...values: Array<unknown>) => {
+    for (const value of values) {
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed.length > 0) {
+          return trimmed;
+        }
+      }
+    }
+
+    return "";
+  };
+
+  if (!effectiveUser) {
+    return {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phoneNumber: "",
+    };
+  }
+
+  return {
+    firstName: pickText(effectiveUser.firstName, storedUser?.firstName),
+    lastName: pickText(effectiveUser.lastName, storedUser?.lastName),
+    email: pickText(effectiveUser.email, storedUser?.email),
+    phoneNumber: pickText(
+      effectiveUser.phoneNumber,
+      effectiveUser.phone,
+      storedUser?.phoneNumber,
+      storedUser?.phone,
+    ),
+  };
+}
+
 export default function ProfileSettings() {
   const { t } = useTranslation();
   const { user: loaderUser, error: loaderError } = useLoaderData<{
@@ -300,6 +354,7 @@ export default function ProfileSettings() {
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const { revalidate } = useRevalidator();
+  const submit = useSubmit();
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(
     loaderUser?.profilePhotoUrl || null
   );
@@ -309,6 +364,10 @@ export default function ProfileSettings() {
   } | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const authUser = useAuthStore((state) => state.user as ProfileFormUser | null);
+  const [profileFormValues, setProfileFormValues] = useState(() =>
+    getProfileFormValues(loaderUser as ProfileFormUser | null, authUser)
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { updateUser } = useAuthStore();
   const isSubmitting = navigation.state === "submitting";
@@ -322,6 +381,8 @@ export default function ProfileSettings() {
 
   const {
     register,
+    reset,
+    handleSubmit,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(profileSchema),
@@ -332,6 +393,52 @@ export default function ProfileSettings() {
       phoneNumber: loaderUser?.phoneNumber || "",
     },
   });
+
+  const firstNameField = register("firstName");
+  const lastNameField = register("lastName");
+  const emailField = register("email");
+  const handleProfileSubmit = handleSubmit((_, event) => {
+    const form = event?.currentTarget;
+    if (form instanceof HTMLFormElement) {
+      submit(form, { method: "post" });
+    }
+  });
+
+  useEffect(() => {
+    const latestUser = actionData?.success && actionData.user ? actionData.user : loaderUser;
+    if (!latestUser) {
+      return;
+    }
+
+    const nextValues = getProfileFormValues(latestUser as ProfileFormUser, authUser);
+
+    reset(nextValues);
+    setProfileFormValues(nextValues);
+  }, [actionData, loaderUser, authUser, reset]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    void usersApi.getCurrentUser().then((user) => {
+      if (!isActive) {
+        return;
+      }
+
+      const nextValues = getProfileFormValues(user as ProfileFormUser, authUser);
+      reset(nextValues);
+      setProfileFormValues(nextValues);
+      if (typeof user.profilePhotoUrl !== "undefined") {
+        setProfilePhotoUrl(user.profilePhotoUrl || null);
+      }
+      updateUser(user as any);
+    }).catch(() => {
+      // Keep loader data as the fallback source of truth if the refresh fails.
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [authUser, reset, updateUser]);
 
   if (!loaderUser) {
     return (
@@ -515,7 +622,7 @@ export default function ProfileSettings() {
             </Card>
 
             {/* Personal Information */}
-            <Form method="post">
+            <Form method="post" onSubmit={handleProfileSubmit}>
               <input type="hidden" name="intent" value="update-profile" />
               <Card>
                 <CardHeader>
@@ -529,12 +636,20 @@ export default function ProfileSettings() {
                           {t("settings.profileSettings.firstName")}
                         </label>
                         <input
-                          {...register("firstName")}
+                          {...firstNameField}
                           id="firstName"
                           name="firstName"
                           type="text"
                           maxLength={50}
                           disabled={isSubmitting}
+                          value={profileFormValues.firstName}
+                          onChange={(event) => {
+                            firstNameField.onChange(event);
+                            setProfileFormValues((current) => ({
+                              ...current,
+                              firstName: event.target.value,
+                            }));
+                          }}
                           className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                         />
                         {errors.firstName && (
@@ -549,12 +664,20 @@ export default function ProfileSettings() {
                           {t("settings.profileSettings.lastName")}
                         </label>
                         <input
-                          {...register("lastName")}
+                          {...lastNameField}
                           id="lastName"
                           name="lastName"
                           type="text"
                           maxLength={50}
                           disabled={isSubmitting}
+                          value={profileFormValues.lastName}
+                          onChange={(event) => {
+                            lastNameField.onChange(event);
+                            setProfileFormValues((current) => ({
+                              ...current,
+                              lastName: event.target.value,
+                            }));
+                          }}
                           className="w-full px-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                         />
                       </div>
@@ -567,12 +690,20 @@ export default function ProfileSettings() {
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                         <input
-                          {...register("email")}
+                          {...emailField}
                           id="email"
                           name="email"
                           type="email"
                           maxLength={320}
                           disabled={isSubmitting}
+                          value={profileFormValues.email}
+                          onChange={(event) => {
+                            emailField.onChange(event);
+                            setProfileFormValues((current) => ({
+                              ...current,
+                              email: event.target.value,
+                            }));
+                          }}
                           className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                         />
                       </div>
@@ -596,12 +727,18 @@ export default function ProfileSettings() {
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                         <input
-                          {...register("phoneNumber")}
                           id="phoneNumber"
                           name="phoneNumber"
                           type="tel"
                           maxLength={20}
                           disabled={isSubmitting}
+                          value={profileFormValues.phoneNumber}
+                          onChange={(event) => {
+                            setProfileFormValues((current) => ({
+                              ...current,
+                              phoneNumber: event.target.value,
+                            }));
+                          }}
                           className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring transition-colors"
                         />
                       </div>

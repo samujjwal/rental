@@ -5,6 +5,24 @@ import { api } from "~/lib/api-client";
 
 const STORAGE_KEY = "auth-storage";
 
+function normalizeUserShape<T extends Record<string, unknown> | null>(user: T) {
+  if (!user) {
+    return user;
+  }
+
+  const phoneNumber =
+    typeof user.phoneNumber === "string"
+      ? user.phoneNumber
+      : typeof user.phone === "string"
+        ? user.phone
+        : undefined;
+
+  return {
+    ...user,
+    ...(phoneNumber ? { phoneNumber } : {}),
+  };
+}
+
 const normalizeRole = (role?: string | null): User["role"] => {
   const normalized = String(role || "").toUpperCase();
   if (normalized === "HOST") return "owner";
@@ -70,7 +88,10 @@ function getInitialAuthSnapshot() {
     }
 
     return {
-      user: { ...storedUser, role: normalizeRole(storedUser.role) },
+      user: {
+        ...normalizeUserShape(storedUser),
+        role: normalizeRole(storedUser.role),
+      },
       accessToken: storedAccessToken,
       isInitialized: true,
       isLoading: false,
@@ -95,7 +116,10 @@ export const useAuthStore = create<AuthState>()(
       ...initialAuthSnapshot,
 
       setAuth: (user, accessToken) => {
-        const normalizedUser = { ...user, role: normalizeRole(user.role) };
+        const normalizedUser = {
+          ...normalizeUserShape(user),
+          role: normalizeRole(user.role),
+        };
         set({ user: normalizedUser, accessToken, isInitialized: true, isAuthenticated: true });
       },
 
@@ -117,8 +141,8 @@ export const useAuthStore = create<AuthState>()(
         set((state) => {
           const updatedUser = state.user
             ? {
-                ...state.user,
-                ...userData,
+                ...normalizeUserShape(state.user),
+                ...normalizeUserShape(userData as Record<string, unknown>),
                 role: normalizeRole(
                   (userData as Partial<User>).role ?? state.user?.role
                 ),
@@ -146,7 +170,7 @@ export const useAuthStore = create<AuthState>()(
 
           if (storedAccessToken && storedUser) {
             const normalizedUser = {
-              ...storedUser,
+              ...normalizeUserShape(storedUser),
               role: normalizeRole(storedUser.role),
             };
 
@@ -168,7 +192,10 @@ export const useAuthStore = create<AuthState>()(
                 }>("/auth/refresh", {});
 
                 set({
-                  user: { ...data.user, role: normalizeRole(data.user.role) },
+                  user: {
+                    ...normalizeUserShape(data.user as Record<string, unknown>),
+                    role: normalizeRole(data.user.role),
+                  },
                   accessToken: data.accessToken,
                   isInitialized: true,
                   isAuthenticated: true,

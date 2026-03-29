@@ -1,3 +1,20 @@
+function splitEnvList(rawValue: string | undefined, fallback: string[]): string[] {
+  if (!rawValue) {
+    return [...fallback];
+  }
+
+  const values = Array.from(
+    new Set(
+      rawValue
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
+
+  return values.length > 0 ? values : [...fallback];
+}
+
 export default () => ({
   port: parseInt(process.env.PORT || '3400', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -12,11 +29,11 @@ export default () => ({
 
   // Platform locale / i18n
   platform: {
-    country: process.env.PLATFORM_COUNTRY || 'NP',
+    country: process.env.PLATFORM_COUNTRY_CODE || process.env.PLATFORM_COUNTRY || 'NP',
     defaultLocale: process.env.DEFAULT_LOCALE || 'en',
-    supportedLocales: (process.env.SUPPORTED_LOCALES || 'en').split(','),
+    supportedLocales: splitEnvList(process.env.SUPPORTED_LOCALES, ['en', 'ne']),
     defaultCurrency: process.env.DEFAULT_CURRENCY || 'NPR',
-    supportedCurrencies: (process.env.SUPPORTED_CURRENCIES || 'NPR').split(','),
+    supportedCurrencies: splitEnvList(process.env.SUPPORTED_CURRENCIES, ['NPR', 'USD', 'INR']),
     defaultTimezone: process.env.DEFAULT_TIMEZONE || 'Asia/Kathmandu',
   },
 

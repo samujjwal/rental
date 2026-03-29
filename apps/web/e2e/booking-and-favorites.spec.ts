@@ -73,7 +73,12 @@ async function fillAndBook(
     'button:has-text("Check Dates")',
   ]);
 
-  await page.waitForTimeout(2000);
+  // Wait for availability check to complete
+  await expectAnyVisible(page, [
+    "text=/available|not available|Total|Subtotal/i",
+    'button:has-text("Book Instantly")',
+    'button:has-text("Request to Book")',
+  ], 8000);
 
   // Click book
   await clickFirstVisible(page, [
@@ -82,7 +87,7 @@ async function fillAndBook(
   ]);
 
   // Wait for navigation (checkout page or error)
-  await page.waitForTimeout(2000);
+  await page.waitForURL(/\/(checkout|bookings|error)/, { timeout: 5000 });
 }
 
 /**
@@ -144,7 +149,8 @@ test.describe("Full booking flow — from listing to /bookings list", () => {
     await dateInputs.nth(0).fill(START);
     await dateInputs.nth(1).fill(END);
     await clickFirstVisible(page, ['button:has-text("Check Availability")']);
-    await page.waitForTimeout(2000);
+    
+    // Wait for price breakdown to appear
     await expectAnyVisible(page, [
       "text=/Total|Subtotal|Daily Rate|Rental Amount/i",
     ], 6000);
@@ -158,7 +164,8 @@ test.describe("Full booking flow — from listing to /bookings list", () => {
     await dateInputs.nth(0).fill(START);
     await dateInputs.nth(1).fill(END);
     await clickFirstVisible(page, ['button:has-text("Check Availability")']);
-    await page.waitForTimeout(2000);
+    
+    // Wait for deposit information to appear
     await expectAnyVisible(page, ["text=/Deposit|Security/i"], 6000);
   });
 
@@ -578,7 +585,12 @@ test.describe("Favorites — add, view, navigate, remove (seeded listing)", () =
     if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) return;
 
     await addBtn.click();
-    await page.waitForTimeout(1500);
+    
+    // Wait for favorite to be added (button state change)
+    await expectAnyVisible(page, [
+      'button[aria-label="Remove from favorites"]',
+      "text=/added|saved/i",
+    ], 3000);
 
     await expectAnyVisible(page, [
       'button[aria-label="Remove from favorites"]',

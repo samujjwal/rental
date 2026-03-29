@@ -9,14 +9,14 @@
  *   import { APP_LOCALE, APP_CURRENCY } from "~/config/locale";
  */
 
-import {
-  DEFAULT_CURRENCY,
-  DEFAULT_LOCALE,
-  DEFAULT_MAP_CENTER,
-  DEFAULT_TIMEZONE,
-  PHONE_PLACEHOLDER as _PHONE_PLACEHOLDER,
-  PLATFORM_COUNTRY_CODE,
-} from "@rental-portal/shared-types";
+import * as sharedPlatform from "@rental-portal/shared-types";
+
+function resolveSharedValue<T>(
+  getter: (() => T) | undefined,
+  fallback: T,
+): T {
+  return typeof getter === "function" ? getter() : fallback;
+}
 
 // ─── Environment overrides (Vite injects these at build time) ────────────────
 
@@ -40,24 +40,36 @@ export const APP_LOCALE: string =
 
 /** ISO 4217 currency code */
 export const APP_CURRENCY: string =
-  getViteEnv('VITE_APP_CURRENCY') || DEFAULT_CURRENCY;
+  getViteEnv('VITE_APP_CURRENCY') ||
+  resolveSharedValue(sharedPlatform.getDefaultCurrency, sharedPlatform.DEFAULT_CURRENCY);
 
 /** ISO 3166-1 alpha-2 country code */
 export const APP_COUNTRY_CODE: string =
-  getViteEnv('VITE_APP_COUNTRY') || PLATFORM_COUNTRY_CODE;
+  getViteEnv('VITE_APP_COUNTRY') ||
+  resolveSharedValue(sharedPlatform.getPlatformCountryCode, sharedPlatform.PLATFORM_COUNTRY_CODE);
 
 /** IANA timezone */
 export const APP_TIMEZONE: string =
-  getViteEnv('VITE_APP_TIMEZONE') || DEFAULT_TIMEZONE;
+  getViteEnv('VITE_APP_TIMEZONE') ||
+  resolveSharedValue(sharedPlatform.getDefaultTimezone, sharedPlatform.DEFAULT_TIMEZONE);
 
 /** Default map center coordinates [lat, lng] */
-export const APP_MAP_CENTER: [number, number] = DEFAULT_MAP_CENTER;
+export const APP_MAP_CENTER: [number, number] = resolveSharedValue(
+  sharedPlatform.getDefaultMapCenter,
+  sharedPlatform.DEFAULT_MAP_CENTER,
+);
 
 /** Phone number placeholder shown in forms */
-export const APP_PHONE_PLACEHOLDER: string = _PHONE_PLACEHOLDER;
+export const APP_PHONE_PLACEHOLDER: string = resolveSharedValue(
+  sharedPlatform.getPhonePlaceholder,
+  sharedPlatform.PHONE_PLACEHOLDER,
+);
 
 /** Shorthand ISO locale tag for the web app (e.g. "en") */
-export const APP_SHORT_LOCALE: string = DEFAULT_LOCALE;
+export const APP_SHORT_LOCALE: string = resolveSharedValue(
+  sharedPlatform.getDefaultLocale,
+  sharedPlatform.DEFAULT_LOCALE,
+);
 
 /** Short BCP 47 lang tag for <html lang> (env-overridable) */
 export const APP_LANG: string =
