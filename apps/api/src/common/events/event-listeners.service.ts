@@ -223,7 +223,7 @@ export class EventListeners {
   async handleListingCreated(payload: ListingCreatedEvent) {
     this.logger.log(`Listing created: ${payload.listingId}`);
 
-    // Index in Elasticsearch
+    // Index in search queue (PostgreSQL full-text search)
     await this.searchQueue.add('index-listing', {
       listingId: payload.listingId,
       operation: 'index',
@@ -244,7 +244,7 @@ export class EventListeners {
   async handleListingUpdated(payload: ListingUpdatedEvent) {
     this.logger.log(`Listing updated: ${payload.listingId}`);
 
-    // Reindex in Elasticsearch
+    // Reindex in search queue (PostgreSQL full-text search)
     await this.searchQueue.add('index-listing', {
       listingId: payload.listingId,
       operation: 'update',
@@ -255,7 +255,7 @@ export class EventListeners {
   async handleListingDeleted(payload: { listingId: string; ownerId: string }) {
     this.logger.log(`Listing deleted: ${payload.listingId}`);
 
-    // Remove from Elasticsearch
+    // Remove from search index (PostgreSQL full-text search)
     await this.searchQueue.add('index-listing', {
       listingId: payload.listingId,
       operation: 'delete',

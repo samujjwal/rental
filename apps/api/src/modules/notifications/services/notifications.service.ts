@@ -10,6 +10,7 @@ import { escapeHtml } from '@/common/utils/sanitize';
 import { PushNotificationService } from './push-notification.service';
 import { EmailService } from './resend.service';
 import { SmsService } from './twilio.service';
+import * as crypto from 'crypto';
 
 type NotificationPayload = Record<string, any>;
 type NormalizedNotification = Omit<Notification, 'data'> & {
@@ -25,6 +26,7 @@ export interface SendNotificationDto {
   channels?: ('EMAIL' | 'SMS' | 'PUSH' | 'IN_APP')[];
   priority?: 'LOW' | 'NORMAL' | 'HIGH';
   scheduledFor?: Date;
+  idempotencyKey?: string;
 }
 
 export interface NotificationPreferences {
@@ -52,6 +54,56 @@ export class NotificationsService {
     @InjectQueue('notifications') private readonly notificationsQueue: Queue,
   ) {}
 
+  /**
+   * Generate an idempotency key from notification content.
+   * Creates a hash of userId + type + title + message + key data fields.
+   */
+  private generateIdempotencyKey(dto: SendNotificationDto): string {
+    const { userId, type, title, message, data } = dto;
+    
+    // Extract key identifying fields from data that make this notification unique
+    const keyFields = {
+      userId,
+      type,
+      title,
+      message,
+      // Include key entity IDs from data if present
+      bookingId: data?.bookingId,
+      listingId: data?.listingId,
+      reviewId: data?.reviewId,
+      disputeId: data?.disputeId,
+      paymentId: data?.paymentId,
+      messageId: data?.messageId,
+    };
+    
+    const content = JSON.stringify(keyFields);
+    return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
+  /**
+   * Check if a notification with the given idempotency key already exists.
+   * Returns the existing notification if found, null otherwise.
+   */
+  private async findExistingNotification(
+    idempotencyKey: string,
+    windowMs: number = 24 * 60 * 60 * 1000 // 24 hours default
+  ): Promise<NormalizedNotification | null> {
+    const since = new Date(Date.now() - windowMs);
+    
+    const existing = await this.prisma.notification.findUnique({
+      where: { idempotencyKey },
+    });
+    
+    if (existing && existing.createdAt >= since) {
+      this.logger.debug(
+        `Duplicate notification detected (key: ${idempotencyKey.substring(0, 16)}...), returning existing ${existing.id}`
+      );
+      return this.normalizeNotification(existing);
+    }
+    
+    return null;
+  }
+
   private parseNotificationData(raw: unknown): NotificationPayload | null {
     if (!raw) {
       return null;
@@ -77,7 +129,8 @@ export class NotificationsService {
   }
 
   /**
-   * Send a notification through specified channels
+   * Send a notification through specified channels with idempotency support.
+   * If a notification with the same idempotency key exists (within 24h), returns the existing notification.
    */
   async sendNotification(dto: SendNotificationDto): Promise<NormalizedNotification> {
     const {
@@ -89,7 +142,17 @@ export class NotificationsService {
       channels = ['IN_APP'],
       priority = 'NORMAL',
       scheduledFor,
+      idempotencyKey: providedKey,
     } = dto;
+
+    // Generate or use provided idempotency key
+    const idempotencyKey = providedKey || this.generateIdempotencyKey(dto);
+
+    // Check for existing notification (idempotency check)
+    const existing = await this.findExistingNotification(idempotencyKey);
+    if (existing) {
+      return existing;
+    }
 
     // Get user preferences
     const user = await this.prisma.user.findUnique({
@@ -104,7 +167,7 @@ export class NotificationsService {
     // Parse preferences
     const preferences = this.parsePreferences(user.userPreferences?.preferences);
 
-    // Create notification record
+    // Create notification record with idempotency key
     const payload = { ...data, priority, scheduledFor };
     const notification = await this.prisma.notification.create({
       data: {
@@ -113,6 +176,7 @@ export class NotificationsService {
         title,
         message,
         data: JSON.stringify(payload),
+        idempotencyKey,
       },
     });
     const normalizedNotification = this.normalizeNotification(notification);

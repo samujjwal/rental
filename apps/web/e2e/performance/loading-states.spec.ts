@@ -128,8 +128,8 @@ test.describe('Performance & Loading States', () => {
         if (await loadingIndicator.isVisible({ timeout: 2000 })) {
           await expect(loadingIndicator).toBeVisible();
           
-          // Wait for more content
-          await page.waitForTimeout(2000);
+          // Wait for more content using network idle
+          await page.waitForLoadState('networkidle');
           
           // Check if more listings loaded
           const newListings = page.locator('[data-testid="listing-card"]');
@@ -156,8 +156,8 @@ test.describe('Performance & Loading States', () => {
           // Scroll to top to load older messages
           await page.evaluate(() => window.scrollTo(0, 0));
           
-          // Wait for loading
-          await page.waitForTimeout(1000);
+          // Wait for loading using network idle
+          await page.waitForLoadState('domcontentloaded');
           
           // Check if older messages loaded
           const olderMessages = page.locator('[data-testid="message"]');
@@ -179,8 +179,8 @@ test.describe('Performance & Loading States', () => {
         // Scroll to bottom
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         
-        // Wait for more bookings
-        await page.waitForTimeout(2000);
+        // Wait for more bookings using network idle
+        await page.waitForLoadState('networkidle');
         
         // Check if more bookings loaded
         const newBookings = page.locator('[data-testid="booking-card"]');
@@ -247,8 +247,8 @@ test.describe('Performance & Loading States', () => {
           // Scroll to trigger loading
           await lazyComponents.first().scrollIntoViewIfNeeded();
           
-          // Wait for component to load
-          await page.waitForTimeout(2000);
+          // Wait for component to load using network idle
+          await page.waitForLoadState('networkidle');
           
           // Check if actual content loaded
           const content = lazyComponents.first().locator('[data-testid="content"]');
@@ -316,8 +316,8 @@ test.describe('Performance & Loading States', () => {
           await page.unroute('**/api/bookings*');
           await retryButton.click();
           
-          // Wait for recovery
-          await page.waitForTimeout(2000);
+          // Wait for recovery using network idle
+          await page.waitForLoadState('networkidle');
           
           // Check if error is resolved
           await expect(errorBoundary).not.toBeVisible();

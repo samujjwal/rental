@@ -607,7 +607,8 @@ test.describe("Favorites — add, view, navigate, remove (seeded listing)", () =
     const addBtn = page.locator('button[aria-label="Add to favorites"]');
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click();
-      await page.waitForTimeout(1500);
+      // Wait for favorite state to update using selector
+      await expect(page.locator('button[aria-label="Remove from favorites"]')).toBeVisible({ timeout: 5000 });
     }
 
     // Navigate to favorites
@@ -628,7 +629,8 @@ test.describe("Favorites — add, view, navigate, remove (seeded listing)", () =
     const addBtn = page.locator('button[aria-label="Add to favorites"]');
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click();
-      await page.waitForTimeout(1000);
+      // Wait for favorite state to update
+      await expect(page.locator('button[aria-label="Remove from favorites"]')).toBeVisible({ timeout: 5000 });
     }
 
     await page.goto("/favorites");
@@ -653,7 +655,8 @@ test.describe("Favorites — add, view, navigate, remove (seeded listing)", () =
     const addBtn = page.locator('button[aria-label="Add to favorites"]');
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click();
-      await page.waitForTimeout(1200);
+      // Wait for favorite state to update
+      await expect(page.locator('button[aria-label="Remove from favorites"]')).toBeVisible({ timeout: 5000 });
     }
 
     await page.goto("/favorites");
@@ -664,7 +667,8 @@ test.describe("Favorites — add, view, navigate, remove (seeded listing)", () =
 
     const before = await page.locator('a[href^="/listings/"]').count();
     await removeBtn.click();
-    await page.waitForTimeout(1500);
+    // Wait for removal to complete using selector
+    await expect(page.locator('button[aria-label="Add to favorites"]')).toBeVisible({ timeout: 5000 });
 
     const after = await page.locator('a[href^="/listings/"]').count();
     expect(after).toBeLessThanOrEqual(before);
@@ -717,7 +721,8 @@ test.describe("Favorites — add, view, navigate, remove (seeded listing)", () =
     const addBtn1 = page.locator('button[aria-label="Add to favorites"]');
     if (await addBtn1.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn1.click();
-      await page.waitForTimeout(1000);
+      // Wait for favorite state to update
+      await expect(page.locator('button[aria-label="Remove from favorites"]')).toBeVisible({ timeout: 5000 });
     }
 
     // Navigate away and back — can't click add again if already favorited
@@ -817,7 +822,8 @@ test.describe("Favorites — multiple favorited listings", () => {
       const addBtn = page.locator('button[aria-label="Add to favorites"]');
       if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await addBtn.click();
-        await page.waitForTimeout(800);
+        // Wait for favorite state to update
+        await expect(page.locator('button[aria-label="Remove from favorites"]')).toBeVisible({ timeout: 5000 });
       }
     }
 
@@ -829,7 +835,8 @@ test.describe("Favorites — multiple favorited listings", () => {
     if (!(await removeBtn.isVisible({ timeout: 3000 }).catch(() => false))) return;
 
     await removeBtn.click();
-    await page.waitForTimeout(1500);
+    // Wait for removal to complete
+    await expect(page.locator('button[aria-label="Add to favorites"]')).toBeVisible({ timeout: 5000 });
 
     const after = await page.locator('a[href^="/listings/"]').count();
     if (before > 0) {
@@ -848,8 +855,11 @@ test.describe("Favorites — multiple favorited listings", () => {
     if (!await searchInput.isVisible().catch(() => false)) return;
 
     await searchInput.fill("[E2E]");
-    await page.waitForTimeout(800);
-    // Should either show results or empty state
+    // Wait for search results or empty state
+    await expectAnyVisible(page, [
+      'a[href^="/listings/"]',
+      "text=/no results|nothing found|no favorites/i",
+    ]);
     await expectAnyVisible(page, [
       'a[href^="/listings/"]',
       "text=/no results|nothing found|no favorites/i",
@@ -930,12 +940,18 @@ test.describe("Viewing booked items — based on UI-created booking", () => {
       await dateInputs.nth(1).fill(futureDate(43));
     }
     await clickFirstVisible(page, ['button:has-text("Check Availability")']);
-    await page.waitForTimeout(2000);
+    // Wait for availability check to complete
+    await expectAnyVisible(page, [
+      'button:has-text("Book Instantly")',
+      'button:has-text("Request to Book")',
+      "text=/available|not available/i",
+    ], 5000);
     await clickFirstVisible(page, [
       'button:has-text("Book Instantly")',
       'button:has-text("Request to Book")',
     ]);
-    await page.waitForTimeout(2000);
+    // Wait for booking to complete
+    await expect(page).toHaveURL(/\/(checkout|bookings|error)/, { timeout: 5000 });
 
     // Navigate to bookings
     await page.goto("/bookings");

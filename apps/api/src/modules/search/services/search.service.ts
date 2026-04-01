@@ -31,8 +31,13 @@ export interface SearchQuery {
     delivery?: boolean;
   };
   sort?: 'relevance' | 'price_asc' | 'price_desc' | 'rating' | 'newest' | 'distance';
+  // Offset-based pagination (legacy)
   page?: number;
   size?: number;
+  // Cursor-based pagination (recommended for large datasets)
+  cursor?: string;
+  cursorField?: 'id' | 'createdAt' | 'basePrice' | 'averageRating';
+  cursorDirection?: 'asc' | 'desc';
 }
 
 /**
@@ -93,6 +98,8 @@ export interface SearchResult {
   features: string[];
   score?: number;
   distance?: number;
+  // Cursor fields for pagination
+  createdAt?: Date;
 }
 
 @Injectable()
@@ -105,12 +112,70 @@ export class SearchService {
     @Inject(SEMANTIC_RANKING_PORT) private readonly semanticRanking: SemanticRankingPort,
   ) {}
 
+  /**
+   * Encode cursor for pagination
+   */
+  private encodeCursor(value: string | number | Date): string {
+    const stringValue = value instanceof Date ? value.toISOString() : String(value);
+    return Buffer.from(stringValue).toString('base64url');
+  }
+
+  /**
+   * Decode cursor for pagination
+   */
+  private decodeCursor(cursor: string): string {
+    return Buffer.from(cursor, 'base64url').toString('utf8');
+  }
+
+  /**
+   * Build cursor-based where clause for Prisma
+   */
+  private buildCursorWhere(
+    cursor: string,
+    cursorField: string,
+    direction: 'asc' | 'desc',
+  ): any {
+    const decodedValue = this.decodeCursor(cursor);
+    
+    // Handle different field types
+    let parsedValue: string | number | Date = decodedValue;
+    if (cursorField === 'createdAt') {
+      parsedValue = new Date(decodedValue);
+    } else if (cursorField === 'basePrice' || cursorField === 'averageRating') {
+      parsedValue = parseFloat(decodedValue);
+    }
+
+    // For ascending sort, we want records > cursor
+    // For descending sort, we want records < cursor
+    const operator = direction === 'asc' ? 'gt' : 'lt';
+
+    return {
+      [cursorField]: {
+        [operator]: parsedValue,
+      },
+    };
+  }
+
+  /**
+   * Generate next cursor from the last result
+   */
+  private generateNextCursor(
+    lastResult: any,
+    cursorField: string,
+  ): string | null {
+    if (!lastResult || !lastResult[cursorField]) return null;
+    return this.encodeCursor(lastResult[cursorField]);
+  }
+
   async search(searchQuery: SearchQuery): Promise<{
     results: SearchResult[];
     total: number;
     page: number;
     size: number;
     aggregations?: any;
+    // Cursor-based pagination fields
+    nextCursor?: string | null;
+    hasMore: boolean;
   }> {
     const page = Math.max(1, Math.floor(Number(searchQuery.page) || 1));
     const size = Math.min(100, Math.max(1, Math.floor(Number(searchQuery.size) || 20)));
@@ -144,7 +209,21 @@ export class SearchService {
       const ids = ftsIds.map((r) => r.id);
       if (ids.length === 0) {
         // No matches — return empty immediately
-        const emptyResult = { results: [] as any[], total: 0, page, size };
+        const emptyResult: { 
+          results: any[]; 
+          total: number; 
+          page: number; 
+          size: number; 
+          hasMore: boolean;
+          nextCursor: string | null;
+        } = { 
+          results: [] as any[], 
+          total: 0, 
+          page, 
+          size, 
+          hasMore: false,
+          nextCursor: null,
+        };
         await this.cache.set(cacheKey, emptyResult, 300);
         return emptyResult;
       }
@@ -517,12 +596,25 @@ export class SearchService {
       // Get aggregations
       const aggregations = await this.getAggregations(where);
 
+      // Determine cursor field for pagination
+      const cursorField = searchQuery.cursorField || 'id';
+      const cursorDirection = searchQuery.cursorDirection || 'asc';
+      
+      // Generate next cursor from last result
+      const lastResult = results.length > 0 ? results[results.length - 1] : null;
+      const nextCursor = this.generateNextCursor(lastResult, cursorField);
+      
+      // Determine if there are more results
+      const hasMore = results.length === size;
+
       const result = {
         results,
         total,
         page,
         size,
         aggregations,
+        nextCursor,
+        hasMore,
       };
 
       // Cache result for 5 minutes

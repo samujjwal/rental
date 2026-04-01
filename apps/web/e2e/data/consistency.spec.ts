@@ -62,9 +62,11 @@ test.describe('Data Consistency & Synchronization', () => {
           
           await Promise.all([booking1Promise, booking2Promise]);
           
-          // Wait for results
-          await renter1Page.waitForTimeout(2000);
-          await renter2Page.waitForTimeout(2000);
+          // Wait for results using explicit selectors instead of timeout
+          await Promise.race([
+            expect(renter1Page.locator('text=/booking.*requested|confirmed|unavailable|error/i').first()).toBeVisible({ timeout: 5000 }),
+            expect(renter2Page.locator('text=/booking.*requested|confirmed|unavailable|error/i').first()).toBeVisible({ timeout: 5000 })
+          ]);
           
           // Verify only one booking succeeded
           const booking1Success = renter1Page.locator('text=/booking.*requested|confirmed/i');
@@ -172,9 +174,11 @@ test.describe('Data Consistency & Synchronization', () => {
 
       await Promise.all([update1Promise, update2Promise]);
 
-      // Wait for processing — both save attempts complete
-      await owner1Page.waitForTimeout(2000);
-      await owner2Page.waitForTimeout(2000);
+      // Wait for processing using network idle instead of fixed timeout
+      await Promise.all([
+        owner1Page.waitForLoadState('networkidle'),
+        owner2Page.waitForLoadState('networkidle')
+      ]);
 
       // Verify the listing still exists and is accessible (integrity check)
       const verifyRes = await owner1Page.request.get(`${API}/listings/${listingId}`, {
@@ -220,9 +224,9 @@ test.describe('Data Consistency & Synchronization', () => {
         
         await Promise.all([send1Promise, send2Promise]);
         
-        // Wait for messages to appear
-        await user1Page.waitForTimeout(2000);
-        await user2Page.waitForTimeout(2000);
+        // Wait for messages to appear using selector
+        await expect(user1Page.locator('[data-testid="message"]')
+          .filter({ hasText: message1 })).toBeVisible({ timeout: 5000 });
         
         // Verify both messages appear in correct order
         const messages = user1Page.locator('[data-testid="message"]');
@@ -259,14 +263,14 @@ test.describe('Data Consistency & Synchronization', () => {
           const favoriteButton = page.locator('[data-testid="favorite-button"]');
           
           if (await favoriteButton.isVisible()) {
-            // Rapidly click favorite/unfavorite
+            // Rapidly click favorite/unfavorite with small delay for UI update
             for (let i = 0; i < 10; i++) {
               await favoriteButton.click();
-              await page.waitForTimeout(50);
+              await expect(favoriteButton).toHaveAttribute('aria-pressed', /true|false/);
             }
             
-            // Wait for all operations to complete
-            await page.waitForTimeout(2000);
+            // Wait for all operations to complete - use network idle
+            await page.waitForLoadState('networkidle');
             
             // Verify final state is consistent
             const isFavorited = await favoriteButton.getAttribute('aria-pressed');
@@ -349,8 +353,9 @@ test.describe('Data Consistency & Synchronization', () => {
         // Double-click submit button rapidly to test race condition prevention
         await submitButton.dblclick();
         
-        // Wait for processing
-        await page.waitForTimeout(3000);
+        // Wait for processing using navigation and network idle
+        await page.waitForURL(/\/listings\/([^/]+)/, { timeout: 5000 });
+        await page.waitForLoadState('networkidle');
         
         // Verify only one listing was created — check via URL redirect
         const url = page.url();
@@ -399,12 +404,12 @@ test.describe('Data Consistency & Synchronization', () => {
       await profilePage.fill('input[name="firstName"]', newFirstName);
       await profilePage.locator('button[type="submit"]').first().click();
       
-      // Wait for update
-      await profilePage.waitForTimeout(2000);
+      // Wait for update using network idle instead of fixed timeout
+      await profilePage.waitForLoadState('networkidle');
       
       // Check if dashboard reflects the change
       await dashboardPage.goto('/dashboard');
-      await dashboardPage.waitForTimeout(1000);
+      await dashboardPage.waitForLoadState('domcontentloaded');
       
       const profileName = dashboardPage.locator('[data-testid="user-name"]');
       if (await profileName.isVisible()) {
@@ -434,12 +439,12 @@ test.describe('Data Consistency & Synchronization', () => {
         await ownerPage.locator('button:has-text("Approve")').click();
         await ownerPage.locator('button:has-text("Confirm")').click();
         
-        // Wait for processing
-        await ownerPage.waitForTimeout(2000);
+        // Wait for processing using network idle
+        await ownerPage.waitForLoadState('networkidle');
         
         // Check if renter sees the update
         await renterPage.goto('/bookings');
-        await renterPage.waitForTimeout(1000);
+        await renterPage.waitForLoadState('domcontentloaded');
         
         const bookingStatus = renterPage.locator('[data-testid="booking-status"]');
         if (await bookingStatus.isVisible()) {
@@ -475,12 +480,13 @@ test.describe('Data Consistency & Synchronization', () => {
         await senderPage.fill('textarea', testMessage);
         await senderPage.locator('button:has-text("Send")').click();
         
-        // Wait for message to appear
-        await senderPage.waitForTimeout(2000);
+        // Wait for message to appear using selector
+        await expect(senderPage.locator('[data-testid="message"]')
+          .filter({ hasText: testMessage })).toBeVisible({ timeout: 5000 });
         
         // Check if receiver sees the message
         await receiverPage.locator('[data-testid="conversation"]').first().click();
-        await receiverPage.waitForTimeout(1000);
+        await receiverPage.waitForLoadState('domcontentloaded');
         
         const messages = receiverPage.locator('[data-testid="message"]');
         const messageTexts = await messages.allTextContents();
@@ -518,8 +524,8 @@ test.describe('Data Consistency & Synchronization', () => {
           await page.fill('input[name="title"]', newTitle);
           await page.locator('button[type="submit"]').first().click();
           
-          // Wait for update
-          await page.waitForTimeout(2000);
+          // Wait for update using network idle
+          await page.waitForLoadState('networkidle');
           
           // Go back to listing page
           await page.goto(`/listings/${listingId}`);
@@ -550,8 +556,8 @@ test.describe('Data Consistency & Synchronization', () => {
       // settings/profile has multiple submit buttons (Save Changes, Update Password, Delete Account)
       await page.locator('button[type="submit"]').first().click();
       
-      // Wait for update
-      await page.waitForTimeout(2000);
+      // Wait for update using network idle
+      await page.waitForLoadState('networkidle');
       
       // Check profile again
       await page.goto('/profile/me');
@@ -592,8 +598,8 @@ test.describe('Data Consistency & Synchronization', () => {
         }
       }
       
-      // Verify search results load (search infrastructure is working)
-      await page.waitForTimeout(2000);
+      // Verify search results load using selector instead of timeout
+      await expect(page.locator('a[href^="/listings/"]').first()).toBeVisible({ timeout: 5000 });
       const listingLinks = page.locator('a[href^="/listings/"]');
       const resultCount = await listingLinks.count();
       
@@ -627,8 +633,8 @@ test.describe('Data Consistency & Synchronization', () => {
           // Submit booking
           await page.locator('button:has-text("Request to Book")').click();
           
-          // Wait for processing
-          await page.waitForTimeout(3000);
+          // Wait for processing using success indicator
+          await expect(page.locator('text=/booking.*requested|confirmed/i')).toBeVisible({ timeout: 5000 });
           
           // Verify booking was created completely
           const bookingSuccess = page.locator('text=/booking.*requested|confirmed/i');
@@ -683,8 +689,8 @@ test.describe('Data Consistency & Synchronization', () => {
           // Submit payment
           await page.locator('button[type="submit"]').first().click();
           
-          // Wait for processing
-          await page.waitForTimeout(3000);
+          // Wait for processing using success indicator
+          await expect(page.locator('text=/payment.*successful|paid/i')).toBeVisible({ timeout: 5000 });
           
           // Verify payment was processed completely
           const paymentSuccess = page.locator('text=/payment.*successful|paid/i');
@@ -725,8 +731,8 @@ test.describe('Data Consistency & Synchronization', () => {
           // Submit review
           await page.locator('button[type="submit"]').first().click();
           
-          // Wait for processing
-          await page.waitForTimeout(2000);
+          // Wait for processing using success indicator
+          await expect(page.locator('text=/review.*submitted|thank you/i')).toBeVisible({ timeout: 5000 });
           
           // Verify review was submitted completely
           const reviewSuccess = page.locator('text=/review.*submitted|thank you/i');

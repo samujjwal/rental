@@ -513,7 +513,8 @@ export async function stableFill(
       if (!/detached|not attached|Target closed/i.test(message)) {
         throw error;
       }
-      await page.waitForTimeout(150);
+      // Use small delay for retry backoff
+      await new Promise(resolve => setTimeout(resolve, 150));
     }
   }
 
@@ -655,7 +656,8 @@ export async function isAnyVisible(
         return true;
       }
     }
-    await page.waitForTimeout(120);
+    // Use small delay between polling iterations
+    await new Promise(resolve => setTimeout(resolve, 120));
   }
 
   return false;
@@ -707,7 +709,8 @@ export async function clickFirstVisible(
         }
       }
     }
-    await page.waitForTimeout(120);
+    // Use small delay between polling iterations
+    await new Promise(resolve => setTimeout(resolve, 120));
   }
 
   return false;

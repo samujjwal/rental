@@ -56,8 +56,8 @@ test.describe('Advanced User Interactions', () => {
         }
       });
 
-      // Wait for potential WebSocket notification
-      await page.waitForTimeout(2000);
+      // Wait for potential WebSocket notification using response monitoring
+      await page.waitForLoadState('networkidle');
 
       // Verify notification UI appears
       const notificationBadge = page.locator('[data-testid="notification-badge"]');
@@ -393,7 +393,7 @@ test.describe('Advanced User Interactions', () => {
             await nextButton.click();
             
             // Wait for step transition
-            await page.waitForTimeout(1000);
+            await page.waitForLoadState('domcontentloaded');
           }
         }
       }
@@ -439,8 +439,8 @@ test.describe('Advanced User Interactions', () => {
       // Start filling form
       await page.fill('input[name="title"]', 'Auto-save Test Listing');
       
-      // Wait for auto-save
-      await page.waitForTimeout(2000);
+      // Wait for more content using network idle
+      await page.waitForLoadState('networkidle');
       
       // Check for save indicator
       const saveIndicator = page.locator('[data-testid="auto-save-indicator"]');

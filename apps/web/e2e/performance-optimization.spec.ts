@@ -53,8 +53,8 @@ test.describe('Performance & Optimization', () => {
       el.scrollTop = el.scrollHeight;
     });
     
-    // Wait a moment for handler
-    await page.waitForTimeout(100);
+    // Wait a moment for handler using network idle
+    await page.waitForLoadState('domcontentloaded');
     
     // Scroll back up
     await page.locator('[data-testid="listing-grid"]').evaluate((el) => {
@@ -186,8 +186,8 @@ test.describe('Performance & Optimization', () => {
       el.scrollTop = el.scrollHeight;
     });
     
-    // Wait for new items to load
-    await page.waitForTimeout(500);
+    // Wait for new items to load using network idle
+    await page.waitForLoadState('networkidle');
     
     // Get new count
     const newCount = await page
@@ -243,7 +243,8 @@ test.describe('Performance & Optimization', () => {
       const metrics = await page.metrics();
       memoryReadings.push(metrics.JSHeapUsedSize);
       
-      await page.waitForTimeout(200);
+      // Small delay between measurements using network idle
+      await page.waitForLoadState('domcontentloaded');
     }
     
     // Memory should stabilize (not continuously increase)

@@ -296,7 +296,8 @@ async function waitForBookingStatus(page: Page, currentBookingId: string, expect
       }
     }
 
-    await page.waitForTimeout(1000);
+    // Wait for response using network idle
+    await page.waitForLoadState('networkidle');
   }
 
   throw new Error(`Booking ${currentBookingId} did not reach ${expectedStatus}`);
@@ -317,7 +318,8 @@ async function waitForConditionReport(page: Page, currentBookingId: string, repo
       }
     }
 
-    await page.waitForTimeout(1000);
+    // Wait for response using network idle
+    await page.waitForLoadState('networkidle');
   }
 
   throw new Error(`Booking ${currentBookingId} did not expose condition report ${reportType}`);
@@ -350,7 +352,8 @@ async function saveConditionReport(
     if (sectionVisible) {
       break;
     }
-    await page.waitForTimeout(1000);
+    // Wait for section to appear using network idle
+    await page.waitForLoadState('domcontentloaded');
     await page.reload({ waitUntil: "domcontentloaded" });
   }
 

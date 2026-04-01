@@ -81,7 +81,9 @@ test.describe("Visual Regression — Public Pages", () => {
     await page.goto(`${BASE_URL}/auth/login`, {
       waitUntil: "networkidle",
     });
-    await page.waitForTimeout(500); // allow animations to settle
+    // Wait for animations to settle using requestAnimationFrame
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    await page.waitForLoadState("load");
 
     await expect(page).toHaveScreenshot("login-page.png", {
       ...screenshotOpts,
@@ -93,7 +95,8 @@ test.describe("Visual Regression — Public Pages", () => {
     await page.goto(`${BASE_URL}/auth/register`, {
       waitUntil: "networkidle",
     });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     await expect(page).toHaveScreenshot("signup-page.png", {
       ...screenshotOpts,
@@ -103,7 +106,8 @@ test.describe("Visual Regression — Public Pages", () => {
 
   test("home / landing page", async ({ page }) => {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     await expect(page).toHaveScreenshot("home-page.png", {
       ...screenshotOpts,
@@ -123,7 +127,8 @@ test.describe("Visual Regression — Authenticated (Renter)", () => {
 
   test("dashboard", async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     // Mask dynamic content like dates, counts
     const dynamicElements = page.locator(
@@ -139,7 +144,9 @@ test.describe("Visual Regression — Authenticated (Renter)", () => {
 
   test("listings browse", async ({ page }) => {
     await page.goto(`${BASE_URL}/listings`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(1000); // wait for listing cards to load
+    // Wait for listing cards to load
+    await expect(page.locator('[data-testid="listing-card"], .listing-card, a[href^="/listings/"]').first())
+      .toBeVisible({ timeout: 5000 });
 
     await expect(page).toHaveScreenshot("listings-browse.png", {
       ...screenshotOpts,
@@ -149,7 +156,8 @@ test.describe("Visual Regression — Authenticated (Renter)", () => {
 
   test("bookings list", async ({ page }) => {
     await page.goto(`${BASE_URL}/bookings`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     await expect(page).toHaveScreenshot("renter-bookings.png", {
       ...screenshotOpts,
@@ -165,7 +173,8 @@ test.describe("Visual Regression — Authenticated (Owner)", () => {
 
   test("owner dashboard", async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     const dynamicElements = page.locator(
       '[data-testid*="count"], [data-testid*="date"], time, [data-testid*="earnings"]'
@@ -182,7 +191,8 @@ test.describe("Visual Regression — Authenticated (Owner)", () => {
     await page.goto(`${BASE_URL}/owner/listings`, {
       waitUntil: "networkidle",
     });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     await expect(page).toHaveScreenshot("owner-listings.png", {
       ...screenshotOpts,
@@ -198,7 +208,8 @@ test.describe("Visual Regression — Admin", () => {
 
   test("admin dashboard", async ({ page }) => {
     await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     const dynamicElements = page.locator(
       '[data-testid*="count"], [data-testid*="stat"], time'
@@ -223,7 +234,8 @@ test.describe("Visual Regression — Mobile Viewport", () => {
     await page.goto(`${BASE_URL}/auth/login`, {
       waitUntil: "networkidle",
     });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     await expect(page).toHaveScreenshot("login-page-mobile.png", {
       ...screenshotOpts,
@@ -233,7 +245,8 @@ test.describe("Visual Regression — Mobile Viewport", () => {
 
   test("home page (mobile)", async ({ page }) => {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+    // Wait for animations to settle
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 
     await expect(page).toHaveScreenshot("home-page-mobile.png", {
       ...screenshotOpts,

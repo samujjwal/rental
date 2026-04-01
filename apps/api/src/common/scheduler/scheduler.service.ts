@@ -502,7 +502,7 @@ export class SchedulerService implements OnModuleDestroy {
   }
 
   /**
-   * Reindex Elasticsearch (daily at 2 AM)
+   * Reindex search engine (daily at 2 AM) - PostgreSQL full-text search
    */
   @Cron('0 2 * * *')
   async reindexSearchEngine() {
