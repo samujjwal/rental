@@ -36,6 +36,8 @@ import {
 import { PortalPageLayout } from "~/components/layout";
 import { RecentActivity } from "~/components/dashboard/RecentActivity";
 import { DashboardCustomizer } from "~/components/dashboard/DashboardCustomizer";
+import { CoordinatedDashboardLoader, DashboardSkeletonGrid } from "~/components/dashboard/CoordinatedLoading";
+import { Suspense } from "react";
 import { cn } from "~/lib/utils";
 import { formatCurrency } from "~/lib/utils";
 import { ownerNavSections } from "~/config/navigation";
@@ -75,9 +77,9 @@ const getOwnerDashboardLoadError = (
 ): string => {
   const responseMessage =
     error &&
-    typeof error === "object" &&
-    "response" in error &&
-    typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+      typeof error === "object" &&
+      "response" in error &&
+      typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
       ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
       : null;
 
@@ -146,14 +148,14 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
       .map((r, i) =>
         r.status === "rejected"
           ? [
-              "listings",
-              "bookings",
-              "earnings",
-              "stats",
-              "notifications",
-              "messages",
-              "insurance",
-            ][i]
+            "listings",
+            "bookings",
+            "earnings",
+            "stats",
+            "notifications",
+            "messages",
+            "insurance",
+          ][i]
           : null
       )
       .filter(Boolean) as string[];

@@ -33,7 +33,8 @@ describe('BaseMap', () => {
   it('uses default center when none provided', () => {
     render(<BaseMap />);
     const container = screen.getByTestId('map-container');
-    expect(container.dataset.center).toContain('0');
+    // Default center is Nepal coordinates from APP_MAP_CENTER
+    expect(container.dataset.center).toContain('27.7');
   });
 
   it('uses custom center', () => {

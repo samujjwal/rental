@@ -19,6 +19,7 @@ vi.mock("react-router", () => ({
   useActionData: () => mocks.useActionData(),
   useNavigation: () => mocks.useNavigation(),
   useNavigate: () => mocks.useNavigate(),
+  useSubmit: () => vi.fn(),
   redirect: mocks.redirect,
   Form: ({ children, ...p }: any) => <form {...p}>{children}</form>,
   Link: ({ children, to, ...p }: any) => <a href={to} {...p}>{children}</a>,

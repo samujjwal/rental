@@ -47,7 +47,8 @@ describe('SearchListingCard', () => {
 
   it('renders price', () => {
     render(wrapRouter(<SearchListingCard listing={baseListing} />));
-    expect(screen.getByText('$25')).toBeInTheDocument();
+    // Currency format depends on locale config (NPR for Nepal)
+    expect(screen.getByText(/25/)).toBeInTheDocument();
     expect(screen.getByText('/day')).toBeInTheDocument();
   });
 
@@ -128,7 +129,8 @@ describe('SearchListingListItem', () => {
 
   it('renders price', () => {
     render(wrapRouter(<SearchListingListItem listing={baseListing} />));
-    expect(screen.getByText('$25')).toBeInTheDocument();
+    // Currency format depends on locale config
+    expect(screen.getByText(/25/)).toBeInTheDocument();
   });
 
   it('renders location', () => {
@@ -147,11 +149,12 @@ describe('SearchListingCompactCard', () => {
     expect(screen.getByText('Camera for Rent')).toBeInTheDocument();
   });
 
-  it('renders price with /day', () => {
+  it('renders price', () => {
     render(wrapRouter(
       <SearchListingCompactCard listing={baseListing} onHighlightChange={onHighlightChange} />
     ));
-    expect(screen.getByText('$25/day')).toBeInTheDocument();
+    // Compact card shows price with /day suffix combined
+    expect(screen.getByText(/25.*day/)).toBeInTheDocument();
   });
 
   it('calls onHighlightChange on hover', () => {

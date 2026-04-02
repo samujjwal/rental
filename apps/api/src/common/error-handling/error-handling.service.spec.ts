@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ErrorHandlingService, ErrorSeverity, ErrorCategory, ErrorContext } from './error-handling.service';
+import {
+  ErrorHandlingService,
+  ErrorSeverity,
+  ErrorCategory,
+  ErrorContext,
+} from './error-handling.service';
 import { Logger } from '@nestjs/common';
 
 describe('ErrorHandlingService', () => {
@@ -79,11 +84,7 @@ describe('ErrorHandlingService', () => {
     });
 
     it('should default severity to MEDIUM', () => {
-      const error = service.createError(
-        'DEFAULT_SEVERITY',
-        'Message',
-        ErrorCategory.DATABASE,
-      );
+      const error = service.createError('DEFAULT_SEVERITY', 'Message', ErrorCategory.DATABASE);
 
       expect(error.severity).toBe(ErrorSeverity.MEDIUM);
     });
@@ -99,7 +100,7 @@ describe('ErrorHandlingService', () => {
       );
 
       expect(() => service.handleError(serviceError)).toThrow('Validation Error: Handled');
-      expect(errorSpy).toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled(); // MEDIUM severity uses warn
     });
 
     it('should log but not throw when shouldThrow is false', () => {
@@ -318,9 +319,24 @@ describe('ErrorHandlingService', () => {
     });
 
     it('should calculate longer delays for higher severity', () => {
-      const mediumError = service.createError('ERR', 'Med', ErrorCategory.NETWORK, ErrorSeverity.MEDIUM);
-      const highError = service.createError('ERR', 'High', ErrorCategory.NETWORK, ErrorSeverity.HIGH);
-      const criticalError = service.createError('ERR', 'Crit', ErrorCategory.NETWORK, ErrorSeverity.CRITICAL);
+      const mediumError = service.createError(
+        'ERR',
+        'Med',
+        ErrorCategory.NETWORK,
+        ErrorSeverity.MEDIUM,
+      );
+      const highError = service.createError(
+        'ERR',
+        'High',
+        ErrorCategory.NETWORK,
+        ErrorSeverity.HIGH,
+      );
+      const criticalError = service.createError(
+        'ERR',
+        'Crit',
+        ErrorCategory.NETWORK,
+        ErrorSeverity.CRITICAL,
+      );
 
       expect(service.getRetryDelay(mediumError, 0)).toBe(2000);
       expect(service.getRetryDelay(highError, 0)).toBe(4000);

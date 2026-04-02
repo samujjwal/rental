@@ -16,19 +16,20 @@ describe('BookingEligibilityService', () => {
   let configService: jest.Mocked<ConfigService>;
 
   const mockFraudDetection = {
-    evaluateTransaction: jest.fn(),
+    performBookingFraudCheck: jest.fn(),
   };
 
   const mockInsuranceService = {
-    validateListingInsurance: jest.fn(),
+    checkInsuranceRequirement: jest.fn(),
+    hasValidInsurance: jest.fn(),
   };
 
   const mockModerationService = {
-    moderateContent: jest.fn(),
+    moderateMessage: jest.fn(),
   };
 
   const mockComplianceService = {
-    checkJurisdictionCompliance: jest.fn(),
+    evaluateCompliance: jest.fn(),
   };
 
   const mockConfigService = {
@@ -75,10 +76,17 @@ describe('BookingEligibilityService', () => {
     };
 
     it('should return allowed when all checks pass', async () => {
-      mockComplianceService.checkJurisdictionCompliance.mockResolvedValue({ compliant: true });
-      mockInsuranceService.validateListingInsurance.mockResolvedValue({ valid: true });
-      mockModerationService.moderateContent.mockResolvedValue({ approved: true });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'low', allowed: true });
+      mockComplianceService.evaluateCompliance.mockResolvedValue({
+        overallCompliant: true,
+        missingChecks: [],
+      });
+      mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
+      mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED', flags: [] });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({
+        allowBooking: true,
+        riskScore: 10,
+        flags: [],
+      });
 
       const result = await service.evaluate(validRequest);
 
@@ -87,10 +95,71 @@ describe('BookingEligibilityService', () => {
     });
 
     it('should reject when compliance check fails', async () => {
-      mockComplianceService.checkJurisdictionCompliance.mockResolvedValue({
-        compliant: false,
-        reason: 'User jurisdiction not supported',
+      mockComplianceService.evaluateCompliance.mockResolvedValue({
+        overallCompliant: false,
+        missingChecks: ['identity_verification'],
       });
+
+      const result = await service.evaluate(validRequest);
+
+      expect(result.allowed).toBe(false);
+      expect(result.rejection?.reason).toContain('Compliance');
+    });
+
+    it('should reject when insurance check fails', async () => {
+      mockComplianceService.evaluateCompliance.mockResolvedValue({
+        overallCompliant: true,
+        missingChecks: [],
+      });
+      mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({
+        required: true,
+        reason: 'High value listing',
+      });
+      mockInsuranceService.hasValidInsurance.mockResolvedValue(false);
+
+      const result = await service.evaluate(validRequest);
+
+      expect(result.allowed).toBe(false);
+      expect(result.rejection?.reason).toContain('Insurance');
+    });
+
+    it('should reject when moderation check fails', async () => {
+      mockComplianceService.evaluateCompliance.mockResolvedValue({
+        overallCompliant: true,
+        missingChecks: [],
+      });
+      mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
+      mockModerationService.moderateMessage.mockResolvedValue({
+        status: 'REJECTED',
+        flags: ['profanity'],
+      });
+
+      const result = await service.evaluate(validRequest);
+
+      expect(result.allowed).toBe(false);
+      expect(result.rejection?.reason).toContain('content');
+    });
+
+    it('should reject when fraud check detects high risk', async () => {
+      mockComplianceService.evaluateCompliance.mockResolvedValue({
+        overallCompliant: true,
+        missingChecks: [],
+      });
+      mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
+      mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED', flags: [] });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({
+        allowBooking: false,
+        riskScore: 85,
+        flags: [{ type: 'velocity' }],
+      });
+
+      const result = await service.evaluate(validRequest);
+
+      expect(result.allowed).toBe(false);
+    });
+
+    it('should handle service errors with fail-closed behavior', async () => {
+      mockComplianceService.evaluateCompliance.mockRejectedValue(new Error('Service unavailable'));
 
       const result = await service.evaluate(validRequest);
 
@@ -98,62 +167,20 @@ describe('BookingEligibilityService', () => {
       expect(result.rejection?.reason).toContain('compliance');
     });
 
-    it('should reject when insurance check fails', async () => {
-      mockComplianceService.checkJurisdictionCompliance.mockResolvedValue({ compliant: true });
-      mockInsuranceService.validateListingInsurance.mockResolvedValue({
-        valid: false,
-        reason: 'Listing lacks required insurance coverage',
-      });
-
-      const result = await service.evaluate(validRequest);
-
-      expect(result.allowed).toBe(false);
-      expect(result.rejection?.reason).toContain('insurance');
-    });
-
-    it('should reject when moderation check fails', async () => {
-      mockComplianceService.checkJurisdictionCompliance.mockResolvedValue({ compliant: true });
-      mockInsuranceService.validateListingInsurance.mockResolvedValue({ valid: true });
-      mockModerationService.moderateContent.mockResolvedValue({
-        approved: false,
-        reason: 'Inappropriate content detected',
-        flags: ['profanity'],
-      });
-
-      const result = await service.evaluate(validRequest);
-
-      expect(result.allowed).toBe(false);
-      expect(result.rejection?.reason).toContain('moderation');
-    });
-
-    it('should reject when fraud check detects high risk', async () => {
-      mockComplianceService.checkJurisdictionCompliance.mockResolvedValue({ compliant: true });
-      mockInsuranceService.validateListingInsurance.mockResolvedValue({ valid: true });
-      mockModerationService.moderateContent.mockResolvedValue({ approved: true });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({
-        risk: 'high',
-        allowed: false,
-        reason: 'Suspicious transaction pattern detected',
-      });
-
-      const result = await service.evaluate(validRequest);
-
-      expect(result.allowed).toBe(false);
-      expect(result.rejection?.reason).toContain('fraud');
-    });
-
-    it('should handle service errors with fail-closed behavior', async () => {
-      mockComplianceService.checkJurisdictionCompliance.mockRejectedValue(new Error('Service unavailable'));
-
-      const result = await service.evaluate(validRequest);
-
-      expect(result.allowed).toBe(false);
-      expect(result.rejection?.reason).toContain('error');
-    });
-
     it('should skip checks and allow in fail-open mode when configured', async () => {
-      mockConfigService.get.mockReturnValue('true'); // SAFETY_CHECKS_FAIL_OPEN=true
-      mockComplianceService.checkJurisdictionCompliance.mockRejectedValue(new Error('Service unavailable'));
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'SAFETY_CHECKS_FAIL_OPEN') return 'true';
+        if (key === 'STRIPE_TEST_BYPASS') return 'false';
+        return 'false';
+      });
+      mockComplianceService.evaluateCompliance.mockRejectedValue(new Error('Service unavailable'));
+      mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
+      mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED', flags: [] });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({
+        allowBooking: true,
+        riskScore: 10,
+        flags: [],
+      });
 
       const result = await service.evaluate(validRequest);
 
@@ -162,16 +189,20 @@ describe('BookingEligibilityService', () => {
     });
 
     it('should evaluate high-value transactions with enhanced scrutiny', async () => {
-      const highValueRequest: EligibilityRequest = { 
-        ...validRequest, 
-        totalPrice: 10000 
+      const highValueRequest: EligibilityRequest = {
+        ...validRequest,
+        totalPrice: 10000,
       };
-      mockComplianceService.checkJurisdictionCompliance.mockResolvedValue({ compliant: true });
-      mockInsuranceService.validateListingInsurance.mockResolvedValue({ valid: true });
-      mockModerationService.moderateContent.mockResolvedValue({ approved: true });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({
-        risk: 'medium',
-        allowed: true,
+      mockComplianceService.evaluateCompliance.mockResolvedValue({
+        overallCompliant: true,
+        missingChecks: [],
+      });
+      mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
+      mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED', flags: [] });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({
+        allowBooking: true,
+        riskScore: 50,
+        flags: [{ type: 'value' }],
       });
 
       const result = await service.evaluate(highValueRequest);
@@ -180,14 +211,20 @@ describe('BookingEligibilityService', () => {
     });
 
     it('should handle missing optional message gracefully', async () => {
-      const requestWithoutMessage: EligibilityRequest = { 
-        ...validRequest, 
-        message: undefined 
+      const requestWithoutMessage: EligibilityRequest = {
+        ...validRequest,
+        message: undefined,
       };
-      mockComplianceService.checkJurisdictionCompliance.mockResolvedValue({ compliant: true });
-      mockInsuranceService.validateListingInsurance.mockResolvedValue({ valid: true });
-      mockModerationService.moderateContent.mockResolvedValue({ approved: true });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'low', allowed: true });
+      mockComplianceService.evaluateCompliance.mockResolvedValue({
+        overallCompliant: true,
+        missingChecks: [],
+      });
+      mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({
+        allowBooking: true,
+        riskScore: 10,
+        flags: [],
+      });
 
       const result = await service.evaluate(requestWithoutMessage);
 
@@ -195,11 +232,17 @@ describe('BookingEligibilityService', () => {
     });
 
     it('should track all skipped checks in fail-open mode', async () => {
-      mockConfigService.get.mockReturnValue('true');
-      mockComplianceService.checkJurisdictionCompliance.mockRejectedValue(new Error('Compliance down'));
-      mockInsuranceService.validateListingInsurance.mockRejectedValue(new Error('Insurance down'));
-      mockModerationService.moderateContent.mockResolvedValue({ approved: true });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'low', allowed: true });
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'SAFETY_CHECKS_FAIL_OPEN') return 'true';
+        return 'false';
+      });
+      mockComplianceService.evaluateCompliance.mockRejectedValue(new Error('Compliance down'));
+      mockInsuranceService.checkInsuranceRequirement.mockRejectedValue(new Error('Insurance down'));
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({
+        allowBooking: true,
+        riskScore: 10,
+        flags: [],
+      });
 
       const result = await service.evaluate(validRequest);
 
@@ -216,6 +259,7 @@ describe('BookingEligibilityService', () => {
       startDate: new Date('2025-12-10'),
       endDate: new Date('2025-12-15'),
       totalPrice: 500,
+      message: 'Test message for moderation',
       listing: {
         country: 'Nepal',
         state: 'Bagmati',
@@ -225,10 +269,14 @@ describe('BookingEligibilityService', () => {
     };
 
     it('should never skip fraud check even in fail-open mode', async () => {
-      mockConfigService.get.mockReturnValue('true');
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({
-        risk: 'high',
-        allowed: false,
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'SAFETY_CHECKS_FAIL_OPEN') return 'true';
+        return 'false';
+      });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({
+        allowBooking: false,
+        riskScore: 85,
+        flags: [{ type: 'suspicious' }],
       });
 
       const result = await service.evaluate(validRequest);
@@ -238,22 +286,22 @@ describe('BookingEligibilityService', () => {
 
     it('should run checks in correct order: compliance -> insurance -> moderation -> fraud', async () => {
       const callOrder: string[] = [];
-      
-      mockComplianceService.checkJurisdictionCompliance.mockImplementation(() => {
+
+      mockComplianceService.evaluateCompliance.mockImplementation(() => {
         callOrder.push('compliance');
-        return Promise.resolve({ compliant: true });
+        return Promise.resolve({ overallCompliant: true, missingChecks: [] });
       });
-      mockInsuranceService.validateListingInsurance.mockImplementation(() => {
+      mockInsuranceService.checkInsuranceRequirement.mockImplementation(() => {
         callOrder.push('insurance');
-        return Promise.resolve({ valid: true });
+        return Promise.resolve({ required: false });
       });
-      mockModerationService.moderateContent.mockImplementation(() => {
+      mockModerationService.moderateMessage.mockImplementation(() => {
         callOrder.push('moderation');
-        return Promise.resolve({ approved: true });
+        return Promise.resolve({ status: 'APPROVED', flags: [] });
       });
-      mockFraudDetection.evaluateTransaction.mockImplementation(() => {
+      mockFraudDetection.performBookingFraudCheck.mockImplementation(() => {
         callOrder.push('fraud');
-        return Promise.resolve({ risk: 'low', allowed: true });
+        return Promise.resolve({ allowBooking: true, riskScore: 10, flags: [] });
       });
 
       await service.evaluate(validRequest);

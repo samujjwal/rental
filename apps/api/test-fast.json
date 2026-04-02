@@ -1,0 +1,11 @@
+{
+  "name": "run-tests-fast",
+  "version": "1.0.0",
+  "scripts": {
+    "test:fast": "jest --testPathIgnorePatterns='chaos|e2e' --maxWorkers=4 --testTimeout=10000 --silent",
+    "test:coverage:fast": "jest --testPathIgnorePatterns='chaos|e2e' --maxWorkers=4 --testTimeout=10000 --coverage --coverageReporters=text-summary --silent",
+    "test:ui": "cd ../web && vitest run --reporter=verbose",
+    "test:ui:coverage": "cd ../web && vitest run --coverage --reporter=verbose",
+    "test:specific": "jest --maxWorkers=2 --testTimeout=5000 --silent"
+  }
+}

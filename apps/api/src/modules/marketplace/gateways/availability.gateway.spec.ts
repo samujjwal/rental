@@ -3,6 +3,9 @@ import { AvailabilityGateway } from './availability.gateway';
 import { AvailabilityGraphService } from '../services/availability-graph.service';
 import { WsJwtAuthGuard } from '@/modules/auth/guards/ws-jwt-auth.guard';
 import { Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { AuthService } from '@/modules/auth/services/auth.service';
 
 describe('AvailabilityGateway', () => {
   let gateway: AvailabilityGateway;
@@ -17,6 +20,10 @@ describe('AvailabilityGateway', () => {
     validateSocket: jest.fn(),
     canActivate: jest.fn(),
   };
+
+  const mockJwtService = {};
+  const mockConfigService = { get: jest.fn() };
+  const mockAuthService = {};
 
   function fakeSocket(userId?: string, id = 'sock-1'): any {
     return {
@@ -45,6 +52,9 @@ describe('AvailabilityGateway', () => {
         AvailabilityGateway,
         { provide: AvailabilityGraphService, useValue: mockAvailabilityGraphService },
         { provide: WsJwtAuthGuard, useValue: mockAuthGuard },
+        { provide: JwtService, useValue: mockJwtService },
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: AuthService, useValue: mockAuthService },
       ],
     }).compile();
 
@@ -90,10 +100,10 @@ describe('AvailabilityGateway', () => {
 
     it('should track multiple sockets for same user', async () => {
       mockWsAuthGuard.validateSocket.mockResolvedValue({ id: 'user-1' });
-      
+
       const socket1 = fakeSocket(undefined, 'sock-1');
       const socket2 = fakeSocket(undefined, 'sock-2');
-      
+
       await gateway.handleConnection(socket1);
       await gateway.handleConnection(socket2);
 
@@ -107,12 +117,12 @@ describe('AvailabilityGateway', () => {
     it('should clean up subscriptions on disconnect', async () => {
       mockWsAuthGuard.validateSocket.mockResolvedValue({ id: 'user-1' });
       const client = fakeSocket(undefined, 'sock-1');
-      
+
       await gateway.handleConnection(client);
-      
+
       // Subscribe to a listing
       await gateway.handleSubscribeAvailability(client, { listingId: 'listing-1' });
-      
+
       // Disconnect
       gateway.handleDisconnect(client);
 
@@ -123,7 +133,7 @@ describe('AvailabilityGateway', () => {
 
     it('should handle disconnect for untracked socket', () => {
       const client = fakeSocket('user-1', 'unknown-sock');
-      
+
       // Should not throw
       expect(() => gateway.handleDisconnect(client)).not.toThrow();
     });
@@ -152,7 +162,7 @@ describe('AvailabilityGateway', () => {
 
     it('should return error for missing listingId', async () => {
       const client = fakeSocket('user-1');
-      
+
       const result = await gateway.handleSubscribeAvailability(client, { listingId: '' });
 
       expect(result.event).toBe('error');
@@ -216,7 +226,7 @@ describe('AvailabilityGateway', () => {
 
       const client1 = fakeSocket('user-1', 'sock-1');
       const client2 = fakeSocket('user-2', 'sock-2');
-      
+
       await gateway.handleSubscribeAvailability(client1, { listingId: 'listing-1' });
       await gateway.handleSubscribeAvailability(client2, { listingId: 'listing-1' });
 
@@ -232,7 +242,7 @@ describe('AvailabilityGateway', () => {
 
       const client = fakeSocket('user-1', 'sock-1');
       await gateway.handleSubscribeAvailability(client, { listingId: 'listing-1' });
-      
+
       const result = gateway.handleUnsubscribeAvailability(client, { listingId: 'listing-1' });
 
       expect(client.leave).toHaveBeenCalledWith('listing:listing-1');
@@ -258,10 +268,10 @@ describe('AvailabilityGateway', () => {
 
     it('should handle unsubscribe for non-subscribed listing', () => {
       const client = fakeSocket('user-1', 'sock-1');
-      
+
       // Should not throw
-      expect(() => 
-        gateway.handleUnsubscribeAvailability(client, { listingId: 'not-subscribed' })
+      expect(() =>
+        gateway.handleUnsubscribeAvailability(client, { listingId: 'not-subscribed' }),
       ).not.toThrow();
     });
   });
@@ -284,7 +294,9 @@ describe('AvailabilityGateway', () => {
     });
 
     it('should handle check dates errors', async () => {
-      mockAvailabilityService.checkRealTimeAvailability.mockRejectedValue(new Error('Invalid dates'));
+      mockAvailabilityService.checkRealTimeAvailability.mockRejectedValue(
+        new Error('Invalid dates'),
+      );
 
       const client = fakeSocket('user-1');
       const result = await gateway.handleCheckDates(client, {
@@ -307,7 +319,7 @@ describe('AvailabilityGateway', () => {
         pricePerNight: 100,
         hasActiveLock: false,
       });
-      
+
       const client = fakeSocket('user-1', 'sock-1');
       await gateway.handleSubscribeAvailability(client, { listingId: 'listing-1' });
 
@@ -322,11 +334,14 @@ describe('AvailabilityGateway', () => {
       });
 
       expect(gateway.server.to).toHaveBeenCalledWith('listing:listing-1');
-      expect(toEmit).toHaveBeenCalledWith('availability_changed', expect.objectContaining({
-        type: 'BOOKING_CREATED',
-        listingId: 'listing-1',
-        bookingId: 'booking-1',
-      }));
+      expect(toEmit).toHaveBeenCalledWith(
+        'availability_changed',
+        expect.objectContaining({
+          type: 'BOOKING_CREATED',
+          listingId: 'listing-1',
+          bookingId: 'booking-1',
+        }),
+      );
     });
 
     it('should broadcast on booking.cancelled event', async () => {
@@ -337,7 +352,7 @@ describe('AvailabilityGateway', () => {
         pricePerNight: 100,
         hasActiveLock: false,
       });
-      
+
       const client = fakeSocket('user-1', 'sock-1');
       await gateway.handleSubscribeAvailability(client, { listingId: 'listing-1' });
 
@@ -351,9 +366,12 @@ describe('AvailabilityGateway', () => {
         bookingId: 'booking-1',
       });
 
-      expect(toEmit).toHaveBeenCalledWith('availability_changed', expect.objectContaining({
-        type: 'BOOKING_CANCELLED',
-      }));
+      expect(toEmit).toHaveBeenCalledWith(
+        'availability_changed',
+        expect.objectContaining({
+          type: 'BOOKING_CANCELLED',
+        }),
+      );
     });
 
     it('should broadcast on listing.availability_updated event', async () => {
@@ -364,7 +382,7 @@ describe('AvailabilityGateway', () => {
         pricePerNight: 100,
         hasActiveLock: false,
       });
-      
+
       const client = fakeSocket('user-1', 'sock-1');
       await gateway.handleSubscribeAvailability(client, { listingId: 'listing-1' });
 
@@ -376,10 +394,13 @@ describe('AvailabilityGateway', () => {
         changes: { price: 200, blockedDates: ['2025-01-01'] },
       });
 
-      expect(toEmit).toHaveBeenCalledWith('availability_changed', expect.objectContaining({
-        type: 'CALENDAR_UPDATED',
-        changes: expect.any(Object),
-      }));
+      expect(toEmit).toHaveBeenCalledWith(
+        'availability_changed',
+        expect.objectContaining({
+          type: 'CALENDAR_UPDATED',
+          changes: expect.any(Object),
+        }),
+      );
     });
 
     it('should not broadcast when no subscribers', () => {
@@ -393,8 +414,8 @@ describe('AvailabilityGateway', () => {
         bookingId: 'booking-1',
       });
 
-      // to should still be called but emit won't happen to anyone
-      expect(gateway.server.to).toHaveBeenCalledWith('listing:listing-with-no-subscribers');
+      // Should not call to/emit when there are no subscribers
+      expect(toEmit).not.toHaveBeenCalled();
     });
   });
 
@@ -407,15 +428,15 @@ describe('AvailabilityGateway', () => {
         pricePerNight: 100,
         hasActiveLock: false,
       });
-      
+
       // Set up some connections and subscriptions
       mockWsAuthGuard.validateSocket.mockResolvedValue({ id: 'user-1' });
       const client1 = fakeSocket(undefined, 'sock-1');
       const client2 = fakeSocket(undefined, 'sock-2');
-      
+
       await gateway.handleConnection(client1);
       await gateway.handleConnection(client2);
-      
+
       await gateway.handleSubscribeAvailability(client1, { listingId: 'listing-1' });
       await gateway.handleSubscribeAvailability(client2, { listingId: 'listing-1' });
       await gateway.handleSubscribeAvailability(client1, { listingId: 'listing-2' });
@@ -447,14 +468,14 @@ describe('AvailabilityGateway', () => {
         pricePerNight: 100,
         hasActiveLock: false,
       });
-      
+
       const client = fakeSocket('user-1', 'sock-1');
-      
+
       const promises = [];
       for (let i = 0; i < 10; i++) {
         promises.push(gateway.handleSubscribeAvailability(client, { listingId: `listing-${i}` }));
       }
-      
+
       await Promise.all(promises);
 
       const stats = gateway.getStats();
@@ -470,15 +491,15 @@ describe('AvailabilityGateway', () => {
         pricePerNight: 100,
         hasActiveLock: false,
       });
-      
+
       const client = fakeSocket('user-1', 'sock-1');
-      
+
       // Subscribe
       await gateway.handleSubscribeAvailability(client, { listingId: 'listing-1' });
-      
+
       // Unsubscribe
       gateway.handleUnsubscribeAvailability(client, { listingId: 'listing-1' });
-      
+
       // Subscribe again
       await gateway.handleSubscribeAvailability(client, { listingId: 'listing-1' });
 

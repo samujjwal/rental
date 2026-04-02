@@ -59,7 +59,8 @@ describe('DetailsStep', () => {
       <DetailsStep register={register} errors={{}} showDeliveryFields={true} />
     );
     expect(screen.getByText('Delivery Radius (km)')).toBeInTheDocument();
-    expect(screen.getByText(/Delivery Fee \(USD\)/)).toBeInTheDocument();
+    // Currency code depends on locale config
+    expect(screen.getByText(/Delivery Fee/)).toBeInTheDocument();
   });
 
   it('registers deliveryRadius and deliveryFee when visible', () => {

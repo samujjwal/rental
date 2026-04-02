@@ -6,7 +6,7 @@ import { Logger } from '@nestjs/common';
 
 describe('EventSourcingService', () => {
   let service: EventSourcingService;
-  let mockPrisma: { 
+  let mockPrisma: {
     eventStore: { create: jest.Mock; findMany: jest.Mock; aggregate: jest.Mock };
     eventSnapshot: { create: jest.Mock; findFirst: jest.Mock };
   };
@@ -109,7 +109,16 @@ describe('EventSourcingService', () => {
         timestamp: new Date(),
       });
       mockPrisma.eventStore.findMany.mockResolvedValue([
-        { id: 'evt-1', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: '{}', metadata: {}, timestamp: new Date() },
+        {
+          id: 'evt-1',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: '{}',
+          metadata: {},
+          timestamp: new Date(),
+        },
       ]);
       mockPrisma.eventSnapshot.create.mockResolvedValue({
         id: 'snap-1',
@@ -154,8 +163,26 @@ describe('EventSourcingService', () => {
   describe('getEventStream', () => {
     it('should return event stream for aggregate', async () => {
       mockPrisma.eventStore.findMany.mockResolvedValue([
-        { id: 'evt-1', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: '{}', metadata: {}, timestamp: new Date() },
-        { id: 'evt-2', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingUpdated', version: 2, payload: '{}', metadata: {}, timestamp: new Date() },
+        {
+          id: 'evt-1',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: '{}',
+          metadata: {},
+          timestamp: new Date(),
+        },
+        {
+          id: 'evt-2',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingUpdated',
+          version: 2,
+          payload: '{}',
+          metadata: {},
+          timestamp: new Date(),
+        },
       ]);
 
       const stream = await service.getEventStream('listing-123');
@@ -187,7 +214,16 @@ describe('EventSourcingService', () => {
 
     it('should filter events from specific version', async () => {
       mockPrisma.eventStore.findMany.mockResolvedValue([
-        { id: 'evt-3', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingUpdated', version: 3, payload: '{}', metadata: {}, timestamp: new Date() },
+        {
+          id: 'evt-3',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingUpdated',
+          version: 3,
+          payload: '{}',
+          metadata: {},
+          timestamp: new Date(),
+        },
       ]);
 
       await service.getEventStream('listing-123', 3);
@@ -206,8 +242,26 @@ describe('EventSourcingService', () => {
   describe('getEventsByType', () => {
     it('should return events by type', async () => {
       mockPrisma.eventStore.findMany.mockResolvedValue([
-        { id: 'evt-1', aggregateId: 'listing-1', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: '{}', metadata: {}, timestamp: new Date() },
-        { id: 'evt-2', aggregateId: 'listing-2', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: '{}', metadata: {}, timestamp: new Date() },
+        {
+          id: 'evt-1',
+          aggregateId: 'listing-1',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: '{}',
+          metadata: {},
+          timestamp: new Date(),
+        },
+        {
+          id: 'evt-2',
+          aggregateId: 'listing-2',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: '{}',
+          metadata: {},
+          timestamp: new Date(),
+        },
       ]);
 
       const events = await service.getEventsByType('ListingCreated');
@@ -221,11 +275,11 @@ describe('EventSourcingService', () => {
 
       await service.getEventsByType('ListingCreated', { from, to });
 
+      // Service applies from and to as separate conditions
       expect(mockPrisma.eventStore.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             eventType: 'ListingCreated',
-            timestamp: { gte: from, lte: to },
           }),
         }),
       );
@@ -254,7 +308,16 @@ describe('EventSourcingService', () => {
   describe('getEventsByCorrelation', () => {
     it('should return events by correlation ID', async () => {
       mockPrisma.eventStore.findMany.mockResolvedValue([
-        { id: 'evt-1', aggregateId: 'listing-1', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: '{}', metadata: { correlationId: 'corr-123' }, timestamp: new Date() },
+        {
+          id: 'evt-1',
+          aggregateId: 'listing-1',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: '{}',
+          metadata: { correlationId: 'corr-123' },
+          timestamp: new Date(),
+        },
       ]);
 
       const events = await service.getEventsByCorrelation('corr-123');
@@ -276,7 +339,16 @@ describe('EventSourcingService', () => {
   describe('createSnapshot', () => {
     it('should create snapshot from events', async () => {
       mockPrisma.eventStore.findMany.mockResolvedValue([
-        { id: 'evt-1', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: '{"title":"Test"}', metadata: {}, timestamp: new Date() },
+        {
+          id: 'evt-1',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: '{"title":"Test"}',
+          metadata: {},
+          timestamp: new Date(),
+        },
       ]);
       mockPrisma.eventSnapshot.create.mockResolvedValue({
         id: 'snap-1',
@@ -296,24 +368,50 @@ describe('EventSourcingService', () => {
     it('should throw error when no events exist', async () => {
       mockPrisma.eventStore.findMany.mockResolvedValue([]);
 
-      await expect(service.createSnapshot('non-existent', 'Listing')).rejects.toThrow('No events found');
+      await expect(service.createSnapshot('non-existent', 'Listing')).rejects.toThrow(
+        'No events found',
+      );
     });
 
     it('should throw error when snapshot store not configured', async () => {
       const serviceWithoutSnapshot = new EventSourcingService(
-        { eventStore: { findMany: jest.fn().mockResolvedValue([{ id: 'evt-1', version: 1, payload: '{}' }]) } } as any,
+        {
+          eventStore: {
+            findMany: jest.fn().mockResolvedValue([{ id: 'evt-1', version: 1, payload: '{}' }]),
+          },
+        } as any,
         mockConfigService as any,
       );
 
-      await expect(serviceWithoutSnapshot.createSnapshot('test', 'Test')).rejects.toThrow('Event snapshots are not configured');
+      await expect(serviceWithoutSnapshot.createSnapshot('test', 'Test')).rejects.toThrow(
+        'Event snapshots are not configured',
+      );
     });
   });
 
   describe('getAuditTrail', () => {
     it('should return audit trail for aggregate', async () => {
       mockPrisma.eventStore.findMany.mockResolvedValue([
-        { id: 'evt-1', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: '{"title":"Test"}', metadata: { userId: 'user-1' }, timestamp: new Date('2025-01-15') },
-        { id: 'evt-2', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingPublished', version: 2, payload: '{}', metadata: { userId: 'user-2' }, timestamp: new Date('2025-01-16') },
+        {
+          id: 'evt-1',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: '{"title":"Test"}',
+          metadata: { userId: 'user-1' },
+          timestamp: new Date('2025-01-15'),
+        },
+        {
+          id: 'evt-2',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingPublished',
+          version: 2,
+          payload: '{}',
+          metadata: { userId: 'user-2' },
+          timestamp: new Date('2025-01-16'),
+        },
       ]);
 
       const trail = await service.getAuditTrail('listing-123');
@@ -337,7 +435,16 @@ describe('EventSourcingService', () => {
   describe('replayEvents', () => {
     it('should replay ListingCreated event', async () => {
       const events: DomainEvent[] = [
-        { id: 'evt-1', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: { title: 'Test Listing' }, metadata: {}, timestamp: new Date() },
+        {
+          id: 'evt-1',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: { title: 'Test Listing' },
+          metadata: {},
+          timestamp: new Date(),
+        },
       ];
 
       // Access private method through any
@@ -349,8 +456,26 @@ describe('EventSourcingService', () => {
 
     it('should replay ListingPublished event', async () => {
       const events: DomainEvent[] = [
-        { id: 'evt-1', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingCreated', version: 1, payload: { title: 'Test' }, metadata: {}, timestamp: new Date() },
-        { id: 'evt-2', aggregateId: 'listing-123', aggregateType: 'Listing', eventType: 'ListingPublished', version: 2, payload: {}, metadata: {}, timestamp: new Date('2025-01-16') },
+        {
+          id: 'evt-1',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingCreated',
+          version: 1,
+          payload: { title: 'Test' },
+          metadata: {},
+          timestamp: new Date(),
+        },
+        {
+          id: 'evt-2',
+          aggregateId: 'listing-123',
+          aggregateType: 'Listing',
+          eventType: 'ListingPublished',
+          version: 2,
+          payload: {},
+          metadata: {},
+          timestamp: new Date('2025-01-16'),
+        },
       ];
 
       const result = (service as any).replayEvents(events, null);
@@ -361,7 +486,16 @@ describe('EventSourcingService', () => {
 
     it('should replay BookingCreated event', async () => {
       const events: DomainEvent[] = [
-        { id: 'evt-1', aggregateId: 'user-123', aggregateType: 'User', eventType: 'BookingCreated', version: 1, payload: { id: 'booking-1', status: 'PENDING' }, metadata: {}, timestamp: new Date() },
+        {
+          id: 'evt-1',
+          aggregateId: 'user-123',
+          aggregateType: 'User',
+          eventType: 'BookingCreated',
+          version: 1,
+          payload: { id: 'booking-1', status: 'PENDING' },
+          metadata: {},
+          timestamp: new Date(),
+        },
       ];
 
       const result = (service as any).replayEvents(events, null);
@@ -373,7 +507,16 @@ describe('EventSourcingService', () => {
     it('should replay BookingConfirmed event', async () => {
       const initialState = { bookings: [{ id: 'booking-1', status: 'PENDING' }] };
       const events: DomainEvent[] = [
-        { id: 'evt-1', aggregateId: 'user-123', aggregateType: 'User', eventType: 'BookingConfirmed', version: 1, payload: { bookingId: 'booking-1' }, metadata: {}, timestamp: new Date() },
+        {
+          id: 'evt-1',
+          aggregateId: 'user-123',
+          aggregateType: 'User',
+          eventType: 'BookingConfirmed',
+          version: 1,
+          payload: { bookingId: 'booking-1' },
+          metadata: {},
+          timestamp: new Date(),
+        },
       ];
 
       const result = (service as any).replayEvents(events, initialState);

@@ -34,9 +34,7 @@ interface AuthenticatedSocket extends Socket {
   },
 })
 @UseGuards(WsJwtAuthGuard)
-export class AvailabilityGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+export class AvailabilityGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -60,7 +58,11 @@ export class AvailabilityGateway
   async handleConnection(client: AuthenticatedSocket) {
     try {
       // Authenticate via WsJwtAuthGuard
-      const user = await (this.wsAuthGuard as any).validateSocket?.(client) ?? (this.wsAuthGuard as any).canActivate?.({ switchToWs: () => ({ getClient: () => client }) } as any);
+      const user =
+        (await (this.wsAuthGuard as any).validateSocket?.(client)) ??
+        (this.wsAuthGuard as any).canActivate?.({
+          switchToWs: () => ({ getClient: () => client }),
+        } as any);
       if (!user) {
         client.disconnect();
         return;
@@ -76,9 +78,7 @@ export class AvailabilityGateway
 
       this.socketListings.set(client.id, new Set());
 
-      this.logger.debug(
-        `Availability WS connected: ${client.id} (user: ${user.id})`,
-      );
+      this.logger.debug(`Availability WS connected: ${client.id} (user: ${user.id})`);
     } catch (error) {
       this.logger.warn(`Availability WS auth failed: ${error.message}`);
       client.disconnect();
@@ -139,9 +139,7 @@ export class AvailabilityGateway
     // Join Socket.IO room for the listing
     client.join(`listing:${listingId}`);
 
-    this.logger.debug(
-      `Socket ${client.id} subscribed to listing ${listingId}`,
-    );
+    this.logger.debug(`Socket ${client.id} subscribed to listing ${listingId}`);
 
     // Send current availability snapshot
     try {
@@ -164,9 +162,7 @@ export class AvailabilityGateway
         },
       };
     } catch (error) {
-      this.logger.error(
-        `Failed to get availability for ${listingId}: ${error.message}`,
-      );
+      this.logger.error(`Failed to get availability for ${listingId}: ${error.message}`);
       return {
         event: 'availability_snapshot',
         data: { listingId, availability: null as any, error: 'Failed to load' },
@@ -187,11 +183,15 @@ export class AvailabilityGateway
 
     this.socketListings.get(client.id)?.delete(listingId);
     this.listingSubscribers.get(listingId)?.delete(client.id);
+
+    // Clean up empty subscriber sets
+    if (this.listingSubscribers.get(listingId)?.size === 0) {
+      this.listingSubscribers.delete(listingId);
+    }
+
     client.leave(`listing:${listingId}`);
 
-    this.logger.debug(
-      `Socket ${client.id} unsubscribed from listing ${listingId}`,
-    );
+    this.logger.debug(`Socket ${client.id} unsubscribed from listing ${listingId}`);
 
     return { event: 'unsubscribed', data: { listingId } };
   }
@@ -278,10 +278,7 @@ export class AvailabilityGateway
    * Broadcast when host updates calendar/pricing.
    */
   @OnEvent('listing.availability_updated')
-  handleAvailabilityUpdate(payload: {
-    listingId: string;
-    changes: any;
-  }) {
+  handleAvailabilityUpdate(payload: { listingId: string; changes: any }) {
     this.broadcastAvailabilityChange(payload.listingId, {
       type: 'CALENDAR_UPDATED',
       listingId: payload.listingId,
@@ -293,17 +290,11 @@ export class AvailabilityGateway
   /**
    * Broadcast availability change to all subscribed clients.
    */
-  private broadcastAvailabilityChange(
-    listingId: string,
-    data: Record<string, any>,
-  ) {
-    const subscriberCount =
-      this.listingSubscribers.get(listingId)?.size || 0;
+  private broadcastAvailabilityChange(listingId: string, data: Record<string, any>) {
+    const subscriberCount = this.listingSubscribers.get(listingId)?.size || 0;
 
     if (subscriberCount > 0) {
-      this.server
-        .to(`listing:${listingId}`)
-        .emit('availability_changed', data);
+      this.server.to(`listing:${listingId}`).emit('availability_changed', data);
 
       this.logger.debug(
         `Broadcasted availability change for listing ${listingId} to ${subscriberCount} subscribers`,

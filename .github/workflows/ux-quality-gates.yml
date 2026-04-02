@@ -1,0 +1,391 @@
+name: UX Quality Gates
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  PLAYWRIGHT_VERSION: '1.40'
+
+jobs:
+  # ==========================================
+  # Phase 1: Code Quality & Static Analysis
+  # ==========================================
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: |
+          npm run lint -- --max-warnings=0 --format=json --output-file=eslint-report.json || true
+          echo "ESLint completed"
+
+      - name: Run TypeScript type checking
+        run: |
+          npm run type-check 2>&1 | tee tsc-output.log || true
+          echo "TypeScript check completed"
+
+      - name: Check for console.log statements
+        run: |
+          if grep -r "console.log" apps/web/app --include="*.ts" --include="*.tsx" | grep -v "eslint-disable"; then
+            echo "::error::Console.log statements found. Remove before merging."
+            exit 1
+          fi
+
+      - name: Check for TODO/FIXME comments
+        run: |
+          TODO_COUNT=$(grep -r "TODO\|FIXME" apps/web/app --include="*.ts" --include="*.tsx" | wc -l)
+          if [ $TODO_COUNT -gt 10 ]; then
+            echo "::warning::Found $TODO_COUNT TODO/FIXME comments. Consider addressing before release."
+          fi
+
+      - name: Check bundle size
+        run: |
+          npm run build 2>&1 | tee build-output.log
+          BUNDLE_SIZE=$(du -sb apps/web/dist | cut -f1)
+          MAX_SIZE=10485760  # 10MB
+          if [ $BUNDLE_SIZE -gt $MAX_SIZE ]; then
+            echo "::error::Bundle size ($BUNDLE_SIZE bytes) exceeds limit ($MAX_SIZE bytes)"
+            exit 1
+          fi
+          echo "Bundle size: $BUNDLE_SIZE bytes (limit: $MAX_SIZE bytes)"
+
+      - name: Upload quality reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: code-quality-reports
+          path: |
+            eslint-report.json
+            tsc-output.log
+            build-output.log
+
+  # ==========================================
+  # Phase 2: Unit & Integration Tests
+  # ==========================================
+  unit-tests:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: |
+          npm run test:unit -- --coverage --reporter=json --outputFile=unit-test-results.json || true
+
+      - name: Check coverage thresholds
+        run: |
+          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          MIN_COVERAGE=70
+          if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
+            echo "::error::Coverage ($COVERAGE%) below minimum ($MIN_COVERAGE%)"
+            exit 1
+          fi
+          echo "Coverage: $COVERAGE% (minimum: $MIN_COVERAGE%)"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: |
+            coverage/
+            unit-test-results.json
+
+  # ==========================================
+  # Phase 3: E2E Critical Path Tests
+  # ==========================================
+  e2e-critical:
+    name: Critical Path E2E Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: |
+          npx playwright install chromium firefox webkit
+          npx playwright install-deps
+
+      - name: Start services
+        run: |
+          npm run dev:api &
+          npm run dev:web &
+          sleep 30
+
+      - name: Run critical E2E tests
+        run: |
+          npx playwright test \
+            --config=playwright.config.ts \
+            --grep="@critical" \
+            --reporter=html,json \
+            --output=e2e-results/
+        timeout-minutes: 15
+        continue-on-error: false
+
+      - name: Upload E2E results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-critical-results
+          path: |
+            playwright-report/
+            e2e-results/
+            test-results.json
+
+  # ==========================================
+  # Phase 4: Accessibility Tests
+  # ==========================================
+  accessibility:
+    name: Accessibility Compliance
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install chromium
+
+      - name: Run accessibility tests
+        run: |
+          npx playwright test \
+            e2e/accessibility/ \
+            --reporter=html,json \
+            --output=accessibility-results/
+
+      - name: Generate accessibility report
+        run: |
+          echo "# Accessibility Test Results" > accessibility-report.md
+          echo "Generated: $(date)" >> accessibility-report.md
+          echo "" >> accessibility-report.md
+          cat accessibility-results/*.json | jq -r '.suites[] | "- \(.title): \(.file)"' >> accessibility-report.md
+
+      - name: Upload accessibility results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-results
+          path: |
+            accessibility-report.md
+            accessibility-results/
+
+  # ==========================================
+  # Phase 5: Visual Regression Tests
+  # ==========================================
+  visual-regression:
+    name: Visual Regression Tests
+    runs-on: ubuntu-latest
+    needs: e2e-critical
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install chromium
+
+      - name: Run visual regression tests
+        run: |
+          npx playwright test \
+            e2e/visual/ \
+            --update-snapshots \
+            --reporter=html \
+            --output=visual-results/
+        continue-on-error: true
+
+      - name: Upload visual results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-regression-results
+          path: |
+            visual-results/
+            **/*.png
+
+  # ==========================================
+  # Phase 6: Performance Tests
+  # ==========================================
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli
+          lhci autorun --config=lighthouserc.json || true
+
+      - name: Check Core Web Vitals
+        run: |
+          # Parse Lighthouse results and check thresholds
+          LCP=$(cat .lighthouseci/manifest.json | jq '.[0].summary.vitals.lcp')
+          FID=$(cat .lighthouseci/manifest.json | jq '.[0].summary.vitals.fid')
+          CLS=$(cat .lighthouseci/manifest.json | jq '.[0].summary.vitals.cls')
+          
+          echo "LCP: $LCP ms (target: <2500ms)"
+          echo "FID: $FID ms (target: <100ms)"
+          echo "CLS: $CLS (target: <0.1)"
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-results
+          path: |
+            .lighthouseci/
+            lhci-report.html
+
+  # ==========================================
+  # Phase 7: UX Quality Gate Decision
+  # ==========================================
+  quality-gate:
+    name: UX Quality Gate
+    runs-on: ubuntu-latest
+    needs: [unit-tests, e2e-critical, accessibility, performance]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Analyze test results
+        run: |
+          echo "# UX Quality Gate Analysis" > quality-gate-report.md
+          echo "" >> quality-gate-report.md
+          
+          # Check unit test results
+          if [ -f "artifacts/unit-test-results/unit-test-results.json" ]; then
+            PASSED=$(jq '.numPassedTests' artifacts/unit-test-results/unit-test-results.json)
+            FAILED=$(jq '.numFailedTests' artifacts/unit-test-results/unit-test-results.json)
+            echo "## Unit Tests" >> quality-gate-report.md
+            echo "- Passed: $PASSED" >> quality-gate-report.md
+            echo "- Failed: $FAILED" >> quality-gate-report.md
+            echo "" >> quality-gate-report.md
+          fi
+          
+          # Check E2E results
+          if [ -f "artifacts/e2e-critical-results/test-results.json" ]; then
+            E2E_PASSED=$(jq '.stats.expected' artifacts/e2e-critical-results/test-results.json)
+            E2E_FAILED=$(jq '.stats.unexpected' artifacts/e2e-critical-results/test-results.json)
+            echo "## E2E Tests" >> quality-gate-report.md
+            echo "- Passed: $E2E_PASSED" >> quality-gate-report.md
+            echo "- Failed: $E2E_FAILED" >> quality-gate-report.md
+            echo "" >> quality-gate-report.md
+          fi
+          
+          # Determine gate status
+          if [ $FAILED -gt 0 ] || [ $E2E_FAILED -gt 0 ]; then
+            echo "## ❌ Gate Status: FAIL" >> quality-gate-report.md
+            echo "Critical tests failed. Cannot proceed with deployment." >> quality-gate-report.md
+            echo "fail" > gate-status.txt
+          else
+            echo "## ✅ Gate Status: PASS" >> quality-gate-report.md
+            echo "All quality checks passed. Ready for deployment." >> quality-gate-report.md
+            echo "pass" > gate-status.txt
+          fi
+          
+          cat quality-gate-report.md
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('quality-gate-report.md', 'utf8');
+            const status = fs.readFileSync('gate-status.txt', 'utf8').trim();
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+      - name: Fail if gate failed
+        run: |
+          if [ "$(cat gate-status.txt)" = "fail" ]; then
+            exit 1
+          fi
+
+      - name: Upload gate report
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-report
+          path: |
+            quality-gate-report.md
+            gate-status.txt

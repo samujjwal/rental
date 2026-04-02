@@ -3,14 +3,17 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": "(\\.e2e-spec|\\.integration-spec)\\.ts$",
-  "testTimeout": 20000,
+  "testTimeout": 10000,
   "forceExit": true,
-  "maxWorkers": 1,
+  "maxWorkers": 4,
   "setupFiles": ["./setup-e2e.js"],
   "transform": {
-    "^.+\\.(t|j)s$": ["ts-jest", {
-      "tsconfig": "./tsconfig.json"
-    }]
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": "./tsconfig.json"
+      }
+    ]
   },
   "transformIgnorePatterns": [],
   "moduleNameMapper": {

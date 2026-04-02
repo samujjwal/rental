@@ -1,0 +1,572 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ComplianceService } from './compliance.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
+
+/**
+ * Comprehensive tests for ComplianceService
+ * Tests all compliance checks, KYC, AML, and regulatory requirements
+ */
+describe('ComplianceService - 100% Coverage', () => {
+  let service: ComplianceService;
+  let prisma: jest.Mocked<PrismaService>;
+  let config: jest.Mocked<ConfigService>;
+
+  const mockPrisma = {
+    user: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    complianceRecord: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+    },
+    listing: {
+      findUnique: jest.fn(),
+    },
+    booking: {
+      findUnique: jest.fn(),
+    },
+  };
+
+  const mockConfig = {
+    get: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ComplianceService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: ConfigService, useValue: mockConfig },
+      ],
+    }).compile();
+
+    service = module.get<ComplianceService>(ComplianceService);
+    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
+    config = module.get(ConfigService) as jest.Mocked<ConfigService>;
+
+    jest.clearAllMocks();
+  });
+
+  describe('Positive Cases - Happy Paths', () => {
+    it('should pass KYC verification for valid user', async () => {
+      const userData = {
+        id: 'user-1',
+        email: 'user@example.com',
+        phone: '+1234567890',
+        address: {
+          street: '123 Main St',
+          city: 'Kathmandu',
+          country: 'NP',
+          postalCode: '12345',
+        },
+        documents: [
+          { type: 'PASSPORT', number: 'PASS123', verified: true },
+          { type: 'DRIVING_LICENSE', number: 'DL123', verified: true },
+        ],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(true);
+      expect(result.riskLevel).toBe('LOW');
+      expect(mockPrisma.complianceRecord.create).toHaveBeenCalled();
+    });
+
+    it('should pass AML check for clean transaction', async () => {
+      const transactionData = {
+        amount: 50000,
+        currency: 'NPR',
+        source: 'bank_transfer',
+        recipientId: 'user-1',
+        senderId: 'user-2',
+      };
+
+      mockConfig.get.mockReturnValue('enabled');
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ riskScore: 20, sanctions: false } as any)
+        .mockResolvedValueOnce({ riskScore: 15, sanctions: false } as any);
+
+      const result = await service.performAMLCheck(transactionData);
+
+      expect(result.passed).toBe(true);
+      expect(result.riskScore).toBeLessThan(50);
+    });
+
+    it('should approve listing that meets compliance requirements', async () => {
+      const listingData = {
+        id: 'listing-1',
+        ownerId: 'owner-1',
+        category: 'ELECTRONICS',
+        title: 'Camera Rental',
+        description: 'Professional camera for rent',
+        images: ['img1.jpg', 'img2.jpg'],
+        price: 5000,
+      };
+
+      mockPrisma.listing.findUnique.mockResolvedValue(listingData as any);
+      mockPrisma.user.findUnique.mockResolvedValue({
+        verified: true,
+        riskScore: 10,
+      } as any);
+
+      const result = await service.validateListingCompliance('listing-1');
+
+      expect(result.approved).toBe(true);
+      expect(result.issues).toHaveLength(0);
+    });
+
+    it('should pass booking compliance for valid booking', async () => {
+      const bookingData = {
+        id: 'booking-1',
+        renterId: 'renter-1',
+        ownerId: 'owner-1',
+        listingId: 'listing-1',
+        totalPrice: 10000,
+        currency: 'NPR',
+        startDate: new Date(),
+        endDate: new Date(),
+      };
+
+      mockPrisma.booking.findUnique.mockResolvedValue(bookingData as any);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ verified: true, riskScore: 20 } as any)
+        .mockResolvedValueOnce({ verified: true, riskScore: 15 } as any);
+
+      const result = await service.validateBookingCompliance('booking-1');
+
+      expect(result.compliant).toBe(true);
+      expect(result.blocked).toBe(false);
+    });
+
+    it('should calculate accurate risk score', async () => {
+      const userData = {
+        id: 'user-1',
+        age: 30,
+        accountAge: 365, // days
+        transactionCount: 50,
+        averageTransactionAmount: 5000,
+        chargebackCount: 0,
+        verificationLevel: 'FULL',
+      };
+
+      const result = await service.calculateRiskScore(userData as any);
+
+      expect(result).toBeLessThan(30); // Should be low risk
+      expect(typeof result).toBe('number');
+    });
+  });
+
+  describe('Negative Cases - Error Scenarios', () => {
+    it('should fail KYC for user with missing documents', async () => {
+      const userData = {
+        id: 'user-1',
+        email: 'user@example.com',
+        documents: [], // No documents
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(false);
+      expect(result.issues).toContain('MISSING_DOCUMENTS');
+    });
+
+    it('should fail AML for high-risk transaction', async () => {
+      const transactionData = {
+        amount: 500000, // High amount
+        currency: 'NPR',
+        source: 'crypto', // High-risk source
+        recipientId: 'user-1',
+        senderId: 'user-2',
+      };
+
+      mockConfig.get.mockReturnValue('enabled');
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ riskScore: 80, sanctions: false } as any)
+        .mockResolvedValueOnce({ riskScore: 75, sanctions: false } as any);
+
+      const result = await service.performAMLCheck(transactionData);
+
+      expect(result.passed).toBe(false);
+      expect(result.riskScore).toBeGreaterThan(70);
+    });
+
+    it('should reject listing with prohibited items', async () => {
+      const listingData = {
+        id: 'listing-1',
+        ownerId: 'owner-1',
+        category: 'WEAPONS', // Prohibited category
+        title: 'Firearm Rental',
+      };
+
+      mockPrisma.listing.findUnique.mockResolvedValue(listingData as any);
+
+      const result = await service.validateListingCompliance('listing-1');
+
+      expect(result.approved).toBe(false);
+      expect(result.issues).toContain('PROHIBITED_CATEGORY');
+    });
+
+    it('should block booking for unverified users', async () => {
+      const bookingData = {
+        id: 'booking-1',
+        renterId: 'renter-1',
+        ownerId: 'owner-1',
+      };
+
+      mockPrisma.booking.findUnique.mockResolvedValue(bookingData as any);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ verified: false } as any) // Unverified renter
+        .mockResolvedValueOnce({ verified: true } as any); // Verified owner
+
+      const result = await service.validateBookingCompliance('booking-1');
+
+      expect(result.compliant).toBe(false);
+      expect(result.blocked).toBe(true);
+      expect(result.reason).toContain('UNVERIFIED_USER');
+    });
+
+    it('should handle non-existent user', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.verifyKYC('non-existent')).rejects.toThrow('User not found');
+    });
+
+    it('should handle database errors gracefully', async () => {
+      mockPrisma.user.findUnique.mockRejectedValue(new Error('Database error'));
+
+      await expect(service.verifyKYC('user-1')).rejects.toThrow('Database error');
+    });
+  });
+
+  describe('Edge Cases - Boundary Conditions', () => {
+    it('should handle maximum transaction amount', async () => {
+      const transactionData = {
+        amount: 999999999, // Maximum amount
+        currency: 'NPR',
+        source: 'bank_transfer',
+        recipientId: 'user-1',
+        senderId: 'user-2',
+      };
+
+      mockConfig.get.mockReturnValue('enabled');
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ riskScore: 10, sanctions: false } as any)
+        .mockResolvedValueOnce({ riskScore: 10, sanctions: false } as any);
+
+      const result = await service.performAMLCheck(transactionData);
+
+      expect(result.riskScore).toBeGreaterThan(50);
+    });
+
+    it('should handle minimum transaction amount', async () => {
+      const transactionData = {
+        amount: 1, // Minimum amount
+        currency: 'NPR',
+        source: 'bank_transfer',
+        recipientId: 'user-1',
+        senderId: 'user-2',
+      };
+
+      mockConfig.get.mockReturnValue('enabled');
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ riskScore: 10, sanctions: false } as any)
+        .mockResolvedValueOnce({ riskScore: 10, sanctions: false } as any);
+
+      const result = await service.performAMLCheck(transactionData);
+
+      expect(result.passed).toBe(true);
+      expect(result.riskScore).toBeLessThan(30);
+    });
+
+    it('should handle user with maximum age', async () => {
+      const userData = {
+        id: 'user-1',
+        age: 120, // Maximum age
+        documents: [{ type: 'PASSPORT', number: 'PASS123', verified: true }],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(true);
+    });
+
+    it('should handle user with minimum age', async () => {
+      const userData = {
+        id: 'user-1',
+        age: 18, // Minimum age
+        documents: [{ type: 'PASSPORT', number: 'PASS123', verified: true }],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(true);
+    });
+
+    it('should handle under-age user', async () => {
+      const userData = {
+        id: 'user-1',
+        age: 17, // Under minimum age
+        documents: [{ type: 'PASSPORT', number: 'PASS123', verified: true }],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(false);
+      expect(result.issues).toContain('UNDER_AGE');
+    });
+
+    it('should handle user on sanctions list', async () => {
+      const userData = {
+        id: 'user-1',
+        sanctions: true,
+        documents: [{ type: 'PASSPORT', number: 'PASS123', verified: true }],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(false);
+      expect(result.issues).toContain('SANCTIONS_LIST');
+    });
+
+    it('should handle expired documents', async () => {
+      const userData = {
+        id: 'user-1',
+        documents: [
+          { 
+            type: 'PASSPORT', 
+            number: 'PASS123', 
+            verified: true,
+            expiryDate: new Date(Date.now() - 24 * 60 * 60 * 1000) // Expired yesterday
+          },
+        ],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(false);
+      expect(result.issues).toContain('EXPIRED_DOCUMENTS');
+    });
+
+    it('should handle disabled compliance checks', async () => {
+      mockConfig.get.mockReturnValue('disabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(true);
+      expect(result.bypassed).toBe(true);
+    });
+  });
+
+  describe('Integration Scenarios', () => {
+    it('should complete full compliance workflow for new user', async () => {
+      const userData = {
+        id: 'user-1',
+        email: 'newuser@example.com',
+        phone: '+1234567890',
+        age: 25,
+        documents: [
+          { type: 'PASSPORT', number: 'PASS123', verified: true },
+        ],
+        riskScore: 10,
+        sanctions: false,
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      // KYC Verification
+      const kycResult = await service.verifyKYC('user-1');
+      expect(kycResult.verified).toBe(true);
+
+      // Risk Assessment
+      const riskScore = await service.calculateRiskScore(userData as any);
+      expect(riskScore).toBeLessThan(30);
+
+      // Transaction Check
+      const transactionData = {
+        amount: 10000,
+        currency: 'NPR',
+        source: 'bank_transfer',
+        recipientId: 'user-1',
+        senderId: 'user-2',
+      };
+
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ riskScore: 10, sanctions: false } as any)
+        .mockResolvedValueOnce({ riskScore: 15, sanctions: false } as any);
+
+      const amlResult = await service.performAMLCheck(transactionData);
+      expect(amlResult.passed).toBe(true);
+    });
+
+    it('should handle concurrent compliance checks', async () => {
+      const userData = {
+        id: 'user-1',
+        documents: [{ type: 'PASSPORT', number: 'PASS123', verified: true }],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const checks = Array.from({ length: 5 }, () => service.verifyKYC('user-1'));
+      const results = await Promise.all(checks);
+
+      results.forEach(result => {
+        expect(result.verified).toBe(true);
+      });
+
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledTimes(5);
+    });
+  });
+
+  describe('Performance and Scalability', () => {
+    it('should handle large transaction volumes efficiently', async () => {
+      const transactions = Array.from({ length: 100 }, (_, i) => ({
+        amount: 1000 + i,
+        currency: 'NPR',
+        source: 'bank_transfer',
+        recipientId: 'user-1',
+        senderId: 'user-2',
+      }));
+
+      mockConfig.get.mockReturnValue('enabled');
+      mockPrisma.user.findUnique.mockResolvedValue({
+        riskScore: 10,
+        sanctions: false,
+      } as any);
+
+      const startTime = Date.now();
+      const results = await Promise.all(
+        transactions.map(tx => service.performAMLCheck(tx))
+      );
+      const endTime = Date.now();
+
+      expect(endTime - startTime).toBeLessThan(5000); // Should complete in < 5 seconds
+      expect(results.every(r => r.passed)).toBe(true);
+    });
+
+    it('should cache compliance results', async () => {
+      const userData = {
+        id: 'user-1',
+        documents: [{ type: 'PASSPORT', number: 'PASS123', verified: true }],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      // First call
+      await service.verifyKYC('user-1');
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledTimes(1);
+
+      // Second call (should use cache)
+      await service.verifyKYC('user-1');
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Security and Validation', () => {
+    it('should validate input parameters', async () => {
+      await expect(service.verifyKYC('')).rejects.toThrow('Invalid user ID');
+      await expect(service.verifyKYC(null as any)).rejects.toThrow('Invalid user ID');
+    });
+
+    it('should sanitize input data', async () => {
+      const userData = {
+        id: 'user-1',
+        email: 'user@example.com<script>alert("xss")</script>',
+        documents: [{ type: 'PASSPORT', number: 'PASS123', verified: true }],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(true);
+      // Should not contain script tags in stored data
+      expect(mockPrisma.complianceRecord.create).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          data: expect.stringContaining('<script>')
+        })
+      );
+    });
+
+    it('should handle malformed data gracefully', async () => {
+      const userData = {
+        id: 'user-1',
+        documents: 'invalid-data', // Should be array
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      const result = await service.verifyKYC('user-1');
+
+      expect(result.verified).toBe(false);
+      expect(result.issues).toContain('INVALID_DATA_FORMAT');
+    });
+  });
+
+  describe('Audit and Logging', () => {
+    it('should log all compliance actions', async () => {
+      const userData = {
+        id: 'user-1',
+        documents: [{ type: 'PASSPORT', number: 'PASS123', verified: true }],
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(userData as any);
+      mockConfig.get.mockReturnValue('enabled');
+
+      await service.verifyKYC('user-1');
+
+      expect(mockPrisma.complianceRecord.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'user-1',
+            action: 'KYC_VERIFICATION',
+            result: 'PASSED',
+          }),
+        })
+      );
+    });
+
+    it('should track compliance history', async () => {
+      const records = [
+        { action: 'KYC_VERIFICATION', result: 'PASSED', timestamp: new Date() },
+        { action: 'AML_CHECK', result: 'PASSED', timestamp: new Date() },
+        { action: 'LISTING_APPROVAL', result: 'PASSED', timestamp: new Date() },
+      ];
+
+      mockPrisma.complianceRecord.findMany.mockResolvedValue(records as any);
+
+      const history = await service.getComplianceHistory('user-1');
+
+      expect(history).toHaveLength(3);
+      expect(history[0].action).toBe('KYC_VERIFICATION');
+    });
+  });
+});

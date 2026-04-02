@@ -22,10 +22,7 @@ export class DistributedLockService {
    * @param options - Lock options
    * @returns Lock release function or null if lock not acquired
    */
-  async acquireLock(
-    key: string,
-    options: LockOptions = {},
-  ): Promise<(() => Promise<void>) | null> {
+  async acquireLock(key: string, options: LockOptions = {}): Promise<(() => Promise<void>) | null> {
     const {
       ttl = this.DEFAULT_TTL,
       retryDelay = this.DEFAULT_RETRY_DELAY,
@@ -42,7 +39,7 @@ export class DistributedLockService {
 
         if (acquired) {
           this.logger.debug(`Lock acquired for key: ${key} (attempt ${attempt + 1})`);
-          
+
           // Return release function
           return async () => {
             try {
@@ -50,12 +47,13 @@ export class DistributedLockService {
               this.logger.debug(`Lock released for key: ${key}`);
             } catch (error) {
               this.logger.error(`Failed to release lock for key: ${key}`, error);
+              // Swallow error to prevent throwing during cleanup
             }
           };
         }
       } catch (error) {
         this.logger.error(`Error acquiring lock for key: ${key} (attempt ${attempt + 1})`, error);
-        
+
         if (attempt < maxRetries - 1) {
           await this.delay(retryDelay);
         }
@@ -79,7 +77,7 @@ export class DistributedLockService {
     options: LockOptions = {},
   ): Promise<T | null> {
     const release = await this.acquireLock(key, options);
-    
+
     if (!release) {
       return null;
     }
@@ -119,7 +117,7 @@ export class DistributedLockService {
    * Delay execution for specified milliseconds
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -139,7 +137,12 @@ export class DistributedLockService {
    */
   async forceReleaseLock(key: string): Promise<void> {
     const lockKey = `lock:${key}`;
-    await this.cacheService.delete(lockKey);
-    this.logger.warn(`Force released lock for key: ${key}`);
+    try {
+      await this.cacheService.delete(lockKey);
+      this.logger.warn(`Force released lock for key: ${key}`);
+    } catch (err: any) {
+      this.logger.error(`Failed to force release lock for key: ${key}`, err?.message);
+      // Swallow error as this is admin operation
+    }
   }
 }

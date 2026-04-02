@@ -57,7 +57,8 @@ describe('ListingsMap', () => {
   it('uses default center when no listings and no center', () => {
     render(<ListingsMap listings={[]} />);
     const center = JSON.parse(screen.getByTestId('base-map').dataset.center!);
-    expect(center[0]).toBeCloseTo(0, 1); // Default map center
+    // Default map center is Nepal coordinates
+    expect(center[0]).toBeCloseTo(27.7, 1);
   });
 
   it('uses provided zoom level', () => {

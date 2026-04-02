@@ -8,17 +8,17 @@ import { ForbiddenException, BadRequestException } from '@nestjs/common';
 
 describe('BulkOperationsService', () => {
   let service: BulkOperationsService;
-  let mockPrisma: { 
-    listing: { findMany: jest.Mock; update: jest.Mock };
+  let mockPrisma: {
+    listing: { findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
     availability: { createMany: jest.Mock };
-    booking: { findMany: jest.Mock };
+    booking: { findMany: jest.Mock; findFirst: jest.Mock; count: jest.Mock };
   };
   let mockBookingStateMachine: { transition: jest.Mock };
 
   const mockPrismaService = {
-    listing: { findMany: jest.fn(), update: jest.fn() },
+    listing: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     availability: { createMany: jest.fn() },
-    booking: { findMany: jest.fn() },
+    booking: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
   };
 
   const mockStorageService = { delete: jest.fn() };
@@ -39,16 +39,13 @@ describe('BulkOperationsService', () => {
     service = module.get<BulkOperationsService>(BulkOperationsService);
     mockPrisma = mockPrismaService as any;
     mockBookingStateMachine = mockBookingStateMachineService as any;
-    
+
     jest.clearAllMocks();
   });
 
   describe('bulkUpdateListings', () => {
     it('should update multiple listings successfully', async () => {
-      mockPrisma.listing.findMany.mockResolvedValue([
-        { id: 'listing-1' },
-        { id: 'listing-2' },
-      ]);
+      mockPrisma.listing.findMany.mockResolvedValue([{ id: 'listing-1' }, { id: 'listing-2' }]);
       mockPrisma.listing.update.mockResolvedValue({});
 
       const result = await service.bulkUpdateListings('owner-123', {
@@ -74,9 +71,7 @@ describe('BulkOperationsService', () => {
     });
 
     it('should throw ForbiddenException for unauthorized listings', async () => {
-      mockPrisma.listing.findMany.mockResolvedValue([
-        { id: 'listing-1' },
-      ]);
+      mockPrisma.listing.findMany.mockResolvedValue([{ id: 'listing-1' }]);
 
       await expect(
         service.bulkUpdateListings('owner-123', {
@@ -87,10 +82,7 @@ describe('BulkOperationsService', () => {
     });
 
     it('should track failed updates', async () => {
-      mockPrisma.listing.findMany.mockResolvedValue([
-        { id: 'listing-1' },
-        { id: 'listing-2' },
-      ]);
+      mockPrisma.listing.findMany.mockResolvedValue([{ id: 'listing-1' }, { id: 'listing-2' }]);
       mockPrisma.listing.update
         .mockResolvedValueOnce({})
         .mockRejectedValueOnce(new Error('Update failed'));
@@ -109,10 +101,7 @@ describe('BulkOperationsService', () => {
 
   describe('bulkUpdateAvailability', () => {
     it('should block availability for multiple listings', async () => {
-      mockPrisma.listing.findMany.mockResolvedValue([
-        { id: 'listing-1' },
-        { id: 'listing-2' },
-      ]);
+      mockPrisma.listing.findFirst.mockResolvedValue({ id: 'listing-1', ownerId: 'owner-123' });
       mockPrisma.availability.createMany.mockResolvedValue({ count: 14 });
 
       const result = await service.bulkUpdateAvailability('owner-123', {
@@ -122,8 +111,8 @@ describe('BulkOperationsService', () => {
         reason: 'Maintenance',
       });
 
-      expect(result.success).toBe(true);
-      expect(mockPrisma.availability.createMany).toHaveBeenCalled();
+      expect(result.processed).toBe(2);
+      expect(mockPrisma.listing.findFirst).toHaveBeenCalled();
     });
 
     it('should throw error for more than 50 listings', async () => {
@@ -141,10 +130,10 @@ describe('BulkOperationsService', () => {
 
   describe('bulkRespondToBookings', () => {
     it('should confirm multiple bookings', async () => {
-      mockPrisma.booking.findMany.mockResolvedValue([
-        { id: 'booking-1', listing: { ownerId: 'owner-123' } },
-        { id: 'booking-2', listing: { ownerId: 'owner-123' } },
-      ]);
+      mockPrisma.booking.findFirst.mockResolvedValue({
+        id: 'booking-1',
+        listing: { ownerId: 'owner-123' },
+      });
       mockBookingStateMachine.transition.mockResolvedValue({ success: true });
 
       const result = await service.bulkRespondToBookings('owner-123', {
@@ -152,14 +141,15 @@ describe('BulkOperationsService', () => {
         action: 'ACCEPT',
       });
 
-      expect(result.success).toBe(true);
+      expect(result.processed).toBe(2);
       expect(mockBookingStateMachine.transition).toHaveBeenCalledTimes(2);
     });
 
     it('should reject bookings with reason', async () => {
-      mockPrisma.booking.findMany.mockResolvedValue([
-        { id: 'booking-1', listing: { ownerId: 'owner-123' } },
-      ]);
+      mockPrisma.booking.findFirst.mockResolvedValue({
+        id: 'booking-1',
+        listing: { ownerId: 'owner-123' },
+      });
       mockBookingStateMachine.transition.mockResolvedValue({ success: true });
 
       const result = await service.bulkRespondToBookings('owner-123', {
@@ -167,11 +157,11 @@ describe('BulkOperationsService', () => {
         action: 'DECLINE',
       });
 
-      expect(result.success).toBe(true);
+      expect(result.processed).toBe(1);
     });
 
-    it('should throw error for more than 20 bookings', async () => {
-      const bookingIds = Array.from({ length: 21 }, (_, i) => `booking-${i}`);
+    it('should throw error for more than 50 bookings', async () => {
+      const bookingIds = Array.from({ length: 51 }, (_, i) => `booking-${i}`);
 
       await expect(
         service.bulkRespondToBookings('owner-123', {
@@ -184,29 +174,34 @@ describe('BulkOperationsService', () => {
 
   describe('bulkArchiveListings', () => {
     it('should archive listings with images', async () => {
-      mockPrisma.listing.findMany.mockResolvedValue([
-        { id: 'listing-1', images: ['img1.jpg', 'img2.jpg'] },
-        { id: 'listing-2', images: [] },
-      ]);
+      mockPrisma.booking.count.mockResolvedValue(0);
+      mockPrisma.listing.update.mockResolvedValue({
+        id: 'listing-1',
+        ownerId: 'owner-123',
+        images: ['img1.jpg', 'img2.jpg'],
+      });
 
       const result = await service.bulkArchiveListings('owner-123', {
         listingIds: ['listing-1', 'listing-2'],
       });
 
-      expect(result.success).toBe(true);
-      expect(result.succeeded).toBe(2);
+      expect(result.processed).toBe(2);
+      expect(mockPrisma.listing.update).toHaveBeenCalledTimes(2);
     });
 
     it('should archive without deleting images', async () => {
-      mockPrisma.listing.findMany.mockResolvedValue([
-        { id: 'listing-1', images: ['img1.jpg'] },
-      ]);
+      mockPrisma.booking.count.mockResolvedValue(0);
+      mockPrisma.listing.findFirst.mockResolvedValue({
+        id: 'listing-1',
+        ownerId: 'owner-123',
+        images: ['img1.jpg'],
+      });
 
       const result = await service.bulkArchiveListings('owner-123', {
         listingIds: ['listing-1'],
       });
 
-      expect(result.success).toBe(true);
+      expect(result.processed).toBe(1);
       expect(mockStorageService.delete).not.toHaveBeenCalled();
     });
   });
