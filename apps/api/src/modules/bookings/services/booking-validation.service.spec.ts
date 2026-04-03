@@ -36,38 +36,49 @@ describe('BookingValidationService', () => {
   });
 
   describe('validateDates', () => {
-    it('should throw error for invalid dates (NaN)', () => {
+    it('should return invalid for invalid dates (NaN)', () => {
       const invalidDate = new Date('invalid');
 
-      expect(() => service.validateDates(invalidDate, new Date())).toThrow('booking.invalidDates');
-      expect(() => service.validateDates(new Date(), invalidDate)).toThrow('booking.invalidDates');
+      const result1 = service.validateDates(invalidDate, new Date());
+      expect(result1.isValid).toBe(false);
+      expect(result1.errors).toContain('Invalid dates provided');
+
+      const result2 = service.validateDates(new Date(), invalidDate);
+      expect(result2.isValid).toBe(false);
+      expect(result2.errors).toContain('Invalid dates provided');
     });
 
-    it('should throw error when end date is before start date', () => {
+    it('should return invalid when end date is before start date', () => {
       const startDate = new Date('2025-12-10');
       const endDate = new Date('2025-12-05');
 
-      expect(() => service.validateDates(startDate, endDate)).toThrow('booking.endBeforeStart');
+      const result = service.validateDates(startDate, endDate);
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('End date must be after start date');
     });
 
-    it('should throw error when start date is in the past', () => {
+    it('should return invalid when start date is in the past', () => {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
 
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      expect(() => service.validateDates(yesterday, tomorrow)).toThrow('booking.startInPast');
+      const result = service.validateDates(yesterday, tomorrow);
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('Start date cannot be in the past');
     });
 
-    it('should not throw error for valid future dates', () => {
+    it('should return valid for valid future dates', () => {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
 
       const nextWeek = new Date();
       nextWeek.setDate(nextWeek.getDate() + 8);
 
-      expect(() => service.validateDates(tomorrow, nextWeek)).not.toThrow();
+      const result = service.validateDates(tomorrow, nextWeek);
+      expect(result.isValid).toBe(true);
+      expect(result.nights).toBe(7);
     });
 
     it('should allow booking starting today', () => {
@@ -77,7 +88,9 @@ describe('BookingValidationService', () => {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      expect(() => service.validateDates(today, tomorrow)).not.toThrow();
+      const result = service.validateDates(today, tomorrow);
+      expect(result.isValid).toBe(true);
+      expect(result.nights).toBe(1);
     });
   });
 

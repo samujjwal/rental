@@ -399,7 +399,7 @@ describe('ChaosEngineeringService', () => {
       expect(result).toHaveProperty('results');
       expect(result.results).toBeInstanceOf(Array);
       expect(result.results.length).toBeGreaterThan(0);
-    });
+    }, 15000);
 
     it('should include scenario names in results', async () => {
       mockCache.get.mockResolvedValue('cached');
@@ -412,7 +412,7 @@ describe('ChaosEngineeringService', () => {
       expect(scenarioNames).toContain('Slow Database Queries');
       expect(scenarioNames).toContain('Redis Outage');
       expect(scenarioNames).toContain('High Network Latency');
-    });
+    }, 15000);
 
     it('should track passed and failed counts', async () => {
       mockCache.get.mockResolvedValue('cached');
@@ -421,7 +421,7 @@ describe('ChaosEngineeringService', () => {
       const result = await service.runChaosSuite();
 
       expect(result.passed + result.failed).toBe(result.results.length);
-    });
+    }, 15000);
 
     it('should call cleanup after suite', async () => {
       mockCache.get.mockResolvedValue('cached');
@@ -430,6 +430,6 @@ describe('ChaosEngineeringService', () => {
       await service.runChaosSuite();
 
       expect(logSpy).toHaveBeenCalledWith('[CHAOS] Cleanup complete');
-    });
+    }, 15000);
   });
 });

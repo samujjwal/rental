@@ -1,14 +1,6 @@
-import {
-  Injectable,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
-import {
-  i18nBadRequest,
-  i18nNotFound,
-  i18nForbidden,
-} from '@/common/errors/i18n-exceptions';
+import { i18nBadRequest, i18nNotFound, i18nForbidden } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { Booking, BookingStatus, BookingMode, toNumber } from '@rental-portal/database';
@@ -18,9 +10,33 @@ import { Prisma } from '@prisma/client';
 type BookingWithRelations = Prisma.BookingGetPayload<{
   include: {
     payments: { select: { status: true } };
-    reviews: { select: { id: true; rating: true; comment: true; createdAt: true; reviewerId: true } };
-    renter: { select: { id: true; firstName: true; lastName: true; profilePhotoUrl: true; averageRating: true; totalReviews: true } };
-    listing: { include: { owner: { select: { id: true; firstName: true; lastName: true; profilePhotoUrl: true; averageRating: true } }; category: true } };
+    reviews: {
+      select: { id: true; rating: true; comment: true; createdAt: true; reviewerId: true };
+    };
+    renter: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        profilePhotoUrl: true;
+        averageRating: true;
+        totalReviews: true;
+      };
+    };
+    listing: {
+      include: {
+        owner: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            profilePhotoUrl: true;
+            averageRating: true;
+          };
+        };
+        category: true;
+      };
+    };
   };
 }>;
 import { Inject } from '@nestjs/common';
@@ -33,10 +49,7 @@ import {
   BOOKING_ELIGIBILITY_PORT,
   type BookingEligibilityPort,
 } from '../ports/booking-eligibility.port';
-import {
-  BOOKING_PRICING_PORT,
-  type BookingPricingPort,
-} from '../ports/booking-pricing.port';
+import { BOOKING_PRICING_PORT, type BookingPricingPort } from '../ports/booking-pricing.port';
 
 export interface CreateBookingDto {
   listingId: string;
@@ -82,7 +95,13 @@ export class BookingsService {
       dto.endDate instanceof Date ? dto.endDate : new Date(dto.endDate as unknown as string);
 
     // Delegate date, listing, and blocked-period validation to BookingValidationService
-    this.bookingValidator.validateDates(startDate, endDate);
+    const dateValidation = this.bookingValidator.validateDates(startDate, endDate);
+    if (!dateValidation.isValid) {
+      throw new BadRequestException({
+        message: dateValidation.errors?.join('; ') || 'Invalid booking dates',
+        errors: dateValidation.errors,
+      });
+    }
     const listing = await this.bookingValidator.validateListing(
       dto.listingId,
       renterId,
@@ -99,11 +118,7 @@ export class BookingsService {
     const safetyChecksSkipped: string[] = [];
 
     // Calculate pricing first; totalPrice is needed by the fraud risk scorer.
-    const pricing = await this.pricing.quote(
-      dto.listingId,
-      startDate,
-      endDate,
-    );
+    const pricing = await this.pricing.quote(dto.listingId, startDate, endDate);
 
     // Run all safety checks (compliance, insurance, moderation, fraud) through
     // the eligibility port. This keeps safety orchestration out of BookingsService.
@@ -134,12 +149,17 @@ export class BookingsService {
     // Calculate tax via PolicyEngine (jurisdiction-aware)
     let listingAddress: Record<string, string> | null = null;
     if (typeof listing.address === 'string') {
-      try { listingAddress = JSON.parse(listing.address); } catch { listingAddress = null; }
+      try {
+        listingAddress = JSON.parse(listing.address);
+      } catch {
+        listingAddress = null;
+      }
     } else {
       listingAddress = listing.address as Record<string, string> | null;
     }
     const policyContext = this.contextResolver.resolve({
-      listingCountry: (listingAddress as Record<string, string> | null)?.country || listing.country || undefined,
+      listingCountry:
+        (listingAddress as Record<string, string> | null)?.country || listing.country || undefined,
       listingState: listing.state || undefined,
       listingCity: listing.city || undefined,
       currency: listing.currency,
@@ -239,22 +259,13 @@ export class BookingsService {
           },
           OR: [
             {
-              AND: [
-                { startDate: { lte: startDate } },
-                { endDate: { gte: startDate } },
-              ],
+              AND: [{ startDate: { lte: startDate } }, { endDate: { gte: startDate } }],
             },
             {
-              AND: [
-                { startDate: { lte: endDate } },
-                { endDate: { gte: endDate } },
-              ],
+              AND: [{ startDate: { lte: endDate } }, { endDate: { gte: endDate } }],
             },
             {
-              AND: [
-                { startDate: { gte: startDate } },
-                { endDate: { lte: endDate } },
-              ],
+              AND: [{ startDate: { gte: startDate } }, { endDate: { lte: endDate } }],
             },
           ],
         },
@@ -351,42 +362,28 @@ export class BookingsService {
     // Persist price breakdown line items for the booking
     const days = Math.max(
       1,
-      Math.ceil(
-        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-      ),
+      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
     );
     try {
       await this.pricing.persistBreakdown(booking.id, {
         basePrice: pricing.breakdown.basePrice,
         nights: days,
         securityDeposit: pricing.depositAmount,
-        taxRate:
-          taxBreakdown.totalTax > 0
-            ? taxBreakdown.totalTax / pricing.subtotal
-            : undefined,
+        taxRate: taxBreakdown.totalTax > 0 ? taxBreakdown.totalTax / pricing.subtotal : undefined,
         currency: listing.currency,
       });
     } catch (err) {
-      this.logger.warn(
-        `Failed to persist price breakdown for booking ${booking.id}`,
-        err,
-      );
+      this.logger.warn(`Failed to persist price breakdown for booking ${booking.id}`, err);
     }
 
     // Capture FX rate snapshot when listing currency differs from platform default
     const platformDefaults = this.contextResolver.resolve({});
     const platformCurrency = platformDefaults.currency || 'USD';
-    if (
-      listing.currency &&
-      listing.currency !== platformCurrency
-    ) {
+    if (listing.currency && listing.currency !== platformCurrency) {
       try {
         await this.pricing.captureExchangeRate(booking.id, platformCurrency, listing.currency);
       } catch (err) {
-        this.logger.warn(
-          `Failed to capture FX rate for booking ${booking.id}`,
-          err,
-        );
+        this.logger.warn(`Failed to capture FX rate for booking ${booking.id}`, err);
       }
     }
 
@@ -406,7 +403,11 @@ export class BookingsService {
     return this.attachPaymentStatus(booking);
   }
 
-  async findById(id: string, includePrivate: boolean = false, userId?: string): Promise<BookingWithRelations> {
+  async findById(
+    id: string,
+    includePrivate: boolean = false,
+    userId?: string,
+  ): Promise<BookingWithRelations> {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
       include: {
@@ -463,15 +464,21 @@ export class BookingsService {
     if (userId) {
       const isRenter = booking.renterId === userId;
       const isOwner = booking.listing?.ownerId === userId;
-      
+
       if (!isRenter && !isOwner) {
         // Check if user is admin (any admin role)
-        const user = await this.prisma.user.findUnique({ 
+        const user = await this.prisma.user.findUnique({
           where: { id: userId },
-          select: { role: true }
+          select: { role: true },
         });
-        
-        const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
+
+        const adminRoles = [
+          'ADMIN',
+          'SUPER_ADMIN',
+          'OPERATIONS_ADMIN',
+          'FINANCE_ADMIN',
+          'SUPPORT_ADMIN',
+        ];
         if (!user?.role || !adminRoles.includes(user.role)) {
           throw i18nForbidden('booking.unauthorizedAction');
         }
@@ -602,13 +609,9 @@ export class BookingsService {
       } else if (bookingStatus === 'CANCELLED') {
         paymentStatus = 'FAILED';
       } else if (
-        [
-          'CONFIRMED',
-          'IN_PROGRESS',
-          'AWAITING_RETURN_INSPECTION',
-          'COMPLETED',
-          'SETTLED',
-        ].includes(bookingStatus)
+        ['CONFIRMED', 'IN_PROGRESS', 'AWAITING_RETURN_INSPECTION', 'COMPLETED', 'SETTLED'].includes(
+          bookingStatus,
+        )
       ) {
         paymentStatus = 'PAID';
       } else {
@@ -644,7 +647,9 @@ export class BookingsService {
           deliveryAddress = String(parsed.deliveryAddress);
         }
       } catch (error) {
-        this.logger.debug(`Metadata parsing failed for booking: ${error instanceof Error ? error.message : error}`);
+        this.logger.debug(
+          `Metadata parsing failed for booking: ${error instanceof Error ? error.message : error}`,
+        );
       }
     }
 
@@ -766,12 +771,7 @@ export class BookingsService {
       throw i18nForbidden('booking.unauthorizedAction');
     }
 
-    await this.stateMachine.transition(
-      bookingId,
-      'START_RENTAL',
-      userId,
-      'OWNER',
-    );
+    await this.stateMachine.transition(bookingId, 'START_RENTAL', userId, 'OWNER');
 
     return this.findById(bookingId);
   }
@@ -960,7 +960,13 @@ export class BookingsService {
     bookingId: string,
     reportId: string,
     userId: string,
-    dto: { notes?: string; damages?: string; signature?: string; photos?: string[]; checklistData?: string },
+    dto: {
+      notes?: string;
+      damages?: string;
+      signature?: string;
+      photos?: string[];
+      checklistData?: string;
+    },
   ) {
     const booking = await this.findById(bookingId, false, userId);
 

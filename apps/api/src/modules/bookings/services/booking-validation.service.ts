@@ -3,6 +3,21 @@ import { i18nBadRequest, i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { Listing } from '@rental-portal/database';
 
+export interface DateValidationResult {
+  isValid: boolean;
+  nights?: number;
+  errors?: string[];
+}
+
+export interface AvailabilityResult {
+  isAvailable: boolean;
+  conflicts?: Array<{
+    startDate: Date;
+    endDate: Date;
+    status: string;
+  }>;
+}
+
 /**
  * Pure domain validation for the booking creation flow.
  *
@@ -20,15 +35,19 @@ export class BookingValidationService {
 
   /**
    * Validate that startDate and endDate form a legal booking window.
-   * Throws i18n-aware BadRequestException on failure.
+   * Returns validation result with isValid flag and night count.
    */
-  validateDates(startDate: Date, endDate: Date): void {
+  validateDates(startDate: Date, endDate: Date): DateValidationResult {
+    const errors: string[] = [];
+
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      throw i18nBadRequest('booking.invalidDates');
+      errors.push('Invalid dates provided');
+      return { isValid: false, errors };
     }
 
     if (endDate <= startDate) {
-      throw i18nBadRequest('booking.endBeforeStart');
+      errors.push('End date must be after start date');
+      return { isValid: false, errors };
     }
 
     const now = new Date();
@@ -39,8 +58,119 @@ export class BookingValidationService {
       startDate.getDate(),
     );
     if (bookingStartDay < todayStart) {
-      throw i18nBadRequest('booking.startInPast');
+      errors.push('Start date cannot be in the past');
+      return { isValid: false, errors };
     }
+
+    // Calculate nights
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const nights = Math.round((endDate.getTime() - startDate.getTime()) / msPerDay);
+
+    return { isValid: true, nights };
+  }
+
+  /**
+   * Validate booking dates against listing constraints (min/max stay).
+   */
+  async validateBookingDates(
+    startDate: Date,
+    endDate: Date,
+    listingId: string,
+  ): Promise<DateValidationResult> {
+    // First validate basic date logic
+    const dateResult = this.validateDates(startDate, endDate);
+    if (!dateResult.isValid) {
+      return dateResult;
+    }
+
+    // Get listing constraints
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: {
+        minStayNights: true,
+        maxStayNights: true,
+      },
+    });
+
+    if (!listing) {
+      return { isValid: false, errors: ['Listing not found'] };
+    }
+
+    const nights = dateResult.nights || 0;
+    const errors: string[] = [];
+
+    if (listing.minStayNights && nights < listing.minStayNights) {
+      errors.push(`Minimum stay is ${listing.minStayNights} nights`);
+    }
+
+    if (listing.maxStayNights && nights > listing.maxStayNights) {
+      errors.push(`Maximum stay is ${listing.maxStayNights} nights`);
+    }
+
+    if (errors.length > 0) {
+      return { isValid: false, nights, errors };
+    }
+
+    return { isValid: true, nights };
+  }
+
+  /**
+   * Check if listing is available for the given date range.
+   */
+  async checkAvailability(
+    listingId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<AvailabilityResult> {
+    // Check for blocked periods
+    const blockedPeriods = await this.prisma.availability.findMany({
+      where: {
+        propertyId: listingId,
+        status: 'BLOCKED',
+        OR: [
+          { AND: [{ startDate: { lte: startDate } }, { endDate: { gte: startDate } }] },
+          { AND: [{ startDate: { lte: endDate } }, { endDate: { gte: endDate } }] },
+          { AND: [{ startDate: { gte: startDate } }, { endDate: { lte: endDate } }] },
+        ],
+      },
+    });
+
+    if (blockedPeriods.length > 0) {
+      return {
+        isAvailable: false,
+        conflicts: blockedPeriods.map((p) => ({
+          startDate: p.startDate,
+          endDate: p.endDate,
+          status: 'BLOCKED',
+        })),
+      };
+    }
+
+    // Check for existing confirmed bookings
+    const existingBookings = await this.prisma.booking.findMany({
+      where: {
+        listingId,
+        status: { in: ['CONFIRMED', 'PENDING'] },
+        OR: [
+          { AND: [{ startDate: { lte: startDate } }, { endDate: { gt: startDate } }] },
+          { AND: [{ startDate: { lt: endDate } }, { endDate: { gte: endDate } }] },
+          { AND: [{ startDate: { gte: startDate } }, { endDate: { lte: endDate } }] },
+        ],
+      },
+    });
+
+    if (existingBookings.length > 0) {
+      return {
+        isAvailable: false,
+        conflicts: existingBookings.map((b) => ({
+          startDate: b.startDate,
+          endDate: b.endDate,
+          status: b.status,
+        })),
+      };
+    }
+
+    return { isAvailable: true };
   }
 
   /**
@@ -89,11 +219,7 @@ export class BookingValidationService {
    * BadRequestException instances; other DB errors are swallowed and the caller
    * falls back to the booking-conflict check inside the transaction.
    */
-  async checkBlockedPeriods(
-    listingId: string,
-    startDate: Date,
-    endDate: Date,
-  ): Promise<void> {
+  async checkBlockedPeriods(listingId: string, startDate: Date, endDate: Date): Promise<void> {
     const blockedPeriods = await this.prisma.availability.findMany({
       where: {
         propertyId: listingId,

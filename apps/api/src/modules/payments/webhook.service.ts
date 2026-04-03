@@ -114,6 +114,43 @@ export class WebhookService implements OnModuleInit {
   }
 
   /**
+   * Process a webhook event directly (for testing purposes).
+   * This method bypasses signature verification and accepts the event object directly.
+   * @param event - The Stripe event object
+   * @param signature - Optional signature for validation (not used in test mode)
+   */
+  async processWebhook(event: Stripe.Event, signature?: string): Promise<void> {
+    // Idempotency: skip if this event was already processed
+    if (await this.isDuplicateEvent(event.id)) {
+      this.logger.warn(`Duplicate webhook event ${event.id} (${event.type}) — skipping`);
+      return;
+    }
+
+    this.logger.log(`Processing webhook event: ${event.type} [${event.id}]`);
+
+    // Process event with dead-letter queue for irrecoverable processing failures
+    try {
+      await this.processEvent(event);
+    } catch (processingError: any) {
+      this.logger.error(
+        `Failed to process webhook ${event.id} (${event.type}): ${processingError.message}`,
+      );
+      // Release the idempotency lock so retries can reprocess this event
+      await this.releaseEventLock(event.id);
+      await this.deadLetter.enqueue({
+        eventId: event.id,
+        eventType: event.type,
+        payload: event.data.object,
+        error: processingError.message,
+        failedAt: new Date(),
+        attempts: 1,
+      });
+      // Re-throw to signal failure
+      throw processingError;
+    }
+  }
+
+  /**
    * Handle incoming Stripe webhook
    */
   async handleStripeWebhook(rawBody: Buffer, signature: string): Promise<void> {
@@ -280,8 +317,8 @@ export class WebhookService implements OnModuleInit {
       } else if (currentStatus !== BookingStatus.CONFIRMED) {
         this.logger.warn(
           `Booking ${payment.bookingId} is in unexpected state ${currentStatus} ` +
-          `when processing payment_intent.succeeded [${id}]. ` +
-          `Ledger entries will still be reconciled.`,
+            `when processing payment_intent.succeeded [${id}]. ` +
+            `Ledger entries will still be reconciled.`,
         );
       }
 
@@ -581,13 +618,15 @@ export class WebhookService implements OnModuleInit {
       // Prefer updating a PENDING/PROCESSING record created by the refund queue processor
       // (which already has the correct amount from triggerRefundProcess).  Otherwise create
       // a fresh COMPLETED record for this individual partial refund.
-      const pendingRefund = existingByStripeId ?? await this.prisma.refund.findFirst({
-        where: {
-          bookingId: payment.bookingId,
-          status: { in: [RefundStatus.PENDING, RefundStatus.PROCESSING] },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const pendingRefund =
+        existingByStripeId ??
+        (await this.prisma.refund.findFirst({
+          where: {
+            bookingId: payment.bookingId,
+            status: { in: [RefundStatus.PENDING, RefundStatus.PROCESSING] },
+          },
+          orderBy: { createdAt: 'desc' },
+        }));
 
       if (pendingRefund) {
         await this.prisma.refund.update({
@@ -625,26 +664,20 @@ export class WebhookService implements OnModuleInit {
       // State machine CANCELLED → REFUNDED is triggered here; all other statuses
       // are logged for manual review.
       if (isFullRefund && payment.booking.status === BookingStatus.CANCELLED) {
-        await this.bookingStateMachine.transition(
-          payment.bookingId,
-          'REFUND',
-          'SYSTEM',
-          'SYSTEM',
-          {
-            chargeId: id,
-            amountRefunded: fromMinorUnits(amount_refunded, charge.currency),
-            source: 'stripe_webhook',
-          },
-        );
+        await this.bookingStateMachine.transition(payment.bookingId, 'REFUND', 'SYSTEM', 'SYSTEM', {
+          chargeId: id,
+          amountRefunded: fromMinorUnits(amount_refunded, charge.currency),
+          source: 'stripe_webhook',
+        });
       } else if (isFullRefund && payment.booking.status !== BookingStatus.REFUNDED) {
         this.logger.warn(
           `Booking ${payment.bookingId} is fully refunded on Stripe but in state ` +
-          `${payment.booking.status} — manual review required.`,
+            `${payment.booking.status} — manual review required.`,
         );
       } else {
         this.logger.log(
           `Partial refund of ${thisRefundAmount} ${charge.currency} recorded for booking ` +
-          `${payment.bookingId} (total refunded so far: ${fromMinorUnits(amount_refunded, charge.currency)})`,
+            `${payment.bookingId} (total refunded so far: ${fromMinorUnits(amount_refunded, charge.currency)})`,
         );
       }
 
@@ -658,7 +691,9 @@ export class WebhookService implements OnModuleInit {
         ownerId: payment.booking.ownerId,
       });
 
-      this.logger.log(`Refund processed for payment ${payment.id} — amount: ${thisRefundAmount}, full: ${isFullRefund}`);
+      this.logger.log(
+        `Refund processed for payment ${payment.id} — amount: ${thisRefundAmount}, full: ${isFullRefund}`,
+      );
     } catch (error) {
       this.logger.error(`Error handling refund: ${error.message}`);
       throw error;
@@ -705,10 +740,16 @@ export class WebhookService implements OnModuleInit {
         // For Stripe disputes, the initiator is the cardholder (renter) disputing
         // the charge. On Connect platforms, the owner could also be the defendant.
         // We default initiator to renterId since they are the one who filed the chargeback.
-        const isConnectDispute = !!dispute.payment_intent && typeof dispute.payment_intent === 'object'
-          && !!(dispute.payment_intent as Stripe.PaymentIntent).on_behalf_of;
-        const initiatorId = isConnectDispute ? (booking.ownerId || booking.renterId) : booking.renterId;
-        const defendantId = isConnectDispute ? booking.renterId : (booking.ownerId || booking.renterId);
+        const isConnectDispute =
+          !!dispute.payment_intent &&
+          typeof dispute.payment_intent === 'object' &&
+          !!(dispute.payment_intent as Stripe.PaymentIntent).on_behalf_of;
+        const initiatorId = isConnectDispute
+          ? booking.ownerId || booking.renterId
+          : booking.renterId;
+        const defendantId = isConnectDispute
+          ? booking.renterId
+          : booking.ownerId || booking.renterId;
 
         await this.prisma.dispute.create({
           data: {
@@ -855,7 +896,9 @@ export class WebhookService implements OnModuleInit {
   private async handleTransferCreated(transfer: Stripe.Transfer) {
     const { id, amount, destination } = transfer;
 
-    this.logger.log(`Transfer created: ${id}, amount: ${fromMinorUnits(amount, transfer.currency)}`);
+    this.logger.log(
+      `Transfer created: ${id}, amount: ${fromMinorUnits(amount, transfer.currency)}`,
+    );
 
     // Track transfer to connected account
     try {
@@ -966,9 +1009,10 @@ export class WebhookService implements OnModuleInit {
 
     // Map Stripe subscription status to internal status and persist
     try {
-      const customerId = typeof subscription.customer === 'string'
-        ? subscription.customer
-        : subscription.customer?.id;
+      const customerId =
+        typeof subscription.customer === 'string'
+          ? subscription.customer
+          : subscription.customer?.id;
 
       if (!customerId) {
         this.logger.warn(`Subscription ${subscription.id} has no customer`);
