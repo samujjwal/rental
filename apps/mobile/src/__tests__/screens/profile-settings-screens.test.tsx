@@ -72,8 +72,8 @@ describe('ProfileViewScreen', () => {
     await waitFor(() => {
       expect(mockGetUserById).toHaveBeenCalledWith('u2');
       expect(screen.getByText(/Sita/)).toBeTruthy();
-    });
-  });
+    }, { timeout: 15000 });
+  }, 15000);
 
   it('shows error when profile fails to load', async () => {
     mockGetUserById.mockRejectedValue(new Error('fail'));

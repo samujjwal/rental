@@ -195,9 +195,9 @@ test.describe('Mobile Navigation and Responsive Design', () => {
       // Click to expand/collapse
       const sectionHeader = firstSection.locator('[data-testid=progressive-disclosure-header]');
       await sectionHeader.click();
-      
-      // Should toggle visibility
-      await page.waitForTimeout(300);
+
+      // Should toggle visibility - wait for visibility state to change
+      await sectionContent.waitFor({ state: isCollapsed ? 'visible' : 'hidden', timeout: 1000 }).catch(() => {});
       const newVisibility = await sectionContent.isVisible();
       expect(newVisibility).toBe(!isCollapsed);
     }
@@ -240,17 +240,17 @@ test.describe('Mobile Navigation and Responsive Design', () => {
       // Swipe left
       await card.evaluate((el) => {
         const touchStart = new TouchEvent('touchstart', {
-          touches: [{ clientX: 100, clientY: 50 }]
+          touches: [{ clientX: 100, clientY: 50 } as any]
         });
         const touchEnd = new TouchEvent('touchend', {
-          changedTouches: [{ clientX: 20, clientY: 50 }]
+          changedTouches: [{ clientX: 20, clientY: 50 } as any]
         });
         el.dispatchEvent(touchStart);
         el.dispatchEvent(touchEnd);
       });
       
       // Should handle swipe without errors
-      await page.waitForTimeout(100);
+      await sectionContent.waitFor({ state: 'visible', timeout: 500 }).catch(() => {});
     }
   });
 
@@ -306,8 +306,8 @@ test.describe('Mobile Navigation and Responsive Design', () => {
       const firstRecommendation = searchRecommendations.locator('a').first();
       if (await firstRecommendation.isVisible()) {
         await firstRecommendation.tap();
-        // Should navigate
-        await page.waitForTimeout(1000);
+        // Should navigate - wait for URL change
+        await page.waitForURL(/.*/, { timeout: 2000 }).catch(() => {});
       }
     }
   });

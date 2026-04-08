@@ -57,6 +57,73 @@ export class EmailService {
     await this.sendEmail(to, subject, html);
   }
 
+  async sendWelcomeEmail(userData: any): Promise<void> {
+    const to = userData.email;
+    const subject = 'Welcome to GharBatai!';
+    const html = `
+      <h1>Welcome to GharBatai!</h1>
+      <p>Hello ${userData.firstName || 'there'},</p>
+      <p>Thank you for joining GharBatai - Nepal's premier rental platform.</p>
+      <p>We're excited to help you find your perfect rental!</p>
+    `;
+
+    await this.sendEmail(to, subject, html);
+  }
+
+  async sendBookingConfirmationEmail(bookingData: any): Promise<void> {
+    const to = bookingData.email;
+    const subject = 'Booking Confirmation';
+    const html = `
+      <h1>Booking Confirmed!</h1>
+      <p>Your booking has been confirmed.</p>
+      <p>Booking ID: ${bookingData.bookingId}</p>
+      <p>Listing: ${bookingData.listingTitle}</p>
+      <p>Dates: ${bookingData.startDate} to ${bookingData.endDate}</p>
+    `;
+
+    await this.sendEmail(to, subject, html);
+  }
+
+  async sendPaymentReceiptEmail(paymentData: any): Promise<void> {
+    const to = paymentData.email;
+    const subject = 'Payment Receipt';
+    const html = `
+      <h1>Payment Receipt</h1>
+      <p>Thank you for your payment of ${paymentData.amount} ${paymentData.currency}.</p>
+      <p>Transaction ID: ${paymentData.transactionId}</p>
+    `;
+
+    await this.sendEmail(to, subject, html);
+  }
+
+  async sendTemplateEmail(to: string, templateName: string, data: any): Promise<void> {
+    const templates: Record<string, string> = {
+      'booking-confirmation': 'Your booking has been confirmed!',
+      'welcome': 'Welcome to our platform!',
+      'default': 'Template email'
+    };
+
+    const subject = templateName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const html = `<h1>${templates[templateName] || templates.default}</h1><p>${JSON.stringify(data)}</p>`;
+
+    await this.sendEmail(to, subject, html);
+  }
+
+  async getDeliveryStatus(deliveryId: string): Promise<any> {
+    // Stub implementation
+    return {
+      deliveryId,
+      status: 'delivered',
+      timestamp: new Date(),
+    };
+  }
+
+  async trackDelivery(deliveryId: string, eventData: any): Promise<{ success: boolean }> {
+    // Stub implementation
+    this.logger.debug('Delivery event tracked', { deliveryId, eventData });
+    return { success: true };
+  }
+
   private parseBoolean(value: boolean | string | undefined, defaultValue: boolean): boolean {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'string') {

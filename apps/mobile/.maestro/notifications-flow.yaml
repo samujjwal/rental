@@ -1,0 +1,78 @@
+# ============================================================================
+# Notifications Flow — E2E Maestro Test
+# Validates push notifications and in-app notification center.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to notifications
+- tapOn:
+    text: "Notifications|Bell|Alerts"
+
+# 2. Verify notifications list loads
+- assertVisible:
+    text: "Notifications|No notifications|Recent"
+
+# 3. Verify notification categories
+- assertVisible:
+    text: "All|Bookings|Messages|Payments"
+    optional: true
+
+# 4. Filter by booking notifications
+- tapOn:
+    text: "Bookings"
+    optional: true
+
+# 5. Tap on a booking notification
+- tapOn:
+    id: "notification-card"
+    index: 0
+
+# 6. Verify notification detail opens
+- assertVisible:
+    text: "Booking|Confirmed|Pending"
+
+# 7. Navigate back to notifications
+- tapOn:
+    text: "Back"
+
+# 8. Mark notification as read
+- tapOn:
+    id: "notification-card"
+    index: 0
+- tapOn:
+    text: "Mark as read|Read"
+    optional: true
+
+# 9. Test notification settings
+- tapOn:
+    text: "Settings|Preferences"
+- assertVisible:
+    text: "Push notifications|Email|SMS"
+- tapOn:
+    text: "Push notifications"
+- assertVisible:
+    text: "Enable|Disable"
+
+# 10. Toggle push notifications
+- tapOn:
+    text: "Enable|Disable"
+- tapOn:
+    text: "Save|Done"
+
+# 11. Test notification clearing
+- tapOn:
+    text: "Clear all|Mark all as read"
+    optional: true
+- tapOn:
+    text: "Confirm"
+    optional: true
+
+# 12. Verify notifications are cleared
+- assertVisible:
+    text: "No notifications"
+    optional: true

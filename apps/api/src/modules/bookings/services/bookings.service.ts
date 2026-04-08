@@ -5,6 +5,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
 import { Booking, BookingStatus, BookingMode, toNumber } from '@rental-portal/database';
 import { Prisma } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 
 // Type for booking with included relations from findById()
 type BookingWithRelations = Prisma.BookingGetPayload<{
@@ -86,13 +87,32 @@ export class BookingsService {
     private readonly contextResolver: ContextResolverService,
     @Inject(BOOKING_PRICING_PORT)
     private readonly pricing: BookingPricingPort,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(renterId: string, dto: CreateBookingDto): Promise<Booking> {
-    const startDate =
-      dto.startDate instanceof Date ? dto.startDate : new Date(dto.startDate as unknown as string);
-    const endDate =
-      dto.endDate instanceof Date ? dto.endDate : new Date(dto.endDate as unknown as string);
+    // Strict date validation with timezone awareness
+    const startDate = this.validateAndParseDate(dto.startDate, 'startDate');
+    const endDate = this.validateAndParseDate(dto.endDate, 'endDate');
+
+    // Validate date range logic
+    if (endDate <= startDate) {
+      throw i18nBadRequest('booking.invalidDates');
+    }
+
+    // Validate dates are not in the past
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    if (startDate < now) {
+      throw i18nBadRequest('booking.invalidDates');
+    }
+
+    // Validate booking is not too far in the future (default 1 year)
+    const maxBookingDate = new Date();
+    maxBookingDate.setFullYear(maxBookingDate.getFullYear() + 1);
+    if (endDate > maxBookingDate) {
+      throw i18nBadRequest('booking.invalidDates');
+    }
 
     // Delegate date, listing, and blocked-period validation to BookingValidationService
     const dateValidation = this.bookingValidator.validateDates(startDate, endDate);
@@ -303,7 +323,7 @@ export class BookingsService {
         bookingMetadata.needsReview = true;
       }
 
-      return tx.booking.create({
+      const createdBooking = await tx.booking.create({
         data: {
           renterId,
           listingId: dto.listingId,
@@ -357,24 +377,28 @@ export class BookingsService {
           },
         },
       });
-    })) as unknown as Booking;
 
-    // Persist price breakdown line items for the booking
-    const days = Math.max(
-      1,
-      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
-    );
-    try {
-      await this.pricing.persistBreakdown(booking.id, {
-        basePrice: pricing.breakdown.basePrice,
-        nights: days,
-        securityDeposit: pricing.depositAmount,
-        taxRate: taxBreakdown.totalTax > 0 ? taxBreakdown.totalTax / pricing.subtotal : undefined,
-        currency: listing.currency,
-      });
-    } catch (err) {
-      this.logger.warn(`Failed to persist price breakdown for booking ${booking.id}`, err);
-    }
+      // Persist price breakdown line items for the booking (inside transaction)
+      const days = Math.max(
+        1,
+        Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
+      );
+      
+      try {
+        await this.pricing.persistBreakdown(createdBooking.id, {
+          basePrice: pricing.breakdown.basePrice,
+          nights: days,
+          securityDeposit: pricing.depositAmount,
+          taxRate: taxBreakdown.totalTax > 0 ? taxBreakdown.totalTax / pricing.subtotal : undefined,
+          currency: listing.currency,
+        });
+      } catch (err) {
+        // Log but don't fail the booking - price breakdown is non-critical
+        this.logger.warn(`Failed to persist price breakdown for booking ${createdBooking.id}`, err);
+      }
+
+      return createdBooking;
+    })) as unknown as Booking;
 
     // Capture FX rate snapshot when listing currency differs from platform default
     const platformDefaults = this.contextResolver.resolve({});
@@ -466,19 +490,15 @@ export class BookingsService {
       const isOwner = booking.listing?.ownerId === userId;
 
       if (!isRenter && !isOwner) {
-        // Check if user is admin (any admin role)
+        // Check if user is admin (using centralized admin roles from config)
         const user = await this.prisma.user.findUnique({
           where: { id: userId },
           select: { role: true },
         });
 
-        const adminRoles = [
-          'ADMIN',
-          'SUPER_ADMIN',
-          'OPERATIONS_ADMIN',
-          'FINANCE_ADMIN',
-          'SUPPORT_ADMIN',
-        ];
+        const adminRoles = this.configService.get<string[]>('security.adminRoles', [
+          'ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'
+        ]);
         if (!user?.role || !adminRoles.includes(user.role)) {
           throw i18nForbidden('booking.unauthorizedAction');
         }
@@ -1003,5 +1023,36 @@ export class BookingsService {
         },
       },
     });
+  }
+
+  /**
+   * Validates and parses a date string or Date object.
+   * Throws an error if the date is invalid or cannot be parsed.
+   */
+  private validateAndParseDate(dateInput: Date | string, fieldName: string): Date {
+    let parsedDate: Date;
+
+    if (dateInput instanceof Date) {
+      parsedDate = dateInput;
+    } else if (typeof dateInput === 'string') {
+      // Try to parse the date string
+      parsedDate = new Date(dateInput);
+    } else {
+      throw i18nBadRequest('booking.invalidDates');
+    }
+
+    // Check if the date is valid (not Invalid Date)
+    if (isNaN(parsedDate.getTime())) {
+      throw i18nBadRequest('booking.invalidDates');
+    }
+
+    // Normalize to midnight UTC to avoid timezone issues
+    const normalizedDate = new Date(Date.UTC(
+      parsedDate.getFullYear(),
+      parsedDate.getMonth(),
+      parsedDate.getDate()
+    ));
+
+    return normalizedDate;
   }
 }

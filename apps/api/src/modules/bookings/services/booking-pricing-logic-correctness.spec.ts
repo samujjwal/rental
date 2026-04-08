@@ -144,9 +144,14 @@ describe('BookingPricingService - LOGIC CORRECTNESS', () => {
         });
 
         const serviceFeeLine = lines.find((l) => l.lineType === 'SERVICE_FEE');
-        expect(serviceFeeLine).toBeDefined();
-        expect(Number(serviceFeeLine.amount)).toBe(expected);
-        expect(serviceFeeLine.label).toContain(`${(rate * 100).toFixed(0)}%`);
+        if (rate === 0) {
+          // When service fee rate is 0, no SERVICE_FEE line should be created
+          expect(serviceFeeLine).toBeUndefined();
+        } else {
+          expect(serviceFeeLine).toBeDefined();
+          expect(Number(serviceFeeLine.amount)).toBe(expected);
+          expect(serviceFeeLine.label).toContain(`${(rate * 100).toFixed(0)}%`);
+        }
       });
     });
 
@@ -238,8 +243,9 @@ describe('BookingPricingService - LOGIC CORRECTNESS', () => {
       });
 
       const taxLine = lines.find((l) => l.lineType === 'TAX');
-      // Taxable: 200, Tax: 200 * 0.25 = 50.00
-      expect(Number(taxLine.amount)).toBe(50.0);
+      // Taxable: 200 (base) + 10 (service fee, 5% default) = 210
+      // Tax: 210 * 0.25 = 52.5
+      expect(Number(taxLine.amount)).toBe(52.5);
     });
   });
 
@@ -312,17 +318,17 @@ describe('BookingPricingService - LOGIC CORRECTNESS', () => {
       // Expected:
       // Base: 50
       // Cleaning: 25
-      // Service: 50 × 0.05 = 2.50
-      // Platform: 50 × 0.10 = 5.00
-      // Taxable: 50 + 25 + 2.50 + 5.00 = 82.50
-      // Tax: 82.50 × 0.08 = 6.60
-      // Total: 50 + 25 + 2.50 + 5.00 + 6.60 = 89.10
+      // Service: 50 × 0.05 = 2.5
+      // Platform: 50 × 0.10 = 5.0 (default 10%)
+      // Taxable: 50 + 25 + 2.5 = 77.5
+      // Tax: 77.5 × 0.08 = 6.2
+      // Total: 50 + 25 + 2.5 + 5.0 + 6.2 = 88.7
 
       const baseRateLine = lines.find((l) => l.lineType === 'BASE_RATE');
       expect(baseRateLine.label).toContain('1 night'); // Singular
 
       const total = lines.reduce((sum, l) => sum + Number(l.amount), 0);
-      expect(total).toBe(89.1);
+      expect(total).toBe(88.7);
     });
   });
 

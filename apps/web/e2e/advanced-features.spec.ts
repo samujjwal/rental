@@ -300,7 +300,6 @@ async function gotoPathAfterLogin(page: Page, path: string): Promise<void> {
     await page.waitForLoadState('domcontentloaded').catch(() => {
       // Best effort to let the auth redirect settle before retrying the target route.
     });
-    await page.waitForTimeout(250);
   }
 
   if (lastError) {

@@ -72,14 +72,21 @@ describe('TaxPolicyEngineService', () => {
   describe('calculateTax', () => {
     it('should calculate tax for Nepal transaction', async () => {
       const result = await service.calculateTax('NP', 10000);
+
+      // EXACT VALIDATION: 10,000 × 13% = 1,300
       expect(result.subtotal).toBe(10000);
       expect(result.totalTax).toBe(1300); // 13% of 10000
-      expect(result.total).toBe(11300);
+      expect(result.total).toBe(11300); // 10000 + 1300
       expect(result.taxes).toHaveLength(1);
+      expect(result.taxes[0].rate).toBe(0.13);
+      expect(result.taxes[0].amount).toBe(1300);
     });
 
     it('should handle zero amount', async () => {
       const result = await service.calculateTax('NP', 0);
+
+      // EXACT VALIDATION: 0 × 13% = 0
+      expect(result.subtotal).toBe(0);
       expect(result.totalTax).toBe(0);
       expect(result.total).toBe(0);
     });

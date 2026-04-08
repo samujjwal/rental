@@ -418,9 +418,9 @@ export class AuthService {
 
     const isValid = Boolean(session);
     if (isValid) {
-      // Cache valid sessions for 30 seconds (B4 fix: was 300s, leaving a 5-minute
-      // window after token revocation where revoked tokens still passed validation).
-      await this.cacheService.set(cacheKey, true, 30);
+      // Cache valid sessions for 5 seconds (was 300s, then 30s - leaving window for revoked tokens).
+      // 5-second TTL ensures quick revocation while maintaining performance.
+      await this.cacheService.set(cacheKey, true, 5);
     }
 
     return isValid;
@@ -789,5 +789,19 @@ export class AuthService {
     });
 
     return { message: 'Phone verified successfully' };
+  }
+
+  /**
+   * Hash a password (wrapper for PasswordService)
+   */
+  async hashPassword(password: string): Promise<string> {
+    return this.passwordService.hash(password);
+  }
+
+  /**
+   * Verify a password against a hash (wrapper for PasswordService)
+   */
+  async verifyPassword(password: string, hash: string): Promise<boolean> {
+    return this.passwordService.verify(password, hash);
   }
 }

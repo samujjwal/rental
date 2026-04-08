@@ -15,4 +15,8 @@ export interface PaymentCommandPayload {
   processedAt?: string;
   failureReason?: string;
   metadata?: Record<string, unknown>;
+  idempotencyKey?: string;
+  retryCount?: number;
+  enqueuedAt?: string;
+  completedAt?: string;
 }

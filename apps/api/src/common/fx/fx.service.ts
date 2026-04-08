@@ -44,12 +44,28 @@ export class FxService {
    * Get the exchange rate from `base` to `target`.
    */
   async getRate(base: string, target: string): Promise<FxRate> {
+    // Validate currency codes
+    if (!base || !target) {
+      throw new Error(`No exchange rate available for ${base}:${target}`);
+    }
+    
+    // Currency codes should be 3 letters
+    const currencyCodeRegex = /^[A-Za-z]{3}$/;
+    if (!currencyCodeRegex.test(base) || !currencyCodeRegex.test(target)) {
+      throw new Error(`No exchange rate available for ${base}:${target}`);
+    }
+
     if (base === target) {
       return { base, target, rate: 1, source: 'identity', fetchedAt: new Date() };
     }
 
     const cacheKey = `fx:${base}:${target}`;
-    const cached = await this.cache.get<FxRate>(cacheKey);
+    let cached: FxRate | null = null;
+    try {
+      cached = await this.cache.get<FxRate>(cacheKey);
+    } catch (error) {
+      this.logger.warn(`Failed to read from cache: ${error.message}`);
+    }
     if (cached) return cached;
 
     // Try live API
@@ -71,7 +87,11 @@ export class FxService {
         source: 'static-fallback',
         fetchedAt: new Date(),
       };
-      await this.cache.set(cacheKey, result, 3600);
+      try {
+        await this.cache.set(cacheKey, result, 3600);
+      } catch (error) {
+        this.logger.warn(`Failed to cache FX rate: ${error.message}`);
+      }
       return result;
     }
 
@@ -87,12 +107,16 @@ export class FxService {
         source: 'static-pivot-USD',
         fetchedAt: new Date(),
       };
-      await this.cache.set(cacheKey, result, 3600);
+      try {
+        await this.cache.set(cacheKey, result, 3600);
+      } catch (error) {
+        this.logger.warn(`Failed to cache FX rate: ${error.message}`);
+      }
       return result;
     }
 
-    this.logger.warn(`No FX rate available for ${base} → ${target}, returning 1`);
-    return { base, target, rate: 1, source: 'unavailable', fetchedAt: new Date() };
+    this.logger.warn(`No FX rate available for ${base} → ${target}`);
+    throw new Error(`No exchange rate available for ${base}:${target}`);
   }
 
   /**

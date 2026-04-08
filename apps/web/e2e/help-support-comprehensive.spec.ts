@@ -434,18 +434,22 @@ test.describe("Help & Support Flows", () => {
         // Should show user message
         await expect(page.locator('[data-testid="user-message"]')).toBeVisible();
         await expect(page.locator('text=Hello, I need help with my booking')).toBeVisible();
-        
-        // Wait for agent response (mock)
-        await page.waitForTimeout(2000);
-        
-        // Should show typing indicator
+
+        // Wait for agent response (mock) - wait for typing indicator or agent message
         const typingIndicator = page.locator('[data-testid="typing-indicator"]');
+        const agentMessage = page.locator('[data-testid="agent-message"]');
+        await Promise.race([
+          typingIndicator.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {}),
+          agentMessage.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {}),
+        ]);
+
+        // Should show typing indicator
         if (await typingIndicator.isVisible()) {
           await expect(typingIndicator).toBeVisible();
         }
-        
+
         // Should show agent response
-        await expect(page.locator('[data-testid="agent-message"]')).toBeVisible({ timeout: 10000 });
+        await expect(agentMessage).toBeVisible({ timeout: 10000 });
       }
     });
 

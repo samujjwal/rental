@@ -1,0 +1,87 @@
+# ============================================================================
+# Payment Flow — E2E Maestro Test
+# Validates payment processing, deposit holds, and refund flows.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to a booking that requires payment
+- tapOn:
+    text: "Bookings|My Bookings"
+- tapOn:
+    id: "booking-card"
+    index: 0
+
+# 2. Verify payment status
+- assertVisible:
+    text: "Payment|Deposit|Amount"
+
+# 3. For pending payment, initiate payment flow
+- tapOn:
+    text: "Pay now|Complete payment|Make payment"
+    optional: true
+
+# 4. Verify payment method selection
+- assertVisible:
+    text: "Payment method|Card|Bank account"
+
+# 5. Select payment method
+- tapOn:
+    text: "Card|Credit card|Debit card"
+    index: 0
+
+# 6. Enter card details (test environment)
+- assertVisible:
+    text: "Card number"
+- inputText: "4242424242424242"
+    id: "card-number"
+- assertVisible:
+    text: "Expiry"
+- inputText: "12/28"
+    id: "card-expiry"
+- assertVisible:
+    text: "CVV|CVC"
+- inputText: "123"
+    id: "card-cvv"
+
+# 7. Confirm payment
+- assertVisible:
+    text: "Confirm|Pay|Submit"
+- tapOn:
+    text: "Confirm|Pay"
+
+# 8. Verify payment success
+- assertVisible:
+    text: "Payment successful|Payment complete|Thank you"
+
+# 9. Navigate to payment history
+- tapOn:
+    text: "Back"
+- tapOn:
+    text: "Payment history|Transactions"
+- assertVisible:
+    text: "Payment|Date|Amount"
+
+# 10. Verify payment appears in history
+- assertVisible:
+    text: "4242"
+
+# 11. Test deposit hold (if applicable)
+- tapOn:
+    text: "Deposit|Security deposit"
+- assertVisible:
+    text: "Deposit amount|Hold"
+
+# 12. Test refund request (if applicable)
+- tapOn:
+    text: "Request refund|Refund"
+    optional: true
+- assertVisible:
+    text: "Refund amount|Reason"
+- tapOn:
+    text: "Submit|Request"
+    optional: true

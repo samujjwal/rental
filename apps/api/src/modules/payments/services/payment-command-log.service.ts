@@ -69,6 +69,7 @@ export class PaymentCommandLogService {
       reason: input.reason,
       requestedByRole: input.requestedByRole,
       metadata: input.metadata,
+      idempotencyKey: input.metadata?.idempotencyKey as string,
     };
 
     return this.prisma.auditLog.create({

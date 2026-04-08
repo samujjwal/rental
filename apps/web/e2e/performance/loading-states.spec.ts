@@ -429,7 +429,8 @@ test.describe('Performance & Loading States', () => {
       // Try multiple actions
       for (let i = 0; i < 5; i++) {
         await page.reload();
-        await page.waitForTimeout(1000);
+        // Wait for page to be ready by checking for navigation or a key element
+        await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
         
         // Check if app handles failures gracefully
         const errorBoundary = page.locator('[data-testid="error-boundary"]');
@@ -564,7 +565,8 @@ test.describe('Performance & Loading States', () => {
         await page.goto('/search');
         await page.fill('input[placeholder*="Search"]', `test query ${i}`);
         await page.getByRole('button', { name: 'Search' }).first().click();
-        await page.waitForTimeout(1000);
+        // Wait for search results to load
+        await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
       }
       
       // Get final memory usage

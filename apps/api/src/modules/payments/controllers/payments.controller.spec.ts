@@ -442,6 +442,7 @@ describe('PaymentsController', () => {
   // ── requestPayout ──
   describe('requestPayout', () => {
     it('delegates to payouts service', async () => {
+      payouts.getPendingEarnings.mockResolvedValue({ amount: 5000, currency: 'NPR' });
       payouts.createPayout.mockResolvedValue({ id: 'po1' } as any);
       await controller.requestPayout('u1', { amount: 1000 } as any);
       expect(payouts.createPayout).toHaveBeenCalledWith('u1', 1000);
@@ -581,6 +582,188 @@ describe('PaymentsController', () => {
         { reason: 'defective' } as any,
       );
       expect(result.refundId).toBe('refund-1');
+    });
+  });
+
+  // ── Payment Error Handling Tests ──
+
+  describe('Payment Error Handling', () => {
+    it('handles Stripe API failures gracefully', async () => {
+      stripe.createPaymentIntent.mockRejectedValue(new Error('Stripe API error'));
+      paymentData.getBookingForPayment.mockResolvedValue({
+        renterId: 'u1',
+        status: 'PENDING_PAYMENT',
+        totalPrice: 1000,
+        currency: 'NPR',
+        renter: { stripeCustomerId: 'cus_123' },
+      } as any);
+      
+      await expect(controller.createPaymentIntent('b1', 'u1')).rejects.toThrow('Stripe API error');
+    });
+
+    it('handles network timeout scenarios', async () => {
+      stripe.createPaymentIntent.mockRejectedValue(new Error('ETIMEDOUT'));
+      paymentData.getBookingForPayment.mockResolvedValue({
+        renterId: 'u1',
+        status: 'PENDING_PAYMENT',
+        totalPrice: 1000,
+        currency: 'NPR',
+        renter: { stripeCustomerId: 'cus_123' },
+      } as any);
+      
+      await expect(controller.createPaymentIntent('b1', 'u1')).rejects.toThrow('ETIMEDOUT');
+    });
+
+    it('validates payment intent creation parameters', async () => {
+      paymentData.getBookingForPayment.mockResolvedValue({
+        renterId: 'u1',
+        status: 'PENDING_PAYMENT',
+        totalPrice: -1000, // Invalid amount
+        currency: 'NPR',
+        renter: { stripeCustomerId: 'cus_123' },
+      } as any);
+      
+      await expect(controller.createPaymentIntent('b1', 'u1')).rejects.toThrow();
+    });
+
+    it('handles insufficient funds scenarios', async () => {
+      stripe.createPaymentIntent.mockRejectedValue(new Error('Insufficient funds'));
+      paymentData.getBookingForPayment.mockResolvedValue({
+        renterId: 'u1',
+        status: 'PENDING_PAYMENT',
+        totalPrice: 1000,
+        currency: 'NPR',
+        renter: { stripeCustomerId: 'cus_123' },
+      } as any);
+      
+      await expect(controller.createPaymentIntent('b1', 'u1')).rejects.toThrow('Insufficient funds');
+    });
+  });
+
+  // ── Refund Logic Tests ──
+
+  describe('Refund Logic', () => {
+    it('calculates refund amount correctly', async () => {
+      ledger.getBookingLedger.mockResolvedValue([{
+        amount: 1000,
+        type: 'PAYMENT',
+        currency: 'NPR'
+      }] as any);
+      paymentData.getLatestPaymentForBooking.mockResolvedValue({
+        stripePaymentIntentId: 'pi_123',
+        amount: 1000,
+        currency: 'NPR',
+        booking: { renterId: 'u1' },
+      } as any);
+      prisma.refund.create.mockResolvedValue({ id: 'refund-1', amount: 800 });
+      paymentCommands.createCommand.mockResolvedValue({ id: 'cmd-1' } as any);
+      
+      const result = await controller.requestRefund('b1', { id: 'u1', role: 'USER' } as any, { reason: 'defective' } as any);
+      expect(result.refundId).toBe('refund-1');
+      expect(prisma.refund.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            amount: expect.any(Number)
+          })
+        })
+      );
+    });
+
+    it('validates refund eligibility timing', async () => {
+      ledger.getBookingLedger.mockResolvedValue([{
+        amount: 1000,
+        type: 'PAYMENT',
+        createdAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000), // 31 days ago
+        currency: 'NPR'
+      }] as any);
+      paymentData.getLatestPaymentForBooking.mockResolvedValue({
+        stripePaymentIntentId: 'pi_123',
+        amount: 1000,
+        currency: 'NPR',
+        booking: { renterId: 'u1' },
+      } as any);
+      
+      await expect(controller.requestRefund('b1', { id: 'u1', role: 'USER' } as any, { reason: 'defective' } as any))
+        .rejects.toThrow();
+    });
+
+    it('enforces refund limits', async () => {
+      ledger.getBookingLedger.mockResolvedValue([{
+        amount: 1000,
+        type: 'PAYMENT',
+        currency: 'NPR'
+      }] as any);
+      paymentData.getLatestPaymentForBooking.mockResolvedValue({
+        stripePaymentIntentId: 'pi_123',
+        amount: 1000,
+        currency: 'NPR',
+        booking: { renterId: 'u1' },
+      } as any);
+      prisma.refund.create.mockRejectedValue(new Error('Refund limit exceeded'));
+      
+      await expect(controller.requestRefund('b1', { id: 'u1', role: 'USER' } as any, { reason: 'defective' } as any))
+        .rejects.toThrow('Refund limit exceeded');
+    });
+  });
+
+  // ── Payout Validation Tests ──
+
+  describe('Payout Validation', () => {
+    it('validates payout amount', async () => {
+      await expect(controller.requestPayout('u1', { amount: -100 } as any))
+        .rejects.toThrow();
+    });
+
+    it('checks payout eligibility', async () => {
+      payouts.getPendingEarnings.mockResolvedValue({ amount: 0, currency: 'NPR' });
+      
+      await expect(controller.requestPayout('u1', { amount: 100 } as any))
+        .rejects.toThrow();
+    });
+
+    it('validates payout timing restrictions', async () => {
+      payouts.getPendingEarnings.mockResolvedValue({ amount: 100, currency: 'NPR' });
+      payouts.createPayout.mockRejectedValue(new Error('Payout cooldown period'));
+      
+      await expect(controller.requestPayout('u1', { amount: 50 } as any))
+        .rejects.toThrow('Payout cooldown period');
+    });
+  });
+
+  // ── Security Tests ──
+
+  describe('Security Tests', () => {
+    it('prevents cross-user data access', async () => {
+      paymentData.getBookingForPayment.mockResolvedValue({
+        renterId: 'other-user',
+        status: 'PENDING_PAYMENT',
+        totalAmount: 1000,
+        currency: 'NPR',
+      } as any);
+      
+      await expect(controller.createPaymentIntent('b1', 'u1'))
+        .rejects.toThrow(ForbiddenException);
+    });
+
+    it('validates admin override capabilities', async () => {
+      paymentData.getBookingForPayment.mockResolvedValue({
+        renterId: 'other-user',
+        status: 'PENDING_PAYMENT',
+        totalAmount: 1000,
+        currency: 'NPR',
+      } as any);
+      
+      // Admin should be able to access but not modify payment intent
+      await expect(controller.createPaymentIntent('b1', 'admin-user'))
+        .rejects.toThrow(ForbiddenException);
+    });
+
+    it('validates payment method security', async () => {
+      paymentData.getUserStripeCustomerId.mockResolvedValue('cus_123');
+      stripe.attachPaymentMethod.mockRejectedValue(new Error('Invalid payment method'));
+      
+      await expect(controller.attachPaymentMethod('u1', { paymentMethodId: 'invalid_pm' } as any))
+        .rejects.toThrow('Invalid payment method');
     });
   });
 });

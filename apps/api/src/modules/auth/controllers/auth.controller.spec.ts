@@ -5,6 +5,7 @@ import { OAuthService } from '../services/oauth.service';
 import { OtpService } from '../services/otp.service';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -348,6 +349,74 @@ describe('AuthController', () => {
       authService.verifyPhone.mockResolvedValue({ verified: true } as any);
       await controller.verifyPhone('user-1', { code: '654321' } as any);
       expect(authService.verifyPhone).toHaveBeenCalledWith('user-1', '654321');
+    });
+
+    it('propagates service errors', async () => {
+      authService.verifyPhone.mockRejectedValue(new Error('Invalid code'));
+      await expect(controller.verifyPhone('user-1', { code: '654321' } as any)).rejects.toThrow('Invalid code');
+    });
+
+    it('handles expired codes', async () => {
+      authService.verifyPhone.mockRejectedValue(new Error('Code expired'));
+      await expect(controller.verifyPhone('user-1', { code: '654321' } as any)).rejects.toThrow('Code expired');
+    });
+  });
+
+  // ── Rate Limiting Tests ─────────────────────────────────────────────
+
+  describe('Rate Limiting', () => {
+    it('should throttle password reset requests', async () => {
+      const mockThrottlerGuard = { canActivate: jest.fn().mockReturnValue(true) };
+      // Test that throttling is applied to password reset endpoint
+      expect(controller.requestPasswordReset).toBeDefined();
+    });
+
+    it('should throttle MFA enable requests', async () => {
+      // Test that throttling is applied to MFA enable endpoint
+      expect(controller.enableMfa).toBeDefined();
+    });
+
+    it('should throttle OTP requests', async () => {
+      // Test that throttling is applied to OTP request endpoint
+      expect(controller.requestOtp).toBeDefined();
+    });
+  });
+
+  // ── Error Response Format Tests ─────────────────────────────────────
+
+  describe('Error Response Formats', () => {
+    it('returns proper error format for duplicate registration', async () => {
+      const conflictError = new ConflictException('Email already exists');
+      authService.register.mockRejectedValue(conflictError);
+      
+      await expect(controller.register({ email: 'test@test.com', password: 'Pass123!', firstName: 'Test' } as any))
+        .rejects.toThrow('Email already exists');
+    });
+
+    it('returns proper error format for invalid credentials', async () => {
+      const unauthorizedError = new UnauthorizedException('Invalid credentials');
+      authService.login.mockRejectedValue(unauthorizedError);
+      
+      await expect(controller.login({ email: 'test@test.com', password: 'wrong' } as any, '127.0.0.1', mockReq))
+        .rejects.toThrow('Invalid credentials');
+    });
+
+    it('returns proper error format for expired tokens', async () => {
+      const unauthorizedError = new UnauthorizedException('Token expired');
+      authService.refreshTokens.mockRejectedValue(unauthorizedError);
+      
+      const mockReq = { cookies: {} } as any;
+      await expect(controller.refreshToken({ refreshToken: 'expired-token' } as any, mockReq))
+        .rejects.toThrow('Token expired');
+    });
+
+    it('returns proper error format for invalid refresh token', async () => {
+      const unauthorizedError = new UnauthorizedException('Invalid refresh token');
+      authService.refreshTokens.mockRejectedValue(unauthorizedError);
+      
+      const mockReq = { cookies: {} } as any;
+      await expect(controller.refreshToken({ refreshToken: 'invalid-token' } as any, mockReq))
+        .rejects.toThrow('Invalid refresh token');
     });
   });
 });

@@ -1,0 +1,82 @@
+# ============================================================================
+# Insurance Claims Flow — E2E Maestro Test
+# Validates the insurance claims submission and tracking flow.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to booking details
+- tapOn:
+    text: "Bookings|My Bookings"
+- tapOn:
+    id: "booking-card"
+    index: 0
+
+# 2. Verify insurance option is available
+- assertVisible:
+    text: "Insurance|Protection|Coverage"
+
+# 3. Navigate to insurance claims
+- tapOn:
+    text: "Insurance|Claims"
+- assertVisible:
+    text: "File a claim|New Claim|Submit Claim"
+
+# 4. Start new claim
+- tapOn:
+    text: "File a claim|New Claim|Submit Claim"
+
+# 5. Select incident type
+- assertVisible:
+    text: "What happened|Incident type|Reason"
+- tapOn:
+    text: "Damage|Theft|Loss|Accident"
+    index: 0
+
+# 6. Provide incident details
+- assertVisible:
+    text: "Description|What happened|Details"
+- inputText: "Test claim for damaged equipment during rental period"
+    id: "claim-description"
+
+# 7. Upload evidence (photo)
+- assertVisible:
+    text: "Upload photo|Add photo|Evidence"
+- tapOn:
+    text: "Upload photo|Add photo"
+- tapOn:
+    text: "Camera|Photo Library"
+    optional: true
+
+# 8. Select date of incident
+- assertVisible:
+    text: "Date of incident|When did it happen"
+- tapOn:
+    text: "Date"
+- tapOn:
+    text: "Confirm|Done|OK"
+    optional: true
+
+# 9. Submit claim
+- assertVisible:
+    text: "Submit|Send claim"
+- tapOn:
+    text: "Submit|Send claim"
+
+# 10. Verify claim submission confirmation
+- assertVisible:
+    text: "Claim submitted|Success|We'll review your claim"
+
+# 11. Navigate to claims list
+- tapOn:
+    text: "My claims|Claims history"
+- assertVisible:
+    text: "Claim #|Status|Pending|In Review"
+
+# 12. Verify claim appears in list
+- assertVisible:
+    text: "Test claim"

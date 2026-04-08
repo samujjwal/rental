@@ -1,0 +1,91 @@
+# ============================================================================
+# Messaging Flow — E2E Maestro Test
+# Validates real-time messaging between renters and owners.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to messages
+- tapOn:
+    text: "Messages|Inbox|Chat"
+
+# 2. Verify messages list loads
+- assertVisible:
+    text: "Conversations|Messages|No messages"
+
+# 3. Open a conversation (if exists)
+- tapOn:
+    id: "conversation-card"
+    index: 0
+    optional: true
+
+# 4. If no conversations, start new one from listing
+- tapOn:
+    text: "Search|Browse"
+- tapOn:
+    id: "listing-card"
+    index: 0
+- tapOn:
+    text: "Contact|Message owner|Chat"
+    optional: true
+
+# 5. Verify chat interface loads
+- assertVisible:
+    text: "Type a message|Message"
+
+# 6. Send a message
+- inputText: "Hello, I'm interested in this listing"
+    id: "message-input"
+- tapOn:
+    text: "Send"
+    id: "send-button"
+
+# 7. Verify message appears in chat
+- assertVisible:
+    text: "Hello, I'm interested"
+
+# 8. Test message attachment
+- tapOn:
+    text: "Attach|Add attachment|Plus"
+    optional: true
+- tapOn:
+    text: "Photo|Image|Camera"
+    optional: true
+- tapOn:
+    text: "Photo Library"
+    optional: true
+
+# 9. Verify attachment indicator
+- assertVisible:
+    text: "Attachment|Image"
+    optional: true
+
+# 10. Test message read receipt
+- tapOn:
+    text: "Back"
+- tapOn:
+    id: "conversation-card"
+    index: 0
+- assertVisible:
+    text: "Read|Seen"
+    optional: true
+
+# 11. Test message search
+- tapOn:
+    text: "Search|Search messages"
+- inputText: "interested"
+    id: "search-input"
+- assertVisible:
+    text: "Hello, I'm interested"
+
+# 12. Test message deletion
+- tapOn:
+    text: "Delete message|Remove"
+    optional: true
+- tapOn:
+    text: "Confirm|Delete"
+    optional: true

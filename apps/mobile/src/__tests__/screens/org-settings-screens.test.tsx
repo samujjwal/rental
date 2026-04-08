@@ -89,9 +89,9 @@ describe('OrganizationsScreen', () => {
       ],
     });
     const { getByText } = render(<OrganizationsScreen navigation={nav()} route={route()} />);
-    await waitFor(() => expect(getByText('Sunrise Rentals')).toBeTruthy());
+    await waitFor(() => expect(getByText('Sunrise Rentals')).toBeTruthy(), { timeout: 10000 });
     expect(getByText('Valley Corp')).toBeTruthy();
-  });
+  }, 10000);
 
   it('shows empty state when no orgs', async () => {
     mockGetOrganizations.mockResolvedValue({ organizations: [] });

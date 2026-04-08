@@ -109,6 +109,14 @@ export class StripeService implements PaymentProvider {
       );
     }
 
+    // Additional guard: In production, explicitly prevent test bypass even if env vars are misconfigured
+    if (testBypass && nodeEnv === 'production') {
+      throw new Error(
+        'FATAL: STRIPE_TEST_BYPASS cannot be enabled in production environment. ' +
+        'Remove STRIPE_TEST_BYPASS from production configuration immediately.'
+      );
+    }
+
     if (!stripeKey) {
       // In test environments Stripe calls are mocked at the test-runner level;
       // the service object itself is never constructed. Guard anyway.
@@ -233,7 +241,16 @@ export class StripeService implements PaymentProvider {
     // keys), return a synthetic PaymentIntent without hitting the Stripe API.
     // The client-side test flow must also skip Stripe.js confirmation and call
     // POST /bookings/:id/bypass-confirm to advance the booking to CONFIRMED.
+    // 
+    // SECURITY: Double-check environment before allowing bypass
+    const nodeEnv = this.configService.get<string>('nodeEnv') || process.env.NODE_ENV;
     if (this.configService.get<string>('STRIPE_TEST_BYPASS') === 'true') {
+      if (nodeEnv !== 'test' && nodeEnv !== 'e2e') {
+        throw new Error(
+          'STRIPE_TEST_BYPASS is only allowed in test/e2e environments. ' +
+          'Current NODE_ENV: ' + nodeEnv
+        );
+      }
       const charSet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       const makeToken = (length: number) =>
         Array.from({ length })

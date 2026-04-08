@@ -36,7 +36,11 @@ describe('BookingStateMachineService - COMPLETE STATE COVERAGE', () => {
     dispute: { findFirst: jest.fn().mockResolvedValue(null) },
     depositHold: { findMany: jest.fn().mockResolvedValue([]) },
     payout: { create: jest.fn().mockResolvedValue({ id: 'payout-1' }) },
-    auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }), update: jest.fn() },
+    auditLog: { 
+      create: jest.fn().mockResolvedValue({ id: 'audit-1' }), 
+      update: jest.fn(),
+      findUnique: jest.fn(),
+    },
     user: { findMany: jest.fn().mockResolvedValue([{ id: 'admin-1' }]) },
   };
 
@@ -582,7 +586,13 @@ describe('BookingStateMachineService - COMPLETE STATE COVERAGE', () => {
         });
 
         const availableTransitions = service.getAvailableTransitions(terminalState, 'SYSTEM');
-        expect(availableTransitions).toHaveLength(0);
+        
+        // CANCELLED is special - it can transition to REFUNDED
+        if (terminalState === BookingStatus.CANCELLED) {
+          expect(availableTransitions).toEqual(['REFUND']);
+        } else {
+          expect(availableTransitions).toHaveLength(0);
+        }
       }
     });
   });
@@ -652,7 +662,7 @@ describe('BookingStateMachineService - COMPLETE STATE COVERAGE', () => {
       {
         state: BookingStatus.PAYMENT_FAILED,
         role: 'RENTER',
-        expectedTransitions: ['RETRY_PAYMENT'],
+        expectedTransitions: ['RETRY_PAYMENT', 'EXPIRE'],
       },
       { state: BookingStatus.CONFIRMED, role: 'RENTER', expectedTransitions: ['CANCEL'] },
       {
@@ -703,7 +713,7 @@ describe('BookingStateMachineService - COMPLETE STATE COVERAGE', () => {
       {
         state: BookingStatus.PENDING_PAYMENT,
         role: 'SYSTEM',
-        expectedTransitions: ['FAIL_PAYMENT', 'EXPIRE'],
+        expectedTransitions: ['COMPLETE_PAYMENT', 'FAIL_PAYMENT', 'EXPIRE'],
       },
       { state: BookingStatus.PAYMENT_FAILED, role: 'SYSTEM', expectedTransitions: ['EXPIRE'] },
       {

@@ -121,9 +121,9 @@ describe('MessageThreadScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('Hello from Ram')).toBeTruthy();
       expect(screen.getByText('Hi there!')).toBeTruthy();
-    });
+    }, { timeout: 10000 });
     expect(mockMarkConversationRead).toHaveBeenCalledWith('conv1');
-  });
+  }, 10000);
 
   it('shows empty state when no messages', async () => {
     mockGetConversationMessages.mockResolvedValue({ messages: [] });

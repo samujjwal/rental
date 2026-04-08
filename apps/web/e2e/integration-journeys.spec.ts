@@ -329,11 +329,10 @@ test.describe('Integration - Full User Journeys', () => {
       await priceInput.fill('200');
       
       await page.locator('[data-testid="apply-bulk-action"]').click();
-      
-      // 5. Verify changes
-      await page.waitForTimeout(500);
-      
+
+      // 5. Verify changes - wait for prices to update
       const updatedPrices = page.locator('[data-testid="listing-price"]');
+      await updatedPrices.first().waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
       
       // First two should be updated
       for (let i = 0; i < 2 && i < count; i++) {
@@ -441,9 +440,9 @@ test.describe('Integration - Full User Journeys', () => {
     // 3. Check overall rating display
     const ratingBadge = page.locator('[data-testid="overall-rating"]');
     const ratingText = await ratingBadge.textContent();
-    
+
     // Should show average (4.7 stars)
-    expect(ratingText).toContain('4.7') || expect(ratingText).toContain('4');
+    expect(ratingText && (ratingText.includes('4.7') || ratingText.includes('4'))).toBeTruthy();
     
     // 4. View review breakdown
     const reviewStats = page.locator('[data-testid="review-stats"]');

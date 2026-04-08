@@ -13,8 +13,7 @@ async function waitForPageStability(page: Page) {
   await page.waitForLoadState('domcontentloaded');
   // Wait for fonts to load
   await page.evaluate(() => document.fonts.ready);
-  // Small delay for any animations to settle
-  await page.waitForTimeout(500);
+  // Animations are mocked to be instant in beforeEach, so no additional delay needed
 }
 
 // Set consistent viewport and mock time for stable screenshots

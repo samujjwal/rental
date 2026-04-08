@@ -316,12 +316,12 @@ test.describe('Data Consistency & Synchronization', () => {
           if (await confirmButton.isVisible()) {
             await confirmButton.click();
           }
-          
-          // Wait for processing
-          await page.waitForTimeout(2000);
-          
-          // Verify final state - should be approved, not rejected
+
+          // Wait for processing - wait for status to update
           const status = page.locator('[data-testid="booking-status"]');
+          await status.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+
+          // Verify final state - should be approved, not rejected
           await expect(status).toContainText(/approved|confirmed/i);
           await expect(status).not.toContainText(/rejected|cancelled/i);
         }

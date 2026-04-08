@@ -51,6 +51,8 @@ describe('BookingsController', () => {
             initiateDispute: jest.fn(),
             getBookingStats: jest.fn(),
             getBlockedDates: jest.fn(),
+            getConditionReports: jest.fn(),
+            updateConditionReport: jest.fn(),
           },
         },
         {
@@ -123,6 +125,25 @@ describe('BookingsController', () => {
       expect(bookingsService.create).toHaveBeenCalledWith('u1', dto);
       expect(result).toBe(mockBooking);
     });
+
+    it('should validate booking creation with invalid dates', async () => {
+      bookingsService.create.mockRejectedValue(new Error('Invalid date range'));
+      const dto = { listingId: 'l1', startDate: '2025-01-05', endDate: '2025-01-01' } as any;
+      await expect(controller.create('u1', dto)).rejects.toThrow('Invalid date range');
+      expect(bookingsService.create).toHaveBeenCalledWith('u1', dto);
+    });
+
+    it('should handle booking conflicts', async () => {
+      bookingsService.create.mockRejectedValue(new Error('Listing not available for selected dates'));
+      const dto = { listingId: 'l1', startDate: '2025-01-01', endDate: '2025-01-05' } as any;
+      await expect(controller.create('u1', dto)).rejects.toThrow('Listing not available for selected dates');
+    });
+
+    it('should validate required fields', async () => {
+      const dto = { startDate: '2025-01-01' } as any;
+      bookingsService.create.mockRejectedValue(new Error('Missing required fields'));
+      await expect(controller.create('u1', dto)).rejects.toThrow('Missing required fields');
+    });
   });
 
   // ── getMyBookings ──
@@ -170,6 +191,16 @@ describe('BookingsController', () => {
       await controller.approve('b1', 'u2');
       expect(bookingsService.approveBooking).toHaveBeenCalledWith('b1', 'u2');
     });
+
+    it('should handle unauthorized approval attempts', async () => {
+      bookingsService.approveBooking.mockRejectedValue(new ForbiddenException('Not authorized to approve this booking'));
+      await expect(controller.approve('b1', 'u1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should handle approval of already approved bookings', async () => {
+      bookingsService.approveBooking.mockRejectedValue(new Error('Booking is already approved'));
+      await expect(controller.approve('b1', 'u2')).rejects.toThrow('Booking is already approved');
+    });
   });
 
   describe('reject', () => {
@@ -178,6 +209,16 @@ describe('BookingsController', () => {
       await controller.reject('b1', 'u2', { reason: 'Not available' } as any);
       expect(bookingsService.rejectBooking).toHaveBeenCalledWith('b1', 'u2', 'Not available');
     });
+
+    it('should handle empty rejection reason', async () => {
+      bookingsService.rejectBooking.mockRejectedValue(new Error('Rejection reason is required'));
+      await expect(controller.reject('b1', 'u2', { reason: '' } as any)).rejects.toThrow('Rejection reason is required');
+    });
+
+    it('should handle unauthorized rejection attempts', async () => {
+      bookingsService.rejectBooking.mockRejectedValue(new ForbiddenException('Not authorized to reject this booking'));
+      await expect(controller.reject('b1', 'u1', { reason: 'Not available' } as any)).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('cancel', () => {
@@ -185,6 +226,38 @@ describe('BookingsController', () => {
       bookingsService.cancelBooking.mockResolvedValue(mockBooking as any);
       await controller.cancel('b1', 'u1', { reason: 'Changed plans' } as any);
       expect(bookingsService.cancelBooking).toHaveBeenCalledWith('b1', 'u1', 'Changed plans');
+    });
+
+    it('should handle cancellation of non-cancellable bookings', async () => {
+      bookingsService.cancelBooking.mockRejectedValue(new Error('Booking cannot be cancelled in current status'));
+      await expect(controller.cancel('b1', 'u1', { reason: 'Changed plans' } as any)).rejects.toThrow('Booking cannot be cancelled in current status');
+    });
+
+    it('should handle unauthorized cancellation attempts', async () => {
+      bookingsService.cancelBooking.mockRejectedValue(new ForbiddenException('Not authorized to cancel this booking'));
+      await expect(controller.cancel('b1', 'u3', { reason: 'Changed plans' } as any)).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  // ── booking modification tests (placeholder for future implementation) ──
+  describe('booking modification', () => {
+    it('should handle booking date modification requests', async () => {
+      // This test is a placeholder for future implementation
+      // When updateBooking endpoint is added, this test should be updated
+      const modificationDto = { newStartDate: '2025-01-02', newEndDate: '2025-01-06' } as any;
+      
+      // Mock the future endpoint
+      const mockUpdateBooking = jest.fn().mockResolvedValue(mockBooking);
+      await expect(mockUpdateBooking('b1', 'u1', modificationDto)).resolves.toBe(mockBooking);
+    });
+
+    it('should validate modification date availability', async () => {
+      // This test is a placeholder for future implementation
+      const modificationDto = { newStartDate: '2025-01-02', newEndDate: '2025-01-06' } as any;
+      
+      // Mock the future endpoint with error
+      const mockUpdateBooking = jest.fn().mockRejectedValue(new Error('New dates not available'));
+      await expect(mockUpdateBooking('b1', 'u1', modificationDto)).rejects.toThrow('New dates not available');
     });
   });
 
@@ -250,6 +323,21 @@ describe('BookingsController', () => {
       await controller.startRental('b1', 'u2');
       expect(bookingsService.startRental).toHaveBeenCalledWith('b1', 'u2');
     });
+
+    it('should handle unauthorized rental start attempts', async () => {
+      bookingsService.startRental.mockRejectedValue(new ForbiddenException('Not authorized to start rental'));
+      await expect(controller.startRental('b1', 'u1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should handle premature rental start', async () => {
+      bookingsService.startRental.mockRejectedValue(new Error('Rental period has not started yet'));
+      await expect(controller.startRental('b1', 'u2')).rejects.toThrow('Rental period has not started yet');
+    });
+
+    it('should handle rental start for non-approved bookings', async () => {
+      bookingsService.startRental.mockRejectedValue(new Error('Booking must be approved before starting rental'));
+      await expect(controller.startRental('b1', 'u2')).rejects.toThrow('Booking must be approved before starting rental');
+    });
   });
 
   // ── return flow ──
@@ -259,6 +347,16 @@ describe('BookingsController', () => {
       await controller.requestReturn('b1', 'u1');
       expect(bookingsService.requestReturn).toHaveBeenCalledWith('b1', 'u1');
     });
+
+    it('should handle unauthorized return requests', async () => {
+      bookingsService.requestReturn.mockRejectedValue(new ForbiddenException('Only renter can request return'));
+      await expect(controller.requestReturn('b1', 'u2')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should handle return requests for non-active rentals', async () => {
+      bookingsService.requestReturn.mockRejectedValue(new Error('Rental is not currently active'));
+      await expect(controller.requestReturn('b1', 'u1')).rejects.toThrow('Rental is not currently active');
+    });
   });
 
   describe('approveReturn', () => {
@@ -266,6 +364,16 @@ describe('BookingsController', () => {
       bookingsService.approveReturn.mockResolvedValue(mockBooking as any);
       await controller.approveReturn('b1', 'u2');
       expect(bookingsService.approveReturn).toHaveBeenCalledWith('b1', 'u2');
+    });
+
+    it('should handle unauthorized return approval', async () => {
+      bookingsService.approveReturn.mockRejectedValue(new ForbiddenException('Only owner can approve return'));
+      await expect(controller.approveReturn('b1', 'u1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should handle return approval without return request', async () => {
+      bookingsService.approveReturn.mockRejectedValue(new Error('No return request pending'));
+      await expect(controller.approveReturn('b1', 'u2')).rejects.toThrow('No return request pending');
     });
   });
 
@@ -275,6 +383,16 @@ describe('BookingsController', () => {
       await controller.rejectReturn('b1', 'u2', { reason: 'Damaged' } as any);
       expect(bookingsService.rejectReturn).toHaveBeenCalledWith('b1', 'u2', 'Damaged');
     });
+
+    it('should handle empty rejection return reason', async () => {
+      bookingsService.rejectReturn.mockRejectedValue(new Error('Rejection reason is required'));
+      await expect(controller.rejectReturn('b1', 'u2', { reason: '' } as any)).rejects.toThrow('Rejection reason is required');
+    });
+
+    it('should handle unauthorized return rejection', async () => {
+      bookingsService.rejectReturn.mockRejectedValue(new ForbiddenException('Only owner can reject return'));
+      await expect(controller.rejectReturn('b1', 'u1', { reason: 'Damaged' } as any)).rejects.toThrow(ForbiddenException);
+    });
   });
 
   // ── initiateDispute ──
@@ -283,6 +401,101 @@ describe('BookingsController', () => {
       bookingsService.initiateDispute.mockResolvedValue({} as any);
       await controller.initiateDispute('b1', 'u1', { reason: 'Missing item' } as any);
       expect(bookingsService.initiateDispute).toHaveBeenCalledWith('b1', 'u1', 'Missing item');
+    });
+
+    it('should handle empty dispute reason', async () => {
+      bookingsService.initiateDispute.mockRejectedValue(new Error('Dispute reason is required'));
+      await expect(controller.initiateDispute('b1', 'u1', { reason: '' } as any)).rejects.toThrow('Dispute reason is required');
+    });
+
+    it('should handle dispute initiation for completed bookings only', async () => {
+      bookingsService.initiateDispute.mockRejectedValue(new Error('Disputes can only be initiated for completed bookings'));
+      await expect(controller.initiateDispute('b1', 'u1', { reason: 'Missing item' } as any)).rejects.toThrow('Disputes can only be initiated for completed bookings');
+    });
+
+    it('should handle unauthorized dispute initiation', async () => {
+      bookingsService.initiateDispute.mockRejectedValue(new ForbiddenException('Not authorized to initiate dispute for this booking'));
+      await expect(controller.initiateDispute('b1', 'u3', { reason: 'Missing item' } as any)).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  // ── permission checks tests ──
+  describe('permission checks', () => {
+    it('should prevent renters from accessing owner-only endpoints', async () => {
+      bookingsService.approveBooking.mockRejectedValue(new ForbiddenException('Only owners can approve bookings'));
+      await expect(controller.approve('b1', 'u1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should prevent owners from accessing renter-only endpoints', async () => {
+      bookingsService.requestReturn.mockRejectedValue(new ForbiddenException('Only renters can request return'));
+      await expect(controller.requestReturn('b1', 'u2')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should prevent unauthorized users from accessing booking details', async () => {
+      bookingsService.findById.mockRejectedValue(new ForbiddenException('Not authorized to view this booking'));
+      await expect(controller.findById('b1', 'u3')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should allow admin access to all bookings', async () => {
+      const adminBooking = { ...mockBooking, renterId: 'u1', ownerId: 'u2' };
+      bookingsService.findById.mockResolvedValue(adminBooking as any);
+      prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+      
+      await expect(controller.findById('b1', 'admin-user')).resolves.toBe(adminBooking);
+      expect(bookingsService.findById).toHaveBeenCalledWith('b1', true, 'admin-user');
+    });
+  });
+
+  // ── state transition validation tests ──
+  describe('state transitions', () => {
+    it('should validate valid state transitions', async () => {
+      const validTransitions = ['APPROVE' as any, 'REJECT' as any, 'CANCEL' as any];
+      stateMachine.getAvailableTransitions.mockReturnValue(validTransitions);
+      bookingsService.findById.mockResolvedValue({ ...mockBooking, status: 'PENDING' } as any);
+      
+      const result = await controller.getAvailableTransitions('b1', 'u2');
+      expect(result.availableTransitions).toEqual(validTransitions);
+      expect(stateMachine.getAvailableTransitions).toHaveBeenCalledWith('PENDING', 'OWNER');
+    });
+
+    it('should handle invalid state transitions', async () => {
+      stateMachine.getAvailableTransitions.mockReturnValue([]);
+      bookingsService.findById.mockResolvedValue({ ...mockBooking, status: 'COMPLETED' } as any);
+      
+      const result = await controller.getAvailableTransitions('b1', 'u2');
+      expect(result.availableTransitions).toEqual([]);
+    });
+
+    it('should prevent state transitions for unauthorized users', async () => {
+      bookingsService.approveBooking.mockRejectedValue(new ForbiddenException('Not authorized to perform this action'));
+      await expect(controller.approve('b1', 'u1')).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  // ── error scenario tests ──
+  describe('error scenarios', () => {
+    it('should handle database connection errors', async () => {
+      bookingsService.create.mockRejectedValue(new Error('Database connection failed'));
+      const dto = { listingId: 'l1', startDate: '2025-01-01', endDate: '2025-01-05' } as any;
+      await expect(controller.create('u1', dto)).rejects.toThrow('Database connection failed');
+    });
+
+    it('should handle service unavailability errors', async () => {
+      calculation.calculatePrice.mockRejectedValue(new Error('Pricing service unavailable'));
+      const dto = { listingId: 'l1', startDate: '2025-01-01', endDate: '2025-01-05' } as any;
+      await expect(controller.calculatePrice(dto)).rejects.toThrow('Pricing service unavailable');
+    });
+
+    it('should handle malformed request data', async () => {
+      const invalidDto = { listingId: null, startDate: 'invalid-date', endDate: '2025-01-05' } as any;
+      bookingsService.create.mockRejectedValue(new Error('Invalid request data'));
+      await expect(controller.create('u1', invalidDto)).rejects.toThrow('Invalid request data');
+    });
+
+    it('should handle concurrent booking conflicts', async () => {
+      bookingsService.create.mockRejectedValue(new Error('Booking conflict: Another booking exists for these dates'));
+      const dto = { listingId: 'l1', startDate: '2025-01-01', endDate: '2025-01-05' } as any;
+      await expect(controller.create('u1', dto)).rejects.toThrow('Booking conflict: Another booking exists for these dates');
     });
   });
 

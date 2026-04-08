@@ -28,14 +28,18 @@ describe('Fraud Detection (e2e)', () => {
   });
 
   afterAll(async () => {
-    await prisma.user.deleteMany({
-      where: {
-        email: {
-          in: [adminEmail, userEmail],
+    if (prisma) {
+      await prisma.user.deleteMany({
+        where: {
+          email: {
+            in: [adminEmail, userEmail],
+          },
         },
-      },
-    });
-    await app.close();
+      });
+    }
+    if (app) {
+      await app.close();
+    }
   });
 
   beforeEach(async () => {

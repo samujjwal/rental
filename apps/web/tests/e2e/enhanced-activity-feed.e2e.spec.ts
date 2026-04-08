@@ -142,9 +142,9 @@ test.describe('Enhanced Activity Feed Actions', () => {
     
     // Scroll to bottom of activity feed
     await page.locator('[data-testid=recent-activity]').evaluate((el) => el.scrollTop = el.scrollHeight);
-    
-    // Wait for potential loading
-    await page.waitForTimeout(1000);
+
+    // Wait for potential loading - wait for network to be idle
+    await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
     
     // Check if more activities loaded (optional, depends on data)
     const finalCount = await page.locator('[data-testid=activity-item]').count();

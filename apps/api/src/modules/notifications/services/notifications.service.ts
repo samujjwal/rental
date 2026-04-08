@@ -467,6 +467,22 @@ export class NotificationsService {
   }
 
   /**
+   * Create notification (for test compatibility)
+   */
+  async createNotification(data: any): Promise<Notification> {
+    return this.prisma.notification.create({
+      data: {
+        userId: data.userId,
+        type: data.type || 'EMAIL',
+        title: data.title || 'Notification',
+        message: data.message || '',
+        status: data.status || 'PENDING',
+        data: data.data || {},
+      },
+    });
+  }
+
+  /**
    * Get unread count
    */
   async getUnreadCount(userId: string): Promise<number> {

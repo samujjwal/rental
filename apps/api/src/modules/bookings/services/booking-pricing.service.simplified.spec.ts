@@ -29,10 +29,12 @@ describe('Booking Pricing Service - Simplified', () => {
               deleteMany: jest.fn(),
               createMany: jest.fn(),
               findMany: jest.fn(),
+              create: jest.fn(),
             },
             fxRateSnapshot: {
               findUnique: jest.fn(),
               create: jest.fn(),
+              upsert: jest.fn(),
             },
             $transaction: jest.fn(),
           },
@@ -84,7 +86,7 @@ describe('Booking Pricing Service - Simplified', () => {
 
       // Mock delete and create operations
       (prisma.bookingPriceBreakdown.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
-      (prisma.bookingPriceBreakdown.createMany as jest.Mock).mockResolvedValue(undefined);
+      (prisma.bookingPriceBreakdown.create as jest.Mock).mockResolvedValue({});
 
       const result = await service.createBreakdown(breakdownDto);
 
@@ -95,7 +97,7 @@ describe('Booking Pricing Service - Simplified', () => {
       expect(prisma.bookingPriceBreakdown.deleteMany).toHaveBeenCalledWith({
         where: { bookingId },
       });
-      expect(prisma.bookingPriceBreakdown.createMany).toHaveBeenCalled();
+      expect(prisma.bookingPriceBreakdown.create).toHaveBeenCalled();
     });
 
     it('should throw error if booking does not exist', async () => {
@@ -113,7 +115,7 @@ describe('Booking Pricing Service - Simplified', () => {
         ],
       };
 
-      prisma.booking.findUnique.mockResolvedValue(null);
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(service.createBreakdown(breakdownDto)).rejects.toThrow();
     });
@@ -141,7 +143,7 @@ describe('Booking Pricing Service - Simplified', () => {
         },
       ];
 
-      prisma.bookingPriceBreakdown.findMany.mockResolvedValue(mockBreakdown);
+      (prisma.bookingPriceBreakdown.findMany as jest.Mock).mockResolvedValue(mockBreakdown);
 
       const result = await service.getBreakdown(bookingId);
 
@@ -149,7 +151,12 @@ describe('Booking Pricing Service - Simplified', () => {
         where: { bookingId },
         orderBy: { sortOrder: 'asc' },
       });
-      expect(result).toEqual(mockBreakdown);
+      expect(result).toEqual({
+        bookingId,
+        lines: mockBreakdown,
+        subtotal: 110000,
+        currency: 'NPR',
+      });
     });
   });
 
@@ -158,6 +165,7 @@ describe('Booking Pricing Service - Simplified', () => {
       const bookingId = 'booking-1';
       const params = {
         basePrice: 100000,
+        nights: 3,
         startDate: new Date('2026-07-15'),
         endDate: new Date('2026-07-18'),
         guestCount: 2,
@@ -165,16 +173,16 @@ describe('Booking Pricing Service - Simplified', () => {
       };
 
       // Mock booking exists
-      prisma.booking.findUnique.mockResolvedValue({ id: bookingId });
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue({ id: bookingId });
 
       // Mock transaction
-      prisma.$transaction.mockImplementation(async (callback) => {
+      (prisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
         return await callback(prisma);
       });
 
       // Mock operations
-      prisma.bookingPriceBreakdown.deleteMany.mockResolvedValue({ count: 0 });
-      prisma.bookingPriceBreakdown.createMany.mockResolvedValue(undefined);
+      (prisma.bookingPriceBreakdown.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.bookingPriceBreakdown.create as jest.Mock).mockResolvedValue({});
 
       const result = await service.calculateAndPersist(bookingId, params);
 
@@ -183,7 +191,7 @@ describe('Booking Pricing Service - Simplified', () => {
         select: { id: true },
       });
       expect(prisma.bookingPriceBreakdown.deleteMany).toHaveBeenCalled();
-      expect(prisma.bookingPriceBreakdown.createMany).toHaveBeenCalled();
+      expect(prisma.bookingPriceBreakdown.create).toHaveBeenCalled();
       expect(result).toBeDefined();
     });
 
@@ -191,23 +199,24 @@ describe('Booking Pricing Service - Simplified', () => {
       const bookingId = 'booking-2';
       const params = {
         basePrice: 150000,
+        nights: 4,
         startDate: new Date('2026-08-01'),
         endDate: new Date('2026-08-05'),
         guestCount: 4,
         currency: 'USD',
       };
 
-      prisma.booking.findUnique.mockResolvedValue({ id: bookingId });
-      prisma.$transaction.mockImplementation(async (callback) => {
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue({ id: bookingId });
+      (prisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
         return await callback(prisma);
       });
-      prisma.bookingPriceBreakdown.deleteMany.mockResolvedValue({ count: 0 });
-      prisma.bookingPriceBreakdown.createMany.mockResolvedValue(undefined);
+      (prisma.bookingPriceBreakdown.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.bookingPriceBreakdown.create as jest.Mock).mockResolvedValue({});
 
       const result = await service.calculateAndPersist(bookingId, params);
 
       expect(result).toBeDefined();
-      expect(prisma.bookingPriceBreakdown.createMany).toHaveBeenCalled();
+      expect(prisma.bookingPriceBreakdown.create).toHaveBeenCalled();
     });
   });
 
@@ -222,10 +231,10 @@ describe('Booking Pricing Service - Simplified', () => {
       };
 
       // Mock booking exists
-      prisma.booking.findUnique.mockResolvedValue({ id: fxDto.bookingId });
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue({ id: fxDto.bookingId });
 
-      // Mock FX rate creation
-      prisma.fxRateSnapshot.create.mockResolvedValue({
+      // Mock FX rate upsert
+      (prisma.fxRateSnapshot.upsert as jest.Mock).mockResolvedValue({
         id: 'fx-1',
         ...fxDto,
         createdAt: new Date(),
@@ -237,13 +246,21 @@ describe('Booking Pricing Service - Simplified', () => {
         where: { id: fxDto.bookingId },
         select: { id: true },
       });
-      expect(prisma.fxRateSnapshot.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
+      expect(prisma.fxRateSnapshot.upsert).toHaveBeenCalledWith({
+        where: { bookingId: fxDto.bookingId },
+        create: expect.objectContaining({
           bookingId: fxDto.bookingId,
           baseCurrency: fxDto.baseCurrency,
           targetCurrency: fxDto.targetCurrency,
           rate: fxDto.rate,
           rateSource: fxDto.rateSource,
+        }),
+        update: expect.objectContaining({
+          baseCurrency: fxDto.baseCurrency,
+          targetCurrency: fxDto.targetCurrency,
+          rate: fxDto.rate,
+          rateSource: fxDto.rateSource,
+          capturedAt: expect.any(Date),
         }),
       });
       expect(result).toBeDefined();
@@ -258,8 +275,8 @@ describe('Booking Pricing Service - Simplified', () => {
         rateSource: 'ECB',
       };
 
-      prisma.booking.findUnique.mockResolvedValue({ id: fxDto.bookingId });
-      prisma.fxRateSnapshot.create.mockResolvedValue({
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue({ id: fxDto.bookingId });
+      (prisma.fxRateSnapshot.upsert as jest.Mock).mockResolvedValue({
         id: 'fx-2',
         ...fxDto,
         createdAt: new Date(),
@@ -268,7 +285,7 @@ describe('Booking Pricing Service - Simplified', () => {
       const result = await service.captureFxRate(fxDto);
 
       expect(result).toBeDefined();
-      expect(prisma.fxRateSnapshot.create).toHaveBeenCalled();
+      expect(prisma.fxRateSnapshot.upsert).toHaveBeenCalled();
     });
   });
 
@@ -285,7 +302,7 @@ describe('Booking Pricing Service - Simplified', () => {
         createdAt: new Date(),
       };
 
-      prisma.fxRateSnapshot.findUnique.mockResolvedValue(mockFxRate);
+      (prisma.fxRateSnapshot.findUnique as jest.Mock).mockResolvedValue(mockFxRate);
 
       const result = await service.getFxRate(bookingId);
 
@@ -298,7 +315,7 @@ describe('Booking Pricing Service - Simplified', () => {
     it('should return null if no FX rate exists', async () => {
       const bookingId = 'booking-no-fx';
 
-      prisma.fxRateSnapshot.findUnique.mockResolvedValue(null);
+      (prisma.fxRateSnapshot.findUnique as jest.Mock).mockResolvedValue(null);
 
       const result = await service.getFxRate(bookingId);
 
@@ -325,7 +342,7 @@ describe('Booking Pricing Service - Simplified', () => {
         ],
       };
 
-      prisma.booking.findUnique.mockRejectedValue(new Error('Database error'));
+      (prisma.booking.findUnique as jest.Mock).mockRejectedValue(new Error('Database error'));
 
       await expect(service.createBreakdown(breakdownDto)).rejects.toThrow('Database error');
     });
@@ -334,14 +351,15 @@ describe('Booking Pricing Service - Simplified', () => {
       const bookingId = 'booking-rollback';
       const params = {
         basePrice: 100000,
+        nights: 3,
         startDate: new Date('2026-07-15'),
         endDate: new Date('2026-07-18'),
         guestCount: 2,
         currency: 'NPR',
       };
 
-      prisma.booking.findUnique.mockResolvedValue({ id: bookingId });
-      prisma.$transaction.mockRejectedValue(new Error('Transaction failed'));
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue({ id: bookingId });
+      (prisma.$transaction as jest.Mock).mockRejectedValue(new Error('Transaction failed'));
 
       await expect(service.calculateAndPersist(bookingId, params)).rejects.toThrow(
         'Transaction failed',
@@ -357,37 +375,37 @@ describe('Booking Pricing Service - Simplified', () => {
         lines: [],
       };
 
-      prisma.booking.findUnique.mockResolvedValue({ id: bookingId });
-      prisma.$transaction.mockImplementation(async (callback) => {
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue({ id: bookingId });
+      (prisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
         return await callback(prisma);
       });
-      prisma.bookingPriceBreakdown.deleteMany.mockResolvedValue({ count: 0 });
-      prisma.bookingPriceBreakdown.createMany.mockResolvedValue(undefined);
+      (prisma.bookingPriceBreakdown.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.bookingPriceBreakdown.createMany as jest.Mock).mockResolvedValue(undefined);
 
       const result = await service.createBreakdown(breakdownDto);
 
       expect(result).toBeDefined();
-      expect(prisma.bookingPriceBreakdown.createMany).toHaveBeenCalledWith({
-        data: [],
-      });
+      // For empty lines, create should not be called
+      expect(prisma.bookingPriceBreakdown.create).not.toHaveBeenCalled();
     });
 
     it('should handle zero base price', async () => {
       const bookingId = 'booking-zero';
       const params = {
         basePrice: 0,
+        nights: 3,
         startDate: new Date('2026-07-15'),
         endDate: new Date('2026-07-18'),
         guestCount: 2,
         currency: 'NPR',
       };
 
-      prisma.booking.findUnique.mockResolvedValue({ id: bookingId });
-      prisma.$transaction.mockImplementation(async (callback) => {
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue({ id: bookingId });
+      (prisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
         return await callback(prisma);
       });
-      prisma.bookingPriceBreakdown.deleteMany.mockResolvedValue({ count: 0 });
-      prisma.bookingPriceBreakdown.createMany.mockResolvedValue(undefined);
+      (prisma.bookingPriceBreakdown.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.bookingPriceBreakdown.createMany as jest.Mock).mockResolvedValue(undefined);
 
       const result = await service.calculateAndPersist(bookingId, params);
 
@@ -398,18 +416,19 @@ describe('Booking Pricing Service - Simplified', () => {
       const bookingId = 'booking-large';
       const params = {
         basePrice: 10000000, // 10 million
+        nights: 3,
         startDate: new Date('2026-07-15'),
         endDate: new Date('2026-07-18'),
         guestCount: 2,
         currency: 'NPR',
       };
 
-      prisma.booking.findUnique.mockResolvedValue({ id: bookingId });
-      prisma.$transaction.mockImplementation(async (callback) => {
+      (prisma.booking.findUnique as jest.Mock).mockResolvedValue({ id: bookingId });
+      (prisma.$transaction as jest.Mock).mockImplementation(async (callback) => {
         return await callback(prisma);
       });
-      prisma.bookingPriceBreakdown.deleteMany.mockResolvedValue({ count: 0 });
-      prisma.bookingPriceBreakdown.createMany.mockResolvedValue(undefined);
+      (prisma.bookingPriceBreakdown.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+      (prisma.bookingPriceBreakdown.createMany as jest.Mock).mockResolvedValue(undefined);
 
       const result = await service.calculateAndPersist(bookingId, params);
 

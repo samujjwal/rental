@@ -1,0 +1,654 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { SecurityTestFramework } from './security-framework';
+import { SecurityTestUtils } from './security-test-utils';
+import { PrismaService } from '../common/prisma/prisma.service';
+
+describe('SQL Injection Security Tests', () => {
+  let framework: SecurityTestFramework;
+  let securityUtils: SecurityTestUtils;
+  let prisma: PrismaService;
+
+  beforeAll(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        SecurityTestFramework,
+        SecurityTestUtils,
+        PrismaService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) => {
+              if (key === 'DATABASE_URL') return 'postgresql://test:test@localhost:5432/test';
+              return undefined;
+            },
+          },
+        },
+      ],
+    }).compile();
+
+    framework = module.get<SecurityTestFramework>(SecurityTestFramework);
+    securityUtils = module.get<SecurityTestUtils>(SecurityTestUtils);
+    prisma = module.get<PrismaService>(PrismaService);
+    
+    // Mock Prisma client methods using spyOn
+    jest.spyOn(prisma, 'user', 'get').mockReturnValue({
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({}),
+      update: jest.fn().mockResolvedValue({}),
+      delete: jest.fn().mockResolvedValue({}),
+      upsert: jest.fn().mockResolvedValue({}),
+    } as any);
+    jest.spyOn(prisma, 'listing', 'get').mockReturnValue({
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+    } as any);
+    jest.spyOn(prisma, '$queryRaw').mockResolvedValue([] as any);
+  });
+
+  describe('SQL Injection in Query Parameters', () => {
+    test('should block SQL injection in user ID parameter', async () => {
+      const maliciousPayloads = [
+        "1' OR '1'='1",
+        "1; DROP TABLE users;--",
+        "1' UNION SELECT * FROM users--",
+        "1' AND 1=CONVERT(int, (SELECT @@version))--",
+        "1' AND (SELECT COUNT(*) FROM users) > 0--",
+        "1' OR 1=1#",
+        "1' UNION SELECT username,password FROM users--",
+        "1' AND 1=(SELECT COUNT(*) FROM tabname); --"
+      ];
+
+      for (const payload of maliciousPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/users/${payload}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid parameter');
+        expect(response.body.error).not.toContain('SQL');
+      }
+    });
+
+    test('should block SQL injection in search parameters', async () => {
+      const searchPayloads = [
+        "test%' OR '1'='1",
+        "test'; DROP TABLE listings;--",
+        "test' UNION SELECT * FROM users--",
+        "test' AND 1=1#",
+        "test' OR (SELECT COUNT(*) FROM users) > 0--",
+        "test' AND (SELECT SUBSTRING(password,1,1) FROM users WHERE username='admin')='a'--",
+        "test' UNION SELECT @@version--",
+        "test' AND 1=CONVERT(int, (SELECT @@version))--"
+      ];
+
+      for (const payload of searchPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/listings?search=${encodeURIComponent(payload)}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid search parameter');
+      }
+    });
+
+    test('should block SQL injection in filter parameters', async () => {
+      const filterPayloads = [
+        "price>0 AND 1=1",
+        "category='test' OR 1=1--",
+        "status='active' UNION SELECT * FROM users--",
+        "date>'2023-01-01' AND (SELECT COUNT(*) FROM users)>0--",
+        "location='test'; DROP TABLE bookings;--",
+        "rating>=0 AND 1=CONVERT(int, (SELECT @@version))--",
+        "featured=true OR '1'='1",
+        "type='rental' AND (SELECT SUBSTRING(password,1,1) FROM users WHERE username='admin')='a'--"
+      ];
+
+      for (const payload of filterPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/listings?filter=${encodeURIComponent(payload)}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid filter parameter');
+      }
+    });
+
+    test('should block SQL injection in pagination parameters', async () => {
+      const paginationPayloads = [
+        "1; DROP TABLE users;--",
+        "1' OR '1'='1",
+        "1 UNION SELECT * FROM users--",
+        "1 AND 1=1#",
+        "1 AND (SELECT COUNT(*) FROM users)>0--",
+        "1 AND 1=CONVERT(int, (SELECT @@version))--",
+        "999999; WAITFOR DELAY '0:0:5'--",
+        "1' AND (SELECT SUBSTRING(password,1,1) FROM users WHERE username='admin')='a'--"
+      ];
+
+      for (const payload of paginationPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/listings?page=${payload}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid page parameter');
+      }
+
+      for (const payload of paginationPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/listings?limit=${payload}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid limit parameter');
+      }
+    });
+  });
+
+  describe('SQL Injection in Request Bodies', () => {
+    test('should block SQL injection in user registration', async () => {
+      const maliciousPayloads = [
+        {
+          email: "test' OR '1'='1'--@example.com",
+          password: "password'; DROP TABLE users;--",
+          firstName: "Test' UNION SELECT * FROM users--",
+          lastName: "User' AND 1=1#"
+        },
+        {
+          email: "admin'; DROP TABLE users;--@example.com",
+          password: "password' OR (SELECT COUNT(*) FROM users)>0--",
+          firstName: "Admin' AND 1=CONVERT(int, (SELECT @@version))--",
+          lastName: "User' AND (SELECT SUBSTRING(password,1,1) FROM users WHERE username='admin')='a'--"
+        }
+      ];
+
+      for (const payload of maliciousPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'POST',
+          path: '/api/auth/register',
+          body: payload
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid input data');
+      }
+    });
+
+    test('should block SQL injection in booking creation', async () => {
+      const maliciousPayloads = [
+        {
+          listingId: "1' OR '1'='1",
+          startDate: "2023-12-01'; DROP TABLE bookings;--",
+          endDate: "2023-12-05' UNION SELECT * FROM users--",
+          totalPrice: "100' AND 1=1#"
+        },
+        {
+          listingId: "1 AND (SELECT COUNT(*) FROM users)>0--",
+          startDate: "2023-12-01' AND 1=CONVERT(int, (SELECT @@version))--",
+          endDate: "2023-12-05' AND (SELECT SUBSTRING(password,1,1) FROM users WHERE username='admin')='a'--",
+          totalPrice: "200; WAITFOR DELAY '0:0:5'--"
+        }
+      ];
+
+      for (const payload of maliciousPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'POST',
+          path: '/api/bookings',
+          body: payload,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid booking data');
+      }
+    });
+
+    test('should block SQL injection in listing creation', async () => {
+      const maliciousPayloads = [
+        {
+          title: "Test Listing' OR '1'='1",
+          description: "Description'; DROP TABLE listings;--",
+          price: "100' UNION SELECT * FROM users--",
+          categoryId: "1' AND 1=1#"
+        },
+        {
+          title: "Malicious Listing' AND (SELECT COUNT(*) FROM users)>0--",
+          description: "Test' AND 1=CONVERT(int, (SELECT @@version))--",
+          price: "200' AND (SELECT SUBSTRING(password,1,1) FROM users WHERE username='admin')='a'--",
+          categoryId: "1; WAITFOR DELAY '0:0:5'--"
+        }
+      ];
+
+      for (const payload of maliciousPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'POST',
+          path: '/api/listings',
+          body: payload,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid listing data');
+      }
+    });
+
+    test('should block SQL injection in message sending', async () => {
+      const maliciousPayloads = [
+        {
+          recipientId: "1' OR '1'='1",
+          content: "Hello'; DROP TABLE messages;--",
+          bookingId: "1' UNION SELECT * FROM users--"
+        },
+        {
+          recipientId: "1 AND 1=1#",
+          content: "Test' AND (SELECT COUNT(*) FROM users)>0--",
+          bookingId: "1' AND 1=CONVERT(int, (SELECT @@version))--"
+        }
+      ];
+
+      for (const payload of maliciousPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'POST',
+          path: '/api/messages',
+          body: payload,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid message data');
+      }
+    });
+  });
+
+  describe('SQL Injection in Headers', () => {
+    test('should block SQL injection in Authorization header', async () => {
+      const maliciousHeaders = [
+        { 'Authorization': "Bearer token' OR '1'='1--" },
+        { 'Authorization': "Bearer token'; DROP TABLE users;--" },
+        { 'Authorization': "Bearer token' UNION SELECT * FROM users--" },
+        { 'Authorization': "Bearer token' AND 1=1#" },
+        { 'Authorization': "Bearer token' AND (SELECT COUNT(*) FROM users)>0--" }
+      ];
+
+      for (const headers of maliciousHeaders) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: '/api/users/profile',
+          headers
+        });
+
+        expect(response.status).toBe(401);
+        expect(response.body.error).toContain('Invalid token');
+      }
+    });
+
+    test('should block SQL injection in custom headers', async () => {
+      const maliciousHeaders = [
+        { 'X-User-ID': "1' OR '1'='1", 'Authorization': 'Bearer valid-token' },
+        { 'X-Listing-ID': "1'; DROP TABLE listings;--", 'Authorization': 'Bearer valid-token' },
+        { 'X-Booking-ID': "1' UNION SELECT * FROM users--", 'Authorization': 'Bearer valid-token' },
+        { 'X-Category': "test' AND 1=1#", 'Authorization': 'Bearer valid-token' }
+      ];
+
+      for (const headers of maliciousHeaders) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: '/api/test',
+          headers
+        });
+
+        expect([400, 401]).toContain(response.status);
+      }
+    });
+  });
+
+  describe('NoSQL Injection Tests', () => {
+    test('should block NoSQL injection in MongoDB queries', async () => {
+      const nosqlPayloads = [
+        { "$gt": "" },
+        { "$ne": null },
+        { "$where": "this.username == 'admin'" },
+        { "$regex": ".*" },
+        { "$expr": { "$gt": ["$password", ""] } },
+        { "$jsonSchema": { "required": ["username"] } },
+        { "$text": { "$search": "admin" } },
+        { "$elemMatch": { "username": "admin" } }
+      ];
+
+      for (const payload of nosqlPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'POST',
+          path: '/api/users/search',
+          body: { query: payload },
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid query parameter');
+      }
+    });
+
+    test('should block NoSQL injection in array operations', async () => {
+      const arrayPayloads = [
+        { "$push": { "roles": "admin" } },
+        { "$pull": { "roles": "user" } },
+        { "$addToSet": { "tags": "admin" } },
+        { "$pop": { "messages": 1 } },
+        { "$pullAll": { "roles": ["admin"] } },
+        { "$each": ["admin", "superuser"] }
+      ];
+
+      for (const payload of arrayPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'PUT',
+          path: '/api/users/update',
+          body: payload,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid update operation');
+      }
+    });
+  });
+
+  describe('ORM Parameter Escaping', () => {
+    test('should properly escape parameters in Prisma queries', async () => {
+      const maliciousInputs = [
+        "admin' OR '1'='1",
+        "'; DROP TABLE users; --",
+        "' UNION SELECT * FROM users --",
+        "' AND 1=1 #",
+        "' AND (SELECT COUNT(*) FROM users) > 0 --",
+        "' AND 1=CONVERT(int, (SELECT @@version)) --"
+      ];
+
+      // Test user lookup with malicious input
+      for (const input of maliciousInputs) {
+        const result = await prisma.user.findFirst({
+          where: {
+            email: input
+          }
+        });
+
+        // Should return null (no user found) rather than throwing an error
+        expect(result).toBeNull();
+      }
+
+      // Test listing lookup with malicious input
+      for (const input of maliciousInputs) {
+        const result = await prisma.listing.findFirst({
+          where: {
+            title: {
+              contains: input
+            }
+          }
+        });
+
+        // Should return null rather than throwing an error
+        expect(result).toBeNull();
+      }
+    });
+
+    test('should handle malicious input in raw queries safely', async () => {
+      const maliciousInputs = [
+        "admin' OR '1'='1",
+        "'; DROP TABLE users; --",
+        "' UNION SELECT * FROM users --",
+        "1; WAITFOR DELAY '0:0:5' --"
+      ];
+
+      // Test that raw queries are properly parameterized
+      for (const input of maliciousInputs) {
+        // This should use parameterized queries internally
+        const result = await prisma.$queryRaw`
+          SELECT * FROM users WHERE email = ${input}
+        `;
+
+        // Should return empty array rather than all users
+        expect(Array.isArray(result)).toBe(true);
+        expect(result.length).toBe(0);
+      }
+    });
+
+    test('should validate input types before database operations', async () => {
+      const invalidInputs = [
+        { id: "not-a-number", type: "string" },
+        { id: "1' OR '1'='1", type: "string" },
+        { id: "1; DROP TABLE users; --", type: "string" },
+        { id: null, type: "null" },
+        { id: undefined, type: "undefined" }
+      ];
+
+      for (const input of invalidInputs) {
+        try {
+          await prisma.user.findUnique({
+            where: { id: input.id }
+          });
+          // Should not reach here for invalid inputs
+          expect(true).toBe(false);
+        } catch (error) {
+          // Should throw validation error, not SQL error
+          expect(error.message).not.toContain('SQL');
+          expect(error.message).not.toContain('DROP TABLE');
+          expect(error.message).not.toContain('UNION SELECT');
+        }
+      }
+    });
+  });
+
+  describe('Advanced SQL Injection Techniques', () => {
+    test('should block time-based SQL injection', async () => {
+      const timeBasedPayloads = [
+        "1'; WAITFOR DELAY '0:0:5'--",
+        "1' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--",
+        "1' AND pg_sleep(5)--",
+        "1' AND 1=(SELECT COUNT(*) FROM all_users t1,all_users t2,all_users t3,all_users t4,all_users t5)--",
+        "1' AND 1=(SELECT COUNT(*) FROM pg_locks a,pg_locks b,pg_locks c,pg_locks d,pg_locks e)--"
+      ];
+
+      const startTime = Date.now();
+
+      for (const payload of timeBasedPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/users/${payload}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+      }
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
+      // Should complete quickly, not delayed by sleep commands
+      expect(duration).toBeLessThan(1000);
+    });
+
+    test('should block boolean-based SQL injection', async () => {
+      const booleanPayloads = [
+        "1' AND '1'='1",
+        "1' AND '1'='2",
+        "1' AND (SELECT COUNT(*) FROM users)>0",
+        "1' AND (SELECT COUNT(*) FROM users)=0",
+        "1' AND (SELECT LENGTH(password) FROM users WHERE username='admin')>5",
+        "1' AND (SELECT SUBSTRING(password,1,1) FROM users WHERE username='admin')='a'"
+      ];
+
+      for (const payload of booleanPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/users/${payload}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Invalid parameter');
+      }
+    });
+
+    test('should block UNION-based SQL injection', async () => {
+      const unionPayloads = [
+        "1' UNION SELECT NULL,NULL,NULL--",
+        "1' UNION SELECT username,password,email FROM users--",
+        "1' UNION SELECT @@version,database(),user()--",
+        "1' UNION SELECT table_name,column_name FROM information_schema.columns--",
+        "1' UNION SELECT schema_name FROM information_schema.schemata--",
+        "1' UNION SELECT grantee,privilege_type FROM information_schema.role_table_grants--"
+      ];
+
+      for (const payload of unionPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/users/${payload}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).not.toContain('UNION');
+        expect(response.body.error).not.toContain('SELECT');
+      }
+    });
+
+    test('should block error-based SQL injection', async () => {
+      const errorPayloads = [
+        "1' AND (SELECT * FROM (SELECT COUNT(*),CONCAT(version(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--",
+        "1' AND (SELECT * FROM (SELECT COUNT(*),CONCAT((SELECT username FROM users LIMIT 1),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--",
+        "1' AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT version()),0x7e))--",
+        "1' AND (SELECT * FROM (SELECT COUNT(*),CONCAT((SELECT database()),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--",
+        "1' AND (SELECT * FROM (SELECT COUNT(*),CONCAT((SELECT table_name FROM information_schema.tables LIMIT 1),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--"
+      ];
+
+      for (const payload of errorPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/users/${payload}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).not.toContain('version');
+        expect(response.body.error).not.toContain('database');
+        expect(response.body.error).not.toContain('table');
+      }
+    });
+  });
+
+  describe('SQL Injection Prevention Validation', () => {
+    test('should validate all database operations are parameterized', async () => {
+      const operations = [
+        'findFirst',
+        'findMany',
+        'findUnique',
+        'create',
+        'update',
+        'delete',
+        'upsert'
+      ];
+
+      for (const operation of operations) {
+        const maliciousInput = "'; DROP TABLE users; --";
+        
+        try {
+          // This should be safe due to parameterization
+          const result = await prisma.user[operation]({
+            where: operation.includes('find') ? { email: maliciousInput } : undefined,
+            data: operation.includes('create') ? { email: maliciousInput } : undefined
+          });
+          
+          // Should return null/empty rather than execute SQL
+          if (operation.includes('find')) {
+            expect(result).toBeNull();
+          }
+        } catch (error) {
+          // Should throw validation error, not SQL error
+          expect(error.message).not.toContain('DROP TABLE');
+          expect(error.message).not.toContain('SQL syntax');
+        }
+      }
+    });
+
+    test('should log SQL injection attempts', async () => {
+      // Clear logs before testing
+      await framework.cleanup();
+      
+      const maliciousPayloads = [
+        "1' OR '1'='1",
+        "'; DROP TABLE users; --",
+        "' UNION SELECT * FROM users --"
+      ];
+
+      for (const payload of maliciousPayloads) {
+        const response = await framework.testEndpoint({
+          method: 'GET',
+          path: `/api/users/${payload}`,
+          headers: { 'Authorization': 'Bearer test-token' }
+        });
+
+        expect(response.status).toBe(400);
+      }
+
+      // Check logs after all requests
+      const securityLogs = await framework.getSecurityLogs();
+      
+      for (const payload of maliciousPayloads) {
+        const recentLogs = securityLogs.filter(log => 
+          log.type === 'SQL_INJECTION_ATTEMPT' && 
+          log.payload && log.payload.includes(payload)
+        );
+
+        expect(recentLogs.length).toBeGreaterThan(0);
+        if (recentLogs.length > 0) {
+          expect(recentLogs[0].timestamp).toBeDefined();
+          expect(recentLogs[0].ipAddress).toBeDefined();
+          expect(recentLogs[0].userAgent).toBeDefined();
+        }
+      }
+    });
+
+    test('should provide comprehensive SQL injection report', async () => {
+      const report = await framework.generateSqlInjectionReport();
+
+      expect(report.timestamp).toBeDefined();
+      expect(report.testResults).toBeDefined();
+      expect(report.summary).toBeDefined();
+      expect(report.vulnerabilities).toBeDefined();
+      expect(report.recommendations).toBeDefined();
+
+      expect(report.summary.totalTests).toBeGreaterThan(0);
+      expect(report.summary.testsPassed).toBe(report.summary.totalTests);
+      expect(report.summary.vulnerabilitiesFound).toBe(0);
+
+      expect(report.testResults.parameterInjection).toBeDefined();
+      expect(report.testResults.bodyInjection).toBeDefined();
+      expect(report.testResults.headerInjection).toBeDefined();
+      expect(report.testResults.nosqlInjection).toBeDefined();
+      expect(report.testResults.ormEscaping).toBeDefined();
+      expect(report.testResults.advancedTechniques).toBeDefined();
+
+      // Should include OWASP compliance
+      expect(report.owaspCompliance).toBeDefined();
+      expect(report.owaspCompliance.a03_injection).toBeDefined();
+      expect(report.owaspCompliance.a03_injection.status).toBe('COMPLIANT');
+    });
+  });
+
+  afterAll(async () => {
+    await framework.cleanup();
+  });
+});

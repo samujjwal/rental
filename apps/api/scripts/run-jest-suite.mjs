@@ -12,6 +12,7 @@ const suites = {
   security: ['--config', './test/jest-e2e.json', '--testPathPatterns', 'security', '--runInBand'],
   property: ['--testPathPatterns', 'property'],
   chaos: ['--testPathPatterns', 'chaos'],
+  '100percent': ['--testPathPatterns', '100percent.spec.ts', '--coverage', '--coverageDirectory=coverage/100percent'],
 };
 
 if (!(suite in suites)) {

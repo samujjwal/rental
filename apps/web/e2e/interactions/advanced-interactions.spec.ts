@@ -212,7 +212,8 @@ test.describe('Advanced User Interactions', () => {
       // Test navigation shortcuts (conditional — keyboard shortcuts may not be implemented)
       const urlAtDashboard = page.url();
       await page.keyboard.press('g+d'); // Go to dashboard
-      await page.waitForTimeout(500);
+      // Wait for navigation to complete or timeout
+      await page.waitForURL(/.*/, { timeout: 1000 }).catch(() => {});
       // Only verify if shortcut navigated (URL may or may not change)
       const urlAfterGD = page.url();
       if (urlAfterGD !== urlAtDashboard && urlAfterGD.includes('dashboard')) {
@@ -225,14 +226,14 @@ test.describe('Advanced User Interactions', () => {
 
       const urlBeforeBookings = page.url();
       await page.keyboard.press('g+b'); // Go to bookings
-      await page.waitForTimeout(500);
+      await page.waitForURL(/.*/, { timeout: 1000 }).catch(() => {});
       if (page.url() !== urlBeforeBookings) {
         await expect(page).toHaveURL(/.*bookings/);
       }
 
       const urlBeforeMessages = page.url();
       await page.keyboard.press('g+m'); // Go to messages
-      await page.waitForTimeout(500);
+      await page.waitForURL(/.*/, { timeout: 1000 }).catch(() => {});
       if (page.url() !== urlBeforeMessages) {
         await expect(page).toHaveURL(/.*messages/);
       }
@@ -356,13 +357,14 @@ test.describe('Advanced User Interactions', () => {
       if (await bookingCard.isVisible()) {
         // Long press on booking card - simulate with click and hold
         await bookingCard.click();
-        await page.waitForTimeout(500); // Hold for 500ms
 
-        // Check for context menu
+        // Check for context menu with explicit wait
         const contextMenu = page.locator('[data-testid="context-menu"]');
-        if (await contextMenu.isVisible({ timeout: 2000 })) {
-          await expect(contextMenu).toBeVisible();
-        }
+        await contextMenu.isVisible({ timeout: 2000 }).then(async (visible) => {
+          if (visible) {
+            await expect(contextMenu).toBeVisible();
+          }
+        });
       }
     });
   });
@@ -494,11 +496,12 @@ test.describe('Advanced User Interactions', () => {
       }
 
       // Verify renter sees real-time update
-      await renterPage.waitForTimeout(2000);
       const statusUpdate = renterPage.locator('text=/approved|confirmed/i');
-      if (await statusUpdate.isVisible({ timeout: 5000 })) {
-        await expect(statusUpdate).toBeVisible();
-      }
+      await statusUpdate.isVisible({ timeout: 5000 }).then(async (visible) => {
+        if (visible) {
+          await expect(statusUpdate).toBeVisible();
+        }
+      });
 
       await renterPage.close();
     });

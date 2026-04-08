@@ -148,7 +148,8 @@ const clickCalendarDate = async (page: Page, dateStr: string) => {
     }
     // Click "Next month" to advance the calendar
     await page.getByRole("button", { name: "Next month" }).click();
-    await page.waitForTimeout(200);
+    // Wait for calendar to update by checking if the next month button is no longer disabled
+    await page.getByRole("button", { name: "Next month" }).waitFor({ state: 'visible', timeout: 1000 }).catch(() => {});
   }
   throw new Error(`Could not find calendar day: ${targetLabel}`);
 };

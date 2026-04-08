@@ -12,3 +12,8 @@ tags:
 - runFlow: booking-flow.yaml
 - runFlow: profile-settings.yaml
 - runFlow: owner_portal_test.yaml
+- runFlow: insurance-claims-flow.yaml
+- runFlow: payment-flow.yaml
+- runFlow: messaging-flow.yaml
+- runFlow: notifications-flow.yaml
+- runFlow: dispute-resolution-flow.yaml

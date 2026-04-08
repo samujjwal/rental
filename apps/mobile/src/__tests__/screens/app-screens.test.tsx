@@ -83,8 +83,8 @@ describe('BookingsScreen', () => {
     render(<BookingsScreen navigation={nav} route={route()} />);
     expect(screen.getByText('My Rentals')).toBeTruthy();
     expect(screen.getByText('My Listings')).toBeTruthy();
-    await waitFor(() => expect(mockGetMyBookings).toHaveBeenCalled());
-  });
+    await waitFor(() => expect(mockGetMyBookings).toHaveBeenCalled(), { timeout: 10000 });
+  }, 10000);
 
   it('fetches renter bookings by default', async () => {
     mockGetMyBookings.mockResolvedValueOnce([

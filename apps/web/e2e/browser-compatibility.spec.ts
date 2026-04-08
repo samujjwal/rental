@@ -255,9 +255,9 @@ test.describe('Cross-Browser Compatibility', () => {
     // Tap option
     if (optionCount > 0) {
       await options.first().tap();
-      
-      // Should close after selection
-      await page.waitForTimeout(100);
+
+      // Should close after selection - wait for dropdown to be hidden
+      await options.first().waitFor({ state: 'hidden', timeout: 1000 }).catch(() => {});
     }
     
     await context.close();

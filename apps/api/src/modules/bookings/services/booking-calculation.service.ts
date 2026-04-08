@@ -148,8 +148,8 @@ export class BookingCalculationService {
     const depositAmount = this.calculateDeposit(listing, subtotal);
 
     const currency = listing.currency || this.config.get('platform.defaultCurrency', 'USD');
-    const total = roundForCurrency(subtotal + serviceFee + depositAmount, currency);
-    const ownerEarnings = roundForCurrency(subtotal - platformFee, currency);
+    const total = roundForCurrency(subtotal + platformFee + serviceFee + depositAmount, currency);
+    const ownerEarnings = roundForCurrency(subtotal - platformFee - serviceFee, currency);
 
     return {
       subtotal,

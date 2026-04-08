@@ -16,6 +16,7 @@ import { InsuranceModule } from '../insurance/insurance.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { PolicyEngineModule } from '../policy-engine/policy-engine.module';
 import { ComplianceModule } from '../compliance/compliance.module';
+import { BullModule } from '@nestjs/bull';
 import { BOOKING_ELIGIBILITY_PORT } from './ports/booking-eligibility.port';
 import { BOOKING_PRICING_PORT } from './ports/booking-pricing.port';
 
@@ -29,7 +30,17 @@ const devControllers =
     : [];
 
 @Module({
-  imports: [ListingsModule, FraudDetectionModule, NotificationsModule, InsuranceModule, ModerationModule, PolicyEngineModule, ComplianceModule],
+  imports: [
+    ListingsModule, 
+    FraudDetectionModule, 
+    NotificationsModule, 
+    InsuranceModule, 
+    ModerationModule, 
+    PolicyEngineModule, 
+    ComplianceModule,
+    BullModule.registerQueue({ name: 'bookings' }),
+    BullModule.registerQueue({ name: 'payments' }),
+  ],
   controllers: [BookingsController, ...devControllers],
   providers: [
     BookingsService,

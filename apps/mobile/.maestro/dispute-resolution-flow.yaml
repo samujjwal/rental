@@ -1,0 +1,90 @@
+# ============================================================================
+# Dispute Resolution Flow — E2E Maestro Test
+# Validates the dispute creation and resolution workflow.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to bookings
+- tapOn:
+    text: "Bookings|My Bookings"
+
+# 2. Open a completed or active booking
+- tapOn:
+    id: "booking-card"
+    index: 0
+
+# 3. Verify dispute option is available
+- assertVisible:
+    text: "Dispute|Report issue|Help"
+    optional: true
+
+# 4. Navigate to dispute creation
+- tapOn:
+    text: "Dispute|Report issue"
+    optional: true
+
+# 5. Select dispute category
+- assertVisible:
+    text: "What's the issue|Dispute type|Category"
+- tapOn:
+    text: "Damage|Payment|Cancellation|Behavior"
+    index: 0
+
+# 6. Provide dispute details
+- assertVisible:
+    text: "Description|Details|Explain"
+- inputText: "Item was damaged upon return"
+    id: "dispute-description"
+
+# 7. Upload evidence (photos)
+- assertVisible:
+    text: "Upload photo|Add evidence|Evidence"
+- tapOn:
+    text: "Upload photo"
+- tapOn:
+    text: "Photo Library"
+    optional: true
+
+# 8. Select evidence type
+- tapOn:
+    text: "Photo|Video|Document"
+    optional: true
+
+# 9. Request refund amount (if applicable)
+- assertVisible:
+    text: "Refund amount|Amount"
+- inputText: "100"
+    id: "refund-amount"
+    optional: true
+
+# 10. Submit dispute
+- assertVisible:
+    text: "Submit dispute|Send|Create dispute"
+- tapOn:
+    text: "Submit|Send"
+
+# 11. Verify dispute submission confirmation
+- assertVisible:
+    text: "Dispute submitted|We'll review|Case created"
+
+# 12. Navigate to disputes list
+- tapOn:
+    text: "My disputes|Disputes"
+- assertVisible:
+    text: "Dispute #|Status|Open|In Review"
+
+# 13. Verify dispute appears in list
+- assertVisible:
+    text: "Item was damaged"
+
+# 14. Check dispute status updates
+- tapOn:
+    id: "dispute-card"
+    index: 0
+- assertVisible:
+    text: "Status|Timeline|Messages"

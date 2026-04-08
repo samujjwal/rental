@@ -367,6 +367,17 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Request payout' })
   @ApiResponse({ status: 201, description: 'Payout created' })
   async requestPayout(@CurrentUser('id') userId: string, @Body() dto: RequestPayoutDto) {
+    // Validate amount is positive
+    if (dto.amount <= 0) {
+      throw i18nBadRequest('payment.invalidAmount');
+    }
+    
+    // Check user has sufficient earnings
+    const pendingEarnings = await this.payouts.getPendingEarnings(userId);
+    if (!pendingEarnings || pendingEarnings.amount < dto.amount) {
+      throw i18nBadRequest('payment.insufficientFunds');
+    }
+    
     return this.payouts.createPayout(userId, dto.amount);
   }
 

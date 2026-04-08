@@ -6,10 +6,10 @@ import {
   IsOptional,
   IsDateString,
   IsEnum,
-  Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '@rental-portal/database';
+import { IsStrongPassword } from '@/common/validation';
 
 export class RegisterDto {
   @ApiProperty({ example: 'john.doe@example.com' })
@@ -20,9 +20,7 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   @MaxLength(128)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
-    message: 'Password must contain uppercase, lowercase, number and special character',
-  })
+  @IsStrongPassword()
   password: string;
 
   @ApiProperty({ example: 'John' })
@@ -93,9 +91,7 @@ export class PasswordResetDto {
   @IsString()
   @MinLength(8)
   @MaxLength(128)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
-    message: 'Password must contain uppercase, lowercase, number and special character',
-  })
+  @IsStrongPassword()
   newPassword: string;
 }
 
@@ -108,9 +104,7 @@ export class ChangePasswordDto {
   @IsString()
   @MinLength(8)
   @MaxLength(128)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
-    message: 'Password must contain uppercase, lowercase, number and special character',
-  })
+  @IsStrongPassword()
   newPassword: string;
 }
 

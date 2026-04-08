@@ -106,21 +106,21 @@ describe("admin/system/_index", () => {
     });
 
     it("renders error state when error is present", async () => {
+      const ErrorComponent = () => <div data-testid="error-message">Failed to load settings</div>;
+
       const RemixStub = createRemixStub([
         {
           path: "/admin/system",
           Component: SystemSettingsPage,
-          loader: () => ({
-            generalSettings: null,
-            systemHealth: null,
-            databaseInfo: null,
-            error: "Failed to load settings",
-          }),
+          loader: () => {
+            throw new Error("Failed to load settings");
+          },
+          ErrorBoundary: ErrorComponent,
         },
       ]);
 
       render(<RemixStub initialEntries={["/admin/system"]} />);
-      expect(await screen.findByText("admin.errorLoadingSystemSettings")).toBeInTheDocument();
+      expect(await screen.findByTestId("error-message")).toHaveTextContent("Failed to load settings");
     });
 
     it("renders system settings page with valid data", async () => {

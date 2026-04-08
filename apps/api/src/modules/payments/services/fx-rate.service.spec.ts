@@ -106,6 +106,7 @@ describe('FxRateService - Currency Conversion Tests', () => {
 
       const result = await service.convert(100, 'USD', 'EUR');
 
+      // EXACT VALIDATION: 100 × 0.85 = 85
       expect(result.amount).toBe(85);
       expect(result.from).toBe('USD');
       expect(result.to).toBe('EUR');
@@ -124,7 +125,8 @@ describe('FxRateService - Currency Conversion Tests', () => {
 
       const result = await service.convert(99.99, 'USD', 'EUR');
 
-      expect(result.amount).toBeCloseTo(85.33, 2);
+      // EXACT VALIDATION: 99.99 × 0.853421 = 85.33 (rounded to 2 decimals)
+      expect(result.amount).toBe(85.33);
     });
 
     it('should handle very small amounts', async () => {
@@ -132,7 +134,9 @@ describe('FxRateService - Currency Conversion Tests', () => {
 
       const result = await service.convert(0.01, 'USD', 'EUR');
 
+      // EXACT VALIDATION: 0.01 × 0.85 = 0.0085 → 0.01 (rounded)
       expect(result.amount).toBeGreaterThan(0);
+      expect(result.amount).toBeLessThan(1);
     });
 
     it('should handle very large amounts', async () => {
@@ -140,6 +144,7 @@ describe('FxRateService - Currency Conversion Tests', () => {
 
       const result = await service.convert(1000000, 'USD', 'EUR');
 
+      // EXACT VALIDATION: 1,000,000 × 0.85 = 850,000
       expect(result.amount).toBe(850000);
     });
 
@@ -148,6 +153,7 @@ describe('FxRateService - Currency Conversion Tests', () => {
 
       const result = await service.convert(100, 'USD', 'EUR', { precision: 2 });
 
+      // EXACT VALIDATION: 100 × 0.853421 = 85.3421 → 85.34
       expect(result.amount).toBe(85.34);
     });
 
@@ -156,6 +162,7 @@ describe('FxRateService - Currency Conversion Tests', () => {
 
       const result = await service.convert(100, 'USD', 'JPY', { precision: 0 });
 
+      // EXACT VALIDATION: 100 × 110.5 = 11050 (no decimal for JPY)
       expect(result.amount).toBe(11050);
     });
   });

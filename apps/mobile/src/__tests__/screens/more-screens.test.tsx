@@ -91,8 +91,8 @@ describe('DisputesScreen', () => {
     });
 
     const { getByText } = render(<DisputesScreen navigation={nav()} route={route()} />);
-    await waitFor(() => expect(getByText('Broken item')).toBeTruthy());
-  });
+    await waitFor(() => expect(getByText('Broken item')).toBeTruthy(), { timeout: 10000 });
+  }, 10000);
 
   it('shows empty state when no disputes', async () => {
     mockGetMyDisputes.mockResolvedValue({ disputes: [] });

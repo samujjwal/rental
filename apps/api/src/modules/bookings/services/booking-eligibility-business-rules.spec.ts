@@ -17,6 +17,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
 
   const mockFraudDetection = {
     evaluateTransaction: jest.fn(),
+    performBookingFraudCheck: jest.fn(),
   };
 
   const mockInsuranceService = {
@@ -160,7 +161,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'HIGH', flagged: true });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: false, riskScore: 0.9, flags: ['SUSPICIOUS'] });
 
       const result = await service.evaluate(baseRequest);
 
@@ -174,7 +175,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockRejectedValue(new Error('Service unavailable'));
+      mockFraudDetection.performBookingFraudCheck.mockRejectedValue(new Error('Service unavailable'));
 
       const result = await service.evaluate(baseRequest);
 
@@ -198,8 +199,8 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
 
       const result = await service.evaluate(baseRequest);
 
-      expect(result.allowed).toBe(true);
-      expect(result.skippedChecks).toContain('compliance');
+      expect(result.allowed).toBe(false);
+      expect(result.rejection?.details?.missingChecks).toContain('KYC_VERIFICATION');
     });
 
     test('ALLOWS with skip when compliance service unavailable', async () => {
@@ -207,8 +208,8 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
 
       const result = await service.evaluate(baseRequest);
 
-      expect(result.allowed).toBe(true);
-      expect(result.skippedChecks).toContain('compliance');
+      expect(result.allowed).toBe(false);
+      expect(result.rejection?.details?.code).toBe('SAFETY_CHECK_UNAVAILABLE');
     });
 
     test('ALLOWS with skip when insurance required but unavailable', async () => {
@@ -221,8 +222,8 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
 
       const result = await service.evaluate(baseRequest);
 
-      expect(result.allowed).toBe(true);
-      expect(result.skippedChecks).toContain('insurance');
+      expect(result.allowed).toBe(false);
+      expect(result.rejection?.reason).toContain('Insurance is required');
     });
 
     test('ALLOWS with skip when insurance service unavailable', async () => {
@@ -236,8 +237,8 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
 
       const result = await service.evaluate(baseRequest);
 
-      expect(result.allowed).toBe(true);
-      expect(result.skippedChecks).toContain('insurance');
+      expect(result.allowed).toBe(false);
+      expect(result.rejection?.details?.code).toBe('SAFETY_CHECK_UNAVAILABLE');
     });
 
     test('BLOCKS moderation violations even in fail-open mode', async () => {
@@ -264,12 +265,12 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockRejectedValue(new Error('Service unavailable'));
+      mockFraudDetection.performBookingFraudCheck.mockRejectedValue(new Error('Service unavailable'));
 
       const result = await service.evaluate(baseRequest);
 
-      expect(result.allowed).toBe(true);
-      expect(result.skippedChecks).toContain('fraud');
+      expect(result.allowed).toBe(false);
+      expect(result.rejection?.details?.code).toBe('SAFETY_CHECK_UNAVAILABLE');
     });
   });
 
@@ -287,7 +288,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'LOW', flagged: false });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: true, riskScore: 0.1, flags: [] });
 
       const result = await service.evaluate(baseRequest);
 
@@ -303,7 +304,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'LOW', flagged: false });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: true, riskScore: 0.1, flags: [] });
 
       const result = await service.evaluate(baseRequest);
 
@@ -319,7 +320,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: true });
       mockInsuranceService.hasValidInsurance.mockResolvedValue(true);
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'LOW', flagged: false });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: true, riskScore: 0.1, flags: [] });
 
       const result = await service.evaluate(baseRequest);
 
@@ -332,7 +333,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
         missingChecks: [],
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'LOW', flagged: false });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: true, riskScore: 0.1, flags: [] });
 
       const result = await service.evaluate({ ...baseRequest, message: undefined });
 
@@ -347,7 +348,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'LOW', flagged: false });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: true, riskScore: 0.1, flags: [] });
 
       const result = await service.evaluate({ ...baseRequest, message: '' });
 
@@ -378,9 +379,9 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
         callOrder.push('moderation');
         return Promise.resolve({ status: 'APPROVED' });
       });
-      mockFraudDetection.evaluateTransaction.mockImplementation(() => {
+      mockFraudDetection.performBookingFraudCheck.mockImplementation(() => {
         callOrder.push('fraud');
-        return Promise.resolve({ risk: 'LOW' });
+        return Promise.resolve({ allowBooking: true, riskScore: 0.1, flags: [] });
       });
 
       await service.evaluate(baseRequest);
@@ -399,7 +400,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       expect(result.allowed).toBe(false);
       expect(mockInsuranceService.checkInsuranceRequirement).not.toHaveBeenCalled();
       expect(mockModerationService.moderateMessage).not.toHaveBeenCalled();
-      expect(mockFraudDetection.evaluateTransaction).not.toHaveBeenCalled();
+      expect(mockFraudDetection.performBookingFraudCheck).not.toHaveBeenCalled();
     });
   });
 
@@ -421,7 +422,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       const result = await service.evaluate(baseRequest);
 
       expect(result.allowed).toBe(true);
-      expect(mockFraudDetection.evaluateTransaction).not.toHaveBeenCalled();
+      expect(mockFraudDetection.performBookingFraudCheck).not.toHaveBeenCalled();
     });
 
     test('still runs other checks with bypass enabled', async () => {
@@ -471,7 +472,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'PENDING' });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'LOW' });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: true, riskScore: 0.1, flags: [] });
 
       const result = await service.evaluate(baseRequest);
 
@@ -501,10 +502,11 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       );
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'LOW' });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: true, riskScore: 0.1, flags: [] });
 
+      const { message, ...requestWithoutMessage } = baseRequest;
       const result = await service.evaluate({
-        ...baseRequest,
+        ...requestWithoutMessage,
         listing: { country: 'CA', state: 'ON', city: 'Toronto' },
       });
 
@@ -526,10 +528,8 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
 
       const result = await service.evaluate(baseRequest);
 
-      expect(result.allowed).toBe(true);
-      expect(result.skippedChecks).toContain('compliance');
-      expect(result.skippedChecks).toContain('insurance');
-      // fraud is also skipped due to STRIPE_TEST_BYPASS
+      expect(result.allowed).toBe(false);
+      expect(result.rejection.details.check).toBe('compliance');
     });
 
     test('reports empty skipped checks when all pass in fail-closed', async () => {
@@ -541,7 +541,7 @@ describe('BookingEligibilityService - BUSINESS RULES VALIDATION', () => {
       });
       mockInsuranceService.checkInsuranceRequirement.mockResolvedValue({ required: false });
       mockModerationService.moderateMessage.mockResolvedValue({ status: 'APPROVED' });
-      mockFraudDetection.evaluateTransaction.mockResolvedValue({ risk: 'LOW' });
+      mockFraudDetection.performBookingFraudCheck.mockResolvedValue({ allowBooking: true, riskScore: 0.1, flags: [] });
 
       const result = await service.evaluate(baseRequest);
 

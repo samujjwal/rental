@@ -163,7 +163,6 @@ async function gotoAppPath(page: Page, path: string): Promise<void> {
     }
 
     await page.waitForLoadState('domcontentloaded').catch(() => null);
-    await page.waitForTimeout(250);
   }
 
   if (lastError) {
