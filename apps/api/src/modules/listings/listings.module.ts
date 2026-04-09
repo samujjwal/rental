@@ -17,13 +17,15 @@ import { CategoriesModule } from '../categories/categories.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { AiModule } from '../ai/ai.module';
 import { SearchModule } from '../search/search.module';
+import { CurrencyModule } from '../currency/currency.module';
 
 @Module({
   imports: [
-    CategoriesModule, 
-    ModerationModule, 
+    CategoriesModule,
+    ModerationModule,
     AiModule,
     SearchModule,
+    CurrencyModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

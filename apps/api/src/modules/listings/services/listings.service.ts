@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
+import { i18nNotFound, i18nForbidden, i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { EmbeddingService } from '../../ai/services/embedding.service';
@@ -22,6 +22,7 @@ import { CategoryTemplateService } from '../../categories/services/category-temp
 import { PropertyValidationService } from './listing-validation.service';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { ListingVersionService } from './listing-version.service';
+import { MultiCurrencyService } from '../../currency/services/multi-currency.service';
 
 export interface CreateListingDto {
   categoryId?: string;
@@ -69,7 +70,6 @@ export interface UpdateListingDto extends Partial<CreateListingDto> {
   images?: string[];
 }
 
-
 export interface ListingFilters {
   categoryId?: string;
   ownerId?: string;
@@ -81,6 +81,7 @@ export interface ListingFilters {
   country?: string;
   minPrice?: number;
   maxPrice?: number;
+  currency?: string;
   verificationStatus?: VerificationStatus;
   search?: string;
 }
@@ -98,7 +99,41 @@ export class ListingsService {
     private readonly embeddingService: EmbeddingService,
     private readonly versionService: ListingVersionService,
     private readonly configService: ConfigService,
+    private readonly multiCurrencyService: MultiCurrencyService,
   ) {}
+
+  /**
+   * Convert listing price to user's preferred currency
+   */
+  private async convertListingPrice(
+    price: number,
+    fromCurrency: string,
+    toCurrency: string,
+  ): Promise<{ convertedPrice: number; exchangeRate: number; fee: number }> {
+    // If same currency, no conversion needed
+    if (fromCurrency === toCurrency || !toCurrency) {
+      return { convertedPrice: price, exchangeRate: 1, fee: 0 };
+    }
+
+    try {
+      const conversion = await this.multiCurrencyService.convertCurrency({
+        fromCurrency,
+        toCurrency,
+        amount: price,
+        date: new Date(),
+      });
+
+      return {
+        convertedPrice: conversion.convertedAmount,
+        exchangeRate: conversion.exchangeRate,
+        fee: conversion.fee,
+      };
+    } catch (error) {
+      this.logger.error(`Currency conversion failed from ${fromCurrency} to ${toCurrency}:`, error);
+      // Fallback: return original price without conversion
+      return { convertedPrice: price, exchangeRate: 1, fee: 0 };
+    }
+  }
 
   private async resolveCategoryId(input: any): Promise<string> {
     const categoryValue = input?.categoryId || input?.category;
@@ -108,11 +143,7 @@ export class ListingsService {
 
     const category = await this.prisma.category.findFirst({
       where: {
-        OR: [
-          { id: categoryValue },
-          { slug: categoryValue.toLowerCase() },
-          { name: categoryValue },
-        ],
+        OR: [{ id: categoryValue }, { slug: categoryValue.toLowerCase() }, { name: categoryValue }],
       },
     });
 
@@ -164,7 +195,11 @@ export class ListingsService {
     if (input.subcategory) metadata.subcategory = input.subcategory;
 
     // Store category-specific data
-    if (input.categorySpecificData && typeof input.categorySpecificData === 'object' && Object.keys(input.categorySpecificData).length > 0) {
+    if (
+      input.categorySpecificData &&
+      typeof input.categorySpecificData === 'object' &&
+      Object.keys(input.categorySpecificData).length > 0
+    ) {
       metadata.categorySpecificData = input.categorySpecificData;
     }
 
@@ -209,7 +244,10 @@ export class ListingsService {
       }
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
-      this.logger.error('Listing moderation service unavailable — blocking listing creation (fail-closed)', error);
+      this.logger.error(
+        'Listing moderation service unavailable — blocking listing creation (fail-closed)',
+        error,
+      );
       throw new BadRequestException({
         message: 'Unable to verify listing content. Please try again later.',
         code: 'MODERATION_SERVICE_UNAVAILABLE',
@@ -269,9 +307,7 @@ export class ListingsService {
         latitude: mappedLocation.latitude,
         longitude: mappedLocation.longitude,
         photos:
-          dto.photos?.map((p) => (typeof p === 'string' ? p : p.url)) ||
-          (dto as any).images ||
-          [],
+          dto.photos?.map((p) => (typeof p === 'string' ? p : p.url)) || (dto as any).images || [],
         type: this.normalizePropertyType((dto as any).type),
         basePrice: basePrice,
         currency: dto.currency || this.configService.get('DEFAULT_CURRENCY', 'NPR'),
@@ -311,9 +347,11 @@ export class ListingsService {
     });
 
     // Generate embedding asynchronously (fire-and-forget)
-    this.embeddingService.updateListingEmbedding(listing.id).catch((err) =>
-      this.logger.warn(`Failed to generate embedding for listing ${listing.id}`, err),
-    );
+    this.embeddingService
+      .updateListingEmbedding(listing.id)
+      .catch((err) =>
+        this.logger.warn(`Failed to generate embedding for listing ${listing.id}`, err),
+      );
 
     return listing;
   }
@@ -394,7 +432,12 @@ export class ListingsService {
     };
   }
 
-  async findById(id: string, includePrivate: boolean = false, viewerUserId?: string, viewerRole?: string): Promise<Property> {
+  async findById(
+    id: string,
+    includePrivate: boolean = false,
+    viewerUserId?: string,
+    viewerRole?: string,
+  ): Promise<Property> {
     const cacheKey = `listing:${id}`;
 
     if (!includePrivate && !viewerUserId) {
@@ -549,7 +592,9 @@ export class ListingsService {
     if ((dto as any).pricePerMonth != null) mapped.monthlyPrice = (dto as any).pricePerMonth;
     if ((dto as any).images) mapped.photos = (dto as any).images;
     if ((dto as any).instantBooking != null) {
-      mapped.bookingMode = (dto as any).instantBooking ? BookingMode.INSTANT_BOOK : BookingMode.REQUEST;
+      mapped.bookingMode = (dto as any).instantBooking
+        ? BookingMode.INSTANT_BOOK
+        : BookingMode.REQUEST;
     } else if ((dto as any).bookingMode) {
       const mode = String((dto as any).bookingMode).toUpperCase();
       mapped.bookingMode = mode === 'INSTANT' ? BookingMode.INSTANT_BOOK : (dto as any).bookingMode;
@@ -580,7 +625,11 @@ export class ListingsService {
     if (newMetadata) {
       const parsed = JSON.parse(newMetadata);
       mapped.metadata = JSON.stringify({ ...existingMetadata, ...parsed });
-    } else if (dto.categorySpecificData && typeof dto.categorySpecificData === 'object' && Object.keys(dto.categorySpecificData).length > 0) {
+    } else if (
+      dto.categorySpecificData &&
+      typeof dto.categorySpecificData === 'object' &&
+      Object.keys(dto.categorySpecificData).length > 0
+    ) {
       // Only categorySpecificData changed, merge it into existing metadata
       existingMetadata.categorySpecificData = dto.categorySpecificData;
       mapped.metadata = JSON.stringify(existingMetadata);
@@ -596,7 +645,9 @@ export class ListingsService {
         const modResult = await this.moderationService.moderateListing({
           title: mapped.title || listing.title,
           description: mapped.description || listing.description,
-          photos: (mapped.photos || listing.photos || []).map((p: any) => (typeof p === 'string' ? p : p.url)),
+          photos: (mapped.photos || listing.photos || []).map((p: any) =>
+            typeof p === 'string' ? p : p.url,
+          ),
           userId,
           listingId: id,
         });
@@ -608,7 +659,10 @@ export class ListingsService {
         }
       } catch (error) {
         if (error instanceof BadRequestException) throw error;
-        this.logger.error('Listing update moderation service unavailable — blocking update (fail-closed)', error);
+        this.logger.error(
+          'Listing update moderation service unavailable — blocking update (fail-closed)',
+          error,
+        );
         throw new BadRequestException({
           message: 'Unable to verify updated listing content. Please try again later.',
           code: 'MODERATION_SERVICE_UNAVAILABLE',
@@ -639,19 +693,19 @@ export class ListingsService {
     await this.cacheService.del(`listing:slug:${listing.slug}`);
 
     // Create version snapshot of the previous state for audit trail
-    this.versionService.createSnapshot({
-      listingId: id,
-      changedBy: userId,
-      changeNotes: `Updated fields: ${Object.keys(mapped).join(', ')}`,
-    }).catch((err) =>
-      this.logger.warn(`Failed to create version snapshot for listing ${id}`, err),
-    );
+    this.versionService
+      .createSnapshot({
+        listingId: id,
+        changedBy: userId,
+        changeNotes: `Updated fields: ${Object.keys(mapped).join(', ')}`,
+      })
+      .catch((err) => this.logger.warn(`Failed to create version snapshot for listing ${id}`, err));
 
     // Regenerate embedding asynchronously if content changed
     if (mapped.title || mapped.description) {
-      this.embeddingService.updateListingEmbedding(id).catch((err) =>
-        this.logger.warn(`Failed to regenerate embedding for listing ${id}`, err),
-      );
+      this.embeddingService
+        .updateListingEmbedding(id)
+        .catch((err) => this.logger.warn(`Failed to regenerate embedding for listing ${id}`, err));
     }
 
     return updated;
@@ -797,7 +851,15 @@ export class ListingsService {
     const activeBookings = await this.prisma.booking.count({
       where: {
         listingId: id,
-        status: { in: ['CONFIRMED', 'IN_PROGRESS', 'PENDING_PAYMENT', 'PENDING_OWNER_APPROVAL', 'AWAITING_RETURN_INSPECTION'] },
+        status: {
+          in: [
+            'CONFIRMED',
+            'IN_PROGRESS',
+            'PENDING_PAYMENT',
+            'PENDING_OWNER_APPROVAL',
+            'AWAITING_RETURN_INSPECTION',
+          ],
+        },
       },
     });
 
@@ -963,9 +1025,7 @@ export class ListingsService {
     const avg = Math.round(sum / prices.length);
     const mid = Math.floor(prices.length / 2);
     const median =
-      prices.length % 2 === 0
-        ? Math.round((prices[mid - 1] + prices[mid]) / 2)
-        : prices[mid];
+      prices.length % 2 === 0 ? Math.round((prices[mid - 1] + prices[mid]) / 2) : prices[mid];
 
     // Suggested range: 25th to 75th percentile
     const p25 = prices[Math.floor(prices.length * 0.25)];

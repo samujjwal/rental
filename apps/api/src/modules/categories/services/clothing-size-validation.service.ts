@@ -3,7 +3,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 
 /**
  * Clothing Size Validation Service
- * 
+ *
  * Handles clothing-specific size validation including:
  * - Size chart validation (XS, S, M, L, XL, XXL, etc.)
  * - Measurement validation (chest, waist, hips, inseam)
@@ -16,7 +16,7 @@ export class ClothingSizeValidationService {
 
   // Standard size charts
   private readonly STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'] as const;
-  
+
   // Size measurement ranges (in inches)
   private readonly SIZE_MEASUREMENTS = {
     XS: { chest: [30, 34], waist: [24, 28], hips: [34, 37] },
@@ -35,16 +35,14 @@ export class ClothingSizeValidationService {
     UK: { XS: '6', S: '8', M: '10', L: '12', XL: '14', XXL: '16', XXXL: '18' },
   } as const;
 
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Validate clothing size
    */
   validateSize(size: string): { valid: boolean; recommendedSize?: string; error?: string } {
     const upperSize = size.toUpperCase();
-    
+
     if (!this.STANDARD_SIZES.includes(upperSize as any)) {
       return {
         valid: false,
@@ -64,7 +62,7 @@ export class ClothingSizeValidationService {
   ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
     const upperSize = size.toUpperCase() as keyof typeof this.SIZE_MEASUREMENTS;
-    
+
     if (!this.SIZE_MEASUREMENTS[upperSize]) {
       errors.push(`Invalid size: ${size}`);
       return { valid: false, errors };
@@ -108,34 +106,47 @@ export class ClothingSizeValidationService {
   /**
    * Recommend size based on measurements
    */
-  recommendSize(measurements: {
-    chest?: number;
-    waist?: number;
-    hips?: number;
-  }): { recommendedSize: string; confidence: number; details: string } {
+  recommendSize(measurements: { chest?: number; waist?: number; hips?: number }): {
+    recommendedSize: string;
+    confidence: number;
+    details: string;
+  } {
     const scores: Record<string, number> = {};
 
     for (const [size, ranges] of Object.entries(this.SIZE_MEASUREMENTS)) {
       let score = 0;
       let measurementsChecked = 0;
+      let edgeCaseCount = 0;
 
       if (measurements.chest !== undefined) {
+        const isEdgeCase =
+          Math.abs(measurements.chest - ranges.chest[0]) <= 0.5 ||
+          Math.abs(measurements.chest - ranges.chest[1]) <= 0.5;
         if (measurements.chest >= ranges.chest[0] && measurements.chest <= ranges.chest[1]) {
-          score += 1;
+          score += isEdgeCase ? 0.5 : 1;
+          if (isEdgeCase) edgeCaseCount++;
         }
         measurementsChecked++;
       }
 
       if (measurements.waist !== undefined) {
+        const isEdgeCase =
+          Math.abs(measurements.waist - ranges.waist[0]) <= 0.5 ||
+          Math.abs(measurements.waist - ranges.waist[1]) <= 0.5;
         if (measurements.waist >= ranges.waist[0] && measurements.waist <= ranges.waist[1]) {
-          score += 1;
+          score += isEdgeCase ? 0.5 : 1;
+          if (isEdgeCase) edgeCaseCount++;
         }
         measurementsChecked++;
       }
 
       if (measurements.hips !== undefined) {
+        const isEdgeCase =
+          Math.abs(measurements.hips - ranges.hips[0]) <= 0.5 ||
+          Math.abs(measurements.hips - ranges.hips[1]) <= 0.5;
         if (measurements.hips >= ranges.hips[0] && measurements.hips <= ranges.hips[1]) {
-          score += 1;
+          score += isEdgeCase ? 0.5 : 1;
+          if (isEdgeCase) edgeCaseCount++;
         }
         measurementsChecked++;
       }
@@ -174,9 +185,22 @@ export class ClothingSizeValidationService {
     const fromSystemUpper = fromSystem.toUpperCase() as 'US' | 'EU' | 'UK';
     const toSystemUpper = toSystem.toUpperCase() as 'US' | 'EU' | 'UK';
 
+    // Validate input size is valid for the source system
+    if (fromSystemUpper === 'US') {
+      if (!this.STANDARD_SIZES.includes(upperSize as any)) {
+        throw new BadRequestException(`Invalid size ${size} for ${fromSystem} system`);
+      }
+    } else {
+      // Check if size exists in the conversion table
+      const validSizes = Object.values(this.SIZE_CONVERSION[fromSystemUpper]) as string[];
+      if (!validSizes.includes(upperSize)) {
+        throw new BadRequestException(`Invalid size ${size} for ${fromSystem} system`);
+      }
+    }
+
     // Find US equivalent
     let usSize: string | undefined;
-    
+
     if (fromSystemUpper === 'US') {
       usSize = upperSize;
     } else {
@@ -240,11 +264,11 @@ export class ClothingSizeValidationService {
       },
     });
 
-    const availableSizes = sizeAttributeValues.map(v => v.value);
+    const availableSizes = sizeAttributeValues.map((v) => v.value);
 
     // Validate all sizes are valid
     const invalidSizes = availableSizes.filter(
-      size => !this.STANDARD_SIZES.includes(size.toUpperCase() as any),
+      (size) => !this.STANDARD_SIZES.includes(size.toUpperCase() as any),
     );
 
     return {
@@ -259,16 +283,22 @@ export class ClothingSizeValidationService {
    */
   private generateSizeRecommendationDetails(size: string, measurements: any): string {
     const sizeRanges = this.SIZE_MEASUREMENTS[size as keyof typeof this.SIZE_MEASUREMENTS];
-    
+
     const details = [];
     if (measurements.chest) {
-      details.push(`Chest: ${measurements.chest}" (range: ${sizeRanges.chest[0]}-${sizeRanges.chest[1]}")`);
+      details.push(
+        `Chest: ${measurements.chest}" (range: ${sizeRanges.chest[0]}-${sizeRanges.chest[1]}")`,
+      );
     }
     if (measurements.waist) {
-      details.push(`Waist: ${measurements.waist}" (range: ${sizeRanges.waist[0]}-${sizeRanges.waist[1]}")`);
+      details.push(
+        `Waist: ${measurements.waist}" (range: ${sizeRanges.waist[0]}-${sizeRanges.waist[1]}")`,
+      );
     }
     if (measurements.hips) {
-      details.push(`Hips: ${measurements.hips}" (range: ${sizeRanges.hips[0]}-${sizeRanges.hips[1]}")`);
+      details.push(
+        `Hips: ${measurements.hips}" (range: ${sizeRanges.hips[0]}-${sizeRanges.hips[1]}")`,
+      );
     }
 
     return details.join(', ');

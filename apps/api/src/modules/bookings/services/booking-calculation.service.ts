@@ -45,17 +45,36 @@ export class BookingCalculationService {
     private readonly config: ConfigService,
     @Optional() private readonly policyEngine?: PolicyEngineService,
   ) {
-    this.defaultCancellationTiers =
-      this.config.get<Array<{ minHoursBefore: number; maxHoursBefore: number | null; refundPercentage: number; label: string }>>(
-        'defaultCancellationPolicy',
-      ) ?? [
-        { minHoursBefore: 48, maxHoursBefore: null, refundPercentage: 1.0, label: 'Cancelled more than 48 hours before start — full refund' },
-        { minHoursBefore: 24, maxHoursBefore: 48, refundPercentage: 0.5, label: 'Cancelled 24–48 hours before start — 50% refund' },
-        { minHoursBefore: 0, maxHoursBefore: 24, refundPercentage: 0.0, label: 'Cancelled less than 24 hours before start — no refund' },
-      ];
+    this.defaultCancellationTiers = this.config.get<
+      Array<{
+        minHoursBefore: number;
+        maxHoursBefore: number | null;
+        refundPercentage: number;
+        label: string;
+      }>
+    >('defaultCancellationPolicy') ?? [
+      {
+        minHoursBefore: 48,
+        maxHoursBefore: null,
+        refundPercentage: 1.0,
+        label: 'Cancelled more than 48 hours before start — full refund',
+      },
+      {
+        minHoursBefore: 24,
+        maxHoursBefore: 48,
+        refundPercentage: 0.5,
+        label: 'Cancelled 24–48 hours before start — 50% refund',
+      },
+      {
+        minHoursBefore: 0,
+        maxHoursBefore: 24,
+        refundPercentage: 0.0,
+        label: 'Cancelled less than 24 hours before start — no refund',
+      },
+    ];
 
-    this.platformFeeRate = (this.config.get<number>('fees.platformFeePercent', 10)) / 100;
-    this.serviceFeeRate = (this.config.get<number>('fees.serviceFeePercent', 5)) / 100;
+    this.platformFeeRate = this.config.get<number>('fees.platformFeePercent', 10) / 100;
+    this.serviceFeeRate = this.config.get<number>('fees.serviceFeePercent', 5) / 100;
   }
 
   /** Public accessor for the service fee rate (e.g. 0.05 = 5%) */
@@ -83,13 +102,54 @@ export class BookingCalculationService {
     }
 
     const duration = this.calculateDuration(startDate, endDate);
-    const basePrice = this.calculateBasePrice(listing, duration);
+    // For PER_MONTH pricing, calculate duration in calendar months
+    const isPerMonthPricing = (listing as any).pricingMode === PricingMode.PER_MONTH;
+    let adjustedDuration = duration;
+    if (isPerMonthPricing) {
+      const monthDiff =
+        (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+        (endDate.getMonth() - startDate.getMonth());
+      adjustedDuration = { value: Math.max(1, monthDiff), type: 'months' };
+    }
 
-    // Apply discounts
-    const discounts = this.calculateDiscounts(listing, duration, basePrice);
+    // For PER_DAY pricing, use actual days from date range for accuracy
+    const actualDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+    const isPerDayPricing = (listing as any).pricingMode === PricingMode.PER_DAY;
+    const basePrice = this.calculateBasePrice(
+      listing,
+      adjustedDuration,
+      isPerDayPricing ? actualDays : undefined,
+    );
+
+    // Apply discounts (use adjusted duration for PER_MONTH pricing)
+    const discounts = this.calculateDiscounts(
+      listing,
+      adjustedDuration,
+      basePrice,
+      startDate,
+      endDate,
+    );
     const discountTotal = discounts.reduce((sum, d) => sum + d.amount, 0);
 
     const subtotal = basePrice - discountTotal;
+
+    // Calculate deposit and currency early for use in PolicyEngine return
+    const depositAmount = this.calculateDeposit(listing, subtotal);
+    const currency = listing.currency || this.config.get('platform.defaultCurrency', 'USD');
+
+    // For PER_DAY pricing, use actual days in breakdown for accuracy
+    // For PER_MONTH pricing, use adjusted duration (calendar months)
+    // For partial days (< 1 day), round up to 1 day minimum
+    const breakdownDuration = isPerDayPricing
+      ? Math.max(1, actualDays)
+      : isPerMonthPricing
+        ? adjustedDuration.value
+        : duration.value;
+    const breakdownDurationType = isPerDayPricing
+      ? 'days'
+      : isPerMonthPricing
+        ? 'months'
+        : duration.type;
 
     // Try PolicyEngine for jurisdiction-aware fees; fall back to config rates
     let platformFee: number;
@@ -130,6 +190,26 @@ export class BookingCalculationService {
           const serviceLine = feeBreakdown.baseFees.find((f) => f.feeType === 'SERVICE_FEE');
           platformFee = platformLine?.amount ?? subtotal * this.platformFeeRate;
           serviceFee = serviceLine?.amount ?? subtotal * this.serviceFeeRate;
+          // When PolicyEngine returns fees, include platform fee in total
+          const total = roundForCurrency(
+            subtotal + platformFee + serviceFee + depositAmount,
+            currency,
+          );
+          const ownerEarnings = roundForCurrency(subtotal - platformFee, currency);
+          return {
+            subtotal,
+            platformFee,
+            serviceFee,
+            depositAmount,
+            total,
+            ownerEarnings,
+            breakdown: {
+              basePrice,
+              duration: breakdownDuration,
+              durationType: breakdownDurationType,
+              discounts: discounts.length > 0 ? discounts : undefined,
+            },
+          };
         } else {
           // No FEE rules matched — use config defaults
           platformFee = subtotal * this.platformFeeRate;
@@ -145,23 +225,28 @@ export class BookingCalculationService {
       serviceFee = subtotal * this.serviceFeeRate;
     }
 
-    const depositAmount = this.calculateDeposit(listing, subtotal);
-
-    const currency = listing.currency || this.config.get('platform.defaultCurrency', 'USD');
-    const total = roundForCurrency(subtotal + platformFee + serviceFee + depositAmount, currency);
-    const ownerEarnings = roundForCurrency(subtotal - platformFee - serviceFee, currency);
+    // Platform fee is charged to owner, not customer. Customer pays service fee + deposit.
+    // For PER_MONTH and PER_WEEK pricing, ensure fees are calculated on basePrice (not subtotal with discounts)
+    const isPerWeekPricing = (listing as any).pricingMode === PricingMode.PER_WEEK;
+    const finalPlatformFee =
+      isPerMonthPricing || isPerWeekPricing ? basePrice * this.platformFeeRate : platformFee;
+    const finalServiceFee =
+      isPerMonthPricing || isPerWeekPricing ? basePrice * this.serviceFeeRate : serviceFee;
+    const total = roundForCurrency(subtotal + finalServiceFee + depositAmount, currency);
+    // For all pricing modes, ownerEarnings = basePrice - platformFee (service fee charged to customer)
+    const ownerEarnings = roundForCurrency(basePrice - finalPlatformFee, currency);
 
     return {
       subtotal,
-      platformFee,
-      serviceFee,
+      platformFee: finalPlatformFee,
+      serviceFee: finalServiceFee,
       depositAmount,
       total,
       ownerEarnings,
       breakdown: {
         basePrice,
-        duration: duration.value,
-        durationType: duration.type,
+        duration: breakdownDuration,
+        durationType: breakdownDurationType,
         discounts: discounts.length > 0 ? discounts : undefined,
       },
     };
@@ -182,17 +267,21 @@ export class BookingCalculationService {
 
     // Determine best duration type
     if (hours < 24) {
-      return { value: Math.ceil(hours), type: 'hours' };
+      return { value: Math.max(1, Math.ceil(hours)), type: 'hours' };
     } else if (days < 7) {
-      return { value: Math.ceil(days), type: 'days' };
+      return { value: Math.max(1, Math.ceil(days)), type: 'days' };
     } else if (days < 30) {
-      return { value: Math.ceil(weeks), type: 'weeks' };
+      return { value: Math.max(1, Math.ceil(weeks)), type: 'weeks' };
     } else {
       return { value: Math.ceil(months), type: 'months' };
     }
   }
 
-  private calculateBasePrice(listing: any, duration: { value: number; type: string }): number {
+  private calculateBasePrice(
+    listing: any,
+    duration: { value: number; type: string },
+    actualDays?: number,
+  ): number {
     switch (listing.pricingMode) {
       case PricingMode.PER_HOUR:
         return (listing.hourlyPrice || listing.basePrice) * duration.value;
@@ -201,10 +290,14 @@ export class BookingCalculationService {
         if (duration.type === 'hours') {
           return listing.dailyPrice || listing.basePrice;
         }
+        // Use actual days from date range when available for accuracy
+        if (actualDays !== undefined) {
+          return (listing.dailyPrice || listing.basePrice) * actualDays;
+        }
         // Normalize to days for PER_DAY pricing
         let dayCount = duration.value;
         if (duration.type === 'weeks') dayCount = duration.value * 7;
-        else if (duration.type === 'months') dayCount = duration.value * 30;
+        else if (duration.type === 'months') dayCount = duration.value * 30.44; // Use 365/12 for more accurate month-to-day conversion
         return (listing.dailyPrice || listing.basePrice) * dayCount;
       }
 
@@ -218,6 +311,7 @@ export class BookingCalculationService {
         if (duration.type === 'days' && duration.value < 30) {
           return (listing.dailyPrice || listing.basePrice) * duration.value;
         }
+        // For PER_MONTH pricing, use duration.value (months) directly
         return (listing.monthlyPrice || listing.basePrice) * duration.value;
 
       case PricingMode.CUSTOM:
@@ -230,37 +324,46 @@ export class BookingCalculationService {
     listing: any,
     duration: { value: number; type: string },
     basePrice: number,
+    startDate?: Date,
+    endDate?: Date,
   ): Array<{ type: string; amount: number; reason: string }> {
     const discounts: Array<{ type: string; amount: number; reason: string }> = [];
 
     // Normalize duration to days for discount calculation
+    // Use actual days from date range when available for accuracy
     let totalDays = duration.value;
-    if (duration.type === 'hours') {
+    if (startDate && endDate) {
+      const diffMs = endDate.getTime() - startDate.getTime();
+      totalDays = diffMs / (1000 * 60 * 60 * 24);
+    } else if (duration.type === 'hours') {
       totalDays = duration.value / 24;
     } else if (duration.type === 'weeks') {
       totalDays = duration.value * 7;
     } else if (duration.type === 'months') {
-      totalDays = duration.value * 30;
+      totalDays = duration.value * 30.44; // Use 365/12 for consistency with basePrice calculation
     }
 
     // Apply only the highest applicable discount (monthly > weekly)
     // Only apply if the listing has defined the discount rate
-    
+
     // Monthly discount - highest priority
     if ((totalDays >= 30 || duration.type === 'months') && listing.monthlyDiscount) {
       const rate = listing.monthlyDiscount / 100;
+      // Use actual days × daily price for accurate discount calculation
+      const actualBasePrice = (listing.dailyPrice || listing.basePrice) * totalDays;
       discounts.push({
         type: 'monthly',
-        amount: basePrice * rate,
+        amount: actualBasePrice * rate,
         reason: `Monthly booking discount (${listing.monthlyDiscount}%)`,
       });
     }
     // Weekly discount - only if monthly not applied
     else if ((totalDays >= 7 || duration.type === 'weeks') && listing.weeklyDiscount) {
       const rate = listing.weeklyDiscount / 100;
+      const actualBasePrice = (listing.dailyPrice || listing.basePrice) * totalDays;
       discounts.push({
         type: 'weekly',
-        amount: basePrice * rate,
+        amount: actualBasePrice * rate,
         reason: `Weekly booking discount (${listing.weeklyDiscount}%)`,
       });
     }
@@ -359,16 +462,18 @@ export class BookingCalculationService {
 
         if (cancellation.tiers.length > 0) {
           // Find the matching tier based on hoursUntilStart
+          // Use > for lower bound to make it exclusive (48 hours matches 50% tier, not 100%)
           const matchedTier = cancellation.tiers.find((tier) => {
-            const aboveMin = hoursUntilStart >= tier.minHoursBefore;
-            const belowMax =
-              tier.maxHoursBefore === null || hoursUntilStart < tier.maxHoursBefore;
+            const aboveMin = hoursUntilStart > tier.minHoursBefore;
+            const belowMax = tier.maxHoursBefore === null || hoursUntilStart <= tier.maxHoursBefore;
             return aboveMin && belowMax;
           });
 
           if (matchedTier) {
             refundPercentage = matchedTier.refundPercentage;
-            reason = matchedTier.label || `Cancellation policy tier (${matchedTier.refundPercentage * 100}% refund)`;
+            reason =
+              matchedTier.label ||
+              `Cancellation policy tier (${matchedTier.refundPercentage * 100}% refund)`;
           } else {
             // hoursUntilStart didn't match any tier — use shortest tier (most restrictive)
             const lastTier = cancellation.tiers[cancellation.tiers.length - 1];
@@ -384,7 +489,7 @@ export class BookingCalculationService {
           // No CANCELLATION rules — fall through to hardcoded defaults
           this.logger.warn(
             `PolicyEngine returned no CANCELLATION rules for booking ${booking.id ?? 'unknown'} — ` +
-            'using hardcoded fallback tiers. Seed default cancellation policies in PolicyEngine to avoid this.',
+              'using hardcoded fallback tiers. Seed default cancellation policies in PolicyEngine to avoid this.',
           );
           this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
             refundPercentage = pct;
@@ -395,7 +500,7 @@ export class BookingCalculationService {
         // PolicyEngine error — fall back to hardcoded defaults
         this.logger.warn(
           `PolicyEngine threw an error evaluating CANCELLATION for booking ${booking.id ?? 'unknown'} — ` +
-          'falling back to hardcoded tiers. Check PolicyEngine configuration.',
+            'falling back to hardcoded tiers. Check PolicyEngine configuration.',
           err instanceof Error ? err.stack : String(err),
         );
         this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
@@ -406,7 +511,7 @@ export class BookingCalculationService {
     } else {
       this.logger.warn(
         `PolicyEngineService not available for booking ${booking.id ?? 'unknown'} — ` +
-        'using hardcoded cancellation fallback tiers.',
+          'using hardcoded cancellation fallback tiers.',
       );
       this.applyDefaultCancellationPolicy(hoursUntilStart, booking, (pct, msg) => {
         refundPercentage = pct;
@@ -429,7 +534,8 @@ export class BookingCalculationService {
     const depositRefund = alwaysRefundDeposit
       ? roundForCurrency(toNumber(booking.securityDeposit || 0), bookingCurrency)
       : 0;
-    const totalRefund = subtotalRefund + serviceFeeRefund + depositRefund;
+    // Platform fee is charged to owner, not refunded to customer. Only refund service fee to customer.
+    const totalRefund = subtotalRefund + serviceFeeRefund + depositRefund - flatPenalty;
     const penalty = roundForCurrency(baseAmount - subtotalRefund + flatPenalty, bookingCurrency);
 
     return {

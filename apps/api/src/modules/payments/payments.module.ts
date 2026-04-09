@@ -17,11 +17,13 @@ import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { BookingsModule } from '../bookings/bookings.module';
 import { EventsModule } from '@/common/events/events.module';
+import { CurrencyModule } from '../currency/currency.module';
 
 @Module({
   imports: [
     BookingsModule,
     EventsModule,
+    CurrencyModule,
     BullModule.registerQueue({ name: 'payments' }),
   ],
   controllers: [PaymentsController, TaxController, WebhookController],

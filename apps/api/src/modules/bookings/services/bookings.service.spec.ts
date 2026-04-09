@@ -209,8 +209,8 @@ describe('BookingsService', () => {
   describe('create', () => {
     const createDto: CreateBookingDto = {
       listingId: '12345678-1234-1234-1234-123456789012',
-      startDate: new Date('2030-01-01T10:00:00.000Z'),
-      endDate: new Date('2030-01-02T10:00:00.000Z'),
+      startDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+      endDate: new Date(Date.now() + 48 * 60 * 60 * 1000), // Day after tomorrow
       guestCount: 2,
     };
 
@@ -330,9 +330,7 @@ describe('BookingsService', () => {
 
     it('should flag booking when tax calculation fails', async () => {
       const policyEngine = module.get<PolicyEngineService>(PolicyEngineService);
-      (policyEngine.calculateTax as jest.Mock).mockRejectedValueOnce(
-        new Error('Tax service down'),
-      );
+      (policyEngine.calculateTax as jest.Mock).mockRejectedValueOnce(new Error('Tax service down'));
       mockPrismaService.listing.findUnique.mockResolvedValue(mockListing);
       mockPrismaService.booking.findMany.mockResolvedValue([]);
       mockAvailabilityService.checkAvailability.mockResolvedValue({ isAvailable: true });
@@ -393,8 +391,8 @@ describe('BookingsService', () => {
   describe('create — error handling', () => {
     const createDto: CreateBookingDto = {
       listingId: '12345678-1234-1234-1234-123456789012',
-      startDate: new Date('2030-01-01T10:00:00.000Z'),
-      endDate: new Date('2030-01-02T10:00:00.000Z'),
+      startDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+      endDate: new Date(Date.now() + 48 * 60 * 60 * 1000), // Day after tomorrow
       guestCount: 2,
     };
 
@@ -522,8 +520,8 @@ describe('BookingsService', () => {
   describe('create — safety-check fail-closed behavior', () => {
     const createDto: CreateBookingDto = {
       listingId: '12345678-1234-1234-1234-123456789012',
-      startDate: new Date('2030-01-01T10:00:00.000Z'),
-      endDate: new Date('2030-01-02T10:00:00.000Z'),
+      startDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+      endDate: new Date(Date.now() + 48 * 60 * 60 * 1000), // Day after tomorrow
       guestCount: 2,
     };
 

@@ -4,6 +4,24 @@ import { StripeTaxService } from './stripe-tax.service';
 jest.mock('stripe', () => {
   return jest.fn().mockImplementation(() => ({
     tax: {
+      calculations: {
+        create: jest.fn().mockResolvedValue({
+          id: 'tax_calc_1',
+          amount: 1000000, // $10000 in cents
+          tax_amount_exclusive: 80000, // $800 in cents
+          tax_amount_inclusive: 0,
+          total: 1080000, // $10800 in cents
+          tax_breakdown: [
+            {
+              taxability_reason: 'Tax',
+              amount: 80000, // $800 in cents
+              tax_rate_details: {
+                percentage_decimal: '8.00',
+              },
+            },
+          ],
+        }),
+      },
       transactions: {
         createFromCalculation: jest.fn().mockResolvedValue({ id: 'tax_txn_1' }),
       },
@@ -57,7 +75,13 @@ describe('StripeTaxService', () => {
       const result = await service.calculateTax({
         amount: 10000,
         currency: 'usd',
-        customerAddress: { line1: '123 Main St', city: 'San Francisco', country: 'US', state: 'CA', postalCode: '94105' },
+        customerAddress: {
+          line1: '123 Main St',
+          city: 'San Francisco',
+          country: 'US',
+          state: 'CA',
+          postalCode: '94105',
+        },
       });
 
       expect(result).toBeDefined();
@@ -82,7 +106,13 @@ describe('StripeTaxService', () => {
       const result = await service.calculateTax({
         amount: 0,
         currency: 'usd',
-        customerAddress: { line1: '123 Main St', city: 'San Francisco', country: 'US', state: 'CA', postalCode: '94105' },
+        customerAddress: {
+          line1: '123 Main St',
+          city: 'San Francisco',
+          country: 'US',
+          state: 'CA',
+          postalCode: '94105',
+        },
       });
 
       expect(result).toBeDefined();
@@ -94,7 +124,13 @@ describe('StripeTaxService', () => {
       const result = await service.calculateTax({
         amount: 1000000, // $10,000
         currency: 'usd',
-        customerAddress: { line1: '123 Main St', city: 'San Francisco', country: 'US', state: 'CA', postalCode: '94105' },
+        customerAddress: {
+          line1: '123 Main St',
+          city: 'San Francisco',
+          country: 'US',
+          state: 'CA',
+          postalCode: '94105',
+        },
       });
 
       expect(result).toBeDefined();
@@ -104,12 +140,18 @@ describe('StripeTaxService', () => {
     // EDGE CASE: Different currencies
     it('should handle different currencies', async () => {
       const currencies = ['usd', 'eur', 'gbp', 'cad', 'aud'];
-      
+
       for (const currency of currencies) {
         const result = await service.calculateTax({
           amount: 10000,
           currency: currency as any,
-          customerAddress: { line1: '123 Main St', city: 'San Francisco', country: 'US', state: 'CA', postalCode: '94105' },
+          customerAddress: {
+            line1: '123 Main St',
+            city: 'San Francisco',
+            country: 'US',
+            state: 'CA',
+            postalCode: '94105',
+          },
         });
 
         expect(result).toBeDefined();
@@ -134,7 +176,13 @@ describe('StripeTaxService', () => {
       const result = await service.calculateTax({
         amount: 10000,
         currency: 'eur',
-        customerAddress: { line1: 'Baker Street', city: 'London', country: 'GB', state: '', postalCode: 'NW1 6XE' },
+        customerAddress: {
+          line1: 'Baker Street',
+          city: 'London',
+          country: 'GB',
+          state: '',
+          postalCode: 'NW1 6XE',
+        },
       });
 
       expect(result).toBeDefined();
@@ -146,12 +194,19 @@ describe('StripeTaxService', () => {
       const result = await service.calculateTax({
         amount,
         currency: 'usd',
-        customerAddress: { line1: '123 Main St', city: 'San Francisco', country: 'US', state: 'CA', postalCode: '94105' },
+        customerAddress: {
+          line1: '123 Main St',
+          city: 'San Francisco',
+          country: 'US',
+          state: 'CA',
+          postalCode: '94105',
+        },
       });
 
       // With 8% default rate, tax should be 800
-      expect(result.amount).toBe(800);
-      expect(result.total).toBe(10800);
+      expect(result.amount).toBe(amount); // Original amount
+      expect(result.tax).toBe(800); // Tax amount
+      expect(result.total).toBe(10800); // Total with tax
     });
 
     // EDGE CASE: Stripe API failure
@@ -161,7 +216,13 @@ describe('StripeTaxService', () => {
       const result = await service.calculateTax({
         amount: 10000,
         currency: 'usd',
-        customerAddress: { line1: '123 Main St', city: 'San Francisco', country: 'US', state: 'CA', postalCode: '94105' },
+        customerAddress: {
+          line1: '123 Main St',
+          city: 'San Francisco',
+          country: 'US',
+          state: 'CA',
+          postalCode: '94105',
+        },
       });
 
       // Should fallback to default rate even if Stripe fails

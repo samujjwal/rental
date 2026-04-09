@@ -48,6 +48,29 @@ interface RateLimitMetrics {
   endpoints: Record<string, any>;
 }
 
+type UserTier = 'free' | 'premium' | 'enterprise';
+
+type Vulnerability = {
+  type: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description: string;
+  endpoint?: string;
+  recommendation?: string;
+};
+
+interface SecurityTestResult {
+  passed: boolean;
+  vulnerabilities: Vulnerability[];
+  testsRun: number;
+  executionTime: number;
+  rateLimitActive?: boolean;
+  unauthorizedAccessBlocked?: boolean;
+  maliciousFilesBlocked?: boolean;
+  fileSizeLimitEnforced?: boolean;
+  invalidDataRejected?: boolean;
+  schemaValidationActive?: boolean;
+}
+
 @Injectable()
 export class SecurityTestFramework {
   private logs: SecurityLog[] = [];
@@ -129,9 +152,9 @@ export class SecurityTestFramework {
       /filter.*AND.*1/i,
       /filter.*OR.*1/i,
       /filter.*UNION/i,
-      /filter.*DROP/i
+      /filter.*DROP/i,
     ];
-    const hasSqlInjection = sqlPatterns.some(pattern => pattern.test(requestStr));
+    const hasSqlInjection = sqlPatterns.some((pattern) => pattern.test(requestStr));
     if (hasSqlInjection) {
       this.logs.push({
         type: 'SQL_INJECTION_ATTEMPT',
@@ -139,9 +162,9 @@ export class SecurityTestFramework {
         ipAddress: options.headers?.['X-Forwarded-For'] || 'unknown',
         userAgent: options.headers?.['User-Agent'] || 'jest-test',
         endpoint: options.path,
-        payload: requestStr.substring(0, 500)
+        payload: requestStr.substring(0, 500),
       });
-      
+
       // Determine error message based on endpoint
       let errorMessage = 'Invalid input data';
       if (options.path?.includes('/api/users/') && !options.path?.includes('?')) {
@@ -151,7 +174,9 @@ export class SecurityTestFramework {
       } else if (options.path?.includes('filter=')) {
         errorMessage = 'Invalid filter parameter';
       } else if (options.path?.includes('page=') || options.path?.includes('limit=')) {
-        errorMessage = options.path?.includes('page=') ? 'Invalid page parameter' : 'Invalid limit parameter';
+        errorMessage = options.path?.includes('page=')
+          ? 'Invalid page parameter'
+          : 'Invalid limit parameter';
       } else if (options.path?.includes('/api/bookings')) {
         errorMessage = 'Invalid booking data';
       } else if (options.path?.includes('/api/listings')) {
@@ -161,11 +186,11 @@ export class SecurityTestFramework {
       } else if (options.path?.includes('/api/auth/register')) {
         errorMessage = 'Invalid input data';
       }
-      
+
       return {
         status: 400,
         body: { error: errorMessage },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -186,8 +211,8 @@ export class SecurityTestFramework {
           'x-ratelimit-limit': '100',
           'x-ratelimit-remaining': '0',
           'x-ratelimit-reset': '60',
-          ...(isSuspicious ? {} : { 'retry-after': '60' })
-        }
+          ...(isSuspicious ? {} : { 'retry-after': '60' }),
+        },
       };
     }
 
@@ -198,13 +223,13 @@ export class SecurityTestFramework {
           return {
             status: 429,
             body: { error: 'Too many login attempts' },
-            headers: {}
+            headers: {},
           };
         }
         return {
           status: 401,
           body: { error: 'Invalid credentials' },
-          headers: {}
+          headers: {},
         };
       }
 
@@ -212,7 +237,7 @@ export class SecurityTestFramework {
         return {
           status: 400,
           body: { error: 'Password does not meet security requirements' },
-          headers: {}
+          headers: {},
         };
       }
     }
@@ -222,7 +247,7 @@ export class SecurityTestFramework {
       return {
         status: 401,
         body: { error: 'Session expired' },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -231,7 +256,7 @@ export class SecurityTestFramework {
       return {
         status: 423,
         body: { error: 'Account locked' },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -240,7 +265,7 @@ export class SecurityTestFramework {
       return {
         status: 200,
         body: { message: 'Account unlocked' },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -249,7 +274,7 @@ export class SecurityTestFramework {
       return {
         status: 200,
         body: { message: 'Unlock email sent' },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -258,7 +283,7 @@ export class SecurityTestFramework {
       return {
         status: 200,
         body: { token: 'valid-token', user: { id: 'user-123' } },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -267,38 +292,45 @@ export class SecurityTestFramework {
       return {
         status: 200,
         body: { message: 'Logged out' },
-        headers: {}
+        headers: {},
       };
     }
 
     // Simulate MFA required
     const sensitivePaths = ['/change-email', '/change-password', '/delete-account', '/transfer'];
-    if (sensitivePaths.some(p => options.path?.includes(p))) {
+    if (sensitivePaths.some((p) => options.path?.includes(p))) {
       return {
         status: 403,
         body: { error: 'Multi-factor authentication required' },
-        headers: {}
+        headers: {},
       };
     }
 
     // Simulate TOTP validation
     if (options.path?.includes('/auth/verify-totp')) {
       const token = options.body?.token;
-      const isValid = token && /^\d{6}$/.test(token) && token !== '000000' && token !== '123456' && token !== '999999';
+      const isValid =
+        token &&
+        /^\d{6}$/.test(token) &&
+        token !== '000000' &&
+        token !== '123456' &&
+        token !== '999999';
       return {
         status: isValid ? 200 : 400,
         body: isValid ? { valid: true } : { error: 'Invalid TOTP token' },
-        headers: {}
+        headers: {},
       };
     }
 
     // Simulate backup codes regeneration
     if (options.path?.includes('/auth/regenerate-backup-codes')) {
-      const codes = Array.from({ length: 10 }, () => Math.floor(10000000 + Math.random() * 90000000).toString());
+      const codes = Array.from({ length: 10 }, () =>
+        Math.floor(10000000 + Math.random() * 90000000).toString(),
+      );
       return {
         status: 200,
         body: { backupCodes: codes },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -307,7 +339,7 @@ export class SecurityTestFramework {
       return {
         status: 400,
         body: { error: 'Invalid session parameter' },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -327,9 +359,9 @@ export class SecurityTestFramework {
       /"\$addToSet":/,
       /"\$pop":/,
       /"\$pullAll":/,
-      /"\$each":/
+      /"\$each":/,
     ];
-    const hasNoSqlInjection = nosqlPatterns.some(pattern => pattern.test(bodyStr));
+    const hasNoSqlInjection = nosqlPatterns.some((pattern) => pattern.test(bodyStr));
     if (hasNoSqlInjection) {
       this.logs.push({
         type: 'NOSQL_INJECTION_ATTEMPT',
@@ -337,17 +369,17 @@ export class SecurityTestFramework {
         ipAddress: options.headers?.['X-Forwarded-For'] || 'unknown',
         userAgent: options.headers?.['User-Agent'] || 'jest-test',
         endpoint: options.path,
-        payload: bodyStr.substring(0, 500)
+        payload: bodyStr.substring(0, 500),
       });
-      
-      const errorMessage = options.path?.includes('/api/users/update') 
-        ? 'Invalid update operation' 
+
+      const errorMessage = options.path?.includes('/api/users/update')
+        ? 'Invalid update operation'
         : 'Invalid query parameter';
-      
+
       return {
         status: 400,
         body: { error: errorMessage },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -366,7 +398,7 @@ export class SecurityTestFramework {
       /COUNT\s*\(\s*\*\s*\)\s*FROM/,
       /'\s*AND\s*\(SELECT\s+COUNT/,
     ];
-    const hasHeaderSqlInjection = headerSqlPatterns.some(pattern => pattern.test(authHeader));
+    const hasHeaderSqlInjection = headerSqlPatterns.some((pattern) => pattern.test(authHeader));
     if (hasHeaderSqlInjection) {
       this.logs.push({
         type: 'SQL_INJECTION_ATTEMPT',
@@ -374,13 +406,13 @@ export class SecurityTestFramework {
         ipAddress: options.headers?.['X-Forwarded-For'] || 'unknown',
         userAgent: options.headers?.['User-Agent'] || 'jest-test',
         endpoint: options.path,
-        payload: authHeader.substring(0, 500)
+        payload: authHeader.substring(0, 500),
       });
-      
+
       return {
         status: 401,
         body: { error: 'Invalid token' },
-        headers: {}
+        headers: {},
       };
     }
 
@@ -399,20 +431,20 @@ export class SecurityTestFramework {
     ];
     for (const key of customHeaderKeys) {
       const headerValue = options.headers?.[key] || '';
-      if (headerValue && customHeaderSqlPatterns.some(pattern => pattern.test(headerValue))) {
+      if (headerValue && customHeaderSqlPatterns.some((pattern) => pattern.test(headerValue))) {
         this.logs.push({
           type: 'SQL_INJECTION_ATTEMPT',
           timestamp: new Date().toISOString(),
           ipAddress: options.headers?.['X-Forwarded-For'] || 'unknown',
           userAgent: options.headers?.['User-Agent'] || 'jest-test',
           endpoint: options.path,
-          payload: `${key}: ${headerValue}`.substring(0, 500)
+          payload: `${key}: ${headerValue}`.substring(0, 500),
         });
-        
+
         return {
           status: 400,
           body: { error: 'Invalid parameter' },
-          headers: {}
+          headers: {},
         };
       }
     }
@@ -424,8 +456,8 @@ export class SecurityTestFramework {
       headers: {
         'x-ratelimit-limit': '100',
         'x-ratelimit-remaining': (100 - (this.requestCount % 100)).toString(),
-        'x-ratelimit-reset': '3600'
-      }
+        'x-ratelimit-reset': '3600',
+      },
     };
   }
 
@@ -436,7 +468,7 @@ export class SecurityTestFramework {
   async getRateLimitConfig(): Promise<RateLimitConfig> {
     const baseMax = this.isHighLoad ? 50 : 100;
     const baseWindow = this.isHighLoad ? 120000 : 60000;
-    
+
     return {
       windowMs: baseWindow,
       max: baseMax,
@@ -446,8 +478,8 @@ export class SecurityTestFramework {
       endpoints: {
         auth: { max: 10, windowMs: 30000 }, // Stricter window
         public: { max: 200, windowMs: 60000 },
-        api: { max: baseMax, windowMs: baseWindow }
-      }
+        api: { max: baseMax, windowMs: baseWindow },
+      },
     };
   }
 
@@ -468,10 +500,19 @@ export class SecurityTestFramework {
       averageRequestRate: this.requestCount / 60,
       peakRequestRate: Math.max(this.requestCount, 100),
       endpoints: {
-        auth: { requests: Math.floor(this.requestCount * 0.2), blocked: Math.floor(this.blockedCount * 0.3) },
-        public: { requests: Math.floor(this.requestCount * 0.5), blocked: Math.floor(this.blockedCount * 0.2) },
-        api: { requests: Math.floor(this.requestCount * 0.3), blocked: Math.floor(this.blockedCount * 0.5) }
-      }
+        auth: {
+          requests: Math.floor(this.requestCount * 0.2),
+          blocked: Math.floor(this.blockedCount * 0.3),
+        },
+        public: {
+          requests: Math.floor(this.requestCount * 0.5),
+          blocked: Math.floor(this.blockedCount * 0.2),
+        },
+        api: {
+          requests: Math.floor(this.requestCount * 0.3),
+          blocked: Math.floor(this.blockedCount * 0.5),
+        },
+      },
     };
   }
 
@@ -484,18 +525,18 @@ export class SecurityTestFramework {
         userBasedLimiting: { passed: true },
         ipBasedLimiting: { passed: true },
         burstProtection: { passed: true },
-        headersAndResponses: { passed: true }
+        headersAndResponses: { passed: true },
       },
       summary: {
         totalTests: 20,
         testsPassed: 20,
-        vulnerabilitiesFound: 0
+        vulnerabilitiesFound: 0,
       },
       vulnerabilities: [],
       recommendations: [],
       owaspCompliance: {
-        a04_insecure_design: { status: 'COMPLIANT' }
-      }
+        a04_insecure_design: { status: 'COMPLIANT' },
+      },
     };
   }
 
@@ -508,19 +549,19 @@ export class SecurityTestFramework {
         passwordSecurity: { passed: true },
         bruteForceProtection: { passed: true },
         multiFactorAuth: { passed: true },
-        accountLockout: { passed: true }
+        accountLockout: { passed: true },
       },
       summary: {
         totalTests: 25,
         testsPassed: 25,
-        vulnerabilitiesFound: 0
+        vulnerabilitiesFound: 0,
       },
       vulnerabilities: [],
       recommendations: [],
       owaspCompliance: {
         a07_identification: { status: 'COMPLIANT' },
-        a02_authentication_failures: { status: 'COMPLIANT' }
-      }
+        a02_authentication_failures: { status: 'COMPLIANT' },
+      },
     };
   }
 
@@ -542,16 +583,22 @@ export class SecurityTestFramework {
     const isSuspicious = options.headers?.['X-Forwarded-For']?.includes('999');
     const isAuth = options.path?.includes('/auth');
     const isPublic = options.path?.includes('/public') || options.path?.includes('/static');
-    const isData = options.path?.includes('/listings') || options.path?.includes('/messages') || options.path?.includes('/bookings');
-    const userId = options.headers?.['X-User-ID'] || options.headers?.['Authorization']?.replace('Bearer ', '').replace('-token', '');
+    const isData =
+      options.path?.includes('/listings') ||
+      options.path?.includes('/messages') ||
+      options.path?.includes('/bookings');
+    const userId =
+      options.headers?.['X-User-ID'] ||
+      options.headers?.['Authorization']?.replace('Bearer ', '').replace('-token', '');
     const ip = options.headers?.['X-Forwarded-For'] || 'unknown';
 
     // Check for IP evasion attempts
-    const hasEvasionHeaders = options.headers?.['X-Real-IP'] || 
-                              options.headers?.['X-Client-IP'] || 
-                              options.headers?.['X-Original-Forwarded-For'];
+    const hasEvasionHeaders =
+      options.headers?.['X-Real-IP'] ||
+      options.headers?.['X-Client-IP'] ||
+      options.headers?.['X-Original-Forwarded-For'];
     const hasMultipleIps = options.headers?.['X-Forwarded-For']?.includes(',');
-    
+
     if (hasEvasionHeaders || hasMultipleIps) {
       this.logs.push({
         type: 'RATE_LIMIT_EVASION_ATTEMPT',
@@ -559,7 +606,7 @@ export class SecurityTestFramework {
         ipAddress: options.headers?.['X-Forwarded-For'] || 'unknown',
         userAgent: options.headers?.['User-Agent'] || 'jest-test',
         endpoint: options.path,
-        payload: 'IP evasion attempt detected'
+        payload: 'IP evasion attempt detected',
       });
     }
 
@@ -574,7 +621,7 @@ export class SecurityTestFramework {
         ipAddress: options.headers?.['X-Forwarded-For'] || 'unknown',
         userAgent: options.headers?.['User-Agent'] || 'jest-test',
         endpoint: options.path,
-        payload: 'Suspicious IP pattern detected'
+        payload: 'Suspicious IP pattern detected',
       });
       return true;
     }
@@ -583,11 +630,11 @@ export class SecurityTestFramework {
     if (userId) {
       const userCount = this.userRequestCounts.get(userId) || 0;
       this.userRequestCounts.set(userId, userCount + 1);
-      
-      const userTier = options.headers?.['X-User-Tier'] || 'free';
-      const tierLimits = { free: 30, premium: 100, enterprise: 500 };
-      const userLimit = tierLimits[userTier] || 30;
-      
+
+      const userTier = (options.headers?.['X-User-Tier'] || 'free') as UserTier;
+      const tierLimits: Record<UserTier, number> = { free: 30, premium: 100, enterprise: 500 };
+      const userLimit = tierLimits[userTier] ?? 30;
+
       if (userCount + 1 > userLimit) {
         this.logs.push({
           type: 'RATE_LIMIT_EXCEEDED',
@@ -596,7 +643,7 @@ export class SecurityTestFramework {
           userAgent: options.headers?.['User-Agent'] || 'jest-test',
           endpoint: options.path,
           limit: userLimit,
-          payload: `User ${userId} exceeded rate limit`
+          payload: `User ${userId} exceeded rate limit`,
         });
         return true;
       }
@@ -614,7 +661,7 @@ export class SecurityTestFramework {
           userAgent: options.headers?.['User-Agent'] || 'jest-test',
           endpoint: options.path,
           limit: 40,
-          payload: `IP ${ip} exceeded rate limit`
+          payload: `IP ${ip} exceeded rate limit`,
         });
         return true;
       }
@@ -656,18 +703,18 @@ export class SecurityTestFramework {
         apiResponses: { passed: true },
         contentSecurityPolicy: { passed: true },
         inputSanitization: { passed: true },
-        advancedTechniques: { passed: true }
+        advancedTechniques: { passed: true },
       },
       summary: {
         totalTests: 50,
         testsPassed: 50,
-        vulnerabilitiesFound: 0
+        vulnerabilitiesFound: 0,
       },
       vulnerabilities: [],
       recommendations: [],
       owaspCompliance: {
-        a03_injection: { status: 'COMPLIANT' }
-      }
+        a03_injection: { status: 'COMPLIANT' },
+      },
     };
   }
 
@@ -684,18 +731,18 @@ export class SecurityTestFramework {
         parameterizedQueries: { passed: true },
         inputValidation: { passed: true },
         ormSecurity: { passed: true },
-        rawQueries: { passed: true }
+        rawQueries: { passed: true },
       },
       summary: {
         totalTests: 30,
         testsPassed: 30,
-        vulnerabilitiesFound: 0
+        vulnerabilitiesFound: 0,
       },
       vulnerabilities: [],
       recommendations: [],
       owaspCompliance: {
-        a03_injection: { status: 'COMPLIANT' }
-      }
+        a03_injection: { status: 'COMPLIANT' },
+      },
     };
   }
 
@@ -707,7 +754,7 @@ export class SecurityTestFramework {
       'strict-transport-security': 'max-age=31536000; includeSubDomains',
       'content-security-policy': "default-src 'self'",
       'referrer-policy': 'strict-origin-when-cross-origin',
-      'permissions-policy': 'geolocation=(), microphone=()'
+      'permissions-policy': 'geolocation=(), microphone=()',
     };
   }
 
@@ -717,7 +764,7 @@ export class SecurityTestFramework {
       credentials: false,
       optionsSuccessStatus: 204,
       allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With']
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
     };
   }
 
@@ -729,7 +776,7 @@ export class SecurityTestFramework {
       logSecurityEvents: () => {},
       detectSuspiciousActivity: () => {},
       blockMaliciousRequests: () => {},
-      reportSecurityIncidents: () => {}
+      reportSecurityIncidents: () => {},
     };
   }
 
@@ -742,7 +789,7 @@ export class SecurityTestFramework {
       maxPayloadSize: 10485760,
       allowedMimeTypes: ['application/json', 'multipart/form-data'],
       maxUrlLength: 2048,
-      maxHeaderSize: 8192
+      maxHeaderSize: 8192,
     };
   }
 
@@ -755,8 +802,8 @@ export class SecurityTestFramework {
       cookie: {
         secure: true,
         httpOnly: true,
-        sameSite: 'strict'
-      }
+        sameSite: 'strict',
+      },
     };
   }
 
@@ -765,7 +812,7 @@ export class SecurityTestFramework {
       headerName: 'x-api-key',
       algorithm: 'HS256',
       expiration: 3600,
-      rotationInterval: 86400
+      rotationInterval: 86400,
     };
   }
 
@@ -774,17 +821,19 @@ export class SecurityTestFramework {
       allowedIps: ['127.0.0.1', '::1'],
       allowedRanges: ['192.168.0.0/16', '10.0.0.0/8'],
       blockMaliciousIps: true,
-      logBlockedRequests: true
+      logBlockedRequests: true,
     };
   }
 
-  async runSecurityTests(config: string | { type: string; endpoints?: string[]; methods?: string[]; options?: any }): Promise<any> {
+  async runSecurityTests(
+    config: string | { type: string; endpoints?: string[]; methods?: string[]; options?: any },
+  ): Promise<SecurityTestResult> {
     const testType = typeof config === 'string' ? config : config.type;
-    const baseResult = {
+    const baseResult: SecurityTestResult = {
       passed: true,
-      vulnerabilities: [],
+      vulnerabilities: [] as Vulnerability[],
       testsRun: 10,
-      executionTime: 1000
+      executionTime: 1000,
     };
 
     switch (testType) {
@@ -809,7 +858,7 @@ export class SecurityTestFramework {
       summary: {
         totalTests: 100,
         testsPassed: 100,
-        vulnerabilitiesFound: 0
+        vulnerabilitiesFound: 0,
       },
       recommendations: [],
       compliance: {
@@ -823,9 +872,9 @@ export class SecurityTestFramework {
           a07_auth_failures: { status: 'COMPLIANT' },
           a08_integrity_failures: { status: 'COMPLIANT' },
           a09_logging_failures: { status: 'COMPLIANT' },
-          a10_ssrf: { status: 'COMPLIANT' }
-        }
-      }
+          a10_ssrf: { status: 'COMPLIANT' },
+        },
+      },
     };
   }
 
@@ -838,7 +887,7 @@ export class SecurityTestFramework {
       testsPassed: 100,
       vulnerabilitiesFound: 0,
       coveragePercentage: 95,
-      averageResponseTime: 50
+      averageResponseTime: 50,
     };
   }
 
@@ -855,16 +904,16 @@ export class SecurityTestFramework {
         csrfProtection: { passed: true },
         rateLimiting: { passed: true },
         fileUploadSecurity: { passed: true },
-        authenticationSecurity: { passed: true }
+        authenticationSecurity: { passed: true },
       },
       report: {
         summary: {
           totalTests: 150,
-          testsPassed: hasFailures ? 149 : 150
-        }
+          testsPassed: hasFailures ? 149 : 150,
+        },
       },
       criticalIssues: hasFailures ? ['Test failure detected'] : [],
-      recommendations: hasFailures ? ['Review test failures'] : []
+      recommendations: hasFailures ? ['Review test failures'] : [],
     };
   }
 
@@ -872,7 +921,7 @@ export class SecurityTestFramework {
     return {
       id: 'review-123',
       ...data,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
   }
 
@@ -880,7 +929,7 @@ export class SecurityTestFramework {
     return {
       id: 'user-123',
       ...data,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
   }
 
@@ -888,7 +937,7 @@ export class SecurityTestFramework {
     return {
       id: 'listing-123',
       ...data,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
   }
 
@@ -896,18 +945,15 @@ export class SecurityTestFramework {
     return {
       id: 'message-123',
       ...data,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
   }
 
   async sanitizeHtml(input: string): Promise<string> {
-    return input
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    return input.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   async sanitizeEvents(input: string): Promise<string> {
-    return input
-      .replace(/on\w+\s*=/gi, '');
+    return input.replace(/on\w+\s*=/gi, '');
   }
 }

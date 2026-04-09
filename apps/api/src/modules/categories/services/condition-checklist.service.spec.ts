@@ -5,7 +5,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 /**
  * Condition Checklist Service - Production-Grade Business Logic Tests
- * 
+ *
  * These tests validate exact business logic computations and invariants:
  * - Checklist template retrieval
  * - Checklist validation
@@ -95,9 +95,27 @@ describe('ConditionChecklistService - Business Logic Validation', () => {
   describe('CHECKLIST VALIDATION', () => {
     it('should validate complete vehicle checklist', () => {
       const checklistData = {
-        exterior: { Scratches: 'good', Dents: 'good', 'Paint condition': 'good', Lights: 'good', Tires: 'good' },
-        interior: { Seats: 'good', Dashboard: 'good', Carpet: 'good', Windows: 'good', 'AC/Heat': 'good' },
-        mechanical: { 'Engine start': 'good', Brakes: 'good', Transmission: 'good', Steering: 'good', Battery: 'good' },
+        exterior: {
+          Scratches: 'good',
+          Dents: 'good',
+          'Paint condition': 'good',
+          Lights: 'good',
+          Tires: 'good',
+        },
+        interior: {
+          Seats: 'good',
+          Dashboard: 'good',
+          Carpet: 'good',
+          Windows: 'good',
+          'AC/Heat': 'good',
+        },
+        mechanical: {
+          'Engine start': 'good',
+          Brakes: 'good',
+          Transmission: 'good',
+          Steering: 'good',
+          Battery: 'good',
+        },
       };
 
       const result = service.validateChecklistCompletion('vehicles', checklistData);
@@ -119,7 +137,7 @@ describe('ConditionChecklistService - Business Logic Validation', () => {
 
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(e => e.includes('Interior Condition'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Interior Condition'))).toBe(true);
     });
 
     it('should reject required section with no completed items', () => {
@@ -131,7 +149,7 @@ describe('ConditionChecklistService - Business Logic Validation', () => {
       const result = service.validateChecklistCompletion('vehicles', checklistData);
 
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('Exterior Condition'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('Exterior Condition'))).toBe(true);
     });
 
     it('should accept optional section missing', () => {
@@ -292,9 +310,7 @@ describe('ConditionChecklistService - Business Logic Validation', () => {
     it('should require both reports for comparison', async () => {
       (prisma.conditionReport.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(
-        service.compareReports('booking-1'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.compareReports('booking-1')).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -303,6 +319,7 @@ describe('ConditionChecklistService - Business Logic Validation', () => {
       const checklistData = {
         exterior: { Scratches: 'good', Dents: 'good' },
         interior: { Seats: 'good' },
+        mechanical: { Engine: 'good', Brakes: 'good' },
       };
 
       (prisma.booking.findUnique as jest.Mock).mockResolvedValue(mockBooking);
@@ -375,6 +392,8 @@ describe('ConditionChecklistService - Business Logic Validation', () => {
 
       const newChecklistData = {
         exterior: { Scratches: 'good' },
+        interior: { Seats: 'good' },
+        mechanical: { Engine: 'good', Brakes: 'good' },
       };
 
       (prisma.conditionReport.findUnique as jest.Mock).mockResolvedValue(existingReport);

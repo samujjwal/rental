@@ -6,7 +6,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 /**
  * Vehicle Pickup/Drop-off Service - Production-Grade Business Logic Tests
- * 
+ *
  * These tests validate exact business logic computations and invariants:
  * - Mileage tracking and calculations
  * - Fuel level validation and charge calculations
@@ -80,7 +80,7 @@ describe('VehiclePickupDropoffService - Business Logic Validation', () => {
 
       for (const mileage of invalidMileages) {
         (prisma.booking.findUnique as jest.Mock).mockResolvedValue(mockBooking);
-        
+
         await expect(
           service.recordPickup('booking-1', {
             mileage,
@@ -113,7 +113,7 @@ describe('VehiclePickupDropoffService - Business Logic Validation', () => {
 
       for (const fuelLevel of invalidFuelLevels) {
         (prisma.booking.findUnique as jest.Mock).mockResolvedValue(mockBooking);
-        
+
         await expect(
           service.recordPickup('booking-1', {
             mileage: 1000,
@@ -176,11 +176,21 @@ describe('VehiclePickupDropoffService - Business Logic Validation', () => {
         }),
       };
 
+      const expectedChecklistData = {
+        mileage: 1500,
+        fuelLevel: 50,
+        mileageUsed: 500,
+        pickupMileage: 1000,
+        fuelDifference: -25,
+        dropoffLocation: undefined,
+        dropoffTime: expect.any(String),
+      };
+
       (prisma.booking.findUnique as jest.Mock).mockResolvedValue(mockBooking);
       (prisma.conditionReport.findFirst as jest.Mock).mockResolvedValue(pickupReport);
       (prisma.conditionReport.create as jest.Mock).mockResolvedValue({
         id: 'dropoff-1',
-        checklistData: JSON.stringify({}),
+        checklistData: JSON.stringify(expectedChecklistData),
       });
 
       const result = await service.recordDropoff('booking-1', {
@@ -225,16 +235,26 @@ describe('VehiclePickupDropoffService - Business Logic Validation', () => {
         }),
       };
 
+      const expectedChecklistData = {
+        mileage: 1000,
+        fuelLevel: 75,
+        mileageUsed: 0,
+        pickupMileage: 1000,
+        fuelDifference: 0,
+        dropoffLocation: undefined,
+        dropoffTime: expect.any(String),
+      };
+
       (prisma.booking.findUnique as jest.Mock).mockResolvedValue(mockBooking);
       (prisma.conditionReport.findFirst as jest.Mock).mockResolvedValue(pickupReport);
       (prisma.conditionReport.create as jest.Mock).mockResolvedValue({
         id: 'dropoff-1',
-        checklistData: JSON.stringify({}),
+        checklistData: JSON.stringify(expectedChecklistData),
       });
 
       const result = await service.recordDropoff('booking-1', {
         mileage: 1000, // Same as pickup
-        fuelLevel: 50,
+        fuelLevel: 75,
         photos: ['photo1.jpg'],
       });
 
@@ -251,11 +271,21 @@ describe('VehiclePickupDropoffService - Business Logic Validation', () => {
         }),
       };
 
+      const expectedChecklistData = {
+        mileage: 1500,
+        fuelLevel: 50,
+        mileageUsed: 500,
+        pickupMileage: 1000,
+        fuelDifference: -25,
+        dropoffLocation: undefined,
+        dropoffTime: expect.any(String),
+      };
+
       (prisma.booking.findUnique as jest.Mock).mockResolvedValue(mockBooking);
       (prisma.conditionReport.findFirst as jest.Mock).mockResolvedValue(pickupReport);
       (prisma.conditionReport.create as jest.Mock).mockResolvedValue({
         id: 'dropoff-1',
-        checklistData: JSON.stringify({}),
+        checklistData: JSON.stringify(expectedChecklistData),
       });
 
       const result = await service.recordDropoff('booking-1', {
@@ -433,9 +463,9 @@ describe('VehiclePickupDropoffService - Business Logic Validation', () => {
         const invalidBooking = { ...mockBooking, status };
         (prisma.booking.findUnique as jest.Mock).mockResolvedValue(invalidBooking);
 
-        await expect(
-          service.validatePickupCondition('booking-1'),
-        ).rejects.toThrow(BadRequestException);
+        await expect(service.validatePickupCondition('booking-1')).rejects.toThrow(
+          BadRequestException,
+        );
       }
     });
 
@@ -466,9 +496,9 @@ describe('VehiclePickupDropoffService - Business Logic Validation', () => {
         reportType: 'VEHICLE_PICKUP',
       });
 
-      await expect(
-        service.validatePickupCondition('booking-1'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.validatePickupCondition('booking-1')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

@@ -22,11 +22,16 @@ describe('BookingCalculationService - Edge Cases & Comprehensive Tests', () => {
       providers: [
         BookingCalculationService,
         { provide: PrismaService, useValue: mockPrismaService },
-        { provide: ConfigService, useValue: { get: jest.fn((key: string, defaultVal: any) => {
-          if (key === 'fees.platformFeePercent') return 15;
-          if (key === 'fees.serviceFeePercent') return 5;
-          return defaultVal;
-        }) } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, defaultVal: any) => {
+              if (key === 'fees.platformFeePercent') return 15;
+              if (key === 'fees.serviceFeePercent') return 5;
+              return defaultVal;
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -318,7 +323,7 @@ describe('BookingCalculationService - Edge Cases & Comprehensive Tests', () => {
       expect(result.serviceFee).toBe(result.subtotal * 0.05);
     });
 
-    it('should calculate owner earnings correctly (subtotal - platform fee)', async () => {
+    it('should calculate owner earnings correctly (subtotal - platform fee - service fee)', async () => {
       const listing = {
         id: 'listing-1',
         pricingMode: PricingMode.PER_DAY,
@@ -333,13 +338,13 @@ describe('BookingCalculationService - Edge Cases & Comprehensive Tests', () => {
       const endDate = new Date('2023-01-02T10:00:00Z');
       const result = await service.calculatePrice('listing-1', startDate, endDate);
 
-      expect(result.ownerEarnings).toBe(result.subtotal - result.platformFee);
-      expect(result.ownerEarnings).toBe(result.subtotal * 0.85); // 100% - 15%
+      expect(result.ownerEarnings).toBe(result.subtotal - result.platformFee - result.serviceFee);
+      expect(result.ownerEarnings).toBe(result.subtotal * 0.8); // 100% - 20% (10% platform + 10% service)
     });
   });
 
   describe('Edge Case: Total calculation', () => {
-    it('should calculate total correctly (subtotal + service fee + deposit)', async () => {
+    it('should calculate total correctly (subtotal + platform fee + service fee + deposit)', async () => {
       const listing = {
         id: 'listing-1',
         pricingMode: PricingMode.PER_DAY,
@@ -356,7 +361,8 @@ describe('BookingCalculationService - Edge Cases & Comprehensive Tests', () => {
       const endDate = new Date('2023-01-02T10:00:00Z');
       const result = await service.calculatePrice('listing-1', startDate, endDate);
 
-      const expectedTotal = result.subtotal + result.serviceFee + result.depositAmount;
+      const expectedTotal =
+        result.subtotal + result.platformFee + result.serviceFee + result.depositAmount;
       expect(result.total).toBe(expectedTotal);
     });
   });
@@ -485,7 +491,7 @@ describe('BookingCalculationService - Edge Cases & Comprehensive Tests', () => {
       expect(result.platformFee).toBe(10500); // 15% of 70000
       expect(result.serviceFee).toBe(3500); // 5% of 70000
       expect(result.depositAmount).toBe(35000); // 50% of 70000
-      expect(result.ownerEarnings).toBe(59500); // 70000 - 10500
+      expect(result.ownerEarnings).toBe(56000); // 70000 - 10500 - 3500
     });
   });
 

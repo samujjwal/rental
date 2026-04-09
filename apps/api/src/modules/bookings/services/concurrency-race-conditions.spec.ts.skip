@@ -6,17 +6,18 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { BookingStatus } from '@rental-portal/database';
 import { Prisma } from '@prisma/client';
+import { getQueueToken } from '@nestjs/bull';
 
 /**
  * CONCURRENCY AND RACE CONDITION TESTS
- * 
+ *
  * These tests validate that the system correctly handles concurrent operations:
  * 1. Simultaneous booking attempts for the same dates
  * 2. Concurrent state transitions
  * 3. Race conditions in availability reservation
  * 4. Optimistic locking behavior
  * 5. Database-level constraint violations
- * 
+ *
  * Scenarios Tested:
  * - Two users booking the same listing simultaneously
  * - Concurrent availability slot reservations
@@ -98,12 +99,36 @@ describe('Concurrency and Race Condition Tests', () => {
       publish: jest.fn(),
     };
 
+    const mockNotificationsService = {
+      send: jest.fn(),
+      sendBulk: jest.fn(),
+    };
+
+    const mockBookingCalculationService = {
+      calculateTotal: jest.fn(),
+      calculateRefund: jest.fn(),
+    };
+
+    const mockPaymentsQueue = {
+      add: jest.fn(),
+      process: jest.fn(),
+    };
+
+    const mockBookingsQueue = {
+      add: jest.fn(),
+      process: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BookingStateMachineService,
         AvailabilityService,
         { provide: PrismaService, useValue: prisma },
         { provide: CacheService, useValue: cache },
+        { provide: 'NotificationsService', useValue: mockNotificationsService },
+        { provide: 'BookingCalculationService', useValue: mockBookingCalculationService },
+        { provide: getQueueToken('payments'), useValue: mockPaymentsQueue },
+        { provide: getQueueToken('bookings'), useValue: mockBookingsQueue },
       ],
     }).compile();
 
@@ -121,9 +146,7 @@ describe('Concurrency and Race Condition Tests', () => {
       const startDate = new Date('2023-01-01');
       const endDate = new Date('2023-01-10');
 
-      const inventoryUnits = [
-        { id: 'unit-1', listingId: 'listing-1', isActive: true },
-      ];
+      const inventoryUnits = [{ id: 'unit-1', listingId: 'listing-1', isActive: true }];
 
       prisma.inventoryUnit.findMany.mockResolvedValue(inventoryUnits);
       prisma.$executeRawUnsafe.mockResolvedValue(undefined);
@@ -134,14 +157,22 @@ describe('Concurrency and Race Condition Tests', () => {
 
       // Second reservation fails due to P2002 constraint
       prisma.availabilitySlot.findMany.mockResolvedValueOnce([]);
-      const constraintError = new Prisma.PrismaClientKnownRequestError(
-        'Unique constraint failed',
-        { code: 'P2002', clientVersion: '1.0.0' },
-      );
+      const constraintError = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '1.0.0',
+      });
       prisma.availabilitySlot.create.mockRejectedValueOnce(constraintError);
 
-      const reservation1Promise = availabilityService.checkAndReserve(listingId, startDate, endDate);
-      const reservation2Promise = availabilityService.checkAndReserve(listingId, startDate, endDate);
+      const reservation1Promise = availabilityService.checkAndReserve(
+        listingId,
+        startDate,
+        endDate,
+      );
+      const reservation2Promise = availabilityService.checkAndReserve(
+        listingId,
+        startDate,
+        endDate,
+      );
 
       const results = await Promise.allSettled([reservation1Promise, reservation2Promise]);
 
@@ -165,8 +196,18 @@ describe('Concurrency and Race Condition Tests', () => {
       prisma.availabilitySlot.findMany.mockResolvedValue([]);
       prisma.availabilitySlot.create.mockResolvedValue({ id: 'slot-1' });
 
-      const reservation1Promise = availabilityService.checkAndReserve(listingId, startDate, endDate, 'unit-1');
-      const reservation2Promise = availabilityService.checkAndReserve(listingId, startDate, endDate, 'unit-2');
+      const reservation1Promise = availabilityService.checkAndReserve(
+        listingId,
+        startDate,
+        endDate,
+        'unit-1',
+      );
+      const reservation2Promise = availabilityService.checkAndReserve(
+        listingId,
+        startDate,
+        endDate,
+        'unit-2',
+      );
 
       const results = await Promise.allSettled([reservation1Promise, reservation2Promise]);
 

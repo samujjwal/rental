@@ -4,13 +4,15 @@ import { CurrencyRepository } from '../repositories/currency.repository';
 import { ExchangeRateRepository } from '../repositories/exchange-rate.repository';
 import { PaymentRepository } from '../../payments/repositories/payment.repository';
 import { ListingRepository } from '../../listings/repositories/listing.repository';
-import { CacheService } from '../../cache/services/cache.service';
+import { CacheService } from '../../../common/cache/cache.service';
+import { FxRateService } from '../../payments/services/fx-rate.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
  * MULTI-CURRENCY TESTS
- * 
+ *
  * These tests validate multi-currency functionality:
  * - Currency conversion with real-time rates
  * - Multi-currency pricing and display
@@ -20,7 +22,7 @@ import { ConfigService } from '@nestjs/config';
  * - Cross-border payment processing
  * - Tax calculations in different currencies
  * - Financial reporting consolidation
- * 
+ *
  * Business Truth Validated:
  * - Currency conversions are accurate and up-to-date
  * - Multi-currency pricing is consistent across platforms
@@ -37,6 +39,8 @@ describe('MultiCurrencyService', () => {
   let paymentRepository: PaymentRepository;
   let listingRepository: ListingRepository;
   let cacheService: CacheService;
+  let fxRateService: FxRateService;
+  let prismaService: PrismaService;
   let configService: ConfigService;
   let logger: Logger;
 
@@ -49,7 +53,40 @@ describe('MultiCurrencyService', () => {
           useValue: {
             findById: jest.fn(),
             findAll: jest.fn(),
-            findByCode: jest.fn(),
+            findByCode: jest.fn().mockImplementation((code: string) => {
+              const currencies: Record<string, any> = {
+                NPR: {
+                  code: 'NPR',
+                  name: 'Nepalese Rupee',
+                  symbol: '₹',
+                  decimalPlaces: 2,
+                  isActive: true,
+                },
+                USD: {
+                  code: 'USD',
+                  name: 'US Dollar',
+                  symbol: '$',
+                  decimalPlaces: 2,
+                  isActive: true,
+                },
+                EUR: { code: 'EUR', name: 'Euro', symbol: '€', decimalPlaces: 2, isActive: true },
+                GBP: {
+                  code: 'GBP',
+                  name: 'British Pound',
+                  symbol: '£',
+                  decimalPlaces: 2,
+                  isActive: true,
+                },
+                INR: {
+                  code: 'INR',
+                  name: 'Indian Rupee',
+                  symbol: '₹',
+                  decimalPlaces: 2,
+                  isActive: true,
+                },
+              };
+              return currencies[code] || null;
+            }),
             create: jest.fn(),
             update: jest.fn(),
             getActiveCurrencies: jest.fn(),
@@ -59,12 +96,52 @@ describe('MultiCurrencyService', () => {
         {
           provide: ExchangeRateRepository,
           useValue: {
-            getCurrentRate: jest.fn(),
-            getHistoricalRates: jest.fn(),
+            getCurrentRate: jest.fn().mockImplementation((from: string, to: string) => {
+              const rates: Record<string, number> = {
+                'USD-NPR': 132.5,
+                'NPR-USD': 0.0075,
+                'EUR-NPR': 145.2,
+                'NPR-EUR': 0.0069,
+                'GBP-NPR': 168.3,
+                'NPR-GBP': 0.0059,
+              };
+              const key = `${from}-${to}`;
+              return Promise.resolve({
+                fromCurrency: from,
+                toCurrency: to,
+                rate: rates[key] || 1,
+                source: 'fixer',
+                timestamp: new Date(),
+              });
+            }),
+            getHistoricalRates: jest.fn().mockImplementation(() => {
+              return Promise.resolve([
+                { date: '2024-06-15', from: 'USD', to: 'NPR', rate: 132.75 },
+                { date: '2024-06-20', from: 'EUR', to: 'NPR', rate: 145.2 },
+              ]);
+            }),
             updateRate: jest.fn(),
-            bulkUpdateRates: jest.fn(),
+            bulkUpdateRates: jest.fn().mockImplementation((rates: Record<string, number>) => {
+              const rateEntries = Object.entries(rates).map(([key, rate]) => {
+                const [from, to] = key.split('-');
+                return { from, to, oldRate: rate * 0.99, newRate: rate, change: rate * 0.01 };
+              });
+              return Promise.resolve({
+                updated: rateEntries.length,
+                failed: 0,
+                rates: rateEntries,
+                timestamp: new Date(),
+              });
+            }),
             getRateHistory: jest.fn(),
-            validateRate: jest.fn(),
+            validateRate: jest.fn().mockImplementation(() => {
+              return Promise.resolve({
+                valid: true,
+                deviation: 0.5,
+                recommendedAction: 'accept',
+                alertTriggered: false,
+              });
+            }),
           },
         },
         {
@@ -72,9 +149,23 @@ describe('MultiCurrencyService', () => {
           useValue: {
             findById: jest.fn(),
             findByCurrency: jest.fn(),
-            createPayment: jest.fn(),
+            createPayment: jest.fn().mockImplementation((data: any) => {
+              return Promise.resolve({
+                id: 'payment-789',
+                ...data,
+                status: 'processed',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+            }),
             updatePayment: jest.fn(),
-            getPaymentStats: jest.fn(),
+            getPaymentStats: jest.fn().mockImplementation(() => {
+              return Promise.resolve([
+                { currency: 'NPR', amount: 5000000, status: 'COMPLETED' },
+                { currency: 'USD', amount: 37500, status: 'COMPLETED' },
+                { currency: 'EUR', amount: 34500, status: 'COMPLETED' },
+              ]);
+            }),
             convertPaymentCurrency: jest.fn(),
           },
         },
@@ -96,7 +187,62 @@ describe('MultiCurrencyService', () => {
             del: jest.fn(),
             getMultiple: jest.fn(),
             setMultiple: jest.fn(),
-            invalidatePattern: jest.fn(),
+            delPattern: jest.fn(),
+          },
+        },
+        {
+          provide: FxRateService,
+          useValue: {
+            convert: jest.fn().mockImplementation((amount: number, from: string, to: string) => {
+              const rates: Record<string, number> = {
+                'USD-NPR': 132.5,
+                'NPR-USD': 0.0075,
+                'EUR-NPR': 145.2,
+                'NPR-EUR': 0.0069,
+                'GBP-NPR': 168.3,
+                'NPR-GBP': 0.0059,
+                'USD-EUR': 0.92,
+                'EUR-USD': 1.09,
+                'INR-NPR': 1.6,
+                'NPR-INR': 0.625,
+              };
+              const key = `${from}-${to}`;
+              const rate = rates[key] || 1;
+              return Promise.resolve({
+                amount: amount * rate,
+                from,
+                to,
+                rate,
+              });
+            }),
+            getCurrentRate: jest.fn().mockImplementation((from: string, to: string) => {
+              const rates: Record<string, number> = {
+                'USD-NPR': 132.5,
+                'NPR-USD': 0.0075,
+                'EUR-NPR': 145.2,
+                'NPR-EUR': 0.0069,
+                'GBP-NPR': 168.3,
+                'NPR-GBP': 0.0059,
+              };
+              const key = `${from}-${to}`;
+              const rate = rates[key] || 1;
+              return Promise.resolve({
+                fromCurrency: from,
+                toCurrency: to,
+                rate,
+                source: 'fixer',
+                timestamp: new Date(),
+              });
+            }),
+            createSnapshot: jest.fn(),
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            payment: {
+              findMany: jest.fn(),
+            },
           },
         },
         {
@@ -107,6 +253,7 @@ describe('MultiCurrencyService', () => {
                 'currency.default': 'NPR',
                 'currency.supported': ['NPR', 'USD', 'EUR', 'GBP', 'INR'],
                 'currency.cacheTTL': 300,
+                'currency.conversionFeeRate': 0.005,
                 'exchangeRate.updateInterval': 3600,
                 'exchangeRate.providers': ['fixer', 'exchangerate-api'],
               };
@@ -132,6 +279,8 @@ describe('MultiCurrencyService', () => {
     paymentRepository = module.get<PaymentRepository>(PaymentRepository);
     listingRepository = module.get<ListingRepository>(ListingRepository);
     cacheService = module.get<CacheService>(CacheService);
+    fxRateService = module.get<FxRateService>(FxRateService);
+    prismaService = module.get<PrismaService>(PrismaService);
     configService = module.get<ConfigService>(ConfigService);
     logger = module.get<Logger>(Logger);
   });
@@ -142,8 +291,8 @@ describe('MultiCurrencyService', () => {
       const fromCurrency = 'USD';
       const toCurrency = 'NPR';
       const amount = 100;
-      const expectedRate = 132.50; // 1 USD = 132.50 NPR
-      
+      const expectedRate = 132.5; // 1 USD = 132.50 NPR
+
       const conversionRequest = {
         fromCurrency,
         toCurrency,
@@ -170,9 +319,9 @@ describe('MultiCurrencyService', () => {
         totalAmount: amount * expectedRate * 1.005, // Including fee
       };
 
-      exchangeRateRepository.getCurrentRate.mockResolvedValue(exchangeRate);
-      cacheService.get.mockResolvedValue(null);
-      cacheService.set.mockResolvedValue(true);
+      (exchangeRateRepository.getCurrentRate as any).mockResolvedValue(exchangeRate);
+      (cacheService.get as any).mockResolvedValue(null);
+      (cacheService.set as any).mockResolvedValue(undefined);
 
       // Act
       const result = await multiCurrencyService.convertCurrency(conversionRequest);
@@ -186,7 +335,7 @@ describe('MultiCurrencyService', () => {
       expect(cacheService.set).toHaveBeenCalledWith(
         `conversion:${fromCurrency}:${toCurrency}:${new Date().toDateString()}`,
         conversionResult,
-        300
+        300,
       );
     });
 
@@ -195,7 +344,7 @@ describe('MultiCurrencyService', () => {
       const fromCurrency = 'EUR';
       const toCurrency = 'NPR';
       const amount = 50;
-      
+
       const cachedResult = {
         originalAmount: amount,
         originalCurrency: fromCurrency,
@@ -214,7 +363,7 @@ describe('MultiCurrencyService', () => {
         date: new Date(),
       };
 
-      cacheService.get.mockResolvedValue(cachedResult);
+      (cacheService.get as any).mockResolvedValue(cachedResult);
 
       // Act
       const result = await multiCurrencyService.convertCurrency(conversionRequest);
@@ -224,7 +373,7 @@ describe('MultiCurrencyService', () => {
       expect(result.exchangeRate).toBe(145);
       expect(exchangeRateRepository.getCurrentRate).not.toHaveBeenCalled();
       expect(cacheService.get).toHaveBeenCalledWith(
-        `conversion:${fromCurrency}:${toCurrency}:${new Date().toDateString()}`
+        `conversion:${fromCurrency}:${toCurrency}:${new Date().toDateString()}`,
       );
     });
 
@@ -237,7 +386,7 @@ describe('MultiCurrencyService', () => {
       };
 
       const exchangeRates = {
-        'USD-NPR': 132.50,
+        'USD-NPR': 132.5,
         'USD-EUR': 0.92,
         'USD-GBP': 0.79,
         'USD-INR': 83.25,
@@ -246,7 +395,7 @@ describe('MultiCurrencyService', () => {
       const batchResult = {
         baseCurrency: 'USD',
         conversions: [
-          { currency: 'NPR', amount: 100, converted: 13250, rate: 132.50 },
+          { currency: 'NPR', amount: 100, converted: 13250, rate: 132.5 },
           { currency: 'EUR', amount: 200, converted: 184, rate: 0.92 },
           { currency: 'GBP', amount: 300, converted: 237, rate: 0.79 },
           { currency: 'INR', amount: 400, converted: 33300, rate: 83.25 },
@@ -255,7 +404,7 @@ describe('MultiCurrencyService', () => {
         timestamp: new Date(),
       };
 
-      exchangeRateRepository.getCurrentRate.mockImplementation((from, to) => {
+      (exchangeRateRepository.getCurrentRate as any).mockImplementation((from, to) => {
         const key = `${from}-${to}`;
         return Promise.resolve({
           fromCurrency: from,
@@ -287,10 +436,12 @@ describe('MultiCurrencyService', () => {
         date: new Date(),
       };
 
-      currencyRepository.findByCode.mockResolvedValue(null);
+      (currencyRepository.findByCode as any).mockResolvedValue(null);
 
       // Act & Assert
-      await expect(multiCurrencyService.convertCurrency(conversionRequest)).rejects.toThrow('Unsupported currency: XYZ');
+      await expect(multiCurrencyService.convertCurrency(conversionRequest)).rejects.toThrow(
+        'Unsupported currency: XYZ',
+      );
       expect(currencyRepository.findByCode).toHaveBeenCalledWith('XYZ');
     });
 
@@ -306,15 +457,17 @@ describe('MultiCurrencyService', () => {
       const exchangeRate = {
         fromCurrency: 'USD',
         toCurrency: 'NPR',
-        rate: 132.50,
+        rate: 132.5,
         source: 'fixer',
         timestamp: new Date(),
       };
 
-      exchangeRateRepository.getCurrentRate.mockResolvedValue(exchangeRate);
+      (exchangeRateRepository.getCurrentRate as any).mockResolvedValue(exchangeRate);
 
       // Act & Assert
-      await expect(multiCurrencyService.convertCurrency(conversionRequest)).rejects.toThrow('Amount must be positive');
+      await expect(multiCurrencyService.convertCurrency(conversionRequest)).rejects.toThrow(
+        'Amount must be positive',
+      );
     });
   });
 
@@ -324,13 +477,13 @@ describe('MultiCurrencyService', () => {
       const listingId = 'listing-123';
       const baseCurrency = 'NPR';
       const basePrice = 50000; // NPR
-      
+
       const pricingRequest = {
         listingId,
         baseCurrency,
         basePrice,
         targetCurrencies: ['USD', 'EUR', 'GBP'],
-        pricingStrategy: 'dynamic', // Adjust for market conditions
+        pricingStrategy: 'dynamic' as 'fixed' | 'dynamic' | 'competitive',
       };
 
       const exchangeRates = {
@@ -354,8 +507,8 @@ describe('MultiCurrencyService', () => {
         nextUpdate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
       };
 
-      listingRepository.findById.mockResolvedValue({ id: listingId });
-      exchangeRateRepository.getCurrentRate.mockImplementation((from, to) => {
+      (listingRepository.findById as any).mockResolvedValue({ id: listingId });
+      (exchangeRateRepository.getCurrentRate as any).mockImplementation((from, to) => {
         const key = `${from}-${to}`;
         return Promise.resolve({
           fromCurrency: from,
@@ -365,7 +518,7 @@ describe('MultiCurrencyService', () => {
           timestamp: new Date(),
         });
       });
-      cacheService.set.mockResolvedValue(true);
+      (cacheService.set as any).mockResolvedValue(undefined);
 
       // Act
       const result = await multiCurrencyService.createMultiCurrencyPricing(pricingRequest);
@@ -387,8 +540,8 @@ describe('MultiCurrencyService', () => {
         baseCurrency: 'NPR',
         basePrice: 75000,
         currencyPrices: {
-          USD: { price: 562.50, rate: 0.0075 },
-          EUR: { price: 517.50, rate: 0.0069 },
+          USD: { price: 562.5, rate: 0.0075 },
+          EUR: { price: 517.5, rate: 0.0069 },
         },
         lastUpdated: new Date(Date.now() - 25 * 60 * 60 * 1000), // 25 hours ago
       };
@@ -402,14 +555,14 @@ describe('MultiCurrencyService', () => {
         ...currentPricing,
         currencyPrices: {
           USD: { price: 585, formatted: '$585.00', symbol: '$', rate: 0.0078 },
-          EUR: { price: 502.50, formatted: '€502.50', symbol: '€', rate: 0.0067 },
+          EUR: { price: 502.5, formatted: '€502.50', symbol: '€', rate: 0.0067 },
         },
         lastUpdated: new Date(),
         updateReason: 'exchange_rate_change',
       };
 
-      cacheService.get.mockResolvedValue(currentPricing);
-      exchangeRateRepository.getCurrentRate.mockImplementation((from, to) => {
+      (cacheService.get as any).mockResolvedValue(currentPricing);
+      (exchangeRateRepository.getCurrentRate as any).mockImplementation((from, to) => {
         const key = `${from}-${to}`;
         return Promise.resolve({
           fromCurrency: from,
@@ -419,14 +572,14 @@ describe('MultiCurrencyService', () => {
           timestamp: new Date(),
         });
       });
-      cacheService.set.mockResolvedValue(true);
+      (cacheService.set as any).mockResolvedValue(undefined);
 
       // Act
       const result = await multiCurrencyService.updateMultiCurrencyPricing(listingId);
 
       // Assert
       expect(result.currencyPrices.USD.price).toBe(585); // Increased from 562.50
-      expect(result.currencyPrices.EUR.price).toBe(502.50); // Decreased from 517.50
+      expect(result.currencyPrices.EUR.price).toBe(502.5); // Decreased from 517.50
       expect(result.updateReason).toBe('exchange_rate_change');
       expect(result.lastUpdated).toBeInstanceOf(Date);
     });
@@ -438,7 +591,7 @@ describe('MultiCurrencyService', () => {
         baseCurrency: 'NPR',
         basePrice: 100000,
         targetCurrencies: ['USD', 'EUR'],
-        pricingStrategy: 'competitive', // Adjust to be competitive
+        pricingStrategy: 'competitive' as 'fixed' | 'dynamic' | 'competitive',
         marketAdjustment: {
           USD: -5, // 5% discount in USD market
           EUR: +3, // 3% premium in EUR market
@@ -456,8 +609,8 @@ describe('MultiCurrencyService', () => {
         basePrice: 100000,
         currencyPrices: {
           NPR: { price: 100000, formatted: 'NPR 100,000', symbol: '₹' },
-          USD: { price: 712.50, formatted: '$712.50', symbol: '$', adjusted: true, adjustment: -5 },
-          EUR: { price: 710.70, formatted: '€710.70', symbol: '€', adjusted: true, adjustment: +3 },
+          USD: { price: 712.5, formatted: '$712.50', symbol: '$', adjusted: true, adjustment: -5 },
+          EUR: { price: 710.7, formatted: '€710.70', symbol: '€', adjusted: true, adjustment: +3 },
         },
         pricingStrategy: 'competitive',
         marketAdjustments: {
@@ -467,8 +620,8 @@ describe('MultiCurrencyService', () => {
         lastUpdated: new Date(),
       };
 
-      listingRepository.findById.mockResolvedValue({ id: 'listing-789' });
-      exchangeRateRepository.getCurrentRate.mockImplementation((from, to) => {
+      (listingRepository.findById as any).mockResolvedValue({ id: 'listing-789' });
+      (exchangeRateRepository.getCurrentRate as any).mockImplementation((from, to) => {
         const key = `${from}-${to}`;
         return Promise.resolve({
           fromCurrency: from,
@@ -483,8 +636,8 @@ describe('MultiCurrencyService', () => {
       const result = await multiCurrencyService.createMultiCurrencyPricing(pricingRequest);
 
       // Assert
-      expect(result.currencyPrices.USD.price).toBe(712.50); // 750 * 0.95 (5% discount)
-      expect(result.currencyPrices.EUR.price).toBe(710.70); // 690 * 1.03 (3% premium)
+      expect(result.currencyPrices.USD.price).toBe(712.5); // 750 * 0.95 (5% discount)
+      expect(result.currencyPrices.EUR.price).toBe(710.7); // 690 * 1.03 (3% premium)
       expect(result.currencyPrices.USD.adjusted).toBe(true);
       expect(result.currencyPrices.USD.adjustment).toBe(-5);
       expect(result.pricingStrategy).toBe('competitive');
@@ -504,7 +657,7 @@ describe('MultiCurrencyService', () => {
         supportedRegions: ['US', 'CA', 'International'],
       };
 
-      currencyRepository.findByCode.mockResolvedValue(currency);
+      (currencyRepository.findByCode as any).mockResolvedValue(currency);
 
       // Act
       const result = await multiCurrencyService.validateCurrency(currencyCode);
@@ -519,7 +672,7 @@ describe('MultiCurrencyService', () => {
     it('should reject unsupported currencies', async () => {
       // Arrange
       const currencyCode = 'BTC'; // Bitcoin not supported
-      currencyRepository.findByCode.mockResolvedValue(null);
+      (currencyRepository.findByCode as any).mockResolvedValue(null);
 
       // Act
       const result = await multiCurrencyService.validateCurrency(currencyCode);
@@ -553,7 +706,7 @@ describe('MultiCurrencyService', () => {
         currency: currency,
       };
 
-      currencyRepository.findByCode.mockResolvedValue(currency);
+      (currencyRepository.findByCode as any).mockResolvedValue(currency);
 
       // Act
       const result = await multiCurrencyService.validateCurrencyAmount(validationRequest);
@@ -617,7 +770,7 @@ describe('MultiCurrencyService', () => {
         updated: 4,
         failed: 0,
         rates: [
-          { from: 'USD', to: 'NPR', oldRate: 132.50, newRate: 132.75, change: 0.25 },
+          { from: 'USD', to: 'NPR', oldRate: 132.5, newRate: 132.75, change: 0.25 },
           { from: 'USD', to: 'EUR', oldRate: 0.92, newRate: 0.91, change: -0.01 },
           { from: 'USD', to: 'GBP', oldRate: 0.79, newRate: 0.78, change: -0.01 },
           { from: 'EUR', to: 'GBP', oldRate: 0.87, newRate: 0.86, change: -0.01 },
@@ -625,8 +778,8 @@ describe('MultiCurrencyService', () => {
         timestamp: new Date(),
       };
 
-      exchangeRateRepository.bulkUpdateRates.mockResolvedValue(updateResult);
-      cacheService.invalidatePattern.mockResolvedValue(true);
+      (exchangeRateRepository.bulkUpdateRates as any).mockResolvedValue(updateResult);
+      (cacheService.delPattern as any).mockResolvedValue(undefined);
 
       // Act
       const result = await multiCurrencyService.updateExchangeRates(providerData);
@@ -637,7 +790,7 @@ describe('MultiCurrencyService', () => {
       expect(result.rates).toHaveLength(4);
       expect(result.rates[0].change).toBe(0.25);
       expect(exchangeRateRepository.bulkUpdateRates).toHaveBeenCalledWith(providerData.rates);
-      expect(cacheService.invalidatePattern).toHaveBeenCalledWith('conversion:*');
+      expect(cacheService.delPattern).toHaveBeenCalledWith('conversion:*');
     });
 
     it('should handle exchange rate update failures', async () => {
@@ -657,7 +810,7 @@ describe('MultiCurrencyService', () => {
         timestamp: new Date(),
       };
 
-      exchangeRateRepository.bulkUpdateRates.mockResolvedValue(partialFailure);
+      (exchangeRateRepository.bulkUpdateRates as any).mockResolvedValue(partialFailure);
 
       // Act
       const result = await multiCurrencyService.updateExchangeRates(providerData);
@@ -673,8 +826,8 @@ describe('MultiCurrencyService', () => {
       const rateValidation = {
         fromCurrency: 'USD',
         toCurrency: 'NPR',
-        proposedRate: 250.00, // Unusually high rate
-        historicalAverage: 132.50,
+        proposedRate: 250.0, // Unusually high rate
+        historicalAverage: 132.5,
         tolerance: 10, // 10% tolerance
       };
 
@@ -686,7 +839,7 @@ describe('MultiCurrencyService', () => {
         alertTriggered: true,
       };
 
-      exchangeRateRepository.validateRate.mockResolvedValue(validationResult);
+      (exchangeRateRepository.validateRate as any).mockResolvedValue(validationResult);
 
       // Act
       const result = await multiCurrencyService.validateExchangeRate(rateValidation);
@@ -714,7 +867,11 @@ describe('MultiCurrencyService', () => {
         lastUpdate: new Date(),
         updateHistory: [
           { timestamp: new Date(Date.now() - 3600 * 1000), success: true, provider: 'fixer' },
-          { timestamp: new Date(Date.now() - 7200 * 1000), success: true, provider: 'exchangerate-api' },
+          {
+            timestamp: new Date(Date.now() - 7200 * 1000),
+            success: true,
+            provider: 'exchangerate-api',
+          },
         ],
       };
 
@@ -772,8 +929,22 @@ describe('MultiCurrencyService', () => {
         },
         exchangeRateImpact: {
           rateChanges: [
-            { date: '2024-06-15', from: 'USD', to: 'NPR', oldRate: 132.50, newRate: 132.75, impact: 9375 },
-            { date: '2024-06-20', from: 'EUR', to: 'NPR', oldRate: 144.80, newRate: 145.20, impact: 1380 },
+            {
+              date: '2024-06-15',
+              from: 'USD',
+              to: 'NPR',
+              oldRate: 132.5,
+              newRate: 132.75,
+              impact: 9375,
+            },
+            {
+              date: '2024-06-20',
+              from: 'EUR',
+              to: 'NPR',
+              oldRate: 144.8,
+              newRate: 145.2,
+              impact: 1380,
+            },
           ],
           totalImpact: 10755,
           volatility: 'low',
@@ -802,7 +973,7 @@ describe('MultiCurrencyService', () => {
         ],
       };
 
-      paymentRepository.getPaymentStats.mockResolvedValue({
+      (paymentRepository.getPaymentStats as any).mockResolvedValue({
         totalRevenue: 5000000,
         totalExpenses: 1500000,
         currencyBreakdown: {
@@ -811,9 +982,9 @@ describe('MultiCurrencyService', () => {
           EUR: { volume: 34500, transactions: 95 },
         },
       });
-      exchangeRateRepository.getHistoricalRates.mockResolvedValue([
+      (exchangeRateRepository.getHistoricalRates as any).mockResolvedValue([
         { date: '2024-06-15', from: 'USD', to: 'NPR', rate: 132.75 },
-        { date: '2024-06-20', from: 'EUR', to: 'NPR', rate: 145.20 },
+        { date: '2024-06-20', from: 'EUR', to: 'NPR', rate: 145.2 },
       ]);
 
       // Act
@@ -919,7 +1090,7 @@ describe('MultiCurrencyService', () => {
         ],
       };
 
-      paymentRepository.getPaymentStats.mockResolvedValue({
+      (paymentRepository.getPaymentStats as any).mockResolvedValue({
         currencyStats: performanceAnalytics.currencyPerformance,
       });
 
@@ -958,9 +1129,9 @@ describe('MultiCurrencyService', () => {
           averageFeeRate: 0.25, // percentage
           feeByCurrency: {
             USD: { totalFees: 8750, avgRate: 0.35 },
-            EUR: { totalFees: 6562.50, avgRate: 0.30 },
+            EUR: { totalFees: 6562.5, avgRate: 0.3 },
             GBP: { totalFees: 4375, avgRate: 0.25 },
-            NPR: { totalFees: 2187.50, avgRate: 0.15 },
+            NPR: { totalFees: 2187.5, avgRate: 0.15 },
           },
         },
         performanceMetrics: {
@@ -980,7 +1151,7 @@ describe('MultiCurrencyService', () => {
           {
             area: 'fee_optimization',
             currentAverage: 0.25,
-            targetAverage: 0.20,
+            targetAverage: 0.2,
             potentialSavings: '-20% fees',
             implementation: 'negotiate_better_rates_with_providers',
           },
@@ -1022,7 +1193,7 @@ describe('MultiCurrencyService', () => {
         originalCurrency: 'USD',
         convertedAmount: 132500,
         convertedCurrency: 'NPR',
-        exchangeRate: 132.50,
+        exchangeRate: 132.5,
         conversionFee: 325, // 0.25% fee
         transferFee: 500, // Fixed transfer fee
         totalFees: 825,
@@ -1040,14 +1211,14 @@ describe('MultiCurrencyService', () => {
         regulations: ['OFAC', 'FATF'],
       };
 
-      exchangeRateRepository.getCurrentRate.mockResolvedValue({
+      (exchangeRateRepository.getCurrentRate as any).mockResolvedValue({
         fromCurrency: 'USD',
         toCurrency: 'NPR',
-        rate: 132.50,
+        rate: 132.5,
         source: 'fixer',
         timestamp: new Date(),
       });
-      paymentRepository.createPayment.mockResolvedValue(paymentResult);
+      (paymentRepository.createPayment as any).mockResolvedValue(paymentResult);
 
       // Act
       const result = await multiCurrencyService.processCrossBorderPayment(paymentRequest);
@@ -1116,7 +1287,7 @@ describe('MultiCurrencyService', () => {
 
       const feeBreakdown = {
         baseAmount: 2000,
-        exchangeRate: 145.20,
+        exchangeRate: 145.2,
         convertedAmount: 290400,
         fees: {
           conversionFee: {
@@ -1151,10 +1322,10 @@ describe('MultiCurrencyService', () => {
         },
       };
 
-      exchangeRateRepository.getCurrentRate.mockResolvedValue({
+      (exchangeRateRepository.getCurrentRate as any).mockResolvedValue({
         fromCurrency: 'EUR',
         toCurrency: 'NPR',
-        rate: 145.20,
+        rate: 145.2,
         source: 'fixer',
         timestamp: new Date(),
       });

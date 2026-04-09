@@ -14,10 +14,15 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { EventsService } from '@/common/events/events.service';
 import { StripeService } from '../services/stripe.service';
 import { PayoutStatus } from '@rental-portal/database';
-import { extractTraceCtx, createTracedLogger, TraceCtxPayload } from '@/common/queue/queue-trace.util';
+import {
+  extractTraceCtx,
+  createTracedLogger,
+  TraceCtxPayload,
+} from '@/common/queue/queue-trace.util';
 import { LedgerService } from '../services/ledger.service';
 import { PaymentCommandLogService } from '../services/payment-command-log.service';
 import { BookingStateMachineService } from '../../bookings/services/booking-state-machine.service';
+import { MultiCurrencyService } from '../../currency/services/multi-currency.service';
 
 interface RetryPaymentJob extends TraceCtxPayload {
   paymentIntentId: string;
@@ -98,10 +103,46 @@ export class PaymentProcessor {
     private readonly ledger: LedgerService,
     private readonly paymentCommandLog: PaymentCommandLogService,
     private readonly bookingStateMachine: BookingStateMachineService,
+    private readonly multiCurrencyService: MultiCurrencyService,
   ) {}
 
+  /**
+   * Convert payment amount from source currency to target currency with conversion fees
+   */
+  private async convertPaymentAmount(
+    amount: number,
+    fromCurrency: string,
+    toCurrency: string,
+  ): Promise<{ convertedAmount: number; fee: number; totalAmount: number }> {
+    // If same currency, no conversion needed
+    if (fromCurrency === toCurrency) {
+      return { convertedAmount: amount, fee: 0, totalAmount: amount };
+    }
+
+    try {
+      const conversion = await this.multiCurrencyService.convertCurrency({
+        fromCurrency,
+        toCurrency,
+        amount,
+        date: new Date(),
+      });
+
+      return {
+        convertedAmount: conversion.convertedAmount,
+        fee: conversion.fee,
+        totalAmount: conversion.totalAmount,
+      };
+    } catch (error) {
+      this.logger.error(`Currency conversion failed from ${fromCurrency} to ${toCurrency}:`, error);
+      // Fallback: return original amount without conversion
+      return { convertedAmount: amount, fee: 0, totalAmount: amount };
+    }
+  }
+
   @Process('retry-payment')
-  async handleRetryPayment(job: Job<RetryPaymentJob>): Promise<{ success: boolean; attempt: number }> {
+  async handleRetryPayment(
+    job: Job<RetryPaymentJob>,
+  ): Promise<{ success: boolean; attempt: number }> {
     const { paymentIntentId, bookingId, attempt, maxAttempts } = job.data;
     const { traceId, requestId } = extractTraceCtx(job);
     const logger = createTracedLogger(PaymentProcessor.name, traceId, requestId);
@@ -141,13 +182,10 @@ export class PaymentProcessor {
 
         // Transition booking through the state machine (F-12 fix — never
         // bypass the state machine with direct Prisma writes).
-        await this.bookingStateMachine.transition(
-          bookingId,
-          'FAIL_PAYMENT',
-          'system',
-          'SYSTEM',
-          { reason: 'Max retry attempts reached', maxAttempts },
-        );
+        await this.bookingStateMachine.transition(bookingId, 'FAIL_PAYMENT', 'system', 'SYSTEM', {
+          reason: 'Max retry attempts reached',
+          maxAttempts,
+        });
 
         this.events.emitPaymentFailed({
           paymentId: payment.id,
@@ -263,7 +301,8 @@ export class PaymentProcessor {
 
   @Process('process-payout')
   async handleProcessPayout(job: Job<ProcessPayoutJob>): Promise<{ processed: boolean }> {
-    const { payoutId, ownerId, ownerStripeConnectId, bookingIds, amount, currency, commandId } = job.data;
+    const { payoutId, ownerId, ownerStripeConnectId, bookingIds, amount, currency, commandId } =
+      job.data;
     this.logger.log(`Processing payout $${amount} ${currency} for owner ${ownerId}`);
 
     try {
@@ -323,16 +362,20 @@ export class PaymentProcessor {
 
       return { processed: true };
     } catch (error) {
-      await this.prisma.payout.update({
-        where: { id: payoutId },
-        data: { status: PayoutStatus.FAILED },
-      }).catch((): undefined => undefined);
+      await this.prisma.payout
+        .update({
+          where: { id: payoutId },
+          data: { status: PayoutStatus.FAILED },
+        })
+        .catch((): undefined => undefined);
       if (commandId) {
-        await this.paymentCommandLog.markFailed(
-          commandId,
-          error instanceof Error ? error.message : 'Payout processor failure',
-          { payoutId },
-        ).catch((): undefined => undefined);
+        await this.paymentCommandLog
+          .markFailed(
+            commandId,
+            error instanceof Error ? error.message : 'Payout processor failure',
+            { payoutId },
+          )
+          .catch((): undefined => undefined);
       }
       this.logger.error(`Payout processing failed for owner ${ownerId}:`, error);
       return { processed: false };
@@ -387,7 +430,8 @@ export class PaymentProcessor {
 
   @Process('process-refund')
   async handleRefund(job: Job<RefundJob>): Promise<{ refunded: boolean }> {
-    const { bookingId, refundRecordId, paymentIntentId, amount, currency, reason, commandId } = job.data;
+    const { bookingId, refundRecordId, paymentIntentId, amount, currency, reason, commandId } =
+      job.data;
     this.logger.log(`Processing refund for booking ${bookingId}, amount ${amount} ${currency}`);
 
     try {
@@ -432,16 +476,20 @@ export class PaymentProcessor {
       this.logger.log(`Refund completed for booking ${bookingId}, stripe refund ${stripeRefundId}`);
       return { refunded: true };
     } catch (error) {
-      await this.prisma.refund.update({
-        where: { id: refundRecordId },
-        data: { status: 'FAILED' },
-      }).catch((): undefined => undefined);
+      await this.prisma.refund
+        .update({
+          where: { id: refundRecordId },
+          data: { status: 'FAILED' },
+        })
+        .catch((): undefined => undefined);
       if (commandId) {
-        await this.paymentCommandLog.markFailed(
-          commandId,
-          error instanceof Error ? error.message : 'Refund processor failure',
-          { refundRecordId },
-        ).catch((): undefined => undefined);
+        await this.paymentCommandLog
+          .markFailed(
+            commandId,
+            error instanceof Error ? error.message : 'Refund processor failure',
+            { refundRecordId },
+          )
+          .catch((): undefined => undefined);
       }
       this.logger.error(`Refund failed for booking ${bookingId}:`, error);
       throw error; // Let Bull retry
@@ -588,11 +636,13 @@ export class PaymentProcessor {
       return { released: true };
     } catch (error) {
       if (commandId) {
-        await this.paymentCommandLog.markFailed(
-          commandId,
-          error instanceof Error ? error.message : 'Deposit release processor failure',
-          { bookingId },
-        ).catch((): undefined => undefined);
+        await this.paymentCommandLog
+          .markFailed(
+            commandId,
+            error instanceof Error ? error.message : 'Deposit release processor failure',
+            { bookingId },
+          )
+          .catch((): undefined => undefined);
       }
       this.logger.error(`Deposit release failed for booking ${bookingId}:`, error);
       throw error; // Let Bull retry
@@ -653,11 +703,13 @@ export class PaymentProcessor {
       return { captured: true };
     } catch (error) {
       if (commandId) {
-        await this.paymentCommandLog.markFailed(
-          commandId,
-          error instanceof Error ? error.message : 'Deposit capture processor failure',
-          { bookingId },
-        ).catch((): undefined => undefined);
+        await this.paymentCommandLog
+          .markFailed(
+            commandId,
+            error instanceof Error ? error.message : 'Deposit capture processor failure',
+            { bookingId },
+          )
+          .catch((): undefined => undefined);
       }
       this.logger.error(`Deposit capture failed for booking ${bookingId}:`, error);
       throw error;

@@ -5,7 +5,7 @@ import { Logger } from '@nestjs/common';
 
 /**
  * FEE CALCULATION TESTS
- * 
+ *
  * These tests validate fee calculation logic:
  * - Platform fee calculations
  * - Service fee calculations
@@ -14,7 +14,7 @@ import { Logger } from '@nestjs/common';
  * - Tiered fee structures
  * - Dynamic fee adjustments
  * - Fee validation and limits
- * 
+ *
  * Business Truth Validated:
  * - Fees are calculated correctly based on policies
  * - Platform fees are applied consistently
@@ -66,7 +66,7 @@ describe('FeeCalculationService', () => {
       const bookingAmount = 10000; // $100
       const platformFeePolicy = {
         type: 'percentage',
-        rate: 0.10, // 10%
+        rate: 0.1, // 10%
         minimumFee: 500, // $5 minimum
         maximumFee: 5000, // $50 maximum
       };
@@ -78,7 +78,7 @@ describe('FeeCalculationService', () => {
       });
 
       // Assert
-      expect(result.amount).toBe(50);
+      expect(result.amount).toBe(1000); // 10% of $100 = $10 = 1000 cents
       expect(result.type).toBe('platform');
     });
 
@@ -99,7 +99,7 @@ describe('FeeCalculationService', () => {
       });
 
       // Assert
-      expect(result.amount).toBe(50); // $0.50 (5% of $20 = $1, but min fee is $5 = 500 cents)
+      expect(result.amount).toBe(500); // 5% of $20 = $1 = 100 cents, but min fee is $5 = 500 cents
       expect(result.breakdown.minimumFeeApplied).toBe(true);
     });
 
@@ -120,7 +120,7 @@ describe('FeeCalculationService', () => {
       });
 
       // Assert
-      expect(result.amount).toBe(50);
+      expect(result.amount).toBe(5000); // 15% of $1000 = $150 = 15000 cents, but max fee is $50 = 5000 cents
       expect(result.breakdown.maximumFeeApplied).toBe(true);
     });
 
@@ -132,7 +132,7 @@ describe('FeeCalculationService', () => {
         tiers: [
           { min: 0, max: 10000, rate: 0.05 }, // 5% up to $100
           { min: 10001, max: 50000, rate: 0.08 }, // 8% from $100.01 to $500
-          { min: 50001, max: Infinity, rate: 0.10 }, // 10% above $500
+          { min: 50001, max: Infinity, rate: 0.1 }, // 10% above $500
         ],
       };
 
@@ -206,7 +206,7 @@ describe('FeeCalculationService', () => {
       const equipmentPolicy = {
         category: 'equipment',
         type: 'percentage',
-        rate: 0.10, // 10%
+        rate: 0.1, // 10%
         minimumFee: 1500, // $15 minimum
         durationMultiplier: {
           shortTerm: { days: 3, multiplier: 1.2 }, // 20% extra for short-term
@@ -250,7 +250,7 @@ describe('FeeCalculationService', () => {
       });
 
       // Assert
-      expect(result.amount).toBe(725.3); // 2.9% of $250 = $7.25, + $0.30 = $7.55
+      expect(result.amount).toBe(755); // 2.9% of $250 = $7.25, + $0.30 = $7.55
       expect(result.type).toBe('payment_processing');
       expect(result.breakdown.percentageFee).toBe(725);
       expect(result.breakdown.fixedFee).toBe(30);
@@ -357,7 +357,10 @@ describe('FeeCalculationService', () => {
       };
 
       // Act
-      const result = await feeService.applyDynamicAdjustments(baseFee, bookingAmount, { season, date: new Date('2024-07-15') });
+      const result = await feeService.applyDynamicAdjustments(baseFee, bookingAmount, {
+        season,
+        date: new Date('2024-07-15'),
+      });
 
       // Assert
       expect(result.adjustedFee).toBe(4500); // $30 * 1.5 = $45
@@ -382,7 +385,9 @@ describe('FeeCalculationService', () => {
       };
 
       // Act
-      const result = await feeService.applyDynamicAdjustments(baseFee, bookingAmount, { demandLevel });
+      const result = await feeService.applyDynamicAdjustments(baseFee, bookingAmount, {
+        demandLevel,
+      });
 
       // Assert
       expect(result.adjustedFee).toBe(2600); // $20 * 1.3 = $26
@@ -400,9 +405,9 @@ describe('FeeCalculationService', () => {
       const loyaltyPolicy = {
         tiers: {
           bronze: { discount: 0.05, bookingsRequired: 0 },
-          silver: { discount: 0.10, bookingsRequired: 5 },
+          silver: { discount: 0.1, bookingsRequired: 5 },
           gold: { discount: 0.15, bookingsRequired: 15 },
-          platinum: { discount: 0.20, bookingsRequired: 50 },
+          platinum: { discount: 0.2, bookingsRequired: 50 },
         },
       };
 
@@ -425,20 +430,22 @@ describe('FeeCalculationService', () => {
       const promoPolicy = {
         code: 'SUMMER2024',
         type: 'percentage_discount',
-        value: 0.20, // 20% discount
+        value: 0.2, // 20% discount
         maxDiscount: 1000, // $10 maximum discount
         minBookingAmount: 10000, // $100 minimum booking
         validUntil: new Date('2024-08-31'),
       };
 
       // Act
-      const result = await feeService.applyDynamicAdjustments(baseFee, bookingAmount, { promoCode });
+      const result = await feeService.applyDynamicAdjustments(baseFee, bookingAmount, {
+        promoCode,
+      });
 
       // Assert
       expect(result.adjustedFee).toBe(2000); // $25 - ($25 * 0.20) = $20
       expect(result.originalFee).toBe(2500);
       expect(result.adjustmentType).toBe('promotion');
-      expect(result.discount).toBe(0.20);
+      expect(result.discount).toBe(0.2);
       expect(result.promoCode).toBe('SUMMER2024');
     });
   });
@@ -518,7 +525,7 @@ describe('FeeCalculationService', () => {
       // Arrange
       const startDate = new Date('2024-06-01');
       const endDate = new Date('2024-06-30');
-      
+
       const mockAnalytics = {
         totalBookings: 1000,
         totalBookingAmount: 5000000, // $50,000
@@ -576,7 +583,10 @@ describe('FeeCalculationService', () => {
       };
 
       // Act
-      const result = await feeService.calculateFeeRevenueProjection(projectionPeriod, historicalData);
+      const result = await feeService.calculateFeeRevenueProjection(
+        projectionPeriod,
+        historicalData,
+      );
 
       // Assert
       expect(result.projectedBookings).toBe(1050);

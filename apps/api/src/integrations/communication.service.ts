@@ -81,11 +81,37 @@ export class CommunicationService {
     private readonly templateService: NotificationTemplateService,
   ) {}
 
+  private readonly CIRCUIT_BREAKER_THRESHOLD = 5;
+  private readonly CIRCUIT_BREAKER_TIMEOUT_MS = 60000; // 1 minute
+  private consecutiveFailures = 0;
+
   async sendEmail(emailData: EmailData): Promise<DeliveryResult> {
+    const serviceKey = 'email';
+    const circuitBreaker = this.circuitBreakers.get(serviceKey);
+
+    // Check if circuit breaker is open
+    if (circuitBreaker?.isOpen) {
+      const timeSinceLastFailure = Date.now() - circuitBreaker.lastFailure.getTime();
+      if (timeSinceLastFailure < this.CIRCUIT_BREAKER_TIMEOUT_MS) {
+        this.logger.warn('Circuit breaker opened for email service');
+        return {
+          success: false,
+          error: 'Circuit breaker is open',
+        };
+      } else {
+        // Reset circuit breaker after timeout
+        this.circuitBreakers.set(serviceKey, { isOpen: false, lastFailure: new Date(0) });
+      }
+    }
+
     try {
-      // Stub implementation - would call actual email service
+      // Call actual email service - render template first
+      const html = await this.renderTemplate(emailData.template, emailData.data);
+      await this.emailService.sendEmail(emailData.to, emailData.subject, html);
+
       const deliveryId = `email-${Date.now()}`;
-      
+      this.consecutiveFailures = 0;
+
       this.logger.log('Email sent', { to: emailData.to, deliveryId });
 
       return {
@@ -94,6 +120,14 @@ export class CommunicationService {
         messageId: deliveryId,
       };
     } catch (error) {
+      this.consecutiveFailures++;
+
+      // Open circuit breaker after threshold failures
+      if (this.consecutiveFailures >= this.CIRCUIT_BREAKER_THRESHOLD) {
+        this.circuitBreakers.set(serviceKey, { isOpen: true, lastFailure: new Date() });
+        this.logger.warn('Circuit breaker opened for email service');
+      }
+
       this.logger.error('Email delivery failed', {
         to: emailData.to,
         error: error.message,
@@ -156,7 +190,7 @@ export class CommunicationService {
   async getDeliveryStatistics(
     startDate: Date,
     endDate: Date,
-    options?: { userId?: string; type?: string }
+    options?: { userId?: string; type?: string },
   ): Promise<DeliveryStatistics> {
     // Return stub statistics
     return {
@@ -217,7 +251,7 @@ export class CommunicationService {
       template: string;
       data: Record<string, any>;
       priority?: 'high' | 'normal' | 'low';
-    }
+    },
   ): Promise<MultiChannelResult[]> {
     const results: MultiChannelResult[] = [];
 
