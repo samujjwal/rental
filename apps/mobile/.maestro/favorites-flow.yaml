@@ -1,0 +1,63 @@
+# ============================================================================
+# Favorites Flow — E2E Maestro Test
+# Validates adding/removing listings from favorites and viewing favorites list.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Search
+- tapOn:
+    text: "Search|Browse"
+    optional: true
+
+# 2. Browse listings
+- assertVisible:
+    id: "listing-card"
+
+# 3. Add first listing to favorites
+- tapOn:
+    id: "favorite-button"
+    index: 0
+
+# 4. Verify favorite button is active (filled heart)
+- assertVisible:
+    id: "favorite-button-active"
+    index: 0
+
+# 5. Navigate to Profile to check favorites
+- tapOn: "Profile"
+
+# 6. Tap on Favorites
+- tapOn:
+    text: "Favorites|My Favorites"
+    optional: true
+
+# 7. Verify favorites list loads
+- assertVisible:
+    text: "Favorites|No favorites yet"
+
+# 8. If favorites exist, verify listing details
+- tapOn:
+    id: "favorite-card"
+    index: 0
+    optional: true
+
+# 9. Remove from favorites
+- tapOn:
+    id: "favorite-button-active"
+    optional: true
+
+# 10. Verify favorite button is inactive (outline heart)
+- assertVisible:
+    id: "favorite-button"
+    optional: true
+
+# 11. Go back and verify removed from list
+- back
+- assertVisible:
+    text: "No favorites yet"
+    optional: true

@@ -6,14 +6,37 @@ tags:
 
 ---
 
+# Authentication & Profile
 - runFlow: auth-login.yaml
 - runFlow: auth-signup.yaml
-- runFlow: browse-listings.yaml
-- runFlow: booking-flow.yaml
+- runFlow: password-reset.yaml
+- runFlow: logout-flow.yaml
 - runFlow: profile-settings.yaml
-- runFlow: owner_portal_test.yaml
-- runFlow: insurance-claims-flow.yaml
-- runFlow: payment-flow.yaml
+- runFlow: profile-update.yaml
+
+# Core User Flows
+- runFlow: browse-listings.yaml
+- runFlow: search-filter.yaml
+- runFlow: booking-flow.yaml
+- runFlow: favorites-flow.yaml
+- runFlow: reviews-flow.yaml
 - runFlow: messaging-flow.yaml
+
+# Payment & Financial
+- runFlow: payment-flow.yaml
+
+# Owner Flows
+- runFlow: owner_portal_test.yaml
+- runFlow: owner-create-listing.yaml
+- runFlow: owner-manage-bookings.yaml
+- runFlow: owner-earnings.yaml
+
+# Advanced Features
+- runFlow: insurance-claims-flow.yaml
 - runFlow: notifications-flow.yaml
 - runFlow: dispute-resolution-flow.yaml
+- runFlow: deep-linking.yaml
+- runFlow: network-error.yaml
+- runFlow: app-lifecycle.yaml
+- runFlow: biometric-auth.yaml
+- runFlow: permissions.yaml

@@ -1,0 +1,35 @@
+# ============================================================================
+# Logout Flow — E2E Maestro Test
+# Validates logout and session clearing.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Profile
+- tapOn: "Profile"
+
+# 2. Tap on Settings
+- tapOn: "Settings"
+
+# 3. Tap on Logout
+- tapOn:
+    text: "Logout|Sign out"
+
+# 4. Confirm logout
+- tapOn:
+    text: "Confirm|Yes|Logout"
+
+# 5. Verify redirected to login screen
+- assertVisible:
+    text: "Sign In"
+
+# 6. Verify session is cleared (can't access authenticated screens)
+- tapOn:
+    text: "Back"
+    optional: true
+- assertVisible:
+    text: "Sign In"

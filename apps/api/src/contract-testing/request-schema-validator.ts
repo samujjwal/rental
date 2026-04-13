@@ -37,6 +37,53 @@ export class RequestSchemaValidator {
       if (!data?.title) errors.push('Title is required');
       if (!data?.description) errors.push('Description is required');
       if (data?.price === undefined) errors.push('Price is required');
+      if (data?.price !== undefined && typeof data.price !== 'number') {
+        errors.push('Price must be a number');
+      }
+      if (data?.price !== undefined && data.price < 0) {
+        errors.push('Price must be non-negative');
+      }
+    }
+
+    // Booking validation
+    if (path === '/api/bookings' && method === 'POST') {
+      if (!data?.listingId) errors.push('Listing ID is required');
+      if (!data?.startDate) errors.push('Start date is required');
+      if (!data?.endDate) errors.push('End date is required');
+      if (data?.startDate && data?.endDate) {
+        const start = new Date(data.startDate);
+        const end = new Date(data.endDate);
+        if (end <= start) errors.push('End date must be after start date');
+      }
+    }
+
+    // Message validation
+    if (path === '/api/messages' && method === 'POST') {
+      if (!data?.recipientId) errors.push('Recipient ID is required');
+      if (!data?.content) errors.push('Message content is required');
+      if (data?.content && data.content.length > 5000) {
+        errors.push('Message content exceeds maximum length');
+      }
+    }
+
+    // Review validation
+    if (path === '/api/reviews' && method === 'POST') {
+      if (!data?.bookingId) errors.push('Booking ID is required');
+      if (data?.rating === undefined) errors.push('Rating is required');
+      if (data?.rating !== undefined) {
+        if (typeof data.rating !== 'number' || data.rating < 1 || data.rating > 5) {
+          errors.push('Rating must be a number between 1 and 5');
+        }
+      }
+    }
+
+    // Payment validation
+    if (path === '/api/payments/intent' && method === 'POST') {
+      if (!data?.bookingId) errors.push('Booking ID is required');
+      if (!data?.amount) errors.push('Amount is required');
+      if (data?.amount !== undefined && (typeof data.amount !== 'number' || data.amount <= 0)) {
+        errors.push('Amount must be a positive number');
+      }
     }
 
     return {

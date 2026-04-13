@@ -247,5 +247,191 @@ describe('EscrowService', () => {
       const results = await service.findReleasableEscrows();
       expect(results).toHaveLength(1);
     });
+
+    it('should respect custom limit', async () => {
+      prisma.escrowTransaction.findMany.mockResolvedValue([]);
+      await service.findReleasableEscrows(10);
+      expect(prisma.escrowTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 10 }),
+      );
+    });
+
+    it('should order by holdUntil ascending', async () => {
+      prisma.escrowTransaction.findMany.mockResolvedValue([]);
+      await service.findReleasableEscrows();
+      expect(prisma.escrowTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { holdUntil: 'asc' } }),
+      );
+    });
+  });
+
+  describe('fundEscrow — ledger and event assertions', () => {
+    it('should create LIABILITY ledger entry when funding', async () => {
+      const funded = { ...mockEscrow, status: 'FUNDED', capturedAt: new Date() };
+      prisma.escrowTransaction.update.mockResolvedValue(funded);
+      await service.fundEscrow('escrow-1');
+      expect(prisma.ledgerEntry.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          bookingId: 'booking-1',
+          accountId: 'escrow-1',
+          accountType: 'LIABILITY',
+          side: 'CREDIT',
+          transactionType: 'DEPOSIT_HOLD',
+          amount: 50000,
+          status: 'POSTED',
+        }),
+      });
+    });
+
+    it('should emit escrow funded event with correct payload', async () => {
+      const funded = { ...mockEscrow, status: 'FUNDED', capturedAt: new Date() };
+      prisma.escrowTransaction.update.mockResolvedValue(funded);
+      await service.fundEscrow('escrow-1', 'pi_stripe_123');
+      expect(events.emitEscrowFunded).toHaveBeenCalledWith(
+        expect.objectContaining({ escrowId: 'escrow-1', bookingId: 'booking-1', amount: 50000 }),
+      );
+    });
+  });
+
+  describe('releaseEscrow — edge cases', () => {
+    it('should throw if escrow not found', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue(null);
+      await expect(service.releaseEscrow('non-existent')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw if amount exceeds escrow amount', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue({
+        ...mockEscrow,
+        status: 'FUNDED',
+        holdUntil: new Date('2020-01-01'),
+      });
+      await expect(service.releaseEscrow('escrow-1', 999999)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should create DEBIT ledger entry on release', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue({
+        ...mockEscrow,
+        status: 'FUNDED',
+        holdUntil: new Date('2020-01-01'),
+      });
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'RELEASED' });
+      await service.releaseEscrow('escrow-1', 50000);
+      expect(prisma.ledgerEntry.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          side: 'DEBIT',
+          transactionType: 'DEPOSIT_RELEASE',
+          amount: 50000,
+        }),
+      });
+    });
+  });
+
+  describe('freezeEscrow — state guards', () => {
+    it('should freeze from PARTIALLY_RELEASED state', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue({
+        ...mockEscrow,
+        status: 'PARTIALLY_RELEASED',
+      });
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'DISPUTED' });
+      const result = await service.freezeEscrow('escrow-1', 'dispute-1');
+      expect(result.status).toBe('DISPUTED');
+    });
+
+    it('should throw if escrow not found', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue(null);
+      await expect(service.freezeEscrow('bad-id', 'dispute-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw if escrow in PENDING state', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue({ ...mockEscrow, status: 'PENDING' });
+      await expect(service.freezeEscrow('escrow-1', 'dispute-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw if escrow in RELEASED state', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue({ ...mockEscrow, status: 'RELEASED' });
+      await expect(service.freezeEscrow('escrow-1', 'dispute-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw if escrow in REFUNDED state', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue({ ...mockEscrow, status: 'REFUNDED' });
+      await expect(service.freezeEscrow('escrow-1', 'dispute-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('refundEscrow — ledger and event assertions', () => {
+    it('should create DEBIT REFUND ledger entry', async () => {
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'REFUNDED', releasedAt: new Date() });
+      await service.refundEscrow('escrow-1');
+      expect(prisma.ledgerEntry.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          side: 'DEBIT',
+          transactionType: 'REFUND',
+          amount: 50000,
+        }),
+      });
+    });
+
+    it('should emit release event with releasedTo=renter', async () => {
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'REFUNDED', releasedAt: new Date() });
+      await service.refundEscrow('escrow-1', 'dispute resolved');
+      expect(events.emitEscrowReleased).toHaveBeenCalledWith(
+        expect.objectContaining({ releasedTo: 'renter' }),
+      );
+    });
+
+    it('should succeed without reason argument', async () => {
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'REFUNDED', releasedAt: new Date() });
+      const result = await service.refundEscrow('escrow-1');
+      expect(result.status).toBe('REFUNDED');
+    });
+  });
+
+  describe('getEscrowForBooking', () => {
+    it('should return most recent escrow ordered by createdAt desc', async () => {
+      const newest = { ...mockEscrow, id: 'escrow-new', createdAt: new Date('2025-06-01') };
+      prisma.escrowTransaction.findFirst.mockResolvedValue(newest);
+      const result = await service.getEscrowForBooking('booking-1');
+      expect(result?.id).toBe('escrow-new');
+      expect(prisma.escrowTransaction.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { createdAt: 'desc' } }),
+      );
+    });
+
+    it('should return null when no escrow exists', async () => {
+      prisma.escrowTransaction.findFirst.mockResolvedValue(null);
+      const result = await service.getEscrowForBooking('booking-1');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('Full Escrow Lifecycle', () => {
+    it('PENDING → FUNDED → RELEASED', async () => {
+      prisma.booking.findUnique.mockResolvedValue(mockBooking);
+      prisma.escrowTransaction.findFirst.mockResolvedValue(null);
+      prisma.escrowTransaction.create.mockResolvedValue(mockEscrow);
+      const created = await service.createEscrow({ bookingId: 'booking-1', amount: 50000, currency: 'NPR' });
+      expect(created.status).toBe('PENDING');
+
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'FUNDED', capturedAt: new Date() });
+      const funded = await service.fundEscrow(created.id, 'pi_123');
+      expect(funded.status).toBe('FUNDED');
+
+      prisma.escrowTransaction.findUnique.mockResolvedValue({ ...mockEscrow, status: 'FUNDED', holdUntil: new Date('2020-01-01') });
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'RELEASED', releasedAt: new Date() });
+      const released = await service.releaseEscrow(created.id);
+      expect(released.success).toBe(true);
+      expect(released.releasedAmount).toBe(50000);
+    });
+
+    it('FUNDED → DISPUTED → REFUNDED', async () => {
+      prisma.escrowTransaction.findUnique.mockResolvedValue({ ...mockEscrow, status: 'FUNDED' });
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'DISPUTED' });
+      const frozen = await service.freezeEscrow('escrow-1', 'dispute-1');
+      expect(frozen.status).toBe('DISPUTED');
+
+      prisma.escrowTransaction.update.mockResolvedValue({ ...mockEscrow, status: 'REFUNDED', releasedAt: new Date() });
+      const refunded = await service.refundEscrow('escrow-1', 'dispute resolved');
+      expect(refunded.status).toBe('REFUNDED');
+    });
   });
 });

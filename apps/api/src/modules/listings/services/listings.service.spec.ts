@@ -7,6 +7,7 @@ import { ListingValidationService } from './listing-validation.service';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { EmbeddingService } from '../../ai/services/embedding.service';
 import { ListingVersionService } from './listing-version.service';
+import { MultiCurrencyService } from '../../currency/services/multi-currency.service';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
@@ -88,6 +89,13 @@ describe('ListingsService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn(),
+          },
+        },
+        {
+          provide: MultiCurrencyService,
+          useValue: {
+            convertAmount: jest.fn().mockResolvedValue(100),
+            getSupportedCurrencies: jest.fn().mockResolvedValue(['USD', 'EUR']),
           },
         },
       ],

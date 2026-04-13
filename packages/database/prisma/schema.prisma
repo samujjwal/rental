@@ -213,6 +213,10 @@ model Listing {
   maxStayNights          Int?
   checkInTime            String?
   checkOutTime           String?
+  minAdvanceDays         Int                      @default(1)
+  maxAdvanceDays         Int                      @default(365)
+  checkinCutoffTime      String                   @default("12:00")
+  blockedSeasons         String[]
   weeklyDiscount         Int?
   monthlyDiscount        Int?
   serviceFee             Decimal?

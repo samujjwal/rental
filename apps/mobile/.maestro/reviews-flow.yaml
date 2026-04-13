@@ -1,0 +1,67 @@
+# ============================================================================
+# Reviews Flow — E2E Maestro Test
+# Validates submitting reviews and viewing reviews for listings and users.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Bookings to find completed booking
+- tapOn: "Bookings"
+
+# 2. Tap on a completed booking
+- tapOn:
+    id: "booking-card"
+    index: 0
+
+# 3. Verify booking details
+- assertVisible:
+    text: "Completed|Finished"
+
+# 4. Tap on review/rating option
+- tapOn:
+    text: "Leave a review|Rate|Review"
+    optional: true
+
+# 5. Verify review form loads
+- assertVisible:
+    text: "Rating|Stars|Review"
+
+# 6. Tap on 5th star for rating
+- tapOn:
+    id: "star-rating"
+    index: 4
+
+# 7. Enter review comment
+- inputText: "Great experience! Highly recommended."
+    id: "review-comment"
+
+# 8. Submit review
+- tapOn:
+    text: "Submit|Post review"
+
+# 9. Verify review success message
+- assertVisible:
+    text: "Review submitted|Thank you|Success"
+
+# 10. Navigate to listing to view reviews
+- tapOn:
+    text: "View listing|Go to listing"
+    optional: true
+
+# 11. Tap on Reviews section
+- tapOn:
+    text: "Reviews|See all reviews"
+    optional: true
+
+# 12. Verify reviews list loads
+- assertVisible:
+    text: "Reviews|No reviews yet"
+
+# 13. Verify the submitted review appears
+- assertVisible:
+    text: "Great experience"
+    optional: true

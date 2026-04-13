@@ -107,6 +107,97 @@ describe("ListingCard", () => {
     expect(screen.getByText("No image")).toBeInTheDocument();
   });
 
+  // Error state tests
+  describe("Error States", () => {
+    it("handles missing title gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, title: undefined as any }} />
+      );
+      // Should render without crashing, showing fallback
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles null title gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, title: null as any }} />
+      );
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles invalid price gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, basePrice: -100 as any }} />
+      );
+      // Should render without crashing
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles zero price gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, basePrice: 0 }} />
+      );
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles missing id gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, id: undefined as any }} />
+      );
+      // Should render without crashing
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles malformed location gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, location: null as any }} />
+      );
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles invalid rating gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, rating: 6 as any, totalReviews: 10 }} />
+      );
+      // Should render without crashing
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles negative rating gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, rating: -1 as any, totalReviews: 10 }} />
+      );
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles missing categorySpecificData gracefully", () => {
+      render(
+        <ListingCard
+          listing={{
+            ...baseListing,
+            categorySlug: "apartment",
+            categorySpecificData: undefined as any,
+          }}
+        />
+      );
+      expect(screen.getByRole("link")).toBeInTheDocument();
+    });
+
+    it("handles empty photos array gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, photos: [] }} />
+      );
+      expect(screen.getByText("No image")).toBeInTheDocument();
+    });
+
+    it("handles broken image URL gracefully", () => {
+      render(
+        <ListingCard listing={{ ...baseListing, photos: ["invalid-url"] }} />
+      );
+      // Should render without crashing
+      expect(screen.getByRole("img")).toBeInTheDocument();
+    });
+  });
+
   it("renders photo when provided", () => {
     render(
       <ListingCard

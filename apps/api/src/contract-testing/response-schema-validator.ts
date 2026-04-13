@@ -104,6 +104,16 @@ export class ResponseSchemaValidator {
         timestamp: 'string',
         read: 'boolean'
       }
+    },
+    ErrorResponse: {
+      required: ['error', 'message', 'statusCode'],
+      types: {
+        error: 'string',
+        message: 'string',
+        statusCode: 'number',
+        timestamp: 'string',
+        details: 'array'
+      }
     }
   };
 

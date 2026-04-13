@@ -9,6 +9,8 @@ import { SmsService } from './services/twilio.service';
 import { InAppNotificationService } from './services/notification.service';
 import { PushNotificationService } from './services/push-notification.service';
 import { NotificationPreferencesService } from './services/notification-preferences.service';
+import { NotificationRetryService } from './services/notification-retry.service';
+import { QueueService } from './services/queue.service';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
@@ -22,8 +24,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
     InAppNotificationService,
     PushNotificationService,
     NotificationPreferencesService,
+    NotificationRetryService,
+    QueueService,
     EventEmitter2,
   ],
-  exports: [NotificationsService, EmailService, SmsService, InAppNotificationService, PushNotificationService],
+  exports: [NotificationsService, EmailService, SmsService, InAppNotificationService, PushNotificationService, NotificationRetryService, QueueService],
 })
 export class NotificationsModule {}

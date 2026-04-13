@@ -132,14 +132,29 @@ export class SpaceCheckinCheckoutService {
       throw new BadRequestException('Check-in report not found. Cannot complete check-out without check-in record.');
     }
 
-    // Validate check-out time is not after booking end date
-    if (data.checkoutTime && new Date(data.checkoutTime) > new Date(booking.endDate)) {
-      throw new BadRequestException('Check-out time cannot be after booking end date');
+    // Validate check-out time is not after booking end date (allow same day)
+    if (data.checkoutTime) {
+      const checkoutDate = new Date(data.checkoutTime);
+      const endDate = new Date(booking.endDate);
+      // Set both to midnight UTC to compare dates only
+      const checkoutMidnight = new Date(Date.UTC(checkoutDate.getUTCFullYear(), checkoutDate.getUTCMonth(), checkoutDate.getUTCDate()));
+      const endMidnight = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
+      if (checkoutMidnight > endMidnight) {
+        throw new BadRequestException('Check-out time cannot be after booking end date');
+      }
     }
 
     // Calculate duration
     const checkinData = JSON.parse(checkinReport.checklistData || '{}');
-    const checkinTime = new Date(checkinData.checkinTime || checkinReport.createdAt);
+    let checkinTime = new Date(checkinData.checkinTime || checkinReport.createdAt);
+    // Validate checkinTime is a valid date
+    if (isNaN(checkinTime.getTime())) {
+      checkinTime = new Date(checkinReport.createdAt);
+      if (isNaN(checkinTime.getTime())) {
+        // If still invalid, use a default time (24 hours ago)
+        checkinTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      }
+    }
     const checkoutTime = data.checkoutTime ? new Date(data.checkoutTime) : new Date();
     const durationHours = (checkoutTime.getTime() - checkinTime.getTime()) / (1000 * 60 * 60);
 
@@ -213,9 +228,9 @@ export class SpaceCheckinCheckoutService {
 
     // Early check-out charge (if checked out more than 2 hours early)
     if (durationHours < expectedDurationHours - 2) {
-      const hoursEarly = expectedDurationHours - durationHours;
+      const hoursEarly = expectedDurationHours - durationHours - 2; // Subtract grace period
       const earlyCheckoutRate = 10; // $10 per hour early
-      charges.earlyCheckoutCharge = Math.round(hoursEarly * earlyCheckoutRate);
+      charges.earlyCheckoutCharge = Math.floor(hoursEarly * earlyCheckoutRate);
     }
 
     // Cleaning fee based on status

@@ -1,0 +1,61 @@
+# ============================================================================
+# Owner Earnings Dashboard Flow — E2E Maestro Test
+# Validates owner viewing earnings, payouts, and financial summary.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login as owner
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Profile
+- tapOn: "Profile"
+
+# 2. Tap on Earnings or Wallet
+- tapOn:
+    text: "Earnings|Wallet|Payouts"
+    optional: true
+
+# 3. Verify earnings dashboard loads
+- assertVisible:
+    text: "Earnings|Balance|Income"
+
+# 4. Verify total earnings displayed
+- assertVisible:
+    text: "Total|NPR|$"
+
+# 5. View pending payouts
+- tapOn:
+    text: "Pending|Upcoming"
+    optional: true
+- assertVisible:
+    text: "Payout|Pending"
+
+# 6. View payout history
+- tapOn:
+    text: "History|Past payouts"
+- assertVisible:
+    text: "Date|Amount|Status"
+
+# 7. View earnings breakdown by listing
+- tapOn:
+    text: "Breakdown|By listing"
+    optional: true
+- assertVisible:
+    text: "Listing|Earnings"
+
+# 8. Request payout (if available)
+- tapOn:
+    text: "Request payout|Withdraw"
+    optional: true
+- assertVisible:
+    text: "Bank account|Payment method"
+    optional: true
+- tapOn:
+    text: "Cancel|Back"
+    optional: true
+
+# 9. Navigate back to profile
+- back
+- back

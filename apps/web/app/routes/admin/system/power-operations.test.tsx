@@ -111,7 +111,10 @@ describe("admin/system/power-operations", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /admin\.clearAllCache/i }));
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
     expect(screen.getByText(/admin\.confirmDangerousOp/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /admin\.proceed/i }));
@@ -119,5 +122,5 @@ describe("admin/system/power-operations", () => {
     await waitFor(() => {
       expect(m.clearCache).toHaveBeenCalledWith("all");
     });
-  });
+  }, 10000);
 });

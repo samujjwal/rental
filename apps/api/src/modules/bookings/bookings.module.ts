@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BookingsService } from './services/bookings.service';
 import { BookingStateMachineService } from './services/booking-state-machine.service';
 import { BookingCalculationService } from './services/booking-calculation.service';
@@ -31,12 +31,12 @@ const devControllers =
 
 @Module({
   imports: [
-    ListingsModule, 
-    FraudDetectionModule, 
-    NotificationsModule, 
-    InsuranceModule, 
-    ModerationModule, 
-    PolicyEngineModule, 
+    forwardRef(() => ListingsModule),
+    FraudDetectionModule,
+    NotificationsModule,
+    InsuranceModule,
+    ModerationModule,
+    PolicyEngineModule,
     ComplianceModule,
     BullModule.registerQueue({ name: 'bookings' }),
     BullModule.registerQueue({ name: 'payments' }),

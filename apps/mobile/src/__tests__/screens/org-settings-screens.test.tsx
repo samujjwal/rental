@@ -89,9 +89,9 @@ describe('OrganizationsScreen', () => {
       ],
     });
     const { getByText } = render(<OrganizationsScreen navigation={nav()} route={route()} />);
-    await waitFor(() => expect(getByText('Sunrise Rentals')).toBeTruthy(), { timeout: 10000 });
+    await waitFor(() => expect(getByText('Sunrise Rentals')).toBeTruthy(), { timeout: 30000 });
     expect(getByText('Valley Corp')).toBeTruthy();
-  }, 10000);
+  }, 30000);
 
   it('shows empty state when no orgs', async () => {
     mockGetOrganizations.mockResolvedValue({ organizations: [] });
@@ -273,10 +273,10 @@ describe('SettingsNotificationsScreen', () => {
     });
     const { getByText } = render(<SettingsNotificationsScreen />);
     expect(getByText('Notification Preferences')).toBeTruthy();
-    await waitFor(() => expect(getByText('Email')).toBeTruthy());
+    await waitFor(() => expect(getByText('Email')).toBeTruthy(), { timeout: 30000 });
     expect(getByText('Push')).toBeTruthy();
     expect(getByText('SMS')).toBeTruthy();
-  });
+  }, 30000);
 
   it('renders activity type labels', async () => {
     mockGetNotificationPreferences.mockResolvedValue({

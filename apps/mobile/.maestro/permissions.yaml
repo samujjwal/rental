@@ -1,0 +1,71 @@
+# ============================================================================
+# Permissions Flow — E2E Maestro Test
+# Validates location and camera permission requests and handling.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# 1. Launch app
+- launchApp:
+    clearState: true
+
+# 2. Login first
+- runFlow: auth-login.yaml
+
+# 3. Navigate to Search (may trigger location permission)
+- tapOn: "Search"
+
+# 4. If location permission dialog appears
+- tapOn:
+    text: "Allow|While using app|Only this time"
+    optional: true
+
+# 5. Verify location-based features work
+- tapOn:
+    text: "Near me|Location"
+    optional: true
+- assertVisible:
+    text: "Nearby|Map"
+    optional: true
+
+# 6. Test camera permission for photo upload
+- tapOn: "Profile"
+- tapOn:
+    text: "Edit profile|Photo"
+- tapOn:
+    text: "Change photo|Upload photo"
+- tapOn:
+    text: "Camera|Take photo"
+
+# 7. If camera permission dialog appears
+- tapOn:
+    text: "Allow"
+    optional: true
+
+# 8. Verify camera interface opens
+- assertVisible:
+    text: "Capture|Shutter"
+    optional: true
+
+# 9. Test permission denial
+- back
+- back
+- tapOn:
+    text: "Settings"
+- tapOn:
+    text: "Permissions"
+    optional: true
+
+# 10. Deny location permission
+- tapOn:
+    text: "Location"
+- tapOn:
+    text: "Deny|Don't allow"
+    optional: true
+
+# 11. Verify app handles denied permission gracefully
+- tapOn: "Search"
+- assertVisible:
+    text: "Listings|Search"
+    optional: true

@@ -7,6 +7,7 @@ import { Job } from 'bull';
 import { LedgerService } from '../services/ledger.service';
 import { PaymentCommandLogService } from '../services/payment-command-log.service';
 import { BookingStateMachineService } from '../../bookings/services/booking-state-machine.service';
+import { MultiCurrencyService } from '../../currency/services/multi-currency.service';
 
 describe('PaymentProcessor', () => {
   let processor: PaymentProcessor;
@@ -65,6 +66,12 @@ describe('PaymentProcessor', () => {
     markFailed: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockMultiCurrencyService = {
+    convertAmount: jest.fn().mockResolvedValue(100),
+    getSupportedCurrencies: jest.fn().mockResolvedValue(['USD', 'EUR', 'NPR']),
+    getExchangeRate: jest.fn().mockResolvedValue(1.0),
+  };
+
   const createJob = <T>(data: T, opts: Partial<Job<T>> = {}): Job<T> =>
     ({
       data,
@@ -86,6 +93,7 @@ describe('PaymentProcessor', () => {
         { provide: StripeService, useValue: mockStripe },
         { provide: LedgerService, useValue: mockLedger },
         { provide: PaymentCommandLogService, useValue: mockPaymentCommands },
+        { provide: MultiCurrencyService, useValue: mockMultiCurrencyService },
         {
           provide: BookingStateMachineService,
           useValue: bookingStateMachine,

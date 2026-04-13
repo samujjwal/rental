@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-04-10T00:00:00Z",
+  "baselines": {
+    "health_check": {
+      "p50_ms": 10,
+      "p95_ms": 50,
+      "p99_ms": 100,
+      "max_ms": 500,
+      "error_rate": 0.0
+    },
+    "listings_search": {
+      "p50_ms": 100,
+      "p95_ms": 500,
+      "p99_ms": 1000,
+      "max_ms": 3000,
+      "error_rate": 0.01
+    },
+    "listing_details": {
+      "p50_ms": 50,
+      "p95_ms": 200,
+      "p99_ms": 500,
+      "max_ms": 2000,
+      "error_rate": 0.01
+    },
+    "auth_login": {
+      "p50_ms": 150,
+      "p95_ms": 500,
+      "p99_ms": 1000,
+      "max_ms": 3000,
+      "error_rate": 0.02
+    },
+    "booking_create": {
+      "p50_ms": 300,
+      "p95_ms": 1000,
+      "p99_ms": 2000,
+      "max_ms": 5000,
+      "error_rate": 0.02
+    },
+    "payment_intent": {
+      "p50_ms": 500,
+      "p95_ms": 1500,
+      "p99_ms": 3000,
+      "max_ms": 10000,
+      "error_rate": 0.03
+    }
+  },
+  "slo": {
+    "availability": 0.999,
+    "error_budget_percent": 0.1,
+    "latency_p95_ms": 500,
+    "latency_p99_ms": 1000
+  },
+  "regression_thresholds": {
+    "p95_increase_percent": 20,
+    "p99_increase_percent": 30,
+    "error_rate_increase_percent": 50,
+    "note": "If any metric exceeds baseline by more than these percentages, flag as regression"
+  }
+}

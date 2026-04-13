@@ -193,7 +193,7 @@ test.describe('Visual Regression Tests', () => {
       
       // Test header on scroll
       await page.evaluate(() => window.scrollTo(0, 500));
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('.header--scrolled, header.scrolled', { state: 'attached' }).catch(() => {});
       await expect(header).toHaveScreenshot('header-scrolled.png');
     });
 
@@ -213,7 +213,7 @@ test.describe('Visual Regression Tests', () => {
       const menuButton = page.locator('.menu-toggle');
       if (await menuButton.isVisible()) {
         await menuButton.click();
-        await page.waitForTimeout(500);
+        await page.waitForSelector('nav.open, .nav-menu.open, [aria-expanded="true"]', { state: 'visible' }).catch(() => {});
         await expect(navigation).toHaveScreenshot('navigation-menu-open.png');
       }
     });
@@ -232,7 +232,7 @@ test.describe('Visual Regression Tests', () => {
       
       // Test search bar with results
       await searchBar.locator('input').fill('apartment');
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('.search-results, .dropdown-results', { state: 'visible', timeout: 2000 }).catch(() => {});
       
       const searchResults = page.locator('.search-results');
       if (await searchResults.isVisible()) {
@@ -254,14 +254,13 @@ test.describe('Visual Regression Tests', () => {
         
         // Test card hover state
         await firstCard.hover();
-        await page.waitForTimeout(500);
         await expect(firstCard).toHaveScreenshot('listing-card-hover.png');
         
         // Test card favorite state
         const favoriteButton = firstCard.locator('.favorite-button');
         if (await favoriteButton.isVisible()) {
           await favoriteButton.click();
-          await page.waitForTimeout(500);
+          await page.waitForSelector('.favorite-button.active, .favorited', { state: 'visible' }).catch(() => {});
           await expect(firstCard).toHaveScreenshot('listing-card-favorited.png');
         }
       }
@@ -278,7 +277,7 @@ test.describe('Visual Regression Tests', () => {
       // Test form validation states
       const submitButton = bookingForm.locator('button[type="submit"]');
       await submitButton.click();
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('.error, .field-error, [aria-invalid="true"]', { state: 'visible', timeout: 3000 }).catch(() => {});
       
       await expect(bookingForm).toHaveScreenshot('booking-form-validation.png');
       
@@ -352,7 +351,7 @@ test.describe('Visual Regression Tests', () => {
       
       for (const viewport of viewports) {
         await page.setViewportSize(viewport);
-        await page.waitForTimeout(500);
+        await page.waitForLoadState('networkidle');
         
         const viewportName = Object.keys(VIEWPORTS).find(key => 
           VIEWPORTS[key as keyof typeof VIEWPORTS].width === viewport.width
@@ -436,7 +435,7 @@ test.describe('Visual Regression Tests', () => {
       for (let i = 0; i < Math.min(navCount, 5); i++) {
         const item = navItems.nth(i);
         await item.focus();
-        await page.waitForTimeout(200);
+        await page.waitForFunction((el) => el === document.activeElement || el.matches(':focus'), item, { timeout: 2000 }).catch(() => {});
         await expect(item).toHaveScreenshot(`nav-focus-${i}.png`);
       }
     });
@@ -564,12 +563,12 @@ test.describe('Visual Regression Tests', () => {
         
         // Hover state
         await button.hover();
-        await page.waitForTimeout(200);
+        await page.waitForSelector('button:hover, .btn:hover, [data-hover="true"]', { timeout: 2000 }).catch(() => {});
         await expect(button).toHaveScreenshot(`button-hover-${i}.png`);
         
         // Active/pressed state
         await button.click();
-        await page.waitForTimeout(200);
+        await page.waitForSelector('button:active, .btn:active, button.active, .btn--active, button[aria-pressed="true"]', { timeout: 2000 }).catch(() => {});
         await expect(button).toHaveScreenshot(`button-active-${i}.png`);
       }
     });
@@ -590,7 +589,7 @@ test.describe('Visual Regression Tests', () => {
         
         // Focus state
         await input.focus();
-        await page.waitForTimeout(200);
+        await page.waitForFunction((el) => el === document.activeElement, input, { timeout: 2000 }).catch(() => {});
         await expect(input).toHaveScreenshot(`input-focus-${i}.png`);
         
         // Filled state
@@ -599,7 +598,7 @@ test.describe('Visual Regression Tests', () => {
         
         // Error state (if applicable)
         await input.blur();
-        await page.waitForTimeout(200);
+        await page.waitForSelector('.error-message, .field-error, .input--error', { state: 'visible', timeout: 2000 }).catch(() => {});
         const hasError = await input.locator('.error-message').isVisible();
         if (hasError) {
           await expect(input).toHaveScreenshot(`input-error-${i}.png`);

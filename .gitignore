@@ -20,6 +20,7 @@ dist/
 build/
 .next/
 out/
+apps/web/html/
 
 # Environment
 .expo/

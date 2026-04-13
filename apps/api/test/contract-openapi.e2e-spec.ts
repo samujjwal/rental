@@ -68,10 +68,28 @@ describe('OpenAPI Contract Tests (e2e)', () => {
     const criticalEndpoints = [
       { method: 'post', path: '/auth/register' },
       { method: 'post', path: '/auth/login' },
+      { method: 'post', path: '/auth/refresh' },
+      { method: 'post', path: '/auth/logout' },
+      { method: 'get', path: '/auth/me' },
       { method: 'get', path: '/listings' },
       { method: 'post', path: '/bookings' },
       { method: 'get', path: '/bookings/my-bookings' },
+      { method: 'get', path: '/bookings/:id' },
+      { method: 'patch', path: '/bookings/:id' },
       { method: 'get', path: '/users/profile' },
+      { method: 'get', path: '/payments' },
+      { method: 'post', path: '/payments/create-intent' },
+      { method: 'post', path: '/payments/confirm' },
+      { method: 'get', path: '/insurance/policies' },
+      { method: 'get', path: '/disputes' },
+      { method: 'get', path: '/organizations' },
+      { method: 'get', path: '/notifications' },
+      { method: 'post', path: '/messages' },
+      { method: 'get', path: '/categories' },
+      { method: 'get', path: '/reviews' },
+      { method: 'post', path: '/favorites' },
+      { method: 'get', path: '/search' },
+      { method: 'get', path: '/geo/locations' },
     ];
 
     for (const { method, path } of criticalEndpoints) {
@@ -110,29 +128,94 @@ describe('OpenAPI Contract Tests (e2e)', () => {
     });
   });
 
-  describe('Response Shape Validation', () => {
-    it('GET /health should match its OpenAPI response schema', async () => {
-      const res = await request(app.getHttpServer()).get('/health');
-
-      // Health endpoint may return 200 (healthy) or 503 (degraded) or 404 (not configured)
-      expect([200, 404, 503]).toContain(res.status);
-
-      // Response should be a valid object with status info
-      if (res.status !== 404) {
-        expect(res.body).toBeDefined();
-        expect(typeof res.body).toBe('object');
-      }
-    });
-
-    it('POST /auth/register should validate required fields per schema', async () => {
-      // Send empty body — should fail validation, proving the Schema is enforced
+  describe('Error Response Schema Validation', () => {
+    it('400 Bad Request should have consistent error structure', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/register')
         .send({});
 
       expect(res.status).toBe(400);
-      // Should return validation errors mentioning required fields
+      expect(res.body).toHaveProperty('message');
+      expect(res.body).toHaveProperty('error');
+      expect(typeof res.body.message).toBe('string');
+      expect(typeof res.body.error).toBe('string');
+    });
+
+    it('401 Unauthorized should have consistent error structure', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'wrong@test.com', password: 'wrong' });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('message');
+      expect(res.body).toHaveProperty('error');
+      expect(typeof res.body.message).toBe('string');
+    });
+
+    it('404 Not Found should have consistent error structure', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/listings/nonexistent-id-12345');
+
+      expect([404, 401]).toContain(res.status);
+
+      if (res.status === 404) {
+        expect(res.body).toHaveProperty('message');
+        expect(res.body).toHaveProperty('error');
+      }
+    });
+  });
+
+  describe('Response Shape Validation', () => {
+    it('GET /health should match its OpenAPI response schema', async () => {
+      const res = await request(app.getHttpServer()).get('/health');
+
+      expect([200, 404, 503]).toContain(res.status);
+
+      if (res.status !== 404) {
+        expect(res.body).toBeDefined();
+        expect(typeof res.body).toBe('object');
+        expect(res.body).toHaveProperty('status');
+      }
+    });
+
+    it('POST /auth/register should validate required fields per schema', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({});
+
+      expect(res.status).toBe(400);
       expect(res.body.message).toBeDefined();
+    });
+
+    it('POST /auth/register with valid data should return user object', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          email: 'contract-test@example.com',
+          username: 'contracttest',
+          password: 'Password123!',
+          firstName: 'Contract',
+          lastName: 'Test',
+        });
+
+      expect([200, 201, 409]).toContain(res.status);
+
+      if (res.status === 200 || res.status === 201) {
+        expect(res.body).toHaveProperty('user');
+        expect(res.body.user).toHaveProperty('id');
+        expect(res.body.user).toHaveProperty('email');
+        expect(res.body.user).toHaveProperty('username');
+        expect(res.body).toHaveProperty('token');
+        
+        // Field-level validation
+        expect(typeof res.body.user.id).toBe('string');
+        expect(typeof res.body.user.email).toBe('string');
+        expect(res.body.user.email).toMatch(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+        expect(typeof res.body.user.username).toBe('string');
+        expect(res.body.user.username.length).toBeGreaterThanOrEqual(3);
+        expect(typeof res.body.token).toBe('string');
+        expect(res.body.token.length).toBeGreaterThan(20);
+      }
     });
 
     it('GET /listings should return paginated array shape', async () => {
@@ -141,17 +224,43 @@ describe('OpenAPI Contract Tests (e2e)', () => {
       expect([200, 401]).toContain(res.status);
 
       if (res.status === 200) {
-        // Response should be array or paginated object
         if (Array.isArray(res.body)) {
-          // Simple array response
           expect(Array.isArray(res.body)).toBe(true);
         } else {
-          // Paginated response — should have listings, data, or items array
           expect(
             Array.isArray(res.body.listings) ||
             Array.isArray(res.body.data) ||
             Array.isArray(res.body.items),
           ).toBe(true);
+        }
+      }
+    });
+
+    it('GET /listings/:id should return single listing object', async () => {
+      const res = await request(app.getHttpServer()).get('/listings');
+
+      if (res.status === 200) {
+        const listings = Array.isArray(res.body) ? res.body : (res.body.listings || res.body.data || res.body.items || []);
+        
+        if (listings.length > 0) {
+          const listingId = listings[0].id;
+          const detailRes = await request(app.getHttpServer()).get(`/listings/${listingId}`);
+          
+          expect([200, 404]).toContain(detailRes.status);
+          
+          if (detailRes.status === 200) {
+            expect(detailRes.body).toHaveProperty('id');
+            expect(detailRes.body).toHaveProperty('title');
+            expect(detailRes.body).toHaveProperty('price');
+            expect(detailRes.body).toHaveProperty('type');
+            
+            // Field-level validation
+            expect(typeof detailRes.body.id).toBe('string');
+            expect(typeof detailRes.body.title).toBe('string');
+            expect(typeof detailRes.body.price).toBe('number');
+            expect(detailRes.body.price).toBeGreaterThan(0);
+            expect(typeof detailRes.body.type).toBe('string');
+          }
         }
       }
     });
@@ -163,6 +272,103 @@ describe('OpenAPI Contract Tests (e2e)', () => {
 
       expect(res.status).toBe(401);
       expect(res.body).toHaveProperty('message');
+    });
+
+    it('GET /bookings/my-bookings should return bookings array', async () => {
+      const res = await request(app.getHttpServer()).get('/bookings/my-bookings');
+
+      expect([200, 401]).toContain(res.status);
+
+      if (res.status === 200) {
+        const bookings = Array.isArray(res.body) ? res.body : (res.body.bookings || res.body.data || res.body.items || []);
+        
+        if (bookings.length > 0) {
+          // Field-level validation on first booking
+          const booking = bookings[0];
+          expect(booking).toHaveProperty('id');
+          expect(booking).toHaveProperty('status');
+          expect(booking).toHaveProperty('startDate');
+          expect(booking).toHaveProperty('endDate');
+          
+          expect(typeof booking.id).toBe('string');
+          expect(typeof booking.status).toBe('string');
+          expect(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED']).toContain(booking.status);
+          expect(typeof booking.startDate).toBe('string');
+          expect(typeof booking.endDate).toBe('string');
+        }
+      }
+    });
+
+    it('GET /categories should return categories array', async () => {
+      const res = await request(app.getHttpServer()).get('/categories');
+
+      expect([200, 401]).toContain(res.status);
+
+      if (res.status === 200) {
+        expect(Array.isArray(res.body) || Array.isArray(res.body.categories)).toBe(true);
+      }
+    });
+
+    it('GET /payments should return payments array', async () => {
+      const res = await request(app.getHttpServer()).get('/payments');
+
+      expect([200, 401]).toContain(res.status);
+
+      if (res.status === 200) {
+        expect(Array.isArray(res.body) || Array.isArray(res.body.payments)).toBe(true);
+      }
+    });
+
+    it('POST /payments/create-intent should validate required fields', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/payments/create-intent')
+        .send({});
+
+      expect([400, 401]).toContain(res.status);
+
+      if (res.status === 400) {
+        expect(res.body.message).toBeDefined();
+      }
+    });
+
+    it('GET /notifications should return notifications array', async () => {
+      const res = await request(app.getHttpServer()).get('/notifications');
+
+      expect([200, 401]).toContain(res.status);
+
+      if (res.status === 200) {
+        expect(Array.isArray(res.body) || Array.isArray(res.body.notifications)).toBe(true);
+      }
+    });
+
+    it('GET /organizations should return organizations array', async () => {
+      const res = await request(app.getHttpServer()).get('/organizations');
+
+      expect([200, 401]).toContain(res.status);
+
+      if (res.status === 200) {
+        expect(Array.isArray(res.body) || Array.isArray(res.body.organizations)).toBe(true);
+      }
+    });
+
+    it('GET /disputes should return disputes array', async () => {
+      const res = await request(app.getHttpServer()).get('/disputes');
+
+      expect([200, 401]).toContain(res.status);
+
+      if (res.status === 200) {
+        expect(Array.isArray(res.body) || Array.isArray(res.body.disputes)).toBe(true);
+      }
+    });
+
+    it('GET /reviews should return reviews array', async () => {
+      const res = await request(app.getHttpServer()).get('/reviews');
+
+      expect([200, 401]).toContain(res.status);
+
+      if (res.status === 200) {
+        expect(Array.isArray(res.body) || Array.isArray(res.body.reviews)).toBe(true);
+      }
     });
   });
 

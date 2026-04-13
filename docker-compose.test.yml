@@ -4,13 +4,13 @@ services:
   # MinIO S3-Compatible Storage
   minio:
     image: minio/minio:latest
-    container_name: rental-minio
+    container_name: ${MINIO_CONTAINER:-rental-minio-test}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -28,7 +28,7 @@ services:
     entrypoint: >
       /bin/sh -c "
       sleep 5 &&
-      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
       mc mb local/test-bucket || true &&
       mc policy set public local/test-bucket || true
       exit 0
@@ -37,10 +37,10 @@ services:
   # Ceph S3-Compatible Storage (alternative)
   ceph:
     image: ceph/daemon:latest
-    container_name: rental-ceph
+    container_name: ${CEPH_CONTAINER:-rental-ceph-test}
     privileged: true
     ports:
-      - "7480:7480"
+      - "${CEPH_PORT:-7480}:7480"
     environment:
       - RGW_FRONTEND_TYPE=beast
       - DEBUG=verbose
@@ -53,36 +53,46 @@ services:
   # Mailhog for email testing
   mailhog:
     image: mailhog/mailhog:latest
-    container_name: rental-mailhog
+    container_name: ${MAILHOG_CONTAINER:-rental-mailhog-test}
     ports:
-      - "1025:1025"  # SMTP port
-      - "8025:8025"  # Web UI
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"  # SMTP port
+      - "${MAILHOG_PORT:-8025}:8025"  # Web UI
     environment:
-      MH_UI_BIND_ADDR: 0.0.0.0:8025
-      MH_SMTP_BIND_ADDR: 0.0.0.0:1025
+      MH_UI_BIND_ADDR: 0.0.0.0:${MAILHOG_PORT:-8025}
+      MH_SMTP_BIND_ADDR: 0.0.0.0:${MAILHOG_SMTP_PORT:-1025}
 
   # Redis for caching and pub/sub
   redis:
     image: redis:7-alpine
-    container_name: rental-redis
+    container_name: ${REDIS_CONTAINER:-rental-redis-test}
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # PostgreSQL test database
   postgres:
-    image: postgres:15-alpine
-    container_name: rental-postgres-test
+    image: pgvector/pgvector:pg16
+    container_name: ${POSTGRES_CONTAINER:-rental-postgres-test}
     ports:
-      - "5433:5432"  # Different port to avoid conflict
+      - "${POSTGRES_PORT:-5433}:5432"  # Different port to avoid conflict
     environment:
-      POSTGRES_USER: test
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: rental_test
+      POSTGRES_USER: ${POSTGRES_USER:-test}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test}
+      POSTGRES_DB: ${POSTGRES_DB:-rental_test}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-test} -d ${POSTGRES_DB:-rental_test}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   minio_data:

@@ -1,0 +1,77 @@
+# ============================================================================
+# Search and Filter Flow — E2E Maestro Test
+# Validates search functionality and filtering by category, price, etc.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Search
+- tapOn: "Search"
+
+# 2. Verify search bar is visible
+- assertVisible:
+    id: "search-bar"
+
+# 3. Search by keyword
+- inputText: "camera"
+    id: "search-input"
+- tapOn:
+    text: "Search|Go"
+    id: "search-button"
+
+# 4. Verify search results
+- assertVisible:
+    text: "camera|Camera"
+    optional: true
+
+# 5. Clear search
+- tapOn:
+    id: "clear-search"
+    optional: true
+
+# 6. Test category filter
+- tapOn:
+    text: "Filter|Categories"
+- tapOn:
+    text: "Electronics|Vehicle|Property"
+    optional: true
+- tapOn:
+    text: "Apply|Done"
+
+# 7. Verify filtered results
+- assertVisible:
+    id: "listing-card"
+
+# 8. Test price filter
+- tapOn:
+    text: "Filter|Price"
+- tapOn:
+    text: "Price range"
+- inputText: "1000"
+    id: "min-price"
+- inputText: "5000"
+    id: "max-price"
+- tapOn:
+    text: "Apply|Done"
+
+# 9. Verify price-filtered results
+- assertVisible:
+    id: "listing-card"
+
+# 10. Clear filters
+- tapOn:
+    text: "Clear filters|Reset"
+    optional: true
+
+# 11. View listing details
+- tapOn:
+    id: "listing-card"
+    index: 0
+
+# 12. Verify listing details page
+- assertVisible:
+    text: "Description|Price|Book"

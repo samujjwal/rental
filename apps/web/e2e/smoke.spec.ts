@@ -98,7 +98,6 @@ test.describe("Smoke Tests - Critical Paths", () => {
 
 test.describe("Smoke Tests - API Endpoints", () => {
   test("auth endpoints are accessible", async ({ request }) => {
-    // Just check that the auth endpoint doesn't 404
     const response = await request.post(`${API_BASE_URL}/auth/login`, {
       data: {
         email: "test@test.com",
@@ -119,5 +118,120 @@ test.describe("Smoke Tests - API Endpoints", () => {
     
     // Should not be 404, accept success or server errors during dev
     expect(response.status()).not.toBe(404);
+  });
+
+  test("bookings endpoint is accessible", async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/bookings/my-bookings`, {
+      failOnStatusCode: false
+    });
+    
+    // Should not be 404, accept 401 (unauthorized) or server errors
+    expect(response.status()).not.toBe(404);
+    expect(response.status()).toBeLessThan(500);
+  });
+
+  test("health check endpoint is accessible", async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/health/readiness`, {
+      failOnStatusCode: false
+    });
+    
+    // Health check should be accessible
+    expect(response.status()).not.toBe(404);
+  });
+});
+
+test.describe("Smoke Tests - Database Connectivity", () => {
+  test("database is connected and responding", async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/health/readiness`, {
+      failOnStatusCode: false
+    });
+    
+    const data = await response.json();
+    
+    // Validate database connection status
+    expect(response.status()).not.toBe(404);
+    if (response.status() === 200) {
+      expect(data).toHaveProperty('dependencies');
+      expect(data.dependencies).toHaveProperty('database');
+      expect(data.dependencies.database).toBe('connected');
+    }
+  });
+});
+
+test.describe("Smoke Tests - External Service Health", () => {
+  test("Redis cache is connected", async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/health/readiness`, {
+      failOnStatusCode: false
+    });
+    
+    const data = await response.json();
+    
+    // Validate Redis connection status
+    expect(response.status()).not.toBe(404);
+    if (response.status() === 200) {
+      expect(data).toHaveProperty('dependencies');
+      expect(data.dependencies).toHaveProperty('redis');
+      expect(data.dependencies.redis).toBe('connected');
+    }
+  });
+
+  test("Stripe service is connected", async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/health/readiness`, {
+      failOnStatusCode: false
+    });
+    
+    const data = await response.json();
+    
+    // Validate Stripe connection status
+    expect(response.status()).not.toBe(404);
+    if (response.status() === 200) {
+      expect(data).toHaveProperty('dependencies');
+      expect(data.dependencies).toHaveProperty('stripe');
+      // Stripe should be connected or in test mode
+      expect(data.dependencies.stripe).toMatch(/connected|test/);
+    }
+  });
+});
+
+test.describe("Smoke Tests - Critical User Journeys", () => {
+  test("signup flow works", async ({ page }) => {
+    const email = `smoke-${Date.now()}@example.com`;
+
+    await page.goto("/auth/signup");
+
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', "Password123!");
+    await page.fill('input[name="confirmPassword"]', "Password123!");
+    await page.fill('input[name="firstName"]', "Smoke");
+    await page.fill('input[name="lastName"]', "Test");
+
+    const termsCheckbox = page.locator('input[name="acceptTerms"]');
+    if (await termsCheckbox.isVisible()) await termsCheckbox.check();
+
+    await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
+
+    // Should redirect to dashboard or show verification page
+    const url = page.url();
+    expect(
+      url.includes("/dashboard") ||
+      url.includes("/verify") ||
+      url.includes("/welcome") ||
+      url.includes("/auth/signup")
+    ).toBe(true);
+  });
+
+  test("search and browse works", async ({ page }) => {
+    await loginAs(page, testUsers.renter);
+    await page.goto("/search");
+    await page.waitForLoadState("networkidle");
+
+    const searchInput = page.locator('input[placeholder*="Search"]').first();
+    if (await searchInput.isVisible()) {
+      await searchInput.fill("camera");
+      await page.getByRole("button", { name: "Search" }).first().click();
+    }
+
+    await expect(page.locator("body")).toBeVisible();
   });
 });

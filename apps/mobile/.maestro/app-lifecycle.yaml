@@ -1,0 +1,55 @@
+# ============================================================================
+# App Lifecycle Flow — E2E Maestro Test
+# Validates app behavior during backgrounding, foregrounding, and restart.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Verify user is logged in
+- assertVisible:
+    text: "Home"
+
+# 2. Background the app
+- runScript:
+    - name: Background app
+      command: "adb shell am force-stop com.gharbatai.mobile"
+      optional: true
+
+# 3. Wait a moment
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 4. Bring app to foreground
+- launchApp:
+    clearState: false
+    clearKeychain: false
+
+# 5. Verify session is maintained (still logged in)
+- assertVisible:
+    text: "Home"
+
+# 6. Navigate to a screen
+- tapOn: "Search"
+
+# 7. Background again
+- runScript:
+    - name: Background app
+      command: "adb shell am force-stop com.gharbatai.mobile"
+      optional: true
+
+# 8. Wait longer
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# 9. Bring app to foreground
+- launchApp:
+    clearState: false
+    clearKeychain: false
+
+# 10. Verify data is refreshed
+- assertVisible:
+    text: "Search|Listings"

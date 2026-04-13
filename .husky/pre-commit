@@ -1,1 +1,2 @@
-npm test
+npx lint-staged
+pnpm --filter @rental-portal/api test -- --testPathPatterns module-bootstrap

@@ -1,18 +1,37 @@
 /**
- * Payment Integration Tests (Real Stripe)
- * Validates end-to-end payment processing with real Stripe test keys
+ * Payment Integration Tests (Real Stripe Test Mode)
+ * Validates end-to-end payment processing with real Stripe test mode (sk_test_ keys)
+ *
+ * === STRIPE TEST MODE SETUP ===
+ *
+ * These tests require Stripe test mode configuration:
+ * - STRIPE_SECRET_KEY=sk_test_... (Stripe test secret key)
+ * - STRIPE_PUBLISHABLE_KEY=pk_test_... (Stripe test publishable key)
+ * - NODE_ENV=test (to enable test environment)
+ *
+ * The tests use Stripe's official test cards:
+ * - 4242424242424242: Successful payment
+ * - 4000000000000002: Card declined
+ * - 4000000000009995: Insufficient funds
+ *
+ * See: https://stripe.com/docs/testing#cards
+ *
  * @tags @payment @integration @critical
  */
 
 import { test, expect } from '@playwright/test';
+import { loginAs, testUsers } from './helpers/test-utils';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3401';
 
-test.describe('Payment Integration — Real Stripe', () => {
-  test.skip(process.env.STRIPE_TEST_BYPASS === 'true', 'Skipped when using Stripe bypass mode');
+// Conditionally run tests only when Stripe test keys are configured
+const hasStripeTestKey = process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_');
+const describeIfStripe = hasStripeTestKey ? test.describe : test.describe.skip;
+
+describeIfStripe('Payment Integration — Real Stripe Test Mode', () => {
 
   test('Complete booking with real Stripe payment', async ({ page }) => {
-    const renter = await loginAs(page, 'renter@test.com', 'USER');
+    await loginAs(page, testUsers.renter);
     
     // Navigate to search
     await page.goto(`${BASE_URL}/search?query=apartment&location=Kathmandu`);
@@ -59,7 +78,7 @@ test.describe('Payment Integration — Real Stripe', () => {
   });
 
   test('Declined payment shows error message', async ({ page }) => {
-    await loginAs(page, 'renter@test.com', 'USER');
+    await loginAs(page, testUsers.renter);
     
     // Navigate to checkout
     await page.goto(`${BASE_URL}/checkout`);
@@ -78,7 +97,7 @@ test.describe('Payment Integration — Real Stripe', () => {
   });
 
   test('Payment timeout recovery', async ({ page }) => {
-    await loginAs(page, 'renter@test.com', 'USER');
+    await loginAs(page, testUsers.renter);
     await page.goto(`${BASE_URL}/checkout`);
     
     // Simulate timeout by aborting request
@@ -105,7 +124,7 @@ test.describe('Payment Integration — Real Stripe', () => {
   });
 
   test('Partial refund processing', async ({ page, request }) => {
-    const owner = await loginAs(page, 'owner@test.com', 'HOST');
+    await loginAs(page, testUsers.owner);
     
     // Create a test booking with API
     const booking = await request.post('http://localhost:3400/api/bookings', {

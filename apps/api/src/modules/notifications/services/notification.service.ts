@@ -430,4 +430,28 @@ export class InAppNotificationService {
       },
     });
   }
+
+  // Methods for notification retry service fallback channels
+  async sendEmail(to: string, body: string): Promise<{ messageId: string }> {
+    this.logger.log(`Sending email to ${to}: ${body.substring(0, 50)}...`);
+    // Actual email sending would be implemented here
+    return { messageId: `email-${Date.now()}` };
+  }
+
+  async sendSMS(to: string, message: string): Promise<{ messageId: string }> {
+    this.logger.log(`Sending SMS to ${to}: ${message.substring(0, 50)}...`);
+    // Actual SMS sending would be implemented here
+    return { messageId: `sms-${Date.now()}` };
+  }
+
+  async sendPush(to: string, message: string): Promise<{ messageId: string }> {
+    this.logger.log(`Sending push notification to ${to}: ${message.substring(0, 50)}...`);
+    // Actual push notification sending would be implemented here
+    return { messageId: `push-${Date.now()}` };
+  }
+
+  async trackDelivery(notificationId: string, channel: string): Promise<void> {
+    this.logger.log(`Tracking delivery for ${notificationId} via ${channel}`);
+    // Delivery tracking implementation would go here
+  }
 }

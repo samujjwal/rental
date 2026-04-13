@@ -1,0 +1,70 @@
+# ============================================================================
+# Profile Update Flow — E2E Maestro Test
+# Validates updating user profile information and password.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Profile
+- tapOn: "Profile"
+
+# 2. Tap on Edit Profile
+- tapOn:
+    text: "Edit profile|Settings"
+
+# 3. Update first name
+- tapOn:
+    id: "first-name-input"
+- inputText: "Updated"
+    id: "first-name-input"
+
+# 4. Update last name
+- tapOn:
+    id: "last-name-input"
+- inputText: "Name"
+    id: "last-name-input"
+
+# 5. Update phone
+- tapOn:
+    id: "phone-input"
+- inputText: "+9779876543210"
+    id: "phone-input"
+
+# 6. Save changes
+- tapOn:
+    text: "Save|Update"
+
+# 7. Verify success message
+- assertVisible:
+    text: "Profile updated|Saved|Success"
+
+# 8. Navigate to Settings for password change
+- tapOn: "Settings"
+
+# 9. Tap on Change Password
+- tapOn:
+    text: "Change password|Security"
+
+# 10. Enter current password
+- inputText: "Test123!@#"
+    id: "current-password"
+
+# 11. Enter new password
+- inputText: "NewSecurePass456!"
+    id: "new-password"
+
+# 12. Confirm new password
+- inputText: "NewSecurePass456!"
+    id: "confirm-password"
+
+# 13. Submit password change
+- tapOn:
+    text: "Update|Change|Save"
+
+# 14. Verify success message
+- assertVisible:
+    text: "Password changed|Success"

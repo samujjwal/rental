@@ -1,0 +1,91 @@
+name: Chaos Engineering (Weekly)
+
+on:
+  schedule:
+    - cron: '0 4 * * 0' # Run at 4 AM UTC every Sunday
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '10'
+
+jobs:
+  chaos-engineering:
+    name: Chaos Engineering Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: cd packages/database && npx prisma generate
+
+      - name: Run chaos engineering tests
+        run: pnpm --filter @rental-portal/api run test:chaos
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+          EMAIL_ENABLED: 'false'
+          JWT_SECRET: test-jwt-secret-for-ci-only-not-for-production
+
+      - name: Upload chaos engineering results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-engineering-results
+          path: apps/api/test/chaos/
+          retention-days: 30
+
+      - name: Comment chaos results on issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Chaos Engineering Test Failure',
+              body: 'Weekly chaos engineering tests failed. System resilience may be compromised. Please investigate.',
+              labels: ['chaos', 'resilience', 'test-failure']
+            });

@@ -28,6 +28,9 @@ describe('BookingCalculationService - Business Logic Validation', () => {
     booking: {
       findUnique: jest.fn(),
     },
+    user: {
+      findUnique: jest.fn(),
+    },
   };
 
   const mockPolicyEngine = {
@@ -1158,6 +1161,365 @@ describe('BookingCalculationService - Business Logic Validation', () => {
       expect(result.platformFee).toBe(0);
       expect(result.serviceFee).toBe(0);
       expect(result.total).toBe(0);
+    });
+  });
+
+  describe('Booking Modification Calculations', () => {
+    const bookingId = 'booking-1';
+
+    it('should calculate exact price increase for date extension', async () => {
+      const booking = {
+        id: bookingId,
+        listingId: 'listing-1',
+        basePrice: 700,
+        totalPrice: 735,
+        currency: 'USD',
+        startDate: new Date('2023-01-01T10:00:00Z'),
+        endDate: new Date('2023-01-08T10:00:00Z'),
+        listing: {
+          id: 'listing-1',
+          pricingMode: PricingMode.PER_DAY,
+          basePrice: 100,
+          dailyPrice: 100,
+          currency: 'USD',
+          category: { slug: 'spaces' },
+        },
+      };
+
+      const listing = booking.listing;
+
+      mockPrismaService.booking.findUnique.mockResolvedValue(booking);
+      mockPrismaService.listing.findUnique.mockResolvedValue(listing);
+      mockPolicyEngine.calculateFees.mockResolvedValue({
+        baseFees: [],
+        totalFees: 0,
+        currency: 'USD',
+      });
+
+      const newStartDate = new Date('2023-01-01T10:00:00Z');
+      const newEndDate = new Date('2023-01-10T10:00:00Z'); // Extended by 2 days
+      const result = await service.calculateModificationPrice(
+        bookingId,
+        newStartDate,
+        newEndDate,
+      );
+
+      // EXACT VALIDATION: 2 additional days × $100 = $200 increase + $10 serviceFee
+      expect(result.breakdown.dateChangeAdjustment).toBe(200);
+      expect(result.priceDifference).toBe(210); // 200 + 10 serviceFee
+      expect(result.refundDue).toBe(0); // No refund due
+      expect(result.newPrice).toBe(945); // 735 + 210
+    });
+
+    it('should calculate exact price decrease for date reduction', async () => {
+      const booking = {
+        id: bookingId,
+        listingId: 'listing-1',
+        basePrice: 700,
+        totalPrice: 735,
+        currency: 'USD',
+        startDate: new Date('2023-01-01T10:00:00Z'),
+        endDate: new Date('2023-01-08T10:00:00Z'),
+        listing: {
+          id: 'listing-1',
+          pricingMode: PricingMode.PER_DAY,
+          basePrice: 100,
+          dailyPrice: 100,
+          currency: 'USD',
+          category: { slug: 'spaces' },
+        },
+      };
+
+      const listing = booking.listing;
+
+      mockPrismaService.booking.findUnique.mockResolvedValue(booking);
+      mockPrismaService.listing.findUnique.mockResolvedValue(listing);
+      mockPolicyEngine.calculateFees.mockResolvedValue({
+        baseFees: [],
+        totalFees: 0,
+        currency: 'USD',
+      });
+
+      const newStartDate = new Date('2023-01-01T10:00:00Z');
+      const newEndDate = new Date('2023-01-05T10:00:00Z'); // Reduced by 3 days
+      const result = await service.calculateModificationPrice(
+        bookingId,
+        newStartDate,
+        newEndDate,
+      );
+
+      // EXACT VALIDATION: 3 fewer days × $100 = $300 decrease - $15 serviceFee
+      expect(result.breakdown.dateChangeAdjustment).toBe(-300);
+      expect(result.priceDifference).toBe(-315); // -300 - 15 serviceFee
+      expect(result.refundDue).toBe(315); // Refund due
+      expect(result.newPrice).toBe(420); // 735 - 315
+    });
+
+    it('should calculate add-on services pricing', async () => {
+      const booking = {
+        id: bookingId,
+        listingId: 'listing-1',
+        basePrice: 700,
+        totalPrice: 735,
+        currency: 'USD',
+        startDate: new Date('2023-01-01T10:00:00Z'),
+        endDate: new Date('2023-01-08T10:00:00Z'),
+        listing: {
+          id: 'listing-1',
+          pricingMode: PricingMode.PER_DAY,
+          basePrice: 100,
+          dailyPrice: 100,
+          currency: 'USD',
+          category: { slug: 'spaces' },
+        },
+      };
+
+      const listing = booking.listing;
+
+      mockPrismaService.booking.findUnique.mockResolvedValue(booking);
+      mockPrismaService.listing.findUnique.mockResolvedValue(listing);
+      mockPolicyEngine.calculateFees.mockResolvedValue({
+        baseFees: [],
+        totalFees: 0,
+        currency: 'USD',
+      });
+
+      const newStartDate = new Date('2023-01-01T10:00:00Z');
+      const newEndDate = new Date('2023-01-08T10:00:00Z');
+      const addOnServices = [
+        { serviceId: 'service-1', quantity: 2 }, // 2 × $50 = $100
+        { serviceId: 'service-2', quantity: 1 }, // 1 × $50 = $50
+      ];
+      const result = await service.calculateModificationPrice(
+        bookingId,
+        newStartDate,
+        newEndDate,
+        addOnServices,
+      );
+
+      // EXACT VALIDATION: Add-on services total = $150
+      expect(result.breakdown.addOnServicesTotal).toBe(150);
+      expect(result.additionalFees).toBe(15); // 10% platform fee on $150
+      expect(result.priceDifference).toBe(150); // Only add-ons, no date change
+    });
+
+    it('should handle combined date change and add-on services', async () => {
+      const booking = {
+        id: bookingId,
+        listingId: 'listing-1',
+        basePrice: 700,
+        totalPrice: 735,
+        currency: 'USD',
+        startDate: new Date('2023-01-01T10:00:00Z'),
+        endDate: new Date('2023-01-08T10:00:00Z'),
+        listing: {
+          id: 'listing-1',
+          pricingMode: PricingMode.PER_DAY,
+          basePrice: 100,
+          dailyPrice: 100,
+          currency: 'USD',
+          category: { slug: 'spaces' },
+        },
+      };
+
+      const listing = booking.listing;
+
+      mockPrismaService.booking.findUnique.mockResolvedValue(booking);
+      mockPrismaService.listing.findUnique.mockResolvedValue(listing);
+      mockPolicyEngine.calculateFees.mockResolvedValue({
+        baseFees: [],
+        totalFees: 0,
+        currency: 'USD',
+      });
+
+      const newStartDate = new Date('2023-01-01T10:00:00Z');
+      const newEndDate = new Date('2023-01-10T10:00:00Z'); // +2 days
+      const addOnServices = [{ serviceId: 'service-1', quantity: 1 }]; // +$50
+      const result = await service.calculateModificationPrice(
+        bookingId,
+        newStartDate,
+        newEndDate,
+        addOnServices,
+      );
+
+      // EXACT VALIDATION: 2 days ($200) + 1 add-on ($50) + $10 serviceFee = $260 increase
+      expect(result.breakdown.dateChangeAdjustment).toBe(200);
+      expect(result.breakdown.addOnServicesTotal).toBe(50);
+      expect(result.priceDifference).toBe(260); // 200 + 50 + 10 serviceFee
+      expect(result.newPrice).toBe(995); // 735 + 260
+    });
+  });
+
+  describe('Loyalty Program Discounts', () => {
+    const userId = 'user-1';
+    const listingId = 'listing-1';
+
+    it('should calculate bronze tier discount (0%)', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        loyaltyTier: 'bronze',
+        referralCount: 0,
+      });
+
+      const result = await service.calculateLoyaltyDiscount(
+        userId,
+        1000,
+        listingId,
+        7,
+      );
+
+      // EXACT VALIDATION: Bronze tier has 0% discount
+      expect(result.tierDiscount).toBe(0);
+      expect(result.referralBonus).toBe(0);
+      expect(result.finalPrice).toBe(1000);
+      expect(result.breakdown).toHaveLength(0);
+    });
+
+    it('should calculate silver tier discount (5%)', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        loyaltyTier: 'silver',
+        referralCount: 0,
+      });
+
+      const result = await service.calculateLoyaltyDiscount(
+        userId,
+        1000,
+        listingId,
+        7,
+      );
+
+      // EXACT VALIDATION: Silver tier has 5% discount = $50
+      expect(result.tierDiscount).toBe(50);
+      expect(result.totalDiscount).toBe(50);
+      expect(result.finalPrice).toBe(950);
+      expect(result.breakdown).toHaveLength(1);
+      expect(result.breakdown[0].type).toBe('tier');
+      expect(result.breakdown[0].percentage).toBe(5);
+    });
+
+    it('should calculate gold tier discount (10%)', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        loyaltyTier: 'gold',
+        referralCount: 0,
+      });
+
+      const result = await service.calculateLoyaltyDiscount(
+        userId,
+        1000,
+        listingId,
+        7,
+      );
+
+      // EXACT VALIDATION: Gold tier has 10% discount = $100
+      expect(result.tierDiscount).toBe(100);
+      expect(result.totalDiscount).toBe(100);
+      expect(result.finalPrice).toBe(900);
+      expect(result.breakdown[0].percentage).toBe(10);
+    });
+
+    it('should calculate platinum tier discount (15%)', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        loyaltyTier: 'platinum',
+        referralCount: 0,
+      });
+
+      const result = await service.calculateLoyaltyDiscount(
+        userId,
+        1000,
+        listingId,
+        7,
+      );
+
+      // EXACT VALIDATION: Platinum tier has 15% discount = $150
+      expect(result.tierDiscount).toBe(150);
+      expect(result.totalDiscount).toBe(150);
+      expect(result.finalPrice).toBe(850);
+      expect(result.breakdown[0].percentage).toBe(15);
+    });
+
+    it('should calculate referral bonus (2% per referral, max 10%)', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        loyaltyTier: 'bronze',
+        referralCount: 3,
+      });
+
+      const result = await service.calculateLoyaltyDiscount(
+        userId,
+        1000,
+        listingId,
+        7,
+      );
+
+      // EXACT VALIDATION: 3 referrals × 2% = 6% = $60
+      expect(result.referralBonus).toBe(60);
+      expect(result.totalDiscount).toBe(60);
+      expect(result.finalPrice).toBe(940);
+      expect(result.breakdown[0].type).toBe('referral');
+      expect(result.breakdown[0].percentage).toBe(6);
+    });
+
+    it('should cap referral bonus at 10%', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        loyaltyTier: 'bronze',
+        referralCount: 10,
+      });
+
+      const result = await service.calculateLoyaltyDiscount(
+        userId,
+        1000,
+        listingId,
+        7,
+      );
+
+      // EXACT VALIDATION: 10 referrals should be capped at 10% = $100
+      expect(result.referralBonus).toBe(100);
+      expect(result.breakdown[0].percentage).toBe(10);
+    });
+
+    it('should combine tier discount and referral bonus', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        loyaltyTier: 'gold',
+        referralCount: 2,
+      });
+
+      const result = await service.calculateLoyaltyDiscount(
+        userId,
+        1000,
+        listingId,
+        7,
+      );
+
+      // EXACT VALIDATION: 10% tier + 4% referral = 14% = $140
+      expect(result.tierDiscount).toBe(100);
+      expect(result.referralBonus).toBe(40);
+      expect(result.totalDiscount).toBe(140);
+      expect(result.finalPrice).toBe(860);
+      expect(result.breakdown).toHaveLength(2);
+    });
+
+    it('should handle user without loyalty fields (defaults to bronze)', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        // No loyaltyTier or referralCount fields
+      });
+
+      const result = await service.calculateLoyaltyDiscount(
+        userId,
+        1000,
+        listingId,
+        7,
+      );
+
+      // EXACT VALIDATION: Default to bronze tier (0%)
+      expect(result.tierDiscount).toBe(0);
+      expect(result.referralBonus).toBe(0);
+      expect(result.finalPrice).toBe(1000);
     });
   });
 });

@@ -1,0 +1,53 @@
+# ============================================================================
+# Network Error Handling Flow — E2E Maestro Test
+# Validates app behavior when network is unavailable.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first
+- runFlow: auth-login.yaml
+
+# 1. Turn off network (airplane mode)
+- runScript:
+    - name: Enable airplane mode
+      command: "adb shell settings put global airplane_mode_on 1"
+      optional: true
+
+# 2. Wait for network to disconnect
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 3. Try to navigate to a screen that requires network
+- tapOn: "Search"
+
+# 4. Verify network error message is displayed
+- assertVisible:
+    text: "No internet|Network error|Connection failed"
+    optional: true
+
+# 5. Verify offline indicator
+- assertVisible:
+    id: "offline-indicator"
+    optional: true
+
+# 6. Turn on network
+- runScript:
+    - name: Disable airplane mode
+      command: "adb shell settings put global airplane_mode_on 0"
+      optional: true
+
+# 7. Wait for network to reconnect
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# 8. Verify app recovers and loads content
+- assertVisible:
+    text: "Listings|Search"
+    optional: true
+
+# 9. Verify offline indicator is gone
+- assertNotVisible:
+    id: "offline-indicator"
+    optional: true

@@ -72,17 +72,14 @@ test.describe('Component Visual Tests', () => {
       
       // Hover state
       await primaryButton.hover();
-      await page.waitForTimeout(200);
       await expect(primaryButton).toHaveScreenshot('btn-primary-hover.png');
       
       // Active state
       await primaryButton.click();
-      await page.waitForTimeout(200);
       await expect(primaryButton).toHaveScreenshot('btn-primary-active.png');
       
       // Focus state
       await primaryButton.focus();
-      await page.waitForTimeout(200);
       await expect(primaryButton).toHaveScreenshot('btn-primary-focus.png');
       
       // Disabled state
@@ -157,16 +154,16 @@ test.describe('Component Visual Tests', () => {
       
       // Focus state
       await textInput.focus();
-      await page.waitForTimeout(200);
+      await expect(page.locator('input:focus')).toBeVisible();
       await expect(textInput).toHaveScreenshot('input-focus.png');
       
       // Filled state
       await textInput.fill('Test value');
+      await expect(textInput).toHaveValue('Test value');
       await expect(textInput).toHaveScreenshot('input-filled.png');
       
       // Hover state
       await textInput.hover();
-      await page.waitForTimeout(200);
       await expect(textInput).toHaveScreenshot('input-hover.png');
       
       // Error state
@@ -220,7 +217,7 @@ test.describe('Component Visual Tests', () => {
       
       // Trigger validation
       await submitButton.click();
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('.field-error, .error-message', { state: 'visible', timeout: 5000 });
       
       // Check validation error states
       const errorFields = form.locator('.field-error');
@@ -287,12 +284,10 @@ test.describe('Component Visual Tests', () => {
       
       // Hover state
       await card.hover();
-      await page.waitForTimeout(200);
       await expect(card).toHaveScreenshot('card-hover.png');
       
       // Active state
       await card.click();
-      await page.waitForTimeout(200);
       await expect(card).toHaveScreenshot('card-active.png');
       
       // Loading state
@@ -320,7 +315,7 @@ test.describe('Component Visual Tests', () => {
         await expect(favoriteButton).toHaveScreenshot('favorite-button-normal.png');
         
         await favoriteButton.click();
-        await page.waitForTimeout(200);
+        await page.waitForSelector('.favorite-button.active, .favorite-button--active, [data-favorited="true"]', { state: 'visible', timeout: 3000 }).catch(() => {});
         await expect(favoriteButton).toHaveScreenshot('favorite-button-active.png');
       }
       
@@ -330,7 +325,7 @@ test.describe('Component Visual Tests', () => {
         await expect(shareButton).toHaveScreenshot('share-button-normal.png');
         
         await shareButton.click();
-        await page.waitForTimeout(200);
+        await page.waitForSelector('.share-modal, .modal--share, [data-testid="share-modal"]', { state: 'visible', timeout: 3000 }).catch(() => {});
         
         const shareModal = page.locator('.share-modal');
         if (await shareModal.isVisible()) {
@@ -352,7 +347,7 @@ test.describe('Component Visual Tests', () => {
       for (let i = 0; i < Math.min(triggerCount, 3); i++) {
         const trigger = modalTriggers.nth(i);
         await trigger.click();
-        await page.waitForTimeout(500);
+        await page.waitForSelector('.modal.show, .modal--visible, [data-testid="modal"].visible', { state: 'visible', timeout: 3000 }).catch(() => {});
         
         const modal = page.locator('.modal.show');
         if (await modal.isVisible()) {
@@ -362,7 +357,7 @@ test.describe('Component Visual Tests', () => {
           const closeButton = modal.locator('.modal-close');
           if (await closeButton.isVisible()) {
             await closeButton.click();
-            await page.waitForTimeout(500);
+            await page.waitForSelector('.modal.show', { state: 'hidden', timeout: 3000 }).catch(() => {});
           }
         }
       }
@@ -374,7 +369,7 @@ test.describe('Component Visual Tests', () => {
       
       const trigger = page.locator('[data-modal-trigger]').first();
       await trigger.click();
-      await page.waitForTimeout(500);
+      await page.waitForSelector('.modal.show, .modal--visible', { state: 'visible', timeout: 3000 });
       
       const modal = page.locator('.modal.show');
       await expect(modal).toBeVisible();
@@ -410,7 +405,7 @@ test.describe('Component Visual Tests', () => {
       const closeButton = modal.locator('.modal-close');
       if (await closeButton.isVisible()) {
         await closeButton.click();
-        await page.waitForTimeout(500);
+        await page.waitForSelector('.modal.show', { state: 'hidden', timeout: 3000 }).catch(() => {});
       }
     });
 
@@ -424,7 +419,7 @@ test.describe('Component Visual Tests', () => {
         const trigger = page.locator(`[data-modal-size="${modalSize.replace('modal-', '')}"]`);
         if (await trigger.isVisible()) {
           await trigger.click();
-          await page.waitForTimeout(500);
+          await page.waitForSelector(`.${modalSize}.show, .${modalSize}--visible`, { state: 'visible', timeout: 3000 }).catch(() => {});
           
           const modal = page.locator(`.${modalSize}.show`);
           if (await modal.isVisible()) {
@@ -435,7 +430,7 @@ test.describe('Component Visual Tests', () => {
           const closeButton = modal.locator('.modal-close');
           if (await closeButton.isVisible()) {
             await closeButton.click();
-            await page.waitForTimeout(500);
+            await page.waitForSelector(`.${modalSize}.show`, { state: 'hidden', timeout: 3000 }).catch(() => {});
           }
         }
       }
@@ -487,12 +482,12 @@ test.describe('Component Visual Tests', () => {
         
         // Hover state
         await item.hover();
-        await page.waitForTimeout(200);
+        await page.waitForSelector('.nav-item:hover, .nav-item--hover, .nav-item.active', { timeout: 2000 }).catch(() => {});
         await expect(item).toHaveScreenshot(`nav-item-hover-${i}.png`);
         
         // Active state
         await item.click();
-        await page.waitForTimeout(200);
+        await page.waitForSelector('.nav-item--active, .nav-item.active, .nav-item[aria-current="page"]', { timeout: 2000 }).catch(() => {});
         await expect(item).toHaveScreenshot(`nav-item-active-${i}.png`);
       }
     });
@@ -514,7 +509,7 @@ test.describe('Component Visual Tests', () => {
           
           // Open dropdown
           await trigger.click();
-          await page.waitForTimeout(500);
+          await page.waitForSelector('.dropdown-menu.show, .dropdown-menu--visible, .dropdown-menu[aria-expanded="true"]', { state: 'visible', timeout: 3000 }).catch(() => {});
           
           const menu = dropdown.locator('.dropdown-menu.show');
           if (await menu.isVisible()) {
@@ -523,7 +518,7 @@ test.describe('Component Visual Tests', () => {
           
           // Close dropdown
           await trigger.click();
-          await page.waitForTimeout(500);
+          await page.waitForSelector('.dropdown-menu.show', { state: 'hidden', timeout: 3000 }).catch(() => {});
         }
       }
     });
@@ -574,14 +569,14 @@ test.describe('Component Visual Tests', () => {
       for (let i = 0; i < Math.min(triggerCount, 3); i++) {
         const trigger = toastTriggers.nth(i);
         await trigger.click();
-        await page.waitForTimeout(500);
+        await page.waitForSelector('.toast.show, .toast--visible, .toast-enter-active', { state: 'visible', timeout: 3000 }).catch(() => {});
         
         const toast = page.locator('.toast.show');
         if (await toast.isVisible()) {
           await expect(toast).toHaveScreenshot(`toast-${i}.png`);
           
-          // Auto-hide toast
-          await page.waitForTimeout(3000);
+          // Wait for auto-hide - use waitForSelector with state: hidden instead of fixed timeout
+          await page.waitForSelector('.toast.show', { state: 'hidden', timeout: 5000 }).catch(() => {});
         }
       }
     });
@@ -649,7 +644,7 @@ test.describe('Component Visual Tests', () => {
       if (rowCount > 0) {
         const firstRow = rows.first();
         await firstRow.hover();
-        await page.waitForTimeout(200);
+        await page.waitForSelector('tbody tr:hover, tr.table-row--hover, tr.hovered', { timeout: 2000 }).catch(() => {});
         await expect(firstRow).toHaveScreenshot('table-row-hover.png');
       }
     });
@@ -664,12 +659,14 @@ test.describe('Component Visual Tests', () => {
         
         // Test mobile view
         await page.setViewportSize({ width: 375, height: 667 });
-        await page.waitForTimeout(500);
+        await page.waitForLoadState('networkidle');
+        await page.waitForFunction(() => document.readyState === 'complete');
         await expect(responsiveTable).toHaveScreenshot('table-responsive-mobile.png');
         
         // Reset viewport
         await page.setViewportSize({ width: 1920, height: 1080 });
-        await page.waitForTimeout(500);
+        await page.waitForLoadState('networkidle');
+        await page.waitForFunction(() => document.readyState === 'complete');
       }
     });
   });
@@ -726,7 +723,11 @@ test.describe('Component Visual Tests', () => {
         
         // Trigger animation
         await element.click();
-        await page.waitForTimeout(1000);
+        // Wait for animation to complete - check for animated state or CSS transition
+        await page.waitForFunction((el) => {
+          const styles = window.getComputedStyle(el);
+          return styles.opacity === '1' || styles.visibility === 'visible' || el.classList.contains('fade-in-complete');
+        }, element, { timeout: 3000 }).catch(() => {});
         
         await expect(element).toHaveScreenshot(`fade-animation-${i}.png`);
       }
@@ -744,7 +745,12 @@ test.describe('Component Visual Tests', () => {
         
         // Trigger animation
         await element.click();
-        await page.waitForTimeout(1000);
+        // Wait for slide animation to complete
+        await page.waitForFunction((el) => {
+          const styles = window.getComputedStyle(el);
+          const rect = el.getBoundingClientRect();
+          return styles.transform !== 'none' || rect.left >= 0 || el.classList.contains('slide-complete');
+        }, element, { timeout: 3000 }).catch(() => {});
         
         await expect(element).toHaveScreenshot(`slide-animation-${i}.png`);
       }
@@ -762,7 +768,12 @@ test.describe('Component Visual Tests', () => {
         
         // Trigger animation
         await element.hover();
-        await page.waitForTimeout(1000);
+        // Wait for scale animation to complete
+        await page.waitForFunction((el) => {
+          const styles = window.getComputedStyle(el);
+          const transform = styles.transform;
+          return transform && transform.includes('scale') && !transform.includes('scale(0') && !transform.includes('scale(1, 0');
+        }, element, { timeout: 3000 }).catch(() => {});
         
         await expect(element).toHaveScreenshot(`scale-animation-${i}.png`);
       }
@@ -792,7 +803,7 @@ test.describe('Component Visual Tests', () => {
       for (let i = 0; i < Math.min(focusableCount, 3); i++) {
         const element = focusableElements.nth(i);
         await element.focus();
-        await page.waitForTimeout(200);
+        await page.waitForFunction((el) => el === document.activeElement || el.matches(':focus'), element, { timeout: 2000 }).catch(() => {});
         await expect(element).toHaveScreenshot(`focus-indicator-${i}.png`);
       }
       

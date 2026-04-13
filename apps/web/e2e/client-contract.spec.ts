@@ -183,10 +183,7 @@ test.describe("Contract: Listings", () => {
     });
     const listBody = await listRes.json();
     const items = listBody.listings ?? listBody.data ?? listBody.items ?? listBody;
-    if (!Array.isArray(items) || items.length === 0) {
-      test.skip(true, "No listings available to test detail endpoint");
-      return;
-    }
+    expect(Array.isArray(items) && items.length > 0, "At least one listing required - ensure seed data exists").toBe(true);
 
     const res = await request.get(`${API}/listings/${items[0].id}`, {
       headers: { Authorization: `Bearer ${accessToken}` },

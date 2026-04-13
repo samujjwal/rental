@@ -30,6 +30,15 @@ export function getPaymentCommandAttentionState(
     return { attentionRequired: true, reason: 'command_failed', ageMinutes };
   }
 
+  // Detect orphaned commands (missing required fields)
+  if (status === 'ENQUEUED' && payload.jobId === null) {
+    return { attentionRequired: true, reason: 'command_orphaned', ageMinutes };
+  }
+
+  if (status === 'PROCESSING' && payload.processedAt === null) {
+    return { attentionRequired: true, reason: 'command_orphaned', ageMinutes };
+  }
+
   if (status === 'PENDING' && ageMinutes >= 10) {
     return { attentionRequired: true, reason: 'command_pending_too_long', ageMinutes };
   }
@@ -40,6 +49,11 @@ export function getPaymentCommandAttentionState(
 
   if (status === 'PROCESSING' && ageMinutes >= 30) {
     return { attentionRequired: true, reason: 'command_processing_too_long', ageMinutes };
+  }
+
+  // Detect orphaned commands (commands stuck in intermediate states for too long)
+  if (ageMinutes >= 60 && (status === 'PENDING' || status === 'ENQUEUED' || status === 'PROCESSING')) {
+    return { attentionRequired: true, reason: 'command_orphaned', ageMinutes };
   }
 
   return { attentionRequired: false, reason: null, ageMinutes };
@@ -59,6 +73,45 @@ export class PaymentCommandLogService {
     requestedByRole?: string;
     metadata?: Record<string, unknown>;
   }) {
+    const idempotencyKey = input.metadata?.idempotencyKey as string;
+
+    // Check for existing command with same idempotency key
+    if (idempotencyKey) {
+      const existing = await this.prisma.auditLog.findFirst({
+        where: {
+          action: `${input.entityType}_COMMAND_REQUESTED`,
+          newValues: { contains: idempotencyKey },
+        },
+      });
+
+      if (existing) {
+        // Check if the existing command is older than 24 hours (expired)
+        const existingPayload = this.parsePayload(existing.newValues as string);
+        let existingRequestedAt: Date;
+        
+        if (existingPayload.requestedAt) {
+          existingRequestedAt = new Date(existingPayload.requestedAt);
+        } else if (existing.createdAt) {
+          existingRequestedAt = new Date(existing.createdAt);
+        } else {
+          // If we can't determine the age, assume it's recent and return existing
+          return existing;
+        }
+
+        // Validate the date
+        if (isNaN(existingRequestedAt.getTime())) {
+          return existing;
+        }
+
+        const ageHours = (Date.now() - existingRequestedAt.getTime()) / (1000 * 60 * 60);
+
+        // If older than 24 hours, allow creating a new command (key expired)
+        if (ageHours < 24) {
+          return existing;
+        }
+      }
+    }
+
     const payload: PaymentCommandPayload = {
       commandType: input.entityType,
       status: 'PENDING',
@@ -69,7 +122,7 @@ export class PaymentCommandLogService {
       reason: input.reason,
       requestedByRole: input.requestedByRole,
       metadata: input.metadata,
-      idempotencyKey: input.metadata?.idempotencyKey as string,
+      idempotencyKey: idempotencyKey || this.generateIdempotencyKey(input.entityType, input.entityId, input.userId),
     };
 
     return this.prisma.auditLog.create({
@@ -81,6 +134,11 @@ export class PaymentCommandLogService {
         newValues: JSON.stringify(payload),
       },
     });
+  }
+
+  private generateIdempotencyKey(entityType: PaymentCommandType, entityId: string, userId?: string): string {
+    const uuid = (globalThis as any).crypto.randomUUID();
+    return `${entityId}-${userId || 'user'}-${uuid}`;
   }
 
   async markEnqueued(commandId: string, data: { jobName: string; jobId?: string }) {
@@ -107,10 +165,18 @@ export class PaymentCommandLogService {
   }
 
   async markFailed(commandId: string, failureReason: string, metadata?: Record<string, unknown>) {
+    const existing = await this.prisma.auditLog.findUnique({
+      where: { id: commandId },
+      select: { newValues: true },
+    });
+    const current = this.parsePayload(existing?.newValues);
+    const retryCount = (current.retryCount || 0) + 1;
+
     return this.updateCommand(commandId, {
       status: 'FAILED',
       processedAt: new Date().toISOString(),
       failureReason,
+      retryCount,
       metadata,
     });
   }

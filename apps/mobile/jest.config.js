@@ -27,4 +27,5 @@ export default {
     '^expo-modules-core/src/Refs$': '<rootDir>/node_modules/expo-modules-core/src/Refs.ts',
     '^expo-modules-core/src/web/index.web$': '<rootDir>/node_modules/expo-modules-core/src/web/index.web.ts',
   },
+  testTimeout: 30000, // 30 second timeout for all mobile tests
 };

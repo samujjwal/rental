@@ -57,4 +57,4 @@ jobs:
           script: |
             cd /root/gharbatai-rentals
             git pull origin main
-            ./scripts/deploy-digitalocean.sh ${{ secrets.DOMAIN }}
+            sudo ./scripts/deploy/deploy.sh ${{ secrets.DOMAIN }} mvp

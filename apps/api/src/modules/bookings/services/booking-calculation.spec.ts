@@ -409,10 +409,9 @@ describe('Booking Calculation Service - Refund/Fee/Deposit Calculations', () => 
 
       // Base price: 800
       // Platform fee: 80 (10%)
-      // Service fee: 40 (5%)
-      // Total fees: 120
-      // Owner earnings: 800 - 120 = 680
-      expect(result.ownerEarnings).toBe(680);
+      // Service fee: 40 (5%) - charged to customer, not deducted from owner earnings
+      // Owner earnings: 800 - 80 = 720
+      expect(result.ownerEarnings).toBe(720);
     });
 
     it('should calculate total including fees', async () => {
@@ -437,11 +436,11 @@ describe('Booking Calculation Service - Refund/Fee/Deposit Calculations', () => 
       const result = await service.calculatePrice('listing-123', startDate, endDate);
 
       // Base price: 800
-      // Platform fee: 80
+      // Platform fee: 80 (charged to owner, not included in customer total)
       // Service fee: 40
       // Deposit: 50
-      // Total: 800 + 80 + 40 + 50 = 970
-      expect(result.total).toBe(970);
+      // Total: 800 + 40 + 50 = 890 (platform fee not charged to customer)
+      expect(result.total).toBe(890);
     });
   });
 
@@ -611,8 +610,8 @@ describe('Booking Calculation Service - Refund/Fee/Deposit Calculations', () => 
 
       const result = await service.calculatePrice('listing-123', startDate, endDate);
 
-      // Subtotal (800) + Platform Fee (80) + Service Fee (40) + Deposit (50) = 970
-      expect(result.total).toBe(970);
+      // Subtotal (800) + Service Fee (40) + Deposit (50) = 890 (platform fee charged to owner, not customer)
+      expect(result.total).toBe(890);
     });
 
     it('should calculate owner earnings after fees', async () => {
@@ -636,8 +635,8 @@ describe('Booking Calculation Service - Refund/Fee/Deposit Calculations', () => 
 
       const result = await service.calculatePrice('listing-123', startDate, endDate);
 
-      // Owner gets subtotal minus fees: 800 - 80 - 40 = 680
-      expect(result.ownerEarnings).toBe(680);
+      // Owner gets subtotal minus platform fee only: 800 - 80 = 720
+      expect(result.ownerEarnings).toBe(720);
     });
 
     it('should include duration in breakdown', async () => {

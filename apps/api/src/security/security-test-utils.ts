@@ -267,24 +267,44 @@ export class SecurityTestUtils {
 
   sanitizeUrl(url: string): string {
     // Remove potentially dangerous protocols
-    return url
+    const sanitized = url
       .replace(/javascript:/gi, '')
       .replace(/data:/gi, '')
       .replace(/vbscript:/gi, '');
+    
+    // Return empty if it was a dangerous URL
+    if (sanitized !== url) {
+      return '';
+    }
+    
+    // Only allow http:// and https://
+    if (!sanitized.startsWith('http://') && !sanitized.startsWith('https://')) {
+      return '';
+    }
+    
+    return sanitized;
   }
 
   sanitizeCss(css: string): string {
     // Remove dangerous CSS expressions and behaviors
     return css
+      .replace(/javascript:/gi, '')
       .replace(/expression\s*\(/gi, '')
-      .replace(/behavior\s*:/gi, '');
+      .replace(/behavior\s*:/gi, '')
+      .replace(/@import/gi, '')
+      .replace(/binding\s*:/gi, '');
   }
 
   sanitizeHtml(input: string): string {
     return input
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/"/g, '&quot;')
+      .replace(/alert\s*\(/gi, '')
+      .replace(/onerror\s*=/gi, '')
+      .replace(/onload\s*=/gi, '')
+      .replace(/onclick\s*=/gi, '')
+      .replace(/javascript:/gi, '');
   }
 
   sanitizeEvents(input: string): string {

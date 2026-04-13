@@ -177,7 +177,7 @@ test.describe('Mobile Responsive Tests', () => {
         // Test long press on listing for context menu
         const listingCard = page.locator('[data-testid="mobile-listing-card"]').first();
         await listingCard.touchStart();
-        await page.waitForTimeout(500); // Hold for 500ms
+        await new Promise(r => setTimeout(r, 500)); // Hold gesture duration
         await listingCard.touchEnd();
         
         // Should show context menu

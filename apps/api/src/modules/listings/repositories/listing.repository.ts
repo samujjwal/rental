@@ -73,4 +73,13 @@ export class ListingRepository {
       basePrice: convertedPrice as unknown as any,
     });
   }
+
+  async findActiveListings(): Promise<any[]> {
+    return this.prisma.listing.findMany({
+      where: {
+        status: 'ACTIVE' as any,
+      },
+      take: 100,
+    });
+  }
 }

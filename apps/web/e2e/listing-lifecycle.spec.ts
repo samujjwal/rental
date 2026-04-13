@@ -723,6 +723,18 @@ test.describe("Listing public view — renter perspective", () => {
 
 test.describe("Listing status guards — API lifecycle", () => {
   const API = process.env.E2E_API_URL ?? "http://localhost:3400/api";
+  let seed: SeedApi;
+  let testListing: SeededListing;
+
+  test.beforeAll(async ({ request }) => {
+    seed = new SeedApi(request);
+    await seed.init();
+    testListing = await seed.createListing("camera");
+  });
+
+  test.afterAll(async () => {
+    await seed.cleanup();
+  });
 
   async function ownerToken(page: import("@playwright/test").Page): Promise<string> {
     const res = await page.request.post(`${API}/auth/dev-login`, {
@@ -736,15 +748,19 @@ test.describe("Listing status guards — API lifecycle", () => {
   test("pause → pause (double pause) returns 400", async ({ page }) => {
     const token = await ownerToken(page);
 
-    // Find an AVAILABLE listing
-    const listRes = await page.request.get(`${API}/listings/my-listings`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!listRes.ok()) throw new Error("Skipped: prerequisite not met — seed data required");
-    const data = (await listRes.json()) as { data?: any[]; items?: any[] };
-    const items = data.data ?? data.items ?? (data as any);
-    const avail = Array.isArray(items) ? items.find((l: any) => l.status === "AVAILABLE") : null;
-    if (!avail) throw new Error("Skipped: prerequisite not met — seed data required");
+    // Use seeded listing or find an AVAILABLE listing
+    let avail = testListing;
+    if (!avail || avail.status !== "AVAILABLE") {
+      const listRes = await page.request.get(`${API}/listings/my-listings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(listRes.ok(), "Should be able to fetch my-listings").toBe(true);
+      const data = (await listRes.json()) as { data?: any[]; items?: any[] };
+      const items = data.data ?? data.items ?? (data as any);
+      const found = Array.isArray(items) ? items.find((l: any) => l.status === "AVAILABLE") : null;
+      expect(found, "Should have at least one AVAILABLE listing - ensure seed data is created").toBeTruthy();
+      avail = found;
+    }
 
     // Pause (should succeed)
     const pause1 = await page.request.post(`${API}/listings/${avail.id}/pause`, {
@@ -767,14 +783,19 @@ test.describe("Listing status guards — API lifecycle", () => {
   test("activate on AVAILABLE listing returns 400", async ({ page }) => {
     const token = await ownerToken(page);
 
-    const listRes = await page.request.get(`${API}/listings/my-listings`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!listRes.ok()) throw new Error("Skipped: prerequisite not met — seed data required");
-    const data = (await listRes.json()) as { data?: any[]; items?: any[] };
-    const items = data.data ?? data.items ?? (data as any);
-    const avail = Array.isArray(items) ? items.find((l: any) => l.status === "AVAILABLE") : null;
-    if (!avail) throw new Error("Skipped: prerequisite not met — seed data required");
+    // Use seeded listing or find an AVAILABLE listing
+    let avail = testListing;
+    if (!avail || avail.status !== "AVAILABLE") {
+      const listRes = await page.request.get(`${API}/listings/my-listings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(listRes.ok(), "Should be able to fetch my-listings").toBe(true);
+      const data = (await listRes.json()) as { data?: any[]; items?: any[] };
+      const items = data.data ?? data.items ?? (data as any);
+      const found = Array.isArray(items) ? items.find((l: any) => l.status === "AVAILABLE") : null;
+      expect(found, "Should have at least one AVAILABLE listing - ensure seed data is created").toBeTruthy();
+      avail = found;
+    }
 
     const res = await page.request.post(`${API}/listings/${avail.id}/activate`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -785,14 +806,19 @@ test.describe("Listing status guards — API lifecycle", () => {
   test("pause → activate cycle works correctly", async ({ page }) => {
     const token = await ownerToken(page);
 
-    const listRes = await page.request.get(`${API}/listings/my-listings`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!listRes.ok()) throw new Error("Skipped: prerequisite not met — seed data required");
-    const data = (await listRes.json()) as { data?: any[]; items?: any[] };
-    const items = data.data ?? data.items ?? (data as any);
-    const avail = Array.isArray(items) ? items.find((l: any) => l.status === "AVAILABLE") : null;
-    if (!avail) throw new Error("Skipped: prerequisite not met — seed data required");
+    // Use seeded listing or find an AVAILABLE listing
+    let avail = testListing;
+    if (!avail || avail.status !== "AVAILABLE") {
+      const listRes = await page.request.get(`${API}/listings/my-listings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(listRes.ok(), "Should be able to fetch my-listings").toBe(true);
+      const data = (await listRes.json()) as { data?: any[]; items?: any[] };
+      const items = data.data ?? data.items ?? (data as any);
+      const found = Array.isArray(items) ? items.find((l: any) => l.status === "AVAILABLE") : null;
+      expect(found, "Should have at least one AVAILABLE listing - ensure seed data is created").toBeTruthy();
+      avail = found;
+    }
 
     // Pause
     const pauseRes = await page.request.post(`${API}/listings/${avail.id}/pause`, {

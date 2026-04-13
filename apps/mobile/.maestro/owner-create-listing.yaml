@@ -1,0 +1,87 @@
+# ============================================================================
+# Owner Create Listing Flow — E2E Maestro Test
+# Validates owner creating a new listing with all required fields.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login as owner
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Profile
+- tapOn: "Profile"
+
+# 2. Tap on My Listings or Create Listing
+- tapOn:
+    text: "My Listings|Create listing|Add listing"
+    optional: true
+
+# 3. If on My Listings, tap Create
+- tapOn:
+    text: "Create|Add new|Plus"
+    optional: true
+
+# 4. Verify create listing form loads
+- assertVisible:
+    text: "Create listing|Title|Description"
+
+# 5. Enter listing title
+- inputText: "Test Camera for Rent"
+    id: "listing-title"
+
+# 6. Select category
+- tapOn:
+    text: "Category"
+- tapOn:
+    text: "Electronics|Camera|Vehicle"
+    optional: true
+
+# 7. Enter description
+- inputText: "Professional DSLR camera available for rent. Includes lens and accessories."
+    id: "listing-description"
+
+# 8. Enter price
+- inputText: "5000"
+    id: "listing-price"
+
+# 9. Select currency (if applicable)
+- tapOn:
+    text: "Currency|NPR"
+    optional: true
+
+# 10. Upload photos
+- tapOn:
+    text: "Add photo|Upload images|Camera"
+- tapOn:
+    text: "Photo Library|Gallery"
+- tapOn:
+    id: "photo-option"
+    index: 0
+- tapOn:
+    text: "Done|Select"
+    optional: true
+
+# 11. Set location
+- tapOn:
+    text: "Location|Address"
+- inputText: "Kathmandu, Nepal"
+    id: "location-input"
+
+# 12. Review and submit
+- tapOn:
+    text: "Preview|Review"
+- assertVisible:
+    text: "Test Camera for Rent"
+- tapOn:
+    text: "Submit|Publish|Create"
+
+# 13. Verify success message
+- assertVisible:
+    text: "Listing created|Published|Success"
+
+# 14. Navigate to My Listings to verify
+- tapOn:
+    text: "My Listings"
+- assertVisible:
+    text: "Test Camera for Rent"

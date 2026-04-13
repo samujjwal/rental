@@ -195,52 +195,73 @@ async function apiGet(page: Page, path: string, token: string) {
 // Domain helpers
 // ---------------------------------------------------------------------------
 
-/** Find the first approved & published listing that can be booked. */
+/** Find the first approved & published listing that can be booked.
+ * Uses seedData.listing as fallback if no listings found in API.
+ */
 async function findBookableListing(
   page: Page,
   token: string,
+  seedData: SeedData,
   options?: { requireOwnerApproval?: boolean }
-): Promise<ListingItem | null> {
+): Promise<ListingItem> {
   const res = await apiGet(page, "/listings?limit=20&status=PUBLISHED", token);
-  if (!res.ok()) return null;
-  const data = (await res.json()) as { data?: ListingItem[]; items?: ListingItem[]; listings?: ListingItem[] };
-  const items = data.data ?? data.items ?? data.listings ?? (data as unknown as ListingItem[]);
-  if (!Array.isArray(items) || items.length === 0) return null;
-  const availableItems = items.filter((item) => item.status === 'AVAILABLE');
-  const candidates = availableItems.length > 0 ? availableItems : items;
+  if (res.ok()) {
+    const data = (await res.json()) as { data?: ListingItem[]; items?: ListingItem[]; listings?: ListingItem[] };
+    const items = data.data ?? data.items ?? data.listings ?? (data as unknown as ListingItem[]);
+    if (Array.isArray(items) && items.length > 0) {
+      const availableItems = items.filter((item) => item.status === 'AVAILABLE');
+      const candidates = availableItems.length > 0 ? availableItems : items;
 
-  if (options?.requireOwnerApproval) {
-    const requestListing = candidates.find((item) => item.instantBooking !== true);
-    if (requestListing) {
-      return requestListing;
+      if (options?.requireOwnerApproval) {
+        const requestListing = candidates.find((item) => item.instantBooking !== true);
+        if (requestListing) {
+          return requestListing;
+        }
+      }
+
+      // Return the first available listing
+      if (candidates.length > 0) {
+        return candidates[0];
+      }
     }
   }
 
-  // Default to the first listing - the beforeAll/afterAll cleanup ensures no date conflicts.
-  return candidates[0];
+  // Fallback to seed data - this ensures tests never fail due to missing listings
+  return { id: seedData.listing.id, title: seedData.listing.title };
 }
 
+/** Find owner's bookable listing with seed data fallback.
+ * Never returns null - always provides a valid listing for testing.
+ */
 async function findOwnerBookableListing(
   page: Page,
   ownerToken: string,
+  seedData: SeedData,
   options?: { requireOwnerApproval?: boolean }
-): Promise<ListingItem | null> {
+): Promise<ListingItem> {
   const res = await apiGet(page, '/listings/my-listings', ownerToken);
-  if (!res.ok()) return null;
+  if (res.ok()) {
+    const data = (await res.json()) as { data?: ListingItem[]; items?: ListingItem[] };
+    const items = data.data ?? data.items ?? (data as unknown as ListingItem[]);
+    if (Array.isArray(items) && items.length > 0) {
+      const availableItems = items.filter((item) => item.status === 'AVAILABLE');
+      const candidates = availableItems.length > 0 ? availableItems : items;
 
-  const items = (await res.json()) as ListingItem[];
-  if (!Array.isArray(items) || items.length === 0) return null;
-  const availableItems = items.filter((item) => item.status === 'AVAILABLE');
-  const candidates = availableItems.length > 0 ? availableItems : items;
+      if (options?.requireOwnerApproval) {
+        const requestListing = candidates.find((item) => item.instantBooking !== true);
+        if (requestListing) {
+          return requestListing;
+        }
+      }
 
-  if (options?.requireOwnerApproval) {
-    const requestListing = candidates.find((item) => item.instantBooking !== true);
-    if (requestListing) {
-      return requestListing;
+      if (candidates.length > 0) {
+        return candidates[0];
+      }
     }
   }
 
-  return candidates[0];
+  // Fallback to seed data - ensures tests always have a valid listing
+  return { id: seedData.listing.id, title: seedData.listing.title };
 }
 
 /** Cancel all non-completed bookings visible to the given token. */
@@ -489,10 +510,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerPage.goto(BASE_URL, { waitUntil: "domcontentloaded" });
         ownerPayload = await devLogin(ownerPage, "HOST");
 
-        const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+        const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, seedData, {
           requireOwnerApproval: true,
         });
-        if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
         // Create a booking as the renter on a listing owned by owner@test.com
         const booking = await createBookingViaApi(
@@ -500,7 +520,6 @@ test.describe("Booking Lifecycle — Full E2E", () => {
           renterPayload.accessToken,
           listing.id
         ).catch(() => null);
-        if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
         // Try to access this booking as the OWNER - owner IS a participant (listing owner)
         // so they should be able to view it. Skip this test as the non-participant
@@ -530,8 +549,7 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       page,
     }) => {
       const payload = await loginAndGo(page, "USER", "/listings");
-      const listing = await findBookableListing(page, payload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, payload.accessToken, seedData);
 
       await gotoAppPath(page, `/listings/${listing.id}`);
 
@@ -546,8 +564,7 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       page,
     }) => {
       const payload = await loginAndGo(page, "USER", "/dashboard");
-      const listing = await findBookableListing(page, payload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, payload.accessToken, seedData);
 
       await gotoAppPath(page, `/listings/${listing.id}`);
 
@@ -587,10 +604,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       }
 
       // ---------- Find a bookable listing ----------
-      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, seedData, {
         requireOwnerApproval: true,
       });
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // ---------- Step 1: Renter creates booking ----------
       let booking: BookingItem;
@@ -694,17 +710,17 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, seedData, {
         requireOwnerApproval: true,
       });
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking || booking.status !== "PENDING_OWNER_APPROVAL") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(booking, "Booking should be created").toBeTruthy();
+      expect(booking?.status, "Booking should be in PENDING_OWNER_APPROVAL status").toBe("PENDING_OWNER_APPROVAL");
 
       // Log in as owner and view the booking
       await injectAuth(page, ownerPayload);
@@ -737,17 +753,17 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, seedData, {
         requireOwnerApproval: true,
       });
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking || booking.status !== "PENDING_OWNER_APPROVAL") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(booking, "Booking should be created").toBeTruthy();
+      expect(booking?.status, "Booking should be in PENDING_OWNER_APPROVAL status").toBe("PENDING_OWNER_APPROVAL");
 
       await injectAuth(page, ownerPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -785,17 +801,17 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, {
+      const listing = await findOwnerBookableListing(page, ownerPayload.accessToken, seedData, {
         requireOwnerApproval: true,
       });
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking || booking.status !== "PENDING_OWNER_APPROVAL") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(booking, "Booking should be created").toBeTruthy();
+      expect(booking?.status, "Booking should be in PENDING_OWNER_APPROVAL status").toBe("PENDING_OWNER_APPROVAL");
 
       await injectAuth(page, ownerPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -845,8 +861,7 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       // Create booking and advance to PENDING_PAYMENT
       const booking = await createBookingViaApi(
@@ -854,7 +869,6 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // If REQUEST, approve first
       if (booking.status === "PENDING_OWNER_APPROVAL") {
@@ -910,15 +924,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       if (booking.status === "PENDING_OWNER_APPROVAL") {
         await advanceBookingViaApi(page, booking.id, [
@@ -966,15 +978,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // Advance to CONFIRMED via approve + bypass-confirm (works when STRIPE_TEST_BYPASS=true)
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
@@ -1020,15 +1030,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1041,10 +1049,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         ? ((await latestRes.json()) as BookingItem)
         : booking;
 
-      if (latest.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      // Test requires CONFIRMED status
+      expect(latest.status, "Test requires CONFIRMED booking status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       // Owner starts via UI
       await injectAuth(page, ownerPayload);
@@ -1076,15 +1082,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // Advance to CONFIRMED via approve + bypass-confirm (works when STRIPE_TEST_BYPASS=true),
       // then start the rental to reach IN_PROGRESS
@@ -1102,7 +1106,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const activeData = activeRes.ok()
         ? ((await activeRes.json()) as BookingItem)
         : null;
-      if (!activeData || activeData.status !== "IN_PROGRESS") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(activeData).toBeTruthy();
+      expect(activeData?.status).toBe("IN_PROGRESS");
 
       await injectAuth(page, renterPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -1131,15 +1136,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // Try advancing all the way to AWAITING_RETURN_INSPECTION
       const steps: Array<{endpoint: string; token: string}> = [];
@@ -1160,10 +1163,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1178,10 +1179,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const awaitingData = awaitingRes.ok()
         ? ((await awaitingRes.json()) as BookingItem)
         : null;
-      if (
-        !awaitingData ||
-        awaitingData.status !== "AWAITING_RETURN_INSPECTION"
-      ) throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(awaitingData).toBeTruthy();
+      expect(awaitingData?.status).toBe("AWAITING_RETURN_INSPECTION");
 
       await injectAuth(page, ownerPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -1210,15 +1209,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const steps: Array<{endpoint: string; token: string}> = [];
       if (booking.status === "PENDING_OWNER_APPROVAL") {
@@ -1238,10 +1235,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1256,10 +1251,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const awaitingData = awaitingRes.ok()
         ? ((await awaitingRes.json()) as BookingItem)
         : null;
-      if (
-        !awaitingData ||
-        awaitingData.status !== "AWAITING_RETURN_INSPECTION"
-      ) throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(awaitingData).toBeTruthy();
+      expect(awaitingData?.status).toBe("AWAITING_RETURN_INSPECTION");
 
       // Owner approves return via UI
       await injectAuth(page, ownerPayload);
@@ -1286,15 +1279,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
       const renterPayload = await devLogin(page, "USER");
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await injectAuth(page, renterPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -1327,15 +1318,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
       const renterPayload = await devLogin(page, "USER");
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await injectAuth(page, renterPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -1384,15 +1373,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1404,10 +1391,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1440,15 +1425,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1460,10 +1443,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1503,15 +1484,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1523,10 +1502,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1571,15 +1548,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1591,10 +1566,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1647,15 +1620,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1667,10 +1638,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1712,15 +1681,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1732,10 +1699,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1751,7 +1716,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const completedData = completedRes.ok()
         ? ((await completedRes.json()) as BookingItem)
         : null;
-      if (!completedData || completedData.status !== "COMPLETED") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(completedData).toBeTruthy();
+      expect(completedData?.status).toBe("COMPLETED");
 
       await injectAuth(page, renterPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -1789,15 +1755,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1809,10 +1773,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1828,7 +1790,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const completedData = completedRes.ok()
         ? ((await completedRes.json()) as BookingItem)
         : null;
-      if (!completedData || completedData.status !== "COMPLETED") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(completedData).toBeTruthy();
+      expect(completedData?.status).toBe("COMPLETED");
 
       await injectAuth(page, renterPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -1871,15 +1834,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -1891,10 +1852,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -1910,7 +1869,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const completedData = completedRes.ok()
         ? ((await completedRes.json()) as BookingItem)
         : null;
-      if (!completedData || completedData.status !== "COMPLETED") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(completedData).toBeTruthy();
+      expect(completedData?.status).toBe("COMPLETED");
 
       await injectAuth(page, renterPayload);
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -2035,15 +1995,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const payload = await loginAndGo(page, "USER", "/dashboard");
 
       // Verify a valid booking created by the renter is accessible
-      const listing = await findBookableListing(page, payload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, payload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         payload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // Reload page freshly (simulate direct navigation)
       await page.goto(`${BASE_URL}/bookings/${booking.id}`, {
@@ -2070,15 +2028,13 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(
         page,
         renterPayload.accessToken,
         listing.id
       ).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       await advanceToConfirmedViaApi(page, booking.id, ownerPayload.accessToken, renterPayload.accessToken, booking.status);
 
@@ -2090,10 +2046,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const postApproveData = postApprove.ok()
         ? ((await postApprove.json()) as BookingItem)
         : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -2133,11 +2087,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // Advance to AWAITING_RETURN_INSPECTION
       const steps: Array<{endpoint: string; token: string}> = [];
@@ -2152,10 +2104,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await apiPost(page, `/bookings/${booking.id}/bypass-confirm`, renterPayload.accessToken, {}).catch(() => null);
       const postApprove = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const postApproveData = postApprove.ok() ? ((await postApprove.json()) as BookingItem) : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -2164,7 +2114,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const awaitingRes = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const awaitingData = awaitingRes.ok() ? ((await awaitingRes.json()) as BookingItem) : null;
-      if (!awaitingData || awaitingData.status !== "AWAITING_RETURN_INSPECTION") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(awaitingData).toBeTruthy();
+      expect(awaitingData?.status).toBe("AWAITING_RETURN_INSPECTION");
 
       // Use loginAndGo for reliable auth in the full suite — proven NEVER to fail.
       await loginAndGo(page, "HOST", `/bookings/${booking.id}`);
@@ -2191,11 +2142,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const steps: Array<{endpoint: string; token: string}> = [];
       if (booking.status === "PENDING_OWNER_APPROVAL") {
@@ -2209,10 +2158,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await apiPost(page, `/bookings/${booking.id}/bypass-confirm`, renterPayload.accessToken, {}).catch(() => null);
       const postApprove = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const postApproveData = postApprove.ok() ? ((await postApprove.json()) as BookingItem) : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -2221,7 +2168,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const awaitingRes = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const awaitingData = awaitingRes.ok() ? ((await awaitingRes.json()) as BookingItem) : null;
-      if (!awaitingData || awaitingData.status !== "AWAITING_RETURN_INSPECTION") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(awaitingData).toBeTruthy();
+      expect(awaitingData?.status).toBe("AWAITING_RETURN_INSPECTION");
 
       // Use loginAndGo for reliable auth in the full suite — proven NEVER to fail.
       await loginAndGo(page, "HOST", `/bookings/${booking.id}`);
@@ -2261,11 +2209,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const steps: Array<{endpoint: string; token: string}> = [];
       if (booking.status === "PENDING_OWNER_APPROVAL") {
@@ -2279,10 +2225,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await apiPost(page, `/bookings/${booking.id}/bypass-confirm`, renterPayload.accessToken, {}).catch(() => null);
       const postApprove = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const postApproveData = postApprove.ok() ? ((await postApprove.json()) as BookingItem) : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -2291,7 +2235,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const awaitingRes = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const awaitingData = awaitingRes.ok() ? ((await awaitingRes.json()) as BookingItem) : null;
-      if (!awaitingData || awaitingData.status !== "AWAITING_RETURN_INSPECTION") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(awaitingData).toBeTruthy();
+      expect(awaitingData?.status).toBe("AWAITING_RETURN_INSPECTION");
 
       // Reject return via API
       await advanceBookingViaApi(page, booking.id, [
@@ -2321,11 +2266,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       const steps: Array<{endpoint: string; token: string}> = [];
       if (booking.status === "PENDING_OWNER_APPROVAL") {
@@ -2339,10 +2282,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await apiPost(page, `/bookings/${booking.id}/bypass-confirm`, renterPayload.accessToken, {}).catch(() => null);
       const postApprove = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const postApproveData = postApprove.ok() ? ((await postApprove.json()) as BookingItem) : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -2351,7 +2292,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const awaitingRes = await apiGet(page, `/bookings/${booking.id}`, renterPayload.accessToken);
       const awaitingData = awaitingRes.ok() ? ((await awaitingRes.json()) as BookingItem) : null;
-      if (!awaitingData || awaitingData.status !== "AWAITING_RETURN_INSPECTION") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(awaitingData).toBeTruthy();
+      expect(awaitingData?.status).toBe("AWAITING_RETURN_INSPECTION");
 
       // Log in as renter — should NOT see Report Damage
       await injectAuth(page, renterPayload);
@@ -2384,11 +2326,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // Approve if needed to reach PENDING_PAYMENT
       if (booking.status === "PENDING_OWNER_APPROVAL") {
@@ -2399,7 +2339,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const statusRes = await apiGet(page, `/bookings/${booking.id}`, renterPayload.accessToken);
       const statusData = statusRes.ok() ? ((await statusRes.json()) as BookingItem) : null;
-      if (!statusData || statusData.status !== "PENDING_PAYMENT") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(statusData).toBeTruthy();
+      expect(statusData?.status).toBe("PENDING_PAYMENT");
 
       // Use loginAndGo for reliable auth in the full suite — proven NEVER to fail.
       await loginAndGo(page, "USER", `/bookings/${booking.id}`);
@@ -2427,11 +2368,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       if (booking.status === "PENDING_OWNER_APPROVAL") {
         await advanceBookingViaApi(page, booking.id, [
@@ -2441,7 +2380,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const statusRes = await apiGet(page, `/bookings/${booking.id}`, renterPayload.accessToken);
       const statusData = statusRes.ok() ? ((await statusRes.json()) as BookingItem) : null;
-      if (!statusData || statusData.status !== "PENDING_PAYMENT") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(statusData).toBeTruthy();
+      expect(statusData?.status).toBe("PENDING_PAYMENT");
 
       // Use loginAndGo for reliable auth in the full suite — proven NEVER to fail.
       await loginAndGo(page, "USER", `/bookings/${booking.id}`);
@@ -2474,11 +2414,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       if (booking.status === "PENDING_OWNER_APPROVAL") {
         await advanceBookingViaApi(page, booking.id, [
@@ -2488,7 +2426,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const statusRes = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const statusData = statusRes.ok() ? ((await statusRes.json()) as BookingItem) : null;
-      if (!statusData || statusData.status !== "PENDING_PAYMENT") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(statusData).toBeTruthy();
+      expect(statusData?.status).toBe("PENDING_PAYMENT");
 
       // Log in as owner — should NOT see Pay Now
       await injectAuth(page, ownerPayload);
@@ -2521,11 +2460,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       if (booking.status === "PENDING_OWNER_APPROVAL") {
         await advanceBookingViaApi(page, booking.id, [
@@ -2535,7 +2472,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const statusRes = await apiGet(page, `/bookings/${booking.id}`, renterPayload.accessToken);
       const statusData = statusRes.ok() ? ((await statusRes.json()) as BookingItem) : null;
-      if (!statusData || statusData.status !== "PENDING_PAYMENT") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(statusData).toBeTruthy();
+      expect(statusData?.status).toBe("PENDING_PAYMENT");
 
       // Use loginAndGo for reliable auth in the full suite — proven NEVER to fail.
       await loginAndGo(page, "USER", `/bookings/${booking.id}`);
@@ -2581,11 +2519,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       if (booking.status === "PENDING_OWNER_APPROVAL") {
         await advanceBookingViaApi(page, booking.id, [
@@ -2595,7 +2531,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const statusRes = await apiGet(page, `/bookings/${booking.id}`, renterPayload.accessToken);
       const statusData = statusRes.ok() ? ((await statusRes.json()) as BookingItem) : null;
-      if (!statusData || statusData.status !== "PENDING_PAYMENT") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(statusData).toBeTruthy();
+      expect(statusData?.status).toBe("PENDING_PAYMENT");
 
       // Cancel via API
       await apiPost(page, `/bookings/${booking.id}/cancel`, renterPayload.accessToken, {
@@ -2630,11 +2567,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // Advance to COMPLETED
       if (booking.status === "PENDING_OWNER_APPROVAL") {
@@ -2647,10 +2582,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await apiPost(page, `/bookings/${booking.id}/bypass-confirm`, renterPayload.accessToken, {}).catch(() => null);
       const postApprove = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const postApproveData = postApprove.ok() ? ((await postApprove.json()) as BookingItem) : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -2660,7 +2593,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const completedRes = await apiGet(page, `/bookings/${booking.id}`, renterPayload.accessToken);
       const completedData = completedRes.ok() ? ((await completedRes.json()) as BookingItem) : null;
-      if (!completedData || completedData.status !== "COMPLETED") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(completedData).toBeTruthy();
+      expect(completedData?.status).toBe("COMPLETED");
 
       // Step 1: Renter submits a review
       await injectAuth(page, renterPayload);
@@ -2720,11 +2654,9 @@ test.describe("Booking Lifecycle — Full E2E", () => {
         await ownerCtx.close();
       }
 
-      const listing = await findBookableListing(page, renterPayload.accessToken);
-      if (!listing) throw new Error("Skipped: prerequisite not met — seed data required");
+      const listing = await findBookableListing(page, renterPayload.accessToken, seedData);
 
       const booking = await createBookingViaApi(page, renterPayload.accessToken, listing.id).catch(() => null);
-      if (!booking) throw new Error("Skipped: prerequisite not met — seed data required");
 
       // Advance to COMPLETED
       if (booking.status === "PENDING_OWNER_APPROVAL") {
@@ -2737,10 +2669,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       await apiPost(page, `/bookings/${booking.id}/bypass-confirm`, renterPayload.accessToken, {}).catch(() => null);
       const postApprove = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const postApproveData = postApprove.ok() ? ((await postApprove.json()) as BookingItem) : null;
-      if (!postApproveData || postApproveData.status !== "CONFIRMED") {
-        test.skip(true, "Stripe payment bypass not available in this environment");
-        return;
-      }
+      expect(postApproveData, "Booking data should exist").toBeTruthy();
+      expect(postApproveData?.status, "Test requires CONFIRMED status - ensure STRIPE_TEST_BYPASS is enabled").toBe("CONFIRMED");
 
       await advanceBookingViaApi(page, booking.id, [
         { endpoint: "/start", token: ownerPayload.accessToken },
@@ -2750,7 +2680,8 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       const completedRes = await apiGet(page, `/bookings/${booking.id}`, ownerPayload.accessToken);
       const completedData = completedRes.ok() ? ((await completedRes.json()) as BookingItem) : null;
-      if (!completedData || completedData.status !== "COMPLETED") throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(completedData).toBeTruthy();
+      expect(completedData?.status).toBe("COMPLETED");
 
       // Owner reviews
       await injectAuth(page, ownerPayload);
@@ -2782,15 +2713,15 @@ test.describe("Booking Lifecycle — Full E2E", () => {
 
       // Find a listing and pause it first
       const listingsRes = await apiGet(page, "/listings/my-listings", ownerPayload.accessToken);
-      if (!listingsRes.ok()) throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(listingsRes.ok(), "Should be able to fetch listings - seed data required").toBe(true);
       const listingsData = (await listingsRes.json()) as { data?: ListingItem[]; items?: ListingItem[] };
       const listings = listingsData.data ?? listingsData.items ?? (listingsData as unknown as ListingItem[]);
       const available = Array.isArray(listings) ? listings.find(l => l.status === "AVAILABLE") : null;
-      if (!available) throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(available, "At least one AVAILABLE listing required - ensure seed data exists").toBeTruthy();
 
       // Pause it (should succeed since it's AVAILABLE)
       const pauseRes = await apiPost(page, `/listings/${available.id}/pause`, ownerPayload.accessToken);
-      if (!pauseRes.ok()) throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(pauseRes.ok(), "Pause operation should succeed for AVAILABLE listing").toBe(true);
 
       // Try to pause again — should fail since it's now UNAVAILABLE
       const doublePauseRes = await apiPost(page, `/listings/${available.id}/pause`, ownerPayload.accessToken);
@@ -2805,11 +2736,11 @@ test.describe("Booking Lifecycle — Full E2E", () => {
       const ownerPayload = await devLogin(page, "HOST");
 
       const listingsRes = await apiGet(page, "/listings/my-listings", ownerPayload.accessToken);
-      if (!listingsRes.ok()) throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(listingsRes.ok(), "Should be able to fetch listings - seed data required").toBe(true);
       const listingsData = (await listingsRes.json()) as { data?: ListingItem[]; items?: ListingItem[] };
       const listings = listingsData.data ?? listingsData.items ?? (listingsData as unknown as ListingItem[]);
       const available = Array.isArray(listings) ? listings.find(l => l.status === "AVAILABLE") : null;
-      if (!available) throw new Error("Skipped: prerequisite not met — seed data required");
+      expect(available, "At least one AVAILABLE listing required - ensure seed data exists").toBeTruthy();
 
       // Try to activate an already AVAILABLE listing — should fail
       const activateRes = await apiPost(page, `/listings/${available.id}/activate`, ownerPayload.accessToken);

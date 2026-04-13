@@ -59,17 +59,8 @@ export class AvailabilityService {
     const overlapping = await this.prisma.availability.findMany({
       where: {
         propertyId: dto.propertyId,
-        OR: [
-          {
-            AND: [{ startDate: { lte: dto.startDate } }, { endDate: { gte: dto.startDate } }],
-          },
-          {
-            AND: [{ startDate: { lte: dto.endDate } }, { endDate: { gte: dto.endDate } }],
-          },
-          {
-            AND: [{ startDate: { gte: dto.startDate } }, { endDate: { lte: dto.endDate } }],
-          },
-        ],
+        startDate: { lt: dto.endDate }, // Existing starts before new ends
+        endDate: { gt: dto.startDate }, // Existing ends after new starts
       },
     });
 
@@ -129,16 +120,18 @@ export class AvailabilityService {
 
     try {
       // Validate dates
-      if (parsedStartDate >= parsedEndDate) {
-        throw new BadRequestException('End date must be after start date');
+      const now = new Date();
+      // Reset time to start of day for comparison
+      now.setHours(0, 0, 0, 0);
+      const startDateStartOfDay = new Date(parsedStartDate);
+      startDateStartOfDay.setHours(0, 0, 0, 0);
+
+      if (startDateStartOfDay < now) {
+        throw new BadRequestException('Start date cannot be in the past');
       }
 
-      const now = new Date();
-      // Compare calendar dates only so selecting today is valid
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const startDay = new Date(parsedStartDate.getFullYear(), parsedStartDate.getMonth(), parsedStartDate.getDate());
-      if (startDay < todayStart) {
-        throw new BadRequestException('Start date cannot be in the past');
+      if (parsedStartDate >= parsedEndDate) {
+        throw new BadRequestException('End date must be after start date');
       }
 
       // Check availability rules
@@ -381,7 +374,7 @@ export class AvailabilityService {
             notIn: ['CANCELLED', 'REFUNDED', 'DRAFT'],
           },
           startDate: { lt: endDate },
-          endDate: { gt: startDate },
+          endDate: { gte: startDate },
         },
       });
 
@@ -467,7 +460,7 @@ export class AvailabilityService {
     const summary: Array<{ date: string; available: boolean; availableUnits: number; totalUnits: number }> = [];
     const current = new Date(startDate);
 
-    while (current < endDate) {
+    while (current <= endDate) {
       const dayStart = new Date(current);
       const dayEnd = new Date(current);
       dayEnd.setDate(dayEnd.getDate() + 1);

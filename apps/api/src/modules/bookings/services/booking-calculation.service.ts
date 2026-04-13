@@ -549,6 +549,227 @@ export class BookingCalculationService {
   }
 
   /**
+   * Calculate booking modification price adjustments
+   * Handles date changes, add-on services, and tax recalculations
+   */
+  async calculateModificationPrice(
+    bookingId: string,
+    newStartDate: Date,
+    newEndDate: Date,
+    addOnServices?: Array<{ serviceId: string; quantity: number }>,
+  ): Promise<{
+    originalPrice: number;
+    newPrice: number;
+    priceDifference: number;
+    additionalFees: number;
+    refundDue: number;
+    breakdown: {
+      dateChangeAdjustment: number;
+      addOnServicesTotal: number;
+      taxRecalculation: number;
+    };
+  }> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { listing: { include: { category: true } } },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    const listing = booking.listing;
+    const currency = listing.currency || this.config.get('platform.defaultCurrency', 'USD');
+
+    // Calculate original price
+    const originalPrice = toNumber(booking.totalPrice);
+
+    // Calculate new price with modified dates
+    const newPriceCalculation = await this.calculatePrice(
+      listing.id,
+      newStartDate,
+      newEndDate,
+    );
+    const newBasePrice = newPriceCalculation.subtotal;
+
+    // Calculate add-on services pricing
+    let addOnServicesTotal = 0;
+    if (addOnServices && addOnServices.length > 0) {
+      for (const addOn of addOnServices) {
+        // Mock add-on service pricing - in production, fetch from database
+        const servicePrice = 50; // Default add-on price
+        addOnServicesTotal += servicePrice * addOn.quantity;
+      }
+    }
+
+    // Calculate tax recalculation (simplified - in production, use actual tax rules)
+    const taxRecalculation = 0; // Tax calculated separately in production
+
+    // Calculate date change adjustment
+    const dateChangeAdjustment = newBasePrice - toNumber(booking.basePrice);
+
+    // Calculate additional fees (platform fee on add-ons)
+    const additionalFees = addOnServicesTotal * this.platformFeeRate;
+
+    // Calculate new total price
+    const newPrice = newBasePrice + addOnServicesTotal + taxRecalculation + newPriceCalculation.serviceFee + newPriceCalculation.depositAmount;
+
+    // Calculate price difference
+    const priceDifference = newPrice - originalPrice;
+
+    // Calculate refund due if price decreased
+    const refundDue = priceDifference < 0 ? Math.abs(priceDifference) : 0;
+
+    return {
+      originalPrice,
+      newPrice: roundForCurrency(newPrice, currency),
+      priceDifference: roundForCurrency(priceDifference, currency),
+      additionalFees: roundForCurrency(additionalFees, currency),
+      refundDue: roundForCurrency(refundDue, currency),
+      breakdown: {
+        dateChangeAdjustment: roundForCurrency(dateChangeAdjustment, currency),
+        addOnServicesTotal: roundForCurrency(addOnServicesTotal, currency),
+        taxRecalculation: roundForCurrency(taxRecalculation, currency),
+      },
+    };
+  }
+
+  /**
+   * Calculate loyalty program discounts
+   * Handles tier-based discounts, referral bonuses, and seasonal pricing
+   */
+  async calculateLoyaltyDiscount(
+    userId: string,
+    basePrice: number,
+    listingId: string,
+    bookingDuration: number,
+  ): Promise<{
+    totalDiscount: number;
+    tierDiscount: number;
+    referralBonus: number;
+    seasonalAdjustment: number;
+    finalPrice: number;
+    breakdown: Array<{
+      type: 'tier' | 'referral' | 'seasonal';
+      amount: number;
+      percentage: number;
+      reason: string;
+    }>;
+  }> {
+    // Fetch user loyalty tier (fields may not exist in User model yet)
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    // Use default values if loyalty fields don't exist
+    const loyaltyTier = (user as any)?.loyaltyTier || 'bronze';
+    const referralCount = (user as any)?.referralCount || 0;
+
+    const tierDiscount = this.calculateTierDiscount(loyaltyTier, basePrice);
+    const referralBonus = this.calculateReferralBonus(referralCount, basePrice);
+    const seasonalAdjustment = this.calculateSeasonalAdjustment(basePrice, listingId);
+
+    const totalDiscount = tierDiscount + referralBonus + seasonalAdjustment;
+    const finalPrice = Math.max(0, basePrice - totalDiscount);
+
+    const breakdown: Array<{
+      type: 'tier' | 'referral' | 'seasonal';
+      amount: number;
+      percentage: number;
+      reason: string;
+    }> = [];
+
+    if (tierDiscount > 0) {
+      breakdown.push({
+        type: 'tier',
+        amount: tierDiscount,
+        percentage: this.getTierDiscountPercentage(loyaltyTier),
+        reason: `${loyaltyTier.charAt(0).toUpperCase() + loyaltyTier.slice(1)} tier discount`,
+      });
+    }
+
+    if (referralBonus > 0) {
+      breakdown.push({
+        type: 'referral',
+        amount: referralBonus,
+        percentage: this.getReferralBonusPercentage(referralCount),
+        reason: `Referral bonus (${referralCount} referrals)`,
+      });
+    }
+
+    if (seasonalAdjustment > 0) {
+      breakdown.push({
+        type: 'seasonal',
+        amount: seasonalAdjustment,
+        percentage: this.getSeasonalDiscountPercentage(listingId),
+        reason: 'Seasonal promotion discount',
+      });
+    }
+
+    return {
+      totalDiscount: roundForCurrency(totalDiscount, 'USD'),
+      tierDiscount: roundForCurrency(tierDiscount, 'USD'),
+      referralBonus: roundForCurrency(referralBonus, 'USD'),
+      seasonalAdjustment: roundForCurrency(seasonalAdjustment, 'USD'),
+      finalPrice: roundForCurrency(finalPrice, 'USD'),
+      breakdown,
+    };
+  }
+
+  private calculateTierDiscount(tier: string, basePrice: number): number {
+    const tierPercentages: Record<string, number> = {
+      bronze: 0,
+      silver: 0.05, // 5%
+      gold: 0.10, // 10%
+      platinum: 0.15, // 15%
+    };
+    const percentage = tierPercentages[tier.toLowerCase()] || 0;
+    return basePrice * percentage;
+  }
+
+  private getTierDiscountPercentage(tier: string): number {
+    const tierPercentages: Record<string, number> = {
+      bronze: 0,
+      silver: 5,
+      gold: 10,
+      platinum: 15,
+    };
+    return tierPercentages[tier.toLowerCase()] || 0;
+  }
+
+  private calculateReferralBonus(referralCount: number, basePrice: number): number {
+    // 2% bonus per referral, max 10%
+    const bonusPercentage = Math.min(referralCount * 0.02, 0.10);
+    return basePrice * bonusPercentage;
+  }
+
+  private getReferralBonusPercentage(referralCount: number): number {
+    const bonusPercentage = Math.min(referralCount * 2, 10);
+    return bonusPercentage;
+  }
+
+  private calculateSeasonalAdjustment(basePrice: number, listingId: string): number {
+    // Mock seasonal adjustment - in production, fetch from seasonal pricing rules
+    const currentMonth = new Date().getMonth();
+    // December holiday season: 5% discount
+    if (currentMonth === 11) {
+      return basePrice * 0.05;
+    }
+    // Summer off-season: 10% discount
+    if (currentMonth >= 5 && currentMonth <= 7) {
+      return basePrice * 0.10;
+    }
+    return 0;
+  }
+
+  private getSeasonalDiscountPercentage(listingId: string): number {
+    const currentMonth = new Date().getMonth();
+    if (currentMonth === 11) return 5;
+    if (currentMonth >= 5 && currentMonth <= 7) return 10;
+    return 0;
+  }
+
+  /**
    * Applies the platform-level default cancellation tiers (loaded from configuration).
    * These tiers are the fallback when the PolicyEngine has no rules for this booking.
    * Override via the DEFAULT_CANCELLATION_POLICY environment variable.

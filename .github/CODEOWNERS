@@ -39,7 +39,7 @@ apps/api/src/modules/bookings/          @rental-portal/platform-team
 apps/api/Dockerfile                     @rental-portal/platform-team
 apps/web/Dockerfile                     @rental-portal/platform-team
 docker-compose*.yml                     @rental-portal/platform-team
-scripts/deploy*.sh                      @rental-portal/platform-team
+scripts/deploy/deploy.sh                @rental-portal/platform-team
 
 # ── Cross-app contract boundaries ─────────────────────────────────────────────
 packages/shared-types/                  @rental-portal/platform-team

@@ -14,13 +14,50 @@ export class ApiSchemaValidator {
     if (path.includes('/auth/login')) {
       if (!data?.email) errors.push('Email is required');
       if (!data?.password) errors.push('Password is required');
+      if (data?.email && typeof data.email !== 'string') errors.push('Email must be a string');
+      if (data?.password && typeof data.password !== 'string') errors.push('Password must be a string');
+    }
+
+    if (path.includes('/auth/register')) {
+      if (!data?.email) errors.push('Email is required');
+      if (!data?.password) errors.push('Password is required');
+      if (!data?.firstName) errors.push('First name is required');
+      if (!data?.lastName) errors.push('Last name is required');
+      if (data?.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+        errors.push('Invalid email format');
+      }
+      if (data?.password && data.password.length < 8) {
+        errors.push('Password must be at least 8 characters');
+      }
     }
 
     if (path.includes('/listings') && method === 'POST') {
       if (!data?.title) errors.push('Title is required');
+      if (!data?.description) errors.push('Description is required');
       if (data?.price !== undefined && typeof data.price !== 'number') {
         errors.push('Price must be a number');
       }
+      if (data?.price !== undefined && data.price < 0) {
+        errors.push('Price must be non-negative');
+      }
+    }
+
+    if (path.includes('/bookings') && method === 'POST') {
+      if (!data?.listingId) errors.push('Listing ID is required');
+      if (!data?.startDate) errors.push('Start date is required');
+      if (!data?.endDate) errors.push('End date is required');
+    }
+
+    if (path.includes('/reviews') && method === 'POST') {
+      if (!data?.bookingId) errors.push('Booking ID is required');
+      if (data?.rating !== undefined && (typeof data.rating !== 'number' || data.rating < 1 || data.rating > 5)) {
+        errors.push('Rating must be a number between 1 and 5');
+      }
+    }
+
+    if (path.includes('/messages') && method === 'POST') {
+      if (!data?.recipientId) errors.push('Recipient ID is required');
+      if (!data?.content) errors.push('Content is required');
     }
 
     return {

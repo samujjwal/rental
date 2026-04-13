@@ -2,9 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../app.module';
+import { RealDependencyTestEnvironment, TestContainerConfig } from './real-dependency-test-framework';
 
-describe('API Integration - Complete Coverage', () => {
+describe('API Integration - Complete Coverage (Real Dependencies)', () => {
   let app: INestApplication;
+  let testEnv: RealDependencyTestEnvironment;
   let userToken: string;
   let hostToken: string;
   let adminToken: string;
@@ -12,6 +14,27 @@ describe('API Integration - Complete Coverage', () => {
   let testBookingId: string;
 
   beforeAll(async () => {
+    // Initialize real dependency test environment
+    const config: TestContainerConfig = {
+      database: {
+        host: process.env.TEST_DB_HOST || 'localhost',
+        port: parseInt(process.env.TEST_DB_PORT || '5432'),
+        database: process.env.TEST_DB_NAME || 'rental_test',
+        user: process.env.TEST_DB_USER || 'postgres',
+        password: process.env.TEST_DB_PASSWORD || 'postgres',
+      },
+      cache: {
+        host: process.env.TEST_REDIS_HOST || 'localhost',
+        port: parseInt(process.env.TEST_REDIS_PORT || '6379'),
+        db: 15,
+      },
+      stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+    };
+
+    testEnv = new RealDependencyTestEnvironment(config);
+    await testEnv.initialize();
+
+    // Create NestJS app with real dependencies
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -19,7 +42,7 @@ describe('API Integration - Complete Coverage', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
 
-    // Setup test users
+    // Setup test users with real database
     const userResponse = await request(app.getHttpServer())
       .post('/api/auth/register')
       .send({
@@ -69,7 +92,13 @@ describe('API Integration - Complete Coverage', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    // Clean up test environment
+    if (testEnv) {
+      await testEnv.cleanup();
+    }
+    if (app) {
+      await app.close();
+    }
   });
 
   describe('Cross-Module Data Flow', () => {

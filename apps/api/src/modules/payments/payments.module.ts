@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { StripeService } from './services/stripe.service';
 import { LedgerService } from './services/ledger.service';
@@ -9,6 +9,7 @@ import { PaymentProviderFactory } from './services/payment-provider-factory.serv
 import { EscrowService } from './services/escrow.service';
 import { PaymentCommandLogService } from './services/payment-command-log.service';
 import { PaymentCommandReconciliationService } from './services/payment-command-reconciliation.service';
+// import { PaymentMethodService } from './services/payment-method.service'; // TODO: PaymentMethod model not in schema
 import { PaymentProcessor } from './processors/payment.processor';
 import { PAYMENT_PROVIDER } from './interfaces/payment-provider.interface';
 import { PaymentsController } from './controllers/payments.controller';
@@ -21,9 +22,9 @@ import { CurrencyModule } from '../currency/currency.module';
 
 @Module({
   imports: [
-    BookingsModule,
+    forwardRef(() => BookingsModule),
     EventsModule,
-    CurrencyModule,
+    forwardRef(() => CurrencyModule),
     BullModule.registerQueue({ name: 'payments' }),
   ],
   controllers: [PaymentsController, TaxController, WebhookController],
@@ -38,6 +39,7 @@ import { CurrencyModule } from '../currency/currency.module';
     EscrowService,
     PaymentCommandLogService,
     PaymentCommandReconciliationService,
+    // PaymentMethodService, // TODO: PaymentMethod model not in schema
     PaymentProcessor,
     {
       provide: PAYMENT_PROVIDER,
@@ -52,6 +54,7 @@ import { CurrencyModule } from '../currency/currency.module';
     PaymentProviderFactory,
     EscrowService,
     PaymentCommandLogService,
+    // PaymentMethodService, // TODO: PaymentMethod model not in schema
     PAYMENT_PROVIDER,
   ],
 })

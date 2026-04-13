@@ -164,6 +164,69 @@ test.describe("Visual Regression — Authenticated (Renter)", () => {
       fullPage: true,
     });
   });
+
+  test("booking details", async ({ page }) => {
+    // Navigate to first booking from bookings list
+    await page.goto(`${BASE_URL}/bookings`, { waitUntil: "networkidle" });
+    const firstBookingLink = page.locator('a[href^="/bookings/"]').first();
+    if (await firstBookingLink.isVisible()) {
+      await firstBookingLink.click();
+      await page.waitForLoadState("networkidle");
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+      const dynamicElements = page.locator(
+        '[data-testid*="date"], [data-testid*="time"], time'
+      );
+
+      await expect(page).toHaveScreenshot("booking-details.png", {
+        ...screenshotOpts,
+        mask: [dynamicElements],
+        fullPage: true,
+      });
+    }
+  });
+
+  test("messages/conversation", async ({ page }) => {
+    await page.goto(`${BASE_URL}/messages`, { waitUntil: "networkidle" });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    const firstConversation = page.locator('a[href^="/messages/"]').first();
+    if (await firstConversation.isVisible()) {
+      await firstConversation.click();
+      await page.waitForLoadState("networkidle");
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+      const dynamicElements = page.locator(
+        '[data-testid*="timestamp"], time'
+      );
+
+      await expect(page).toHaveScreenshot("messages-conversation.png", {
+        ...screenshotOpts,
+        mask: [dynamicElements],
+        fullPage: true,
+      });
+    }
+  });
+
+  test("profile settings", async ({ page }) => {
+    await page.goto(`${BASE_URL}/settings/profile`, { waitUntil: "networkidle" });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    await expect(page).toHaveScreenshot("profile-settings.png", {
+      ...screenshotOpts,
+      fullPage: true,
+    });
+  });
+
+  test("favorites", async ({ page }) => {
+    await page.goto(`${BASE_URL}/favorites`, { waitUntil: "networkidle" });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    await expect(page).toHaveScreenshot("favorites.png", {
+      ...screenshotOpts,
+      fullPage: true,
+    });
+  });
 });
 
 test.describe("Visual Regression — Authenticated (Owner)", () => {
@@ -196,6 +259,52 @@ test.describe("Visual Regression — Authenticated (Owner)", () => {
 
     await expect(page).toHaveScreenshot("owner-listings.png", {
       ...screenshotOpts,
+      fullPage: true,
+    });
+  });
+
+  test("create listing page", async ({ page }) => {
+    await page.goto(`${BASE_URL}/listings/new`, {
+      waitUntil: "networkidle",
+    });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    await expect(page).toHaveScreenshot("create-listing.png", {
+      ...screenshotOpts,
+      fullPage: true,
+    });
+  });
+
+  test("booking requests", async ({ page }) => {
+    await page.goto(`${BASE_URL}/owner/bookings`, {
+      waitUntil: "networkidle",
+    });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    const dynamicElements = page.locator(
+      '[data-testid*="date"], [data-testid*="time"], time'
+    );
+
+    await expect(page).toHaveScreenshot("owner-booking-requests.png", {
+      ...screenshotOpts,
+      mask: [dynamicElements],
+      fullPage: true,
+    });
+  });
+
+  test("earnings page", async ({ page }) => {
+    await page.goto(`${BASE_URL}/owner/earnings`, {
+      waitUntil: "networkidle",
+    });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    const dynamicElements = page.locator(
+      '[data-testid*="amount"], [data-testid*="earnings"], [data-testid*="total"]'
+    );
+
+    await expect(page).toHaveScreenshot("owner-earnings.png", {
+      ...screenshotOpts,
+      mask: [dynamicElements],
       fullPage: true,
     });
   });
@@ -251,6 +360,96 @@ test.describe("Visual Regression — Mobile Viewport", () => {
     await expect(page).toHaveScreenshot("home-page-mobile.png", {
       ...screenshotOpts,
       fullPage: true,
+    });
+  });
+
+  test("listings browse (mobile)", async ({ page }) => {
+    await page.goto(`${BASE_URL}/listings`, { waitUntil: "networkidle" });
+    await expect(page.locator('[data-testid="listing-card"], .listing-card, a[href^="/listings/"]').first())
+      .toBeVisible({ timeout: 5000 });
+
+    await expect(page).toHaveScreenshot("listings-browse-mobile.png", {
+      ...screenshotOpts,
+      fullPage: true,
+    });
+  });
+});
+
+test.describe("Visual Regression — Tablet Viewport", () => {
+  test.use({ viewport: { width: 768, height: 1024 } }); // iPad
+
+  test("login page (tablet)", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth/login`, {
+      waitUntil: "networkidle",
+    });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    await expect(page).toHaveScreenshot("login-page-tablet.png", {
+      ...screenshotOpts,
+      fullPage: true,
+    });
+  });
+
+  test("home page (tablet)", async ({ page }) => {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    await expect(page).toHaveScreenshot("home-page-tablet.png", {
+      ...screenshotOpts,
+      fullPage: true,
+    });
+  });
+
+  test("dashboard (tablet)", async ({ page }) => {
+    await devLogin(page, "USER");
+    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: "networkidle" });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    const dynamicElements = page.locator(
+      '[data-testid*="count"], [data-testid*="date"], time'
+    );
+
+    await expect(page).toHaveScreenshot("dashboard-tablet.png", {
+      ...screenshotOpts,
+      mask: [dynamicElements],
+      fullPage: true,
+    });
+  });
+});
+
+test.describe("Visual Regression — Desktop Viewport", () => {
+  test.use({ viewport: { width: 1920, height: 1080 } }); // Full HD
+
+  test("login page (desktop)", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth/login`, {
+      waitUntil: "networkidle",
+    });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    await expect(page).toHaveScreenshot("login-page-desktop.png", {
+      ...screenshotOpts,
+      fullPage: true,
+    });
+  });
+
+  test("home page (desktop)", async ({ page }) => {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+    await expect(page).toHaveScreenshot("home-page-desktop.png", {
+      ...screenshotOpts,
+      fullPage: true,
+    });
+  });
+
+  test("listings browse (desktop)", async ({ page }) => {
+    await page.goto(`${BASE_URL}/listings`, { waitUntil: "networkidle" });
+    await expect(page.locator('[data-testid="listing-card"], .listing-card, a[href^="/listings/"]').first())
+      .toBeVisible({ timeout: 5000 });
+
+    await expect(page).toHaveScreenshot("listings-browse-desktop.png", {
+      ...screenshotOpts,
+      fullPage: false,
     });
   });
 });

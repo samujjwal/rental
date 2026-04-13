@@ -147,6 +147,61 @@ describe('EnhancedInput', () => {
     const label = screen.getByText('Label');
     expect(label).toHaveClass('opacity-50');
   });
+
+  // Error state tests
+  describe('Error States', () => {
+    it('handles missing onChange gracefully', () => {
+      render(<EnhancedInput onChange={undefined as any} />);
+      const input = screen.getByRole('textbox');
+      expect(() => fireEvent.change(input, { target: { value: 'test' } })).not.toThrow();
+    });
+
+    it('handles null label gracefully', () => {
+      render(<EnhancedInput label={null as any} />);
+      const input = screen.getByRole('textbox');
+      expect(input).toBeInTheDocument();
+    });
+
+    it('handles undefined label gracefully', () => {
+      render(<EnhancedInput label={undefined as any} />);
+      const input = screen.getByRole('textbox');
+      expect(input).toBeInTheDocument();
+    });
+
+    it('handles missing id gracefully', () => {
+      render(<EnhancedInput id={undefined as any} />);
+      const input = screen.getByRole('textbox');
+      expect(input).toBeInTheDocument();
+    });
+
+    it('handles invalid type gracefully', () => {
+      render(<EnhancedInput type={("invalid-type" as any) as "text"} />);
+      const input = screen.getByRole('textbox');
+      expect(input).toBeInTheDocument();
+    });
+
+    it('handles null icon gracefully', () => {
+      render(<EnhancedInput icon={null as any} />);
+      const input = screen.getByRole('textbox');
+      expect(input).toBeInTheDocument();
+    });
+
+    it('handles error with empty string gracefully', () => {
+      render(<EnhancedInput error="" />);
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute('aria-invalid', 'false');
+    });
+
+    it('handles success with error simultaneously', () => {
+      render(<EnhancedInput error="Error" success={true} />);
+      // Error should take precedence
+      expect(screen.getByText('Error')).toBeInTheDocument();
+      expect(screen.getByRole('textbox')).toHaveClass('border-destructive');
+    });
+
+    // Note: Error handling tests removed as React 18+ logs errors in dev mode even when caught
+    // Component error handling is tested via ErrorBoundary component tests
+  });
 });
 
 describe('EnhancedTextarea', () => {
@@ -207,5 +262,48 @@ describe('EnhancedTextarea', () => {
     render(<EnhancedTextarea />);
     const textarea = screen.getByRole('textbox');
     expect(textarea).toHaveClass('resize-y');
+  });
+
+  // Error state tests
+  describe('Error States', () => {
+    it('handles missing onChange gracefully', () => {
+      render(<EnhancedTextarea onChange={undefined as any} />);
+      const textarea = screen.getByRole('textbox');
+      fireEvent.change(textarea, { target: { value: 'test' } });
+      expect(textarea).toBeInTheDocument();
+    });
+
+    it('handles null label gracefully', () => {
+      render(<EnhancedTextarea label={null as any} />);
+      const textarea = screen.getByRole('textbox');
+      expect(textarea).toBeInTheDocument();
+    });
+
+    it('handles undefined label gracefully', () => {
+      render(<EnhancedTextarea label={undefined as any} />);
+      const textarea = screen.getByRole('textbox');
+      expect(textarea).toBeInTheDocument();
+    });
+
+    it('handles missing id gracefully', () => {
+      render(<EnhancedTextarea id={undefined as any} />);
+      const textarea = screen.getByRole('textbox');
+      expect(textarea).toBeInTheDocument();
+    });
+
+    it('handles error with empty string gracefully', () => {
+      render(<EnhancedTextarea error="" />);
+      const textarea = screen.getByRole('textbox');
+      expect(textarea).toHaveAttribute('aria-invalid', 'false');
+    });
+
+    it('handles success with error simultaneously', () => {
+      render(<EnhancedTextarea error="Error" success={true} />);
+      expect(screen.getByText('Error')).toBeInTheDocument();
+      expect(screen.getByRole('textbox')).toHaveClass('border-destructive');
+    });
+
+    // Note: Error handling tests removed as React 18+ logs errors in dev mode even when caught
+    // Component error handling is tested via ErrorBoundary component tests
   });
 });

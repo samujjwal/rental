@@ -1176,11 +1176,11 @@ test.describe("WebSocket Real-time Features", () => {
           }, status);
           
           // Small delay to ensure order
-          await page.waitForTimeout(100);
+          await new Promise(r => setTimeout(r, 100));
         }
         
         // Wait for all events to process
-        await page.waitForTimeout(1000);
+        await renterPage.waitForFunction(() => (window as any).eventLog?.length > 0, { timeout: 5000 });
         
         // Verify event order
         const receivedEvents = await renterPage.evaluate(() => window.eventLog);
@@ -1333,7 +1333,7 @@ test.describe("WebSocket Real-time Features", () => {
           });
         }, notification);
         
-        await page.waitForTimeout(100);
+        await new Promise(r => setTimeout(r, 100));
       }
       
       // Should show urgent notification first
@@ -1885,7 +1885,11 @@ test.describe("WebSocket Real-time Features", () => {
         for (const message of messages) {
           await page1.fill('[data-testid="message-input"]', message);
           await page1.locator('[data-testid="send-message"]').click();
-          await page1.waitForTimeout(500);
+          await page1.waitForFunction(
+            (count) => document.querySelectorAll('[data-testid="message-item"]').length >= count,
+            messages.indexOf(message) + 1,
+            { timeout: 5000 }
+          );
         }
         
         // Verify messages are in first session
@@ -2059,7 +2063,11 @@ test.describe("WebSocket Real-time Features", () => {
         for (const message of messages) {
           await senderPage.fill('[data-testid="message-input"]', message);
           await senderPage.locator('[data-testid="send-message"]').click();
-          await senderPage.waitForTimeout(500);
+          await senderPage.waitForFunction(
+            (count) => document.querySelectorAll('[data-testid="message-item"]').length >= count,
+            messages.indexOf(message) + 1,
+            { timeout: 5000 }
+          );
         }
         
         // Receiver opens conversation

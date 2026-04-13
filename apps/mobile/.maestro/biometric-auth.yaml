@@ -1,0 +1,64 @@
+# ============================================================================
+# Biometric Authentication Flow — E2E Maestro Test
+# Validates biometric login (Face ID/Touch ID) if available.
+# ============================================================================
+appId: com.gharbatai.mobile
+
+---
+
+# Precondition: login first and enable biometric
+- runFlow: auth-login.yaml
+
+# 1. Navigate to Settings
+- tapOn: "Profile"
+- tapOn: "Settings"
+
+# 2. Enable biometric login
+- tapOn:
+    text: "Biometric|Face ID|Touch ID"
+    optional: true
+- tapOn:
+    text: "Enable|Turn on"
+    optional: true
+
+# 3. Logout
+- back
+- tapOn:
+    text: "Logout|Sign out"
+- tapOn:
+    text: "Confirm|Yes"
+
+# 4. Verify login screen
+- assertVisible:
+    text: "Sign In"
+
+# 5. Tap on biometric login option
+- tapOn:
+    text: "Face ID|Touch ID|Biometric"
+    optional: true
+
+# 6. Simulate biometric authentication
+- runScript:
+    - name: Simulate biometric success
+      command: "adb shell cmd fingerprint_state reset && adb shell cmd fingerprint_state add 1 1000 1000"
+      optional: true
+
+# 7. Verify login succeeds
+- assertVisible:
+    text: "Home"
+    optional: true
+
+# 8. Test biometric failure (if applicable)
+- logout
+- tapOn:
+    text: "Face ID|Touch ID|Biometric"
+    optional: true
+- runScript:
+    - name: Simulate biometric failure
+      command: "adb shell cmd fingerprint_state error 1000"
+      optional: true
+
+# 9. Verify fallback to password
+- assertVisible:
+    text: "Password|Sign in with password"
+    optional: true

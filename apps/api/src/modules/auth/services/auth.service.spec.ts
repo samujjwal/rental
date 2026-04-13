@@ -15,6 +15,22 @@ import { SmsService } from './sms.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getQueueToken } from '@nestjs/bull';
 
+/**
+ * COMPREHENSIVE AUTH SERVICE TESTS
+ * 
+ * Consolidated test suite covering all authentication flows:
+ * - Registration with various roles and configurations
+ * - Login with MFA (TOTP and backup codes)
+ * - Token management (refresh, logout, logoutAll)
+ * - Password management (reset, change, strength validation)
+ * - Email and phone verification
+ * - MFA enable/disable/verify flows
+ * - Account lockout and security scenarios
+ * - Session validation and management
+ * 
+ * This consolidates auth.service.spec.ts, auth.service.extended.spec.ts,
+ * and auth.service.100percent.final.spec.ts into a single comprehensive test file.
+ */
 describe('AuthService', () => {
   let service: AuthService;
   let prismaService: jest.Mocked<PrismaService>;
@@ -83,6 +99,7 @@ describe('AuthService', () => {
       $transaction: jest.fn().mockImplementation((cb) => cb(mockPrismaService)),
       user: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn().mockResolvedValue({ loginAttempts: 1, lockedUntil: null }),
         findMany: jest.fn(),
@@ -90,6 +107,8 @@ describe('AuthService', () => {
       session: {
         create: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        delete: jest.fn(),
         deleteMany: jest.fn(),
         updateMany: jest.fn(),
       },
@@ -107,12 +126,15 @@ describe('AuthService', () => {
       verifyRefreshToken: jest.fn(),
       revokeSession: jest.fn(),
       revokeAllSessions: jest.fn(),
+      generatePasswordResetToken: jest.fn(),
+      generateEmailVerificationToken: jest.fn(),
     };
 
     const mockMfaService = {
       generateSecret: jest.fn(),
       verifyToken: jest.fn(),
       generateQRCode: jest.fn(),
+      generateBackupCodes: jest.fn(),
     };
 
     const mockCacheService = {
@@ -651,6 +673,305 @@ describe('AuthService', () => {
       (prismaService.session as any).findUnique = jest.fn().mockResolvedValue(suspendedSession);
 
       await expect(service.refreshTokens('susp-token')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('role-specific registration', () => {
+    const base = {
+      email: 'user@example.com',
+      password: 'StrongPassword123!',
+      firstName: 'Test',
+    };
+
+    beforeEach(() => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (passwordService.validateStrength as jest.Mock).mockReturnValue({ isValid: true, errors: [] });
+      (passwordService.hash as jest.Mock).mockResolvedValue('hashedpassword');
+      (tokenService.generateTokens as jest.Mock).mockResolvedValue(mockTokens);
+      (tokenService.createSession as jest.Mock).mockResolvedValue(undefined);
+    });
+
+    it('should register with HOST role when role=host', async () => {
+      (prismaService.user.create as jest.Mock).mockResolvedValue({ ...mockUser, role: UserRole.HOST });
+      const result = await service.register({ ...base, email: 'host@example.com', role: 'host' } as any);
+      expect(result.user.role).toBe(UserRole.HOST);
+    });
+
+    it('should register with CUSTOMER role when role=renter', async () => {
+      (prismaService.user.create as jest.Mock).mockResolvedValue({ ...mockUser, role: UserRole.CUSTOMER });
+      const result = await service.register({ ...base, email: 'renter@example.com', role: 'renter' } as any);
+      expect(result.user.role).toBe(UserRole.CUSTOMER);
+    });
+
+    it('should handle email queue failure gracefully and still return tokens', async () => {
+      (prismaService.user.create as jest.Mock).mockResolvedValue(mockUser);
+      const emailsQueue = service['emailsQueue'] as any;
+      if (emailsQueue?.add) emailsQueue.add.mockRejectedValueOnce(new Error('Queue failed'));
+      const result = await service.register({ ...base, email: 'queuefail@example.com' });
+      expect(result.user).toBeDefined();
+      expect(result.accessToken).toBeDefined();
+    });
+  });
+
+  describe('logout', () => {
+    it('should delete session and clear cache on logout', async () => {
+      (prismaService.session.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (cacheService.del as jest.Mock).mockResolvedValue(undefined);
+      await service.logout(mockUser.id, 'refresh-token');
+      expect(prismaService.session.deleteMany).toHaveBeenCalledWith({
+        where: { userId: mockUser.id, refreshToken: 'refresh-token' },
+      });
+      expect(cacheService.del).toHaveBeenCalledWith(`user:${mockUser.id}`);
+    });
+
+    it('should delete all sessions and clear cache pattern on logoutAll', async () => {
+      (prismaService.session.deleteMany as jest.Mock).mockResolvedValue({ count: 5 });
+      (cacheService.del as jest.Mock).mockResolvedValue(undefined);
+      (cacheService.delPattern as jest.Mock).mockResolvedValue(undefined);
+      await service.logoutAll(mockUser.id);
+      expect(prismaService.session.deleteMany).toHaveBeenCalledWith({ where: { userId: mockUser.id } });
+      expect(cacheService.del).toHaveBeenCalledWith(`user:${mockUser.id}`);
+      expect(cacheService.delPattern).toHaveBeenCalledWith(`session:${mockUser.id}:*`);
+    });
+  });
+
+  describe('requestPasswordReset', () => {
+    it('should store reset token and send email for existing user', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (tokenService.generatePasswordResetToken as jest.Mock).mockResolvedValue('reset-token');
+      (prismaService.user.update as jest.Mock).mockResolvedValue(mockUser);
+      (emailService.sendPasswordResetEmail as jest.Mock).mockResolvedValue(undefined);
+      await service.requestPasswordReset(mockUser.email);
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockUser.id },
+          data: expect.objectContaining({
+            passwordResetToken: expect.any(String),
+            passwordResetExpires: expect.any(Date),
+          }),
+        }),
+      );
+      expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith(mockUser.email, 'reset-token');
+    });
+
+    it('should not throw or send email when user does not exist', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(service.requestPasswordReset('ghost@example.com')).resolves.toBeUndefined();
+      expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('should hash new password and clear reset token', async () => {
+      (prismaService.user.findFirst as jest.Mock).mockResolvedValue(mockUser);
+      (passwordService.validateStrength as jest.Mock).mockReturnValue({ isValid: true, errors: [] });
+      (passwordService.hash as jest.Mock).mockResolvedValue('new-hash');
+      (prismaService.user.update as jest.Mock).mockResolvedValue(mockUser);
+      jest.spyOn(service, 'logoutAll').mockResolvedValue(undefined);
+      await service.resetPassword('valid-token', 'NewPass123!');
+      expect(passwordService.hash).toHaveBeenCalledWith('NewPass123!');
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockUser.id },
+          data: expect.objectContaining({ passwordHash: 'new-hash', passwordResetToken: null }),
+        }),
+      );
+    });
+  });
+
+  describe('changePassword', () => {
+    it('should change password when current password is correct', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (passwordService.verify as jest.Mock).mockResolvedValue(true);
+      (prismaService.user.update as jest.Mock).mockResolvedValue(mockUser);
+
+      await service.changePassword(mockUser.id, 'OldPass!123', 'NewPass!456');
+
+      expect(passwordService.verify).toHaveBeenCalledWith('OldPass!123', mockUser.passwordHash);
+      expect(passwordService.hash).toHaveBeenCalledWith('NewPass!456');
+    });
+
+    it('should reject when current password is wrong', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (passwordService.verify as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.changePassword(mockUser.id, 'WrongPass', 'NewPass!456'),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('verifyEmail', () => {
+    it('should mark user as verified and active', async () => {
+      const pending = { ...mockUser, status: UserStatus.PENDING_VERIFICATION, emailVerificationToken: 'hash' };
+      (cacheService.get as jest.Mock).mockResolvedValue('cached');
+      (prismaService.user.findFirst as jest.Mock).mockResolvedValue(pending);
+      (prismaService.user.update as jest.Mock).mockResolvedValue({ ...pending, status: UserStatus.ACTIVE, emailVerified: true });
+      (cacheService.del as jest.Mock).mockResolvedValue(undefined);
+      const result = await service.verifyEmail('valid-token');
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: pending.id },
+          data: expect.objectContaining({ emailVerified: true, status: UserStatus.ACTIVE }),
+        }),
+      );
+      expect(result).toEqual({ message: 'Email verified successfully' });
+    });
+  });
+
+  describe('enableMfa / disableMfa', () => {
+    it('should generate and encrypt MFA secret on enableMfa', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (mfaService.generateSecret as jest.Mock).mockReturnValue({ secret: 'raw-secret', qrCode: 'qr-data' });
+      (prismaService.user.update as jest.Mock).mockResolvedValue({ ...mockUser, mfaEnabled: true });
+      const result = await service.enableMfa(mockUser.id);
+      expect(result.secret).toBe('raw-secret');
+      expect(result.qrCode).toBe('qr-data');
+    });
+
+    it('should reject if MFA is already enabled', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue({ ...mockUser, mfaEnabled: true });
+      await expect(service.enableMfa(mockUser.id)).rejects.toThrow();
+    });
+
+    it('should reject for non-existent user', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(service.enableMfa('ghost-user')).rejects.toThrow();
+    });
+
+    it('should enable MFA and return backup codes on valid TOTP', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        mfaSecret: 'enc:MFASECRET',
+        mfaEnabled: false,
+      });
+      (mfaService.verifyToken as jest.Mock).mockReturnValue(true);
+      (mfaService.generateBackupCodes as jest.Mock).mockReturnValue(
+        Array.from({ length: 10 }, (_, i) => `backup-${i}`),
+      );
+      (prismaService.user.update as jest.Mock).mockResolvedValue({ ...mockUser, mfaEnabled: true });
+
+      const result = await service.verifyAndEnableMfa(mockUser.id, '123456');
+
+      expect(result).toHaveProperty('backupCodes');
+      expect(result.backupCodes).toHaveLength(10);
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            mfaEnabled: true,
+            mfaBackupCodes: expect.any(Array),
+          }),
+        }),
+      );
+    });
+
+    it('should reject invalid TOTP code for verifyAndEnableMfa', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        mfaSecret: 'enc:MFASECRET',
+      });
+      (mfaService.verifyToken as jest.Mock).mockReturnValue(false);
+
+      await expect(
+        service.verifyAndEnableMfa(mockUser.id, '000000'),
+      ).rejects.toThrow();
+    });
+
+    it('should reject if MFA setup not initiated for verifyAndEnableMfa', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        mfaSecret: null,
+      });
+
+      await expect(
+        service.verifyAndEnableMfa(mockUser.id, '123456'),
+      ).rejects.toThrow();
+    });
+
+    it('should clear MFA fields on disableMfa with correct password', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (passwordService.verify as jest.Mock).mockResolvedValue(true);
+      (prismaService.user.update as jest.Mock).mockResolvedValue({ ...mockUser, mfaEnabled: false, mfaSecret: null });
+      await service.disableMfa(mockUser.id, 'correct-password');
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockUser.id },
+          data: expect.objectContaining({ mfaEnabled: false, mfaSecret: null }),
+        }),
+      );
+    });
+
+    it('should reject disableMfa with wrong password', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        mfaEnabled: true,
+      });
+      (passwordService.verify as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.disableMfa(mockUser.id, 'WrongPass'),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('Phone Verification', () => {
+    it('should verify phone with correct code', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        phone: '+9779800000000',
+        phoneVerified: false,
+      });
+      (cacheService.get as jest.Mock).mockResolvedValue('123456');
+      (prismaService.user.update as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        phoneVerified: true,
+      });
+
+      const result = await service.verifyPhone(mockUser.id, '123456');
+      expect(result).toHaveProperty('message');
+    });
+
+    it('should reject incorrect verification code', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        phone: '+9779800000000',
+      });
+      (cacheService.get as jest.Mock).mockResolvedValue('123456');
+
+      await expect(
+        service.verifyPhone(mockUser.id, '999999'),
+      ).rejects.toThrow();
+    });
+
+    it('should send phone verification OTP', async () => {
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        phone: '+9779800000000',
+      });
+      (cacheService.set as jest.Mock).mockResolvedValue(undefined);
+      const smsService = service['smsService'] as any;
+      smsService.sendOtp = jest.fn().mockResolvedValue(undefined);
+
+      await service.sendPhoneVerification(mockUser.id);
+
+      expect(cacheService.set).toHaveBeenCalled();
+      expect(smsService.sendOtp).toHaveBeenCalled();
+    });
+  });
+
+  describe('sendVerificationEmail', () => {
+    it('should send verification email successfully', async () => {
+      const userId = 'user-1';
+      const pendingUser = { ...mockUser, emailVerified: false };
+
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(pendingUser);
+      (prismaService.user.update as jest.Mock).mockResolvedValue(pendingUser);
+      (cacheService.set as jest.Mock).mockResolvedValue(undefined);
+      (emailService.sendEmail as jest.Mock).mockResolvedValue(undefined);
+
+      await service.sendVerificationEmail(userId);
+
+      expect(emailService.sendEmail).toHaveBeenCalled();
     });
   });
 });

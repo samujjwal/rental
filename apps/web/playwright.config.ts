@@ -49,9 +49,14 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1,
-  // Use 1 worker to avoid parallel login conflicts causing server errors
-  // Multiple workers trying to login as same user simultaneously causes DB contention
-  workers: 1,
+  // Parallel E2E: global-setup creates per-worker seed data (unique users) to
+  // avoid login contention.  CI uses 4 workers for speed; local uses 1 for
+  // easier debugging.  Set PW_WORKERS env var to override.
+  workers: process.env.PW_WORKERS
+    ? parseInt(process.env.PW_WORKERS, 10)
+    : process.env.CI
+      ? 4
+      : 1,
   reporter: [["html", { outputFolder: htmlReportOutput, open: "never" }]],
   outputDir: testOutputDir,
 
