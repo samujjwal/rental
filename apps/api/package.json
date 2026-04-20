@@ -21,7 +21,7 @@
     "test:chaos": "node ./scripts/run-jest-suite.mjs chaos"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.978.0",
+    "@aws-sdk/client-s3": "^3.980.0",
     "@aws-sdk/s3-request-presigner": "^3.978.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/bull": "^11.0.4",
