@@ -138,7 +138,7 @@ export class AvailabilityRepository {
     await this.prisma.$transaction(
       updates.map((update) =>
         this.prisma.availability.updateMany({
-          where: { propertyId: update.propertyId as string },
+          where: { propertyId: (update as any).propertyId as string },
           data: update,
         }),
       ),

@@ -93,4 +93,4 @@ fi
 
 log_section "Starting development servers"
 cd "$PROJECT_ROOT"
-turbo run dev
+pnpm turbo run dev
