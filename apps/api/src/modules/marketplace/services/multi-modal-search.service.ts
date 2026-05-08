@@ -128,66 +128,114 @@ export class MultiModalSearchService {
     offset: number,
     limit: number,
   ): Promise<{ results: any[]; total: number }> {
-    const { latitude, longitude, radiusKm = 25 } = params.location!;
-    const filters = params.filters || {};
+    try {
+      const { latitude, longitude, radiusKm = 25 } = params.location!;
+      const filters = params.filters || {};
 
-    // Build dynamic WHERE clauses
-    const conditions: string[] = [
-      `l.status = 'AVAILABLE'`,
-      `l."deletedAt" IS NULL`,
-      `l.latitude IS NOT NULL`,
-      `l.longitude IS NOT NULL`,
-    ];
-    const values: any[] = [latitude, longitude, radiusKm];
+      // Validate numeric inputs to prevent SQL injection
+      if (typeof latitude !== 'number' || typeof longitude !== 'number' || 
+          isNaN(latitude) || isNaN(longitude) ||
+          latitude < -90 || latitude > 90 || 
+          longitude < -180 || longitude > 180) {
+        throw new Error('Invalid latitude/longitude values');
+      }
 
-    if (filters.country) { conditions.push(`l.country = $${values.length + 1}`); values.push(filters.country); }
-    if (filters.city) { conditions.push(`l.city = $${values.length + 1}`); values.push(filters.city); }
-    if (filters.categoryId) { conditions.push(`l."categoryId" = $${values.length + 1}`); values.push(filters.categoryId); }
-    if (filters.minPrice) { conditions.push(`l."basePrice" >= $${values.length + 1}`); values.push(filters.minPrice); }
-    if (filters.maxPrice) { conditions.push(`l."basePrice" <= $${values.length + 1}`); values.push(filters.maxPrice); }
+      if (typeof radiusKm !== 'number' || isNaN(radiusKm) || radiusKm < 0 || radiusKm > 1000) {
+        throw new Error('Invalid radius value');
+      }
 
-    const whereClause = conditions.join(' AND ');
+      // Build dynamic WHERE clauses with parameterized queries
+      const conditions: string[] = [
+        `l.status = 'AVAILABLE'`,
+        `l."deletedAt" IS NULL`,
+        `l.latitude IS NOT NULL`,
+        `l.longitude IS NOT NULL`,
+      ];
+      const values: any[] = [latitude, longitude, radiusKm];
 
-    // Haversine formula in SQL
-    const distanceExpr = `
-      (6371 * acos(
-        LEAST(1.0, GREATEST(-1.0,
-          cos(radians($1)) * cos(radians(l.latitude)) *
-          cos(radians(l.longitude) - radians($2)) +
-          sin(radians($1)) * sin(radians(l.latitude))
-        ))
-      ))`;
+      if (filters.country) { 
+        if (typeof filters.country !== 'string' || filters.country.length > 100) {
+          throw new Error('Invalid country filter');
+        }
+        conditions.push(`l.country = $${values.length + 1}`); 
+        values.push(filters.country); 
+      }
+      if (filters.city) { 
+        if (typeof filters.city !== 'string' || filters.city.length > 100) {
+          throw new Error('Invalid city filter');
+        }
+        conditions.push(`l.city = $${values.length + 1}`); 
+        values.push(filters.city); 
+      }
+      if (filters.categoryId) { 
+        if (typeof filters.categoryId !== 'string' || filters.categoryId.length > 50) {
+          throw new Error('Invalid categoryId filter');
+        }
+        conditions.push(`l."categoryId" = $${values.length + 1}`); 
+        values.push(filters.categoryId); 
+      }
+      if (filters.minPrice) { 
+        if (typeof filters.minPrice !== 'number' || filters.minPrice < 0) {
+          throw new Error('Invalid minPrice filter');
+        }
+        conditions.push(`l."basePrice" >= $${values.length + 1}`); 
+        values.push(filters.minPrice); 
+      }
+      if (filters.maxPrice) { 
+        if (typeof filters.maxPrice !== 'number' || filters.maxPrice < 0) {
+          throw new Error('Invalid maxPrice filter');
+        }
+        conditions.push(`l."basePrice" <= $${values.length + 1}`); 
+        values.push(filters.maxPrice); 
+      }
 
-    const countQuery = `
-      SELECT COUNT(*)::int as total
-      FROM "Listing" l
-      WHERE ${whereClause}
-        AND ${distanceExpr} <= $3
-    `;
+      const whereClause = conditions.join(' AND ');
 
-    const dataQuery = `
-      SELECT l.id, l.title, l.description, l."basePrice", l.city, l.country,
-             l.latitude, l.longitude, l."averageRating", l.featured, l."viewCount",
-             l."categoryId", l."ownerId",
-             ${distanceExpr} AS distance_km
-      FROM "Listing" l
-      WHERE ${whereClause}
-        AND ${distanceExpr} <= $3
-      ORDER BY distance_km ASC, l.featured DESC, l."averageRating" DESC
-      LIMIT $${values.length + 1} OFFSET $${values.length + 2}
-    `;
+      // Haversine formula in SQL
+      const distanceExpr = `
+        (6371 * acos(
+          LEAST(1.0, GREATEST(-1.0,
+            cos(radians($1)) * cos(radians(l.latitude)) *
+            cos(radians(l.longitude) - radians($2)) +
+            sin(radians($1)) * sin(radians(l.latitude))
+          ))
+        ))`;
 
-    values.push(limit, offset);
+      const countQuery = `
+        SELECT COUNT(*)::int as total
+        FROM "Listing" l
+        WHERE ${whereClause}
+          AND ${distanceExpr} <= $3
+      `;
 
-    const [countResult, rows] = await Promise.all([
-      this.prisma.$queryRawUnsafe<[{ total: number }]>(countQuery, ...values.slice(0, -2)),
-      this.prisma.$queryRawUnsafe<any[]>(dataQuery, ...values),
-    ]);
+      const dataQuery = `
+        SELECT l.id, l.title, l.description, l."basePrice", l.city, l.country,
+               l.latitude, l.longitude, l."averageRating", l.featured, l."viewCount",
+               l."categoryId", l."ownerId",
+               ${distanceExpr} AS distance_km
+        FROM "Listing" l
+        WHERE ${whereClause}
+          AND ${distanceExpr} <= $3
+        ORDER BY distance_km ASC, l.featured DESC, l."averageRating" DESC
+        LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+      `;
 
-    return {
-      results: rows.map((r) => ({ ...r, distanceKm: Math.round(r.distance_km * 100) / 100 })),
-      total: countResult[0]?.total ?? 0,
-    };
+      values.push(limit, offset);
+
+      const [countResult, rows] = await Promise.all([
+        this.prisma.$queryRawUnsafe<[{ total: number }]>(countQuery, ...values.slice(0, -2)),
+        this.prisma.$queryRawUnsafe<any[]>(dataQuery, ...values),
+      ]);
+
+      return {
+        results: rows.map((r) => ({ ...r, distanceKm: Math.round(r.distance_km * 100) / 100 })),
+        total: countResult[0]?.total ?? 0,
+      };
+    } catch (error) {
+      this.logger.error('Geo-spatial search failed, falling back to filter search', error);
+      // Fallback to standard Prisma filter search
+      return this.filterSearch(params, offset, limit);
+    }
   }
 
   // ── Full-text search via Postgres tsvector ──────────────────────
@@ -197,66 +245,107 @@ export class MultiModalSearchService {
     offset: number,
     limit: number,
   ): Promise<{ results: any[]; total: number }> {
-    const query = params.query!;
-    const filters = params.filters || {};
+    try {
+      const query = params.query!;
+      const filters = params.filters || {};
 
-    const conditions: string[] = [
-      `l.status = 'AVAILABLE'`,
-      `l."deletedAt" IS NULL`,
-    ];
-    const values: any[] = [query];
+      // Validate query string to prevent injection
+      if (typeof query !== 'string' || query.length > 500) {
+        throw new Error('Invalid search query');
+      }
 
-    if (filters.country) { conditions.push(`l.country = $${values.length + 1}`); values.push(filters.country); }
-    if (filters.city) { conditions.push(`l.city = $${values.length + 1}`); values.push(filters.city); }
-    if (filters.categoryId) { conditions.push(`l."categoryId" = $${values.length + 1}`); values.push(filters.categoryId); }
-    if (filters.minPrice) { conditions.push(`l."basePrice" >= $${values.length + 1}`); values.push(filters.minPrice); }
-    if (filters.maxPrice) { conditions.push(`l."basePrice" <= $${values.length + 1}`); values.push(filters.maxPrice); }
+      const conditions: string[] = [
+        `l.status = 'AVAILABLE'`,
+        `l."deletedAt" IS NULL`,
+      ];
+      const values: any[] = [query];
 
-    const whereClause = conditions.join(' AND ');
+      if (filters.country) { 
+        if (typeof filters.country !== 'string' || filters.country.length > 100) {
+          throw new Error('Invalid country filter');
+        }
+        conditions.push(`l.country = $${values.length + 1}`); 
+        values.push(filters.country); 
+      }
+      if (filters.city) { 
+        if (typeof filters.city !== 'string' || filters.city.length > 100) {
+          throw new Error('Invalid city filter');
+        }
+        conditions.push(`l.city = $${values.length + 1}`); 
+        values.push(filters.city); 
+      }
+      if (filters.categoryId) { 
+        if (typeof filters.categoryId !== 'string' || filters.categoryId.length > 50) {
+          throw new Error('Invalid categoryId filter');
+        }
+        conditions.push(`l."categoryId" = $${values.length + 1}`); 
+        values.push(filters.categoryId); 
+      }
+      if (filters.minPrice) { 
+        if (typeof filters.minPrice !== 'number' || filters.minPrice < 0) {
+          throw new Error('Invalid minPrice filter');
+        }
+        conditions.push(`l."basePrice" >= $${values.length + 1}`); 
+        values.push(filters.minPrice); 
+      }
+      if (filters.maxPrice) { 
+        if (typeof filters.maxPrice !== 'number' || filters.maxPrice < 0) {
+          throw new Error('Invalid maxPrice filter');
+        }
+        conditions.push(`l."basePrice" <= $${values.length + 1}`); 
+        values.push(filters.maxPrice); 
+      }
 
-    // Use plainto_tsquery for safe user input, ts_rank for relevance scoring
-    const ftsExpr = `(
-      to_tsvector('english', COALESCE(l.title, '') || ' ' || COALESCE(l.description, '') || ' ' || COALESCE(l.city, ''))
-      @@ plainto_tsquery('english', $1)
-    )`;
+      const whereClause = conditions.join(' AND ');
 
-    const rankExpr = `ts_rank(
-      to_tsvector('english', COALESCE(l.title, '') || ' ' || COALESCE(l.description, '') || ' ' || COALESCE(l.city, '')),
-      plainto_tsquery('english', $1)
-    )`;
+      // Use plainto_tsquery for safe user input, ts_rank for relevance scoring
+      const ftsExpr = `(
+        to_tsvector('english', COALESCE(l.title, '') || ' ' || COALESCE(l.description, '') || ' ' || COALESCE(l.city, ''))
+        @@ plainto_tsquery('english', $1)
+      )`;
 
-    // Fallback: also match via ILIKE for short or partial queries
-    const fallbackExpr = `(l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%' OR l.city ILIKE '%' || $1 || '%')`;
+      const rankExpr = `ts_rank(
+        to_tsvector('english', COALESCE(l.title, '') || ' ' || COALESCE(l.description, '') || ' ' || COALESCE(l.city, '')),
+        plainto_tsquery('english', $1)
+      )`;
 
-    const matchExpr = `(${ftsExpr} OR ${fallbackExpr})`;
+      // Fallback: also match via ILIKE for short or partial queries
+      const fallbackExpr = `(l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%' OR l.city ILIKE '%' || $1 || '%')`;
 
-    const countQuery = `
-      SELECT COUNT(*)::int as total FROM "Listing" l
-      WHERE ${whereClause} AND ${matchExpr}
-    `;
+      const matchExpr = `(${ftsExpr} OR ${fallbackExpr})`;
 
-    const dataQuery = `
-      SELECT l.id, l.title, l.description, l."basePrice", l.city, l.country,
-             l.latitude, l.longitude, l."averageRating", l.featured, l."viewCount",
-             l."categoryId", l."ownerId",
-             ${rankExpr} AS fts_rank
-      FROM "Listing" l
-      WHERE ${whereClause} AND ${matchExpr}
-      ORDER BY l.featured DESC, fts_rank DESC, l."averageRating" DESC, l."viewCount" DESC
-      LIMIT $${values.length + 1} OFFSET $${values.length + 2}
-    `;
+      const countQuery = `
+        SELECT COUNT(*)::int as total FROM "Listing" l
+        WHERE ${whereClause} AND ${matchExpr}
+      `;
 
-    values.push(limit, offset);
+      const dataQuery = `
+        SELECT l.id, l.title, l.description, l."basePrice", l.city, l.country,
+               l.latitude, l.longitude, l."averageRating", l.featured, l."viewCount",
+               l."categoryId", l."ownerId",
+               ${rankExpr} AS fts_rank
+        FROM "Listing" l
+        WHERE ${whereClause} AND ${matchExpr}
+        ORDER BY l.featured DESC, fts_rank DESC, l."averageRating" DESC, l."viewCount" DESC
+        LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+      `;
 
-    const [countResult, rows] = await Promise.all([
-      this.prisma.$queryRawUnsafe<[{ total: number }]>(countQuery, ...values.slice(0, -2)),
-      this.prisma.$queryRawUnsafe<any[]>(dataQuery, ...values),
-    ]);
+      values.push(limit, offset);
 
-    return {
-      results: rows.map((r) => ({ ...r, relevanceScore: Number(r.fts_rank) })),
-      total: countResult[0]?.total ?? 0,
-    };
+      const [countResult, rows] = await Promise.all([
+        this.prisma.$queryRawUnsafe<[{ total: number }]>(countQuery, ...values.slice(0, -2)),
+        this.prisma.$queryRawUnsafe<any[]>(dataQuery, ...values),
+      ]);
+
+      return {
+        results: rows.map((r) => ({ ...r, relevanceScore: Number(r.fts_rank) })),
+        total: countResult[0]?.total ?? 0,
+      };
+    } catch (error) {
+      this.logger.error('Full-text search failed, falling back to filter search', error);
+      // Fallback to standard Prisma filter search
+      return this.filterSearch(params, offset, limit);
+    }
   }
 
   // ── Standard Prisma filter-based search ────────────────────────

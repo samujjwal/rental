@@ -113,10 +113,10 @@ export class SearchAnalyticsService {
         refinementRate: 0, // Would need search refinement tracking
       },
       searchQuality: {
-        relevanceScore: 0.85, // Placeholder
-        diversityScore: 0.75, // Placeholder
-        coverageScore: 0.9, // Placeholder
-        userSatisfaction: 4.2, // Placeholder
+        relevanceScore: this.calculateRelevanceScore(logs),
+        diversityScore: this.calculateDiversityScore(logs),
+        coverageScore: this.calculateCoverageScore(logs),
+        userSatisfaction: this.calculateUserSatisfaction(logs),
       },
     };
   }
@@ -353,7 +353,39 @@ export class SearchAnalyticsService {
     if (values.length === 0) return 0;
     const sorted = [...values].sort((a, b) => a - b);
     const index = Math.ceil((percentile / 100) * sorted.length) - 1;
-    return sorted[Math.max(0, index)];
+    return sorted[index] || 0;
+  }
+
+  private calculateRelevanceScore(logs: SearchQuery[]): number {
+    if (logs.length === 0) return 0;
+    const withClicks = logs.filter((l) => l.clickedResults && l.clickedResults.length > 0).length;
+    return (withClicks / logs.length) * 100;
+  }
+
+  private calculateDiversityScore(logs: SearchQuery[]): number {
+    if (logs.length === 0) return 0;
+    const uniqueListings = new Set();
+    logs.forEach((log) => {
+      if (log.clickedResults) {
+        log.clickedResults.forEach((result: any) => uniqueListings.add(result.listingId));
+      }
+    });
+    const totalClicks = logs.reduce((sum, log) => sum + (log.clickedResults?.length || 0), 0);
+    return totalClicks > 0 ? (uniqueListings.size / totalClicks) * 100 : 0;
+  }
+
+  private calculateCoverageScore(logs: SearchQuery[]): number {
+    if (logs.length === 0) return 0;
+    const withResults = logs.filter((l) => l.resultsCount > 0).length;
+    return (withResults / logs.length) * 100;
+  }
+
+  private calculateUserSatisfaction(logs: SearchQuery[]): number {
+    if (logs.length === 0) return 0;
+    const withClicks = logs.filter((l) => l.clickedResults && l.clickedResults.length > 0).length;
+    const clickThroughRate = (withClicks / logs.length) * 100;
+    // Map CTR to satisfaction score (0-5 scale)
+    return Math.min(5, (clickThroughRate / 20) * 5);
   }
 
   private determineHealth(recentLogs: SearchQuery[]): 'healthy' | 'degraded' | 'critical' {

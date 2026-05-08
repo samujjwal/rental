@@ -2,14 +2,14 @@ version: "3.8"
 
 services:
   postgres:
-    image: pgvector/pgvector:pg15
+    image: pgvector/pgvector:pg16
     container_name: ${POSTGRES_CONTAINER:-rental-postgres-dev}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-rental_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rental_password}
       POSTGRES_DB: ${POSTGRES_DB:-rental_portal}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-3432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     image: redis:7-alpine
     container_name: ${REDIS_CONTAINER:-rental-redis-dev}
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-3479}:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes

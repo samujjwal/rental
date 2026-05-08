@@ -114,7 +114,9 @@ export class AuthService {
           // email-verification flows are exercised consistently in dev/staging.
           // Set AUTO_VERIFY_ON_REGISTER=true in .env to skip verification in
           // non-production environments (e.g. seeded test users).
-          status: this.configService.get<string>('AUTO_VERIFY_ON_REGISTER') === 'true'
+          // SECURITY: AUTO_VERIFY_ON_REGISTER is only allowed in non-production environments.
+          status: this.configService.get<string>('AUTO_VERIFY_ON_REGISTER') === 'true' &&
+                   this.configService.get<string>('NODE_ENV') !== 'production'
             ? UserStatus.ACTIVE
             : UserStatus.PENDING_VERIFICATION,
         },

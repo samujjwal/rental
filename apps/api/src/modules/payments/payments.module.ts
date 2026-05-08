@@ -9,6 +9,7 @@ import { PaymentProviderFactory } from './services/payment-provider-factory.serv
 import { EscrowService } from './services/escrow.service';
 import { PaymentCommandLogService } from './services/payment-command-log.service';
 import { PaymentCommandReconciliationService } from './services/payment-command-reconciliation.service';
+import { FxRateService } from './services/fx-rate.service';
 // import { PaymentMethodService } from './services/payment-method.service'; // TODO: PaymentMethod model not in schema
 import { PaymentProcessor } from './processors/payment.processor';
 import { PAYMENT_PROVIDER } from './interfaces/payment-provider.interface';
@@ -39,6 +40,7 @@ import { CurrencyModule } from '../currency/currency.module';
     EscrowService,
     PaymentCommandLogService,
     PaymentCommandReconciliationService,
+    FxRateService,
     // PaymentMethodService, // TODO: PaymentMethod model not in schema
     PaymentProcessor,
     {
@@ -54,6 +56,7 @@ import { CurrencyModule } from '../currency/currency.module';
     PaymentProviderFactory,
     EscrowService,
     PaymentCommandLogService,
+    FxRateService,
     // PaymentMethodService, // TODO: PaymentMethod model not in schema
     PAYMENT_PROVIDER,
   ],

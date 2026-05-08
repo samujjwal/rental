@@ -1,0 +1,169 @@
+name: Production Readiness Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  production-readiness-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check test coverage
+        run: |
+          echo "Checking test coverage..."
+          # This would run coverage checks and enforce thresholds
+          # For now, we'll check if coverage report exists
+          if [ ! -f "apps/api/coverage/coverage-summary.json" ]; then
+            echo "❌ Coverage report not found. Run tests with coverage first."
+            exit 1
+          fi
+          echo "✅ Coverage report found"
+      
+      - name: Check for TODO/FIXME comments
+        run: |
+          echo "Checking for unresolved TODO/FIXME comments..."
+          TODO_COUNT=$(grep -r "TODO\|FIXME" apps/api/src apps/web/app apps/mobile/src --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" | wc -l)
+          if [ $TODO_COUNT -gt 10 ]; then
+            echo "⚠️  Found $TODO_COUNT TODO/FIXME comments. Please review before production."
+            echo "To bypass this check temporarily, add [skip-production-check] to commit message."
+          else
+            echo "✅ TODO/FIXME count acceptable: $TODO_COUNT"
+          fi
+      
+      - name: Check for console.log statements
+        run: |
+          echo "Checking for console.log statements in production code..."
+          CONSOLE_COUNT=$(grep -r "console\.log" apps/api/src apps/web/app apps/mobile/src --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" | grep -v "test\|spec\|debug" | wc -l)
+          if [ $CONSOLE_COUNT -gt 5 ]; then
+            echo "⚠️  Found $CONSOLE_COUNT console.log statements. Remove before production."
+            exit 1
+          fi
+          echo "✅ Console.log count acceptable: $CONSOLE_COUNT"
+      
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Checking for hardcoded secrets..."
+          if grep -r "password\s*=\s*['\"][^'\"]*['\"]" apps/api/src apps/web/app --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" | grep -v "test\|spec\|example"; then
+            echo "❌ Found potential hardcoded passwords"
+            exit 1
+          fi
+          if grep -r "api[_-]key\s*=\s*['\"][^'\"]*['\"]" apps/api/src apps/web/app --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" | grep -v "test\|spec\|example"; then
+            echo "❌ Found potential hardcoded API keys"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets found"
+      
+      - name: Check Prisma access violations
+        run: |
+          echo "Checking for direct Prisma access in controllers..."
+          VIOLATIONS=$(grep -r "this\.prisma\." apps/api/src/modules --include="*.controller.ts" || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ Prisma access violations found in controllers:"
+            echo "$VIOLATIONS"
+            echo "See docs/PRISMA_ACCESS_VIOLATIONS.md for remediation steps."
+            exit 1
+          fi
+          echo "✅ No Prisma access violations in controllers"
+      
+      - name: Check dependency security
+        run: |
+          echo "Running security audit on dependencies..."
+          pnpm audit --audit-level moderate
+          echo "✅ Security audit passed"
+      
+      - name: Check TypeScript compilation
+        run: |
+          echo "Checking TypeScript compilation..."
+          pnpm run typecheck
+          echo "✅ TypeScript compilation successful"
+      
+      - name: Check linting
+        run: |
+          echo "Running linter..."
+          pnpm run lint
+          echo "✅ Linting passed"
+      
+      - name: Generate release checklist
+        run: |
+          echo "Generating release checklist..."
+          cat > RELEASE_CHECKLIST.md << 'EOF'
+          # Production Release Checklist
+          
+          ## Pre-Release Checks
+          - [ ] All tests passing (unit, integration, E2E)
+          - [ ] Test coverage meets threshold (80%+)
+          - [ ] No critical security vulnerabilities
+          - [ ] No hardcoded secrets in code
+          - [ ] No console.log statements in production code
+          - [ ] TypeScript compilation successful
+          - [ ] Linting passes
+          - [ ] No direct Prisma access in controllers
+          
+          ## Functional Checks
+          - [ ] Authentication flows working
+          - [ ] Booking flow end-to-end working
+          - [ ] Payment integration (Stripe) working in test mode
+          - [ ] Email/SMS notifications configured
+          - [ ] File upload/download working
+          - [ ] Real-time messaging (WebSocket) working
+          - [ ] Admin dashboard functional
+          
+          ## Performance Checks
+          - [ ] Load tests passing (k6)
+          - [ ] Database query performance acceptable
+          - [ ] API response times within SLA
+          - [ ] No memory leaks detected
+          
+          ## Security Checks
+          - [ ] Rate limiting configured
+          - [ ] CORS configuration correct
+          - [ ] Authentication middleware active
+          - [ ] Input validation on all endpoints
+          - [ ] SQL injection prevention verified
+          - [ ] XSS protection enabled
+          
+          ## Infrastructure Checks
+          - [ ] Environment variables configured
+          - [ ] Database migrations applied
+          - [ ] Redis cache configured
+          - [ ] CDN/CDN configured for static assets
+          - [ ] SSL certificates valid
+          - [ ] Backup procedures tested
+          
+          ## Monitoring & Observability
+          - [ ] Logging configured
+          - [ ] Error tracking (Sentry) configured
+          - [ ] Metrics collection enabled
+          - [ ] Health check endpoints working
+          - [ ] Alert rules configured
+          
+          ## Documentation
+          - [ ] API documentation updated
+          - [ ] Release notes prepared
+          - [ ] Runbooks updated
+          - [ ] On-call team notified
+          
+          ## Rollback Plan
+          - [ ] Database backup taken
+          - [ ] Rollback procedure documented
+          - [ ] Rollback tested in staging
+          - [ ] Team trained on rollback
+          
+          ## Post-Release Verification
+          - [ ] Smoke tests passed
+          - [ ] Critical user journeys tested
+          - [ ] Error rates monitored
+          - [ ] Performance metrics checked
+          - [ ] User feedback monitored
+          EOF
+          echo "✅ Release checklist generated"
+      
+      - name: Upload release checklist
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-checklist
+          path: RELEASE_CHECKLIST.md

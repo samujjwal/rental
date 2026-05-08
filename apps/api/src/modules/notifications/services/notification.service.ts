@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EmailService } from './resend.service';
+import { SmsService } from './twilio.service';
+import { PushNotificationService } from './push-notification.service';
 
 export interface CreateNotificationDto {
   userId: string;
@@ -36,6 +39,9 @@ export class InAppNotificationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly emailService: EmailService,
+    private readonly smsService: SmsService,
+    private readonly pushNotificationService: PushNotificationService,
   ) {}
 
   /**
@@ -431,27 +437,71 @@ export class InAppNotificationService {
     });
   }
 
-  // Methods for notification retry service fallback channels
+  // Methods for notification retry service fallback channels - now using real delivery services
   async sendEmail(to: string, body: string): Promise<{ messageId: string }> {
     this.logger.log(`Sending email to ${to}: ${body.substring(0, 50)}...`);
-    // Actual email sending would be implemented here
-    return { messageId: `email-${Date.now()}` };
+    try {
+      const result = await this.emailService.sendEmail({
+        to,
+        subject: 'Notification',
+        text: body,
+        html: `<p>${body}</p>`,
+      });
+      return { messageId: result.messageId };
+    } catch (error) {
+      this.logger.error('Failed to send email', error);
+      throw error;
+    }
   }
 
   async sendSMS(to: string, message: string): Promise<{ messageId: string }> {
     this.logger.log(`Sending SMS to ${to}: ${message.substring(0, 50)}...`);
-    // Actual SMS sending would be implemented here
-    return { messageId: `sms-${Date.now()}` };
+    try {
+      const result = await this.smsService.sendSms({
+        to,
+        body: message,
+      });
+      return { messageId: result.sid };
+    } catch (error) {
+      this.logger.error('Failed to send SMS', error);
+      throw error;
+    }
   }
 
   async sendPush(to: string, message: string): Promise<{ messageId: string }> {
     this.logger.log(`Sending push notification to ${to}: ${message.substring(0, 50)}...`);
-    // Actual push notification sending would be implemented here
-    return { messageId: `push-${Date.now()}` };
+    try {
+      // For push notifications, 'to' should be a userId
+      const result = await this.pushNotificationService.sendPushNotification({
+        userId: to,
+        title: 'Notification',
+        body: message,
+      });
+      return { messageId: `push-${Date.now()}` };
+    } catch (error) {
+      this.logger.error('Failed to send push notification', error);
+      throw error;
+    }
   }
 
   async trackDelivery(notificationId: string, channel: string): Promise<void> {
     this.logger.log(`Tracking delivery for ${notificationId} via ${channel}`);
-    // Delivery tracking implementation would go here
+    try {
+      // Update notification delivery status in database
+      const deliveryData = JSON.stringify({
+        deliveryChannel: channel,
+        deliveredAt: new Date().toISOString(),
+      });
+      
+      await this.prisma.notification.update({
+        where: { id: notificationId },
+        data: {
+          data: deliveryData,
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to track delivery', error);
+      // Don't throw - tracking failures shouldn't block the main flow
+    }
   }
 }

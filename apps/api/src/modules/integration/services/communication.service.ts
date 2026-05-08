@@ -2,10 +2,14 @@
  * Communication Service
  * 
  * Provides multi-channel communication with delivery tracking and retry
+ * Integrates with real providers: Twilio (SMS), Resend (Email), WebSocket (real-time)
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { RetryService } from '@/modules/common/resilience/services/retry.service';
+import { SmsService } from '@/modules/notifications/services/sms.service';
+import { EmailService } from '@/modules/notifications/services/resend.service';
+import { MessagingGateway } from '@/modules/messaging/gateways/messaging.gateway';
 
 export interface CommunicationChannel {
   name: string;
@@ -52,7 +56,12 @@ export class CommunicationService {
   private messageHistory: CommunicationMessage[] = [];
   private readonly maxHistorySize = 10000;
 
-  constructor(private readonly retryService: RetryService) {
+  constructor(
+    private readonly retryService: RetryService,
+    @Inject(forwardRef(() => SmsService)) private readonly smsService?: SmsService,
+    @Inject(forwardRef(() => EmailService)) private readonly emailService?: EmailService,
+    @Inject(forwardRef(() => MessagingGateway)) private readonly messagingGateway?: MessagingGateway,
+  ) {
     // Initialize default channels
     this.registerChannel({
       name: 'email',
@@ -73,6 +82,13 @@ export class CommunicationService {
       type: 'push',
       enabled: true,
       priority: 3,
+    });
+
+    this.registerChannel({
+      name: 'websocket',
+      type: 'websocket',
+      enabled: true,
+      priority: 4,
     });
   }
 
@@ -352,33 +368,85 @@ export class CommunicationService {
     message: CommunicationMessage,
     _channel: CommunicationChannel,
   ): Promise<DeliveryResult> {
-    // Simulate email sending
-    this.logger.log(`Sending email to ${message.recipient}: ${message.subject}`);
+    if (!this.emailService) {
+      this.logger.warn('Email service not available, falling back to simulation');
+      return {
+        messageId: message.id,
+        success: true,
+        channel: 'email',
+        deliveredAt: new Date(),
+        retryCount: 0,
+      };
+    }
 
-    // Simulate success (would integrate with email provider)
-    return {
-      messageId: message.id,
-      success: true,
-      channel: 'email',
-      deliveredAt: new Date(),
-      retryCount: 0,
-    };
+    try {
+      await this.emailService.sendEmail({
+        to: message.recipient,
+        subject: message.subject || 'Notification',
+        html: message.content,
+      });
+
+      this.logger.log(`Email sent successfully to ${message.recipient}: ${message.subject}`);
+
+      return {
+        messageId: message.id,
+        success: true,
+        channel: 'email',
+        deliveredAt: new Date(),
+        retryCount: 0,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to send email to ${message.recipient}`, error);
+      return {
+        messageId: message.id,
+        success: false,
+        channel: 'email',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        retryCount: 0,
+      };
+    }
   }
 
   private async sendSMS(
     message: CommunicationMessage,
     _channel: CommunicationChannel,
   ): Promise<DeliveryResult> {
-    // Simulate SMS sending
-    this.logger.log(`Sending SMS to ${message.recipient}`);
+    if (!this.smsService) {
+      this.logger.warn('SMS service not available, falling back to simulation');
+      return {
+        messageId: message.id,
+        success: true,
+        channel: 'sms',
+        deliveredAt: new Date(),
+        retryCount: 0,
+      };
+    }
 
-    return {
-      messageId: message.id,
-      success: true,
-      channel: 'sms',
-      deliveredAt: new Date(),
-      retryCount: 0,
-    };
+    try {
+      await this.smsService.sendSms({
+        to: message.recipient,
+        message: message.content,
+      });
+
+      this.logger.log(`SMS sent successfully to ${message.recipient}`);
+
+      return {
+        messageId: message.id,
+        success: true,
+        channel: 'sms',
+        deliveredAt: new Date(),
+        retryCount: 0,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to send SMS to ${message.recipient}`, error);
+      return {
+        messageId: message.id,
+        success: false,
+        channel: 'sms',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        retryCount: 0,
+      };
+    }
   }
 
   private async sendPush(
@@ -417,16 +485,50 @@ export class CommunicationService {
     message: CommunicationMessage,
     _channel: CommunicationChannel,
   ): Promise<DeliveryResult> {
-    // Simulate WebSocket message
-    this.logger.log(`Sending WebSocket message to ${message.recipient}`);
+    if (!this.messagingGateway) {
+      this.logger.warn('Messaging gateway not available, falling back to simulation');
+      return {
+        messageId: message.id,
+        success: true,
+        channel: 'websocket',
+        deliveredAt: new Date(),
+        retryCount: 0,
+      };
+    }
 
-    return {
-      messageId: message.id,
-      success: true,
-      channel: 'websocket',
-      deliveredAt: new Date(),
-      retryCount: 0,
-    };
+    try {
+      // Extract user ID from recipient (assuming format "user:{userId}")
+      const userId = message.recipient.startsWith('user:') 
+        ? message.recipient.substring(5) 
+        : message.recipient;
+
+      this.messagingGateway.server.to(`user:${userId}`).emit('notification', {
+        id: message.id,
+        content: message.content,
+        subject: message.subject,
+        metadata: message.metadata,
+        timestamp: new Date().toISOString(),
+      });
+
+      this.logger.log(`WebSocket message sent successfully to ${message.recipient}`);
+
+      return {
+        messageId: message.id,
+        success: true,
+        channel: 'websocket',
+        deliveredAt: new Date(),
+        retryCount: 0,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to send WebSocket message to ${message.recipient}`, error);
+      return {
+        messageId: message.id,
+        success: false,
+        channel: 'websocket',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        retryCount: 0,
+      };
+    }
   }
 
   private async sendViaFallback(

@@ -199,4 +199,112 @@ export class ListingVersionService {
     });
     return latest?.version ?? 0;
   }
+
+  /**
+   * Rollback a listing to a specific version.
+   * Creates a new version containing the rolled-back state.
+   */
+  async rollbackToVersion(
+    listingId: string,
+    targetVersion: number,
+    changedBy: string,
+    changeNotes?: string,
+  ) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+    });
+
+    if (!listing) {
+      throw new NotFoundException(`Listing ${listingId} not found`);
+    }
+
+    // Get the target version snapshot
+    const targetVersionEntry = await this.prisma.listingVersion.findUnique({
+      where: {
+        listingId_version: { listingId, version: targetVersion },
+      },
+    });
+
+    if (!targetVersionEntry) {
+      throw new NotFoundException(
+        `Version ${targetVersion} not found for listing ${listingId}`,
+      );
+    }
+
+    const targetSnapshot = JSON.parse(targetVersionEntry.snapshot) as Record<string, unknown>;
+
+    // Extract listing fields from snapshot (excluding metadata)
+    const { _snapshotVersion, _snapshotAt, ...listingData } = targetSnapshot;
+
+    // Update listing with rolled-back data
+    await this.prisma.$transaction(async (tx) => {
+      // Update main listing fields
+      const updateData: Record<string, unknown> = {
+        title: listingData.title,
+        description: listingData.description,
+        price: listingData.price,
+        currency: listingData.currency,
+        minRentalDuration: listingData.minRentalDuration,
+        maxRentalDuration: listingData.maxRentalDuration,
+        cancellationPolicy: listingData.cancellationPolicy,
+      };
+
+      // Update listing
+      await tx.listing.update({
+        where: { id: listingId },
+        data: updateData,
+      });
+
+      // Rollback content versions
+      if (Array.isArray(listingData.contents)) {
+        for (const content of listingData.contents as any[]) {
+          await tx.listingContent.upsert({
+            where: {
+              listingId_locale: { listingId, locale: content.locale },
+            },
+            create: {
+              listingId,
+              locale: content.locale,
+              title: content.title,
+              description: content.description,
+              rules: content.rules ?? null,
+              highlights: content.highlights ?? null,
+            },
+            update: {
+              title: content.title,
+              description: content.description,
+              rules: content.rules ?? null,
+              highlights: content.highlights ?? null,
+            },
+          });
+        }
+      }
+
+      // Rollback attribute values
+      if (Array.isArray(listingData.attributeValues)) {
+        // Delete existing attribute values
+        await tx.listingAttributeValue.deleteMany({
+          where: { listingId },
+        });
+
+        // Recreate from snapshot
+        for (const attrValue of listingData.attributeValues as any[]) {
+          await tx.listingAttributeValue.create({
+            data: {
+              listingId,
+              attributeDefinitionId: attrValue.attributeDefinitionId,
+              value: attrValue.value,
+            },
+          });
+        }
+      }
+    });
+
+    // Create a new version snapshot of the rolled-back state
+    return this.createSnapshot({
+      listingId,
+      changedBy,
+      changeNotes: changeNotes || `Rolled back to version ${targetVersion}`,
+    });
+  }
 }

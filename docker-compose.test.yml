@@ -66,7 +66,7 @@ services:
     image: redis:7-alpine
     container_name: ${REDIS_CONTAINER:-rental-redis-test}
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-3479}:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes

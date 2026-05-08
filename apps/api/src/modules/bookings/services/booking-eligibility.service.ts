@@ -249,7 +249,19 @@ export class BookingEligibilityService implements BookingEligibilityPort {
 
   private shouldBlock(checkName: SafetyCheckName): boolean {
     const failOpen = this.configService.get<string>('SAFETY_CHECKS_FAIL_OPEN', 'false');
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    
+    // Fail-open mode is only allowed in non-production environments
     if (failOpen === 'true') {
+      if (isProduction) {
+        this.logger.error(
+          `SECURITY VIOLATION: SAFETY_CHECKS_FAIL_OPEN=true in production environment. ` +
+          `This configuration is not allowed in production. Blocking check ${checkName}.`
+        );
+        // Block the check in production regardless of configuration
+        return (CRITICAL_SAFETY_CHECKS as readonly string[]).includes(checkName);
+      }
+      this.logger.warn(`Fail-open mode enabled - allowing check ${checkName} to be skipped (DEVELOPMENT/TEST ONLY)`);
       return false;
     }
     return (CRITICAL_SAFETY_CHECKS as readonly string[]).includes(checkName);

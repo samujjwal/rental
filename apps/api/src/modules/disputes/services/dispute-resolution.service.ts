@@ -485,6 +485,15 @@ export class DisputeResolutionService {
     const slaThreshold = this.configService.get<number>('dispute.sla.resolutionHours', 72);
     const createdAt = new Date(dispute.createdAt);
     const now = new Date();
+    
+    // Calculate response time from first admin response timeline event
+    const firstResponseEvent = dispute.timelineEvents?.find(
+      (event: any) => event.type === 'ADMIN_RESPONSE' || event.type === 'ASSIGNED'
+    );
+    const responseTimeHours = firstResponseEvent
+      ? (new Date(firstResponseEvent.createdAt).getTime() - createdAt.getTime()) / (1000 * 60 * 60)
+      : (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+
     const resolutionTimeHours = dispute.resolvedAt 
       ? (new Date(dispute.resolvedAt).getTime() - createdAt.getTime()) / (1000 * 60 * 60)
       : (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
@@ -495,7 +504,7 @@ export class DisputeResolutionService {
       disputeId,
       compliant,
       metrics: {
-        responseTime: 24, // hours (placeholder - would calculate from first response)
+        responseTime: Math.round(responseTimeHours),
         resolutionTime: Math.round(resolutionTimeHours),
         slaThreshold,
       },

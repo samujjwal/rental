@@ -227,8 +227,6 @@ This runs: Unit → Integration → E2E → Coverage → Security
 
 ## Code Quality
 
-### Linting
-
 **Check code style:**
 ```bash
 pnpm lint
@@ -239,12 +237,35 @@ pnpm lint
 pnpm arch-lint
 ```
 
+**Check for circular dependencies:**
+```bash
+pnpm check-circular
+```
+
+**Generate dependency graph:**
+```bash
+pnpm check-deps
+```
+
 ### Type Checking
 
 **TypeScript validation:**
 ```bash
 pnpm typecheck
 ```
+
+### Module Bootstrap Validation
+
+**Test application can bootstrap successfully:**
+```bash
+pnpm --filter @rental-portal/api test -- --testPathPatterns module-bootstrap
+```
+
+This test catches:
+- Circular dependencies
+- Missing providers
+- Invalid constructor signatures
+- Module resolution errors
 
 ### Formatting
 

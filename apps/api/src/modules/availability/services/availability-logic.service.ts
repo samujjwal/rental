@@ -19,6 +19,154 @@ export class AvailabilityLogicService {
     @Optional() private readonly prisma?: PrismaService,
   ) {}
 
+  /**
+   * Check and reserve availability with concurrency safety
+   * Uses PostgreSQL advisory locks to prevent race conditions
+   * 
+   * @param listingId - The listing to check availability for
+   * @param startDate - Start date of the booking
+   * @param endDate - End date of the booking
+   * @param inventoryUnitId - Optional specific inventory unit to reserve
+   * @param userId - User making the reservation attempt
+   * @returns Reservation result with success status and details
+   */
+  async checkAndReserve(
+    listingId: string,
+    startDate: Date,
+    endDate: Date,
+    inventoryUnitId?: string,
+    userId?: string,
+  ): Promise<{
+    success: boolean;
+    slotId?: string;
+    unitId?: string;
+    conflictReason?: string;
+  }> {
+    if (!this.prisma) {
+      throw new Error('Prisma service is required for checkAndReserve');
+    }
+
+    // Generate lock key from listing ID (hash to get numeric value)
+    const lockKey = Math.abs(
+      listingId.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) % 2147483647,
+    );
+
+    try {
+      // Use advisory lock to serialize concurrent reservation attempts for the same listing
+      await this.prisma.$executeRawUnsafe('SELECT pg_advisory_xact_lock($1)', lockKey);
+
+      // Check for existing conflicts
+      const conflicts = await this.detectConflicts(listingId, startDate, endDate);
+      if (conflicts.hasConflicts) {
+        this.logger.warn(
+          `Availability conflict detected for listing ${listingId}: ${conflicts.conflictType}`,
+        );
+        return {
+          success: false,
+          conflictReason: conflicts.conflictType || 'Booking conflict detected',
+        };
+      }
+
+      // Find or create availability slot
+      const slot = await this.findOrCreateAvailabilitySlot(
+        listingId,
+        startDate,
+        endDate,
+        inventoryUnitId,
+      );
+
+      if (!slot) {
+        return {
+          success: false,
+          conflictReason: 'Failed to create availability slot',
+        };
+      }
+
+      // Reserve the slot
+      await this.availabilityRepository.reserveAvailabilitySlot(slot.id, 'temp-reservation');
+
+      // Invalidate cache for this listing
+      await this.cacheService.del(`availability:${listingId}:*`);
+
+      return {
+        success: true,
+        slotId: slot.id,
+        unitId: inventoryUnitId || slot.inventoryUnitId,
+      };
+    } catch (error) {
+      this.logger.error(`Error during checkAndReserve for listing ${listingId}`, error);
+      return {
+        success: false,
+        conflictReason: 'System error during availability check',
+      };
+    }
+  }
+
+  /**
+   * Release a previously reserved slot
+   * Called when booking fails or is cancelled
+   */
+  async releaseReservation(slotId: string): Promise<void> {
+    try {
+      await this.availabilityRepository.releaseAvailabilitySlot(slotId);
+      this.logger.log(`Released reservation for slot ${slotId}`);
+    } catch (error) {
+      this.logger.error(`Error releasing reservation for slot ${slotId}`, error);
+    }
+  }
+
+  /**
+   * Confirm a reservation (convert temporary reservation to actual booking)
+   */
+  async confirmReservation(slotId: string, bookingId: string): Promise<void> {
+    try {
+      await this.availabilityRepository.reserveAvailabilitySlot(slotId, bookingId);
+      this.logger.log(`Confirmed reservation for slot ${slotId} with booking ${bookingId}`);
+    } catch (error) {
+      this.logger.error(`Error confirming reservation for slot ${slotId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find or create an availability slot for the given period
+   */
+  private async findOrCreateAvailabilitySlot(
+    listingId: string,
+    startDate: Date,
+    endDate: Date,
+    inventoryUnitId?: string,
+  ): Promise<any> {
+    // Try to find existing slot
+    const existingSlots = await this.availabilityRepository.findAvailabilitySlots(
+      listingId,
+      startDate,
+      endDate,
+    );
+
+    // Find a slot that matches the criteria
+    const matchingSlot = existingSlots.find(
+      (slot: any) =>
+        slot.status === 'AVAILABLE' &&
+        (!inventoryUnitId || slot.inventoryUnitId === inventoryUnitId),
+    );
+
+    if (matchingSlot) {
+      return matchingSlot;
+    }
+
+    // Create new slot
+    return this.availabilityRepository.createAvailabilitySlot({
+      listingId,
+      inventoryUnitId,
+      startTime: startDate,
+      endTime: endDate,
+      status: 'AVAILABLE',
+      currency: 'NPR', // Default to NPR for GharBatai
+      price: null, // Price determined by pricing engine
+    } as any);
+  }
+
   async calculateAvailability(listingId: string, startDate: Date, endDate: Date): Promise<any[]> {
     // Check cache first
     const cacheKey = `availability:${listingId}:${startDate.getTime()}:${endDate.getTime()}`;

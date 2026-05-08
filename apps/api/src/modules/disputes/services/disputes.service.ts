@@ -797,13 +797,160 @@ export class DisputesService {
   // Payout
   // ──────────────────────────────────────────────────────────────────────────
 
-  async processDisputePayout(disputeId: string, _userId: string, dto: { amount: number; currency: string; method?: string }) {
+  async processDisputePayout(disputeId: string, userId: string, dto: { amount: number; currency: string; method?: string }) {
+    this.logger.log(`Processing dispute payout for dispute ${disputeId}, amount: ${dto.amount} ${dto.currency}`);
+
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        booking: {
+          include: {
+            renter: true,
+            listing: {
+              include: {
+                owner: true,
+              },
+            },
+          },
+        },
+        resolution: true,
+      },
+    });
+
+    if (!dispute) {
+      throw i18nNotFound('dispute.notFound');
+    }
+
+    // Verify admin authorization
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    const adminRoles = [UserRole.ADMIN, 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'] as string[];
+    if (!user || !adminRoles.includes(user.role as string)) {
+      throw i18nForbidden('dispute.adminOnly');
+    }
+
+    // Verify dispute is in resolvable state
+    if (dispute.status !== DisputeStatus.RESOLVED && dispute.status !== DisputeStatus.UNDER_REVIEW) {
+      throw new BadRequestException('Dispute must be RESOLVED or UNDER_REVIEW to process payout');
+    }
+
+    const booking = dispute.booking;
+    const payoutAmount = dto.amount;
+
+    // Process refund to renter if amount > 0
+    if (payoutAmount > 0) {
+      try {
+        // Find the booking's payment transaction for refund
+        const ledgerEntries = await this.prisma.ledgerEntry.findMany({
+          where: { 
+            bookingId: booking.id,
+            side: 'DEBIT',
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        });
+
+        if (ledgerEntries.length > 0 && ledgerEntries[0].referenceId) {
+          const txId = ledgerEntries[0].referenceId;
+          const metadata = ledgerEntries[0].metadata ? JSON.parse(ledgerEntries[0].metadata as string) : {};
+          const provider = metadata?.provider || 'stripe';
+
+          // Add refund job to payment queue
+          await this.paymentsQueue.add('process-refund', {
+            bookingId: booking.id,
+            transactionId: txId,
+            amount: payoutAmount,
+            currency: dto.currency,
+            reason: `Dispute resolution: ${disputeId}`,
+            disputeId,
+            provider,
+            timestamp: new Date().toISOString(),
+          }, {
+            jobId: `dispute-refund:${disputeId}`,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 3000 },
+            removeOnComplete: 100,
+            removeOnFail: false,
+          });
+
+          this.logger.log(`Refund job queued for dispute ${disputeId}: ${payoutAmount} ${dto.currency}`);
+        } else {
+          this.logger.warn(`No payment transaction found for booking ${booking.id} to process refund`);
+        }
+      } catch (error) {
+        this.logger.error(`Failed to queue refund for dispute ${disputeId}: ${error.message}`);
+        throw new BadRequestException('Failed to process refund');
+      }
+    }
+
+    // If payout amount is 0 or negative, release funds to owner
+    if (payoutAmount <= 0) {
+      try {
+        // Release escrow/deposit to owner
+        await this.paymentsQueue.add('release-escrow', {
+          bookingId: booking.id,
+          amount: Math.abs(payoutAmount) || booking.totalPrice,
+          currency: dto.currency,
+          reason: `Dispute resolved in favor of owner: ${disputeId}`,
+          disputeId,
+          timestamp: new Date().toISOString(),
+        }, {
+          jobId: `dispute-release:${disputeId}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 3000 },
+          removeOnComplete: 100,
+          removeOnFail: false,
+        });
+
+        this.logger.log(`Escrow release job queued for dispute ${disputeId}`);
+      } catch (error) {
+        this.logger.error(`Failed to queue escrow release for dispute ${disputeId}: ${error.message}`);
+        throw new BadRequestException('Failed to release escrow');
+      }
+    }
+
+    // Update dispute with payout information
+    const updated = await this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: {
+        amount: payoutAmount,
+        status: DisputeStatus.CLOSED,
+        resolvedAt: new Date(),
+      },
+    });
+
+    // Send notifications to both parties
+    await this.notificationsService.sendNotification({
+      userId: booking.renterId,
+      type: NotificationType.DISPUTE_UPDATED,
+      title: 'Dispute payout processed',
+      message: payoutAmount > 0 
+        ? `You will receive a refund of ${payoutAmount} ${dto.currency} for dispute ${disputeId}`
+        : `The dispute has been resolved in favor of the owner`,
+      channels: ['IN_APP', 'EMAIL'],
+      data: { disputeId, amount: payoutAmount, currency: dto.currency },
+    }).catch(err => this.logger.error('Failed to notify renter', err));
+
+    await this.notificationsService.sendNotification({
+      userId: booking.listing.ownerId,
+      type: NotificationType.DISPUTE_UPDATED,
+      title: 'Dispute payout processed',
+      message: payoutAmount > 0
+        ? `A refund of ${payoutAmount} ${dto.currency} will be issued to the renter for dispute ${disputeId}`
+        : `The dispute has been resolved in your favor - funds will be released`,
+      channels: ['IN_APP', 'EMAIL'],
+      data: { disputeId, amount: payoutAmount, currency: dto.currency },
+    }).catch(err => this.logger.error('Failed to notify owner', err));
+
     return {
       disputeId,
-      amount: dto.amount,
+      amount: payoutAmount,
       currency: dto.currency,
-      method: dto.method,
-      status: 'PROCESSING',
+      method: dto.method || 'queue',
+      status: 'QUEUED',
+      processedAt: new Date(),
     };
   }
 

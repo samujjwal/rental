@@ -1,0 +1,40 @@
+name: Prisma Access Check
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/**/*.controller.ts'
+  push:
+    branches: [main, develop]
+
+jobs:
+  check-prisma-access:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for direct Prisma access in controllers
+        run: |
+          echo "Checking for direct Prisma access in controllers..."
+          
+          # Search for PrismaService imports in controller files
+          VIOLATIONS=$(grep -r "PrismaService" apps/api/src/modules --include="*.controller.ts" || true)
+          
+          # Search for this.prisma usage in controller files
+          PRISMA_USAGE=$(grep -r "this\.prisma\." apps/api/src/modules --include="*.controller.ts" || true)
+          
+          if [ -n "$VIOLATIONS" ] || [ -n "$PRISMA_USAGE" ]; then
+            echo "❌ VIOLATION FOUND: Controllers should not directly access Prisma"
+            echo ""
+            echo "Files with PrismaService imports:"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "Files with direct Prisma usage:"
+            echo "$PRISMA_USAGE"
+            echo ""
+            echo "Please move all Prisma access to service layers."
+            exit 1
+          else
+            echo "✅ No direct Prisma access found in controllers"
+            exit 0
+          fi

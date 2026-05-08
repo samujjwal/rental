@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
@@ -153,6 +154,22 @@ export class ListingContentService {
     });
     if (!listing) {
       throw new NotFoundException(`Listing ${listingId} not found`);
+    }
+  }
+
+  /**
+   * Verify that the current user owns the listing.
+   */
+  async verifyOwnership(listingId: string, userId: string): Promise<void> {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { ownerId: true },
+    });
+    if (!listing) {
+      throw new NotFoundException(`Listing ${listingId} not found`);
+    }
+    if (listing.ownerId !== userId) {
+      throw new ForbiddenException(`You do not have permission to modify this listing`);
     }
   }
 }

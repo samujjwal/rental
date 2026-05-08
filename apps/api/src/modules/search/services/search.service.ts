@@ -198,15 +198,37 @@ export class SearchService {
     };
 
     // Full-text search via ILIKE (simplified version to avoid tsvector issues)
+    // with fallback to Prisma query if raw SQL fails
     if (searchQuery.query) {
-      const ftsIds = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM properties
-         WHERE title ILIKE '%' || $1 || '%'
+      let ids: string[] = [];
+      try {
+        const ftsIds = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+          `SELECT id FROM properties
+           WHERE title ILIKE '%' || $1 || '%'
            OR description ILIKE '%' || $1 || '%'
            OR city ILIKE '%' || $1 || '%'`,
-        searchQuery.query,
-      );
-      const ids = ftsIds.map((r) => r.id);
+          searchQuery.query,
+        );
+        ids = ftsIds.map((r) => r.id);
+      } catch (sqlError) {
+        // Fallback to Prisma-based search if raw SQL fails
+        this.logger.warn('Raw SQL search failed, falling back to Prisma query', sqlError);
+        const fallbackListings = await this.prisma.listing.findMany({
+          where: {
+            status: PropertyStatus.AVAILABLE,
+            verificationStatus: VerificationStatus.VERIFIED,
+            OR: [
+              { title: { contains: searchQuery.query, mode: 'insensitive' } },
+              { description: { contains: searchQuery.query, mode: 'insensitive' } },
+              { city: { contains: searchQuery.query, mode: 'insensitive' } },
+            ],
+          },
+          select: { id: true },
+          take: 1000,
+        });
+        ids = fallbackListings.map((l) => l.id);
+      }
+
       if (ids.length === 0) {
         // No matches — return empty immediately
         const emptyResult: { 

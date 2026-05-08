@@ -9,13 +9,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
-import { i18nNotFound, i18nForbidden } from '@/common/errors/i18n-exceptions';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard, CurrentUser } from '@/common/auth';
-import { PrismaService } from '@/common/prisma/prisma.service';
 import {
   ListingContentService,
   CreateListingContentDto,
@@ -27,17 +23,7 @@ import {
 export class ListingContentController {
   constructor(
     private readonly contentService: ListingContentService,
-    private readonly prisma: PrismaService,
   ) {}
-
-  private async verifyOwnership(listingId: string, userId: string): Promise<void> {
-    const listing = await this.prisma.listing.findUnique({
-      where: { id: listingId },
-      select: { ownerId: true },
-    });
-    if (!listing) throw i18nNotFound('listing.notFound');
-    if (listing.ownerId !== userId) throw i18nForbidden('listing.unauthorized');
-  }
 
   @Put(':locale')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -50,7 +36,7 @@ export class ListingContentController {
     @Body() body: Omit<CreateListingContentDto, 'listingId' | 'locale'>,
     @CurrentUser('id') userId: string,
   ) {
-    await this.verifyOwnership(listingId, userId);
+    await this.contentService.verifyOwnership(listingId, userId);
     return this.contentService.upsert(listingId, locale, {
       ...body,
       listingId,
@@ -93,7 +79,7 @@ export class ListingContentController {
     @Param('locale') locale: string,
     @CurrentUser('id') userId: string,
   ) {
-    await this.verifyOwnership(listingId, userId);
+    await this.contentService.verifyOwnership(listingId, userId);
     await this.contentService.deleteByLocale(listingId, locale);
   }
 }
