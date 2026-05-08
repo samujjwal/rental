@@ -1,3 +1,12 @@
+---
+status: archived
+source_of_truth: false
+archived_reason: historical-audit
+archived_on: 2026-05-08
+---
+
+> Historical archive. Not a source of truth. Do not use for implementation without validating against live docs and code.
+
 # Product V4.1 End-to-End Correctness, Reliable AI/ML Automation, Duplicate Detection, Restructuring, Minimal API, UI/UX, Backend, and DB Audit Report
 
 ## 1. Executive Summary

@@ -1939,6 +1939,7 @@ enum BookingStatus {
   PENDING
   PENDING_PAYMENT
   PENDING_OWNER_APPROVAL
+  MANUAL_REVIEW
   CONFIRMED
   IN_PROGRESS
   CANCELLED
@@ -2013,13 +2014,28 @@ enum RefundStatus {
   SUCCEEDED
 }
 
+/**
+ * Canonical Deposit Lifecycle
+ *
+ * PENDING: Initial state when deposit is requested but not yet authorized
+ * AUTHORIZED: Deposit hold created on Stripe (payment intent authorized)
+ * HELD: Deposit is actively held during the booking period (interchangeable with AUTHORIZED)
+ * RELEASED: Deposit released back to renter after successful completion
+ * CAPTURED: Deposit captured for damages or other deductions
+ *
+ * Valid transitions:
+ * PENDING -> AUTHORIZED (when payment intent is authorized)
+ * AUTHORIZED -> HELD (when booking starts)
+ * AUTHORIZED/HELD -> RELEASED (when booking completes successfully)
+ * AUTHORIZED/HELD -> CAPTURED (when damages are claimed)
+ * CAPTURED -> RELEASED (remaining balance after deductions)
+ */
 enum DepositStatus {
   PENDING
   AUTHORIZED
   HELD
   RELEASED
   CAPTURED
-  FAILED
 }
 
 enum PayoutStatus {
@@ -2073,6 +2089,7 @@ enum NotificationType {
   BOOKING_CANCELLED
   BOOKING_REMINDER
   PAYMENT_RECEIVED
+  PAYMENT_FAILED
   REVIEW_RECEIVED
   MESSAGE_RECEIVED
   SYSTEM_UPDATE

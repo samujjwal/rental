@@ -1,4 +1,11 @@
-# ADR-001: Listing Core + Extension Model
+---
+status: canonical
+owner: architecture
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
+# ADR 001: Listing Extensibility Model
 
 **Status:** Accepted  
 **Date:** 2026-02-22  

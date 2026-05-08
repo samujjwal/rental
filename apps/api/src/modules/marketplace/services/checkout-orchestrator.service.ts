@@ -355,7 +355,7 @@ export class CheckoutOrchestratorService {
       const idHash = createHash('sha256').update(params.listingId).digest();
       const lockKey1 = idHash.readInt32BE(0);
       const lockKey2 = idHash.readInt32BE(4);
-      await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock($1, $2)`, lockKey1, lockKey2);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey1}, ${lockKey2})`;
 
       const booking = await tx.booking.create({
         data: {

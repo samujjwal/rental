@@ -1,3 +1,10 @@
+---
+status: canonical
+owner: engineering
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # Documentation Map
 
 This directory is the intended home for the repository's live documentation.
@@ -8,7 +15,7 @@ This directory is the intended home for the repository's live documentation.
   Product vision, market framing, requirements, and the canonical feature catalog.
 - [`architecture/`](architecture/)
   Architecture overview, domain model, capability deep dives, ADRs, and diagrams.
-- [`architecture-audit/`](architecture-audit/README.md)
+- [`archive/audits/`](archive/audits/)
   Archive pointer for historical architecture audits and refactor packs.
 - [`engineering/`](engineering/README.md)
   Developer setup, build/test workflows, deployment notes, and engineering policies.
@@ -26,10 +33,9 @@ This directory is the intended home for the repository's live documentation.
 
 ## Current Status
 
-The repository is in the middle of a documentation consolidation effort. Many
-root-level reports and app-local summaries still exist and need to be merged,
-archived, or deleted. The working plan for that effort lives in
-[`CONSOLIDATION_PLAN.md`](CONSOLIDATION_PLAN.md).
+Documentation consolidation completed. All canonical docs have been established
+with proper metadata, superseded docs have been merged or archived, and the
+documentation structure follows the canonical organization defined in this map.
 
 ## Canonical Docs Created So Far
 

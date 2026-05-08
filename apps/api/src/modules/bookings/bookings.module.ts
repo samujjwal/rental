@@ -21,11 +21,12 @@ import { BOOKING_ELIGIBILITY_PORT } from './ports/booking-eligibility.port';
 import { BOOKING_PRICING_PORT } from './ports/booking-pricing.port';
 
 // Register the dev controller only when STRIPE_TEST_BYPASS is active
-// AND we are not in production. This keeps bypass/reset endpoints completely
-// off the production route table.
+// AND NODE_ENV is 'test' or 'e2e'. This aligns with the stricter guardrail
+// in StripeService and prevents bypass in development/staging environments.
+const nodeEnv = process.env['NODE_ENV'] || process.env['nodeEnv'];
 const devControllers =
   process.env['STRIPE_TEST_BYPASS'] === 'true' &&
-  process.env['NODE_ENV'] !== 'production'
+  (nodeEnv === 'test' || nodeEnv === 'e2e')
     ? [BookingsDevController]
     : [];
 

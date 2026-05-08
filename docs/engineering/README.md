@@ -1,3 +1,10 @@
+---
+status: canonical
+owner: engineering
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # Engineering Docs
 
 This area is for durable engineering guidance:

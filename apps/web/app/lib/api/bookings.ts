@@ -9,24 +9,40 @@ import type {
 } from "~/types/booking";
 
 export const bookingsApi = {
-  async getMyBookings(status?: string): Promise<Booking[]> {
-    const params = status ? `?status=${status}` : "";
-    return api.get<Booking[]>(`/bookings/my-bookings${params}`);
+  async getMyBookings(status?: string, page?: number, limit?: number): Promise<{ data: Booking[]; total: number; page: number; limit: number }> {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (page) params.set('page', page.toString());
+    if (limit) params.set('limit', limit.toString());
+    const queryString = params.toString();
+    return api.get<{ data: Booking[]; total: number; page: number; limit: number }>(`/bookings/my-bookings${queryString ? `?${queryString}` : ''}`);
   },
 
-  async getBookingsByRenterId(renterId: string): Promise<Booking[]> {
+  async getBookingsByRenterId(renterId: string, page?: number, limit?: number): Promise<{ data: Booking[]; total: number; page: number; limit: number }> {
     // Backend uses authenticated user for renter bookings
-    return api.get<Booking[]>(`/bookings/my-bookings`);
+    const params = new URLSearchParams();
+    if (page) params.set('page', page.toString());
+    if (limit) params.set('limit', limit.toString());
+    const queryString = params.toString();
+    return api.get<{ data: Booking[]; total: number; page: number; limit: number }>(`/bookings/my-bookings${queryString ? `?${queryString}` : ''}`);
   },
 
-  async getBookingsByOwnerId(ownerId: string): Promise<Booking[]> {
+  async getBookingsByOwnerId(ownerId: string, page?: number, limit?: number): Promise<{ data: Booking[]; total: number; page: number; limit: number }> {
     // Backend uses authenticated user for owner bookings
-    return api.get<Booking[]>(`/bookings/host-bookings`);
+    const params = new URLSearchParams();
+    if (page) params.set('page', page.toString());
+    if (limit) params.set('limit', limit.toString());
+    const queryString = params.toString();
+    return api.get<{ data: Booking[]; total: number; page: number; limit: number }>(`/bookings/host-bookings${queryString ? `?${queryString}` : ''}`);
   },
 
-  async getOwnerBookings(status?: string): Promise<Booking[]> {
-    const params = status ? `?status=${status}` : "";
-    return api.get<Booking[]>(`/bookings/host-bookings${params}`);
+  async getOwnerBookings(status?: string, page?: number, limit?: number): Promise<{ data: Booking[]; total: number; page: number; limit: number }> {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (page) params.set('page', page.toString());
+    if (limit) params.set('limit', limit.toString());
+    const queryString = params.toString();
+    return api.get<{ data: Booking[]; total: number; page: number; limit: number }>(`/bookings/host-bookings${queryString ? `?${queryString}` : ''}`);
   },
 
   async getBookingById(id: string): Promise<Booking> {

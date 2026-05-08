@@ -1,7 +1,11 @@
-# Domain Model
+---
+status: canonical
+owner: architecture
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
 
-This document summarizes the core bounded contexts and domain aggregates that
-shape the rental platform.
+# Domain Model
 
 ## Bounded Contexts
 

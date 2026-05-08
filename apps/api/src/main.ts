@@ -13,19 +13,11 @@ import { SentryExceptionFilter } from './common/telemetry';
 import { I18nExceptionFilter } from './common/filters/i18n-exception.filter';
 import { LocaleInterceptor } from './common/interceptors/locale.interceptor';
 import { LoggerService } from './common/logger/logger.service';
+import { ConfigValidationService } from './config/config-validation.service';
 
 const bootstrapLogger = new Logger('Bootstrap');
 
 async function bootstrap() {
-  // ── Startup environment guards ──────────────────────────────────────────────
-  if (!process.env.JWT_SECRET) {
-    throw new Error('FATAL: JWT_SECRET environment variable is required. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
-  }
-
-  if (!process.env.EMAIL_FROM) {
-    bootstrapLogger.warn('EMAIL_FROM is not set. Transactional emails may fail SPF/DKIM checks.');
-  }
-
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
     rawBody: true,
@@ -38,6 +30,27 @@ async function bootstrap() {
   app.useLogger(loggerService);
 
   const configService = app.get(ConfigService);
+
+  // ── Configuration Validation ──────────────────────────────────────────────
+  // Validate all environment variables for the current environment
+  // This must run before any other initialization to fail fast on config errors
+  const configValidationService = app.get(ConfigValidationService);
+  try {
+    configValidationService.validate();
+  } catch (error) {
+    bootstrapLogger.error('Configuration validation failed. Application cannot start.');
+    throw error;
+  }
+
+  // ── Legacy Startup Guards (kept for backward compatibility) ───────────────
+  // These checks are now redundant with ConfigValidationService but kept as failsafe
+  if (!process.env.JWT_SECRET) {
+    throw new Error('FATAL: JWT_SECRET environment variable is required. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  }
+
+  if (!process.env.EMAIL_FROM) {
+    bootstrapLogger.warn('EMAIL_FROM is not set. Transactional emails may fail SPF/DKIM checks.');
+  }
 
   // Trust proxy — required behind nginx/load-balancer for correct client IP + secure cookies
   const expressApp = app.getHttpAdapter().getInstance();

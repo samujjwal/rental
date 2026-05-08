@@ -1,3 +1,10 @@
+---
+status: canonical
+owner: support
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # Renter Manual
 
 This document summarizes the main renter-facing journeys supported by the platform.

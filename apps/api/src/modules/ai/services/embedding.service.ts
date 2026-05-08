@@ -107,11 +107,7 @@ export class EmbeddingService implements SemanticRankingPort {
 
     // Use raw SQL since Prisma doesn't support vector types directly
     const vectorStr = `[${embedding.join(',')}]`;
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE properties SET embedding = $1::vector WHERE id = $2`,
-      vectorStr,
-      listingId,
-    );
+    await this.prisma.$executeRaw`UPDATE properties SET embedding = ${vectorStr}::vector WHERE id = ${listingId}`;
 
     this.logger.debug(`Updated embedding for listing ${listingId}`);
     return true;

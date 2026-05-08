@@ -51,6 +51,7 @@ import { HealthModule } from './common/health/health.module';
 import configuration from './config/configuration';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { ConfigCascadeModule } from './common/config/config-cascade.module';
+import { ConfigValidationService } from './config/config-validation.service';
 
 @Module({
   imports: [
@@ -135,6 +136,8 @@ import { ConfigCascadeModule } from './common/config/config-cascade.module';
     HealthModule,
   ],
   providers: [
+    // Configuration validation
+    ConfigValidationService,
     // Global rate limiting guard
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Global CSRF guard: JWT Bearer routes are auto-exempt; webhooks use @SkipCsrf()

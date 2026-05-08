@@ -1,4 +1,11 @@
-# Feature Catalog
+---
+status: canonical
+owner: product
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
+# Features Catalog
 
 This document is the canonical high-level feature inventory for the repository.
 It should stay concise, current, and implementation-grounded.

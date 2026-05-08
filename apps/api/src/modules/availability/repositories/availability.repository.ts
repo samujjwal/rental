@@ -2,6 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
+/**
+ * Strict type for availability bulk updates that enforces propertyId inclusion
+ * and separates it from mutable fields to prevent type safety violations.
+ */
+export interface AvailabilityBulkUpdateInput {
+  propertyId: string;
+  updateData: Prisma.AvailabilityUpdateInput;
+}
+
 @Injectable()
 export class AvailabilityRepository {
   private readonly logger = new Logger(AvailabilityRepository.name);
@@ -49,9 +58,8 @@ export class AvailabilityRepository {
       WHERE propertyId = ${listingId}
         AND status IN ('BOOKED', 'BLOCKED')
         AND (
-          (startDate <= ${startDate} AND endDate > ${startDate}) OR
-          (startDate < ${endDate} AND endDate >= ${endDate}) OR
-          (startDate >= ${startDate} AND endDate <= ${endDate})
+          -- Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
+          (startDate < ${endDate} AND endDate > ${startDate})
         )
     `;
     return conflicts;
@@ -134,12 +142,12 @@ export class AvailabilityRepository {
     };
   }
 
-  async bulkUpdateAvailability(updates: Prisma.AvailabilityUpdateInput[]): Promise<void> {
+  async bulkUpdateAvailability(updates: AvailabilityBulkUpdateInput[]): Promise<void> {
     await this.prisma.$transaction(
       updates.map((update) =>
         this.prisma.availability.updateMany({
-          where: { propertyId: (update as any).propertyId as string },
-          data: update,
+          where: { propertyId: update.propertyId },
+          data: update.updateData,
         }),
       ),
     );

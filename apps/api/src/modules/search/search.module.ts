@@ -6,6 +6,13 @@ import { SearchController } from './controllers/search.controller';
 import { AiModule } from '../ai/ai.module';
 import { EmbeddingService } from '../ai/services/embedding.service';
 import { SEMANTIC_RANKING_PORT } from './ports/semantic-ranking.port';
+import {
+  QueryBuilderComponent,
+  GeoEngineComponent,
+  FilterProcessorComponent,
+  CacheManagerComponent,
+  ResultAggregatorComponent,
+} from './components';
 
 @Module({
   imports: [AiModule],
@@ -14,6 +21,12 @@ import { SEMANTIC_RANKING_PORT } from './ports/semantic-ranking.port';
     SearchService,
     RecommendationService,
     SearchRankingService,
+    // Search components
+    QueryBuilderComponent,
+    GeoEngineComponent,
+    FilterProcessorComponent,
+    CacheManagerComponent,
+    ResultAggregatorComponent,
     // Wire the AI EmbeddingService to the Search domain's SemanticRankingPort.
     // SearchService depends only on the port interface; swapping the adapter
     // requires only a change here, not inside SearchService.

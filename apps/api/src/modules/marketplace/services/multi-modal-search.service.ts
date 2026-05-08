@@ -61,7 +61,15 @@ export class MultiModalSearchService {
     const offset = (page - 1) * limit;
 
     // ── Check hot-query cache ──
-    const cacheKey = `search:${JSON.stringify({ q: params.query, t: searchType, f: params.filters, l: params.location, p: page })}`;
+    // Use stable deep serialization with sorted keys for deterministic cache keys
+    const cacheParams = {
+      q: params.query,
+      t: searchType,
+      f: params.filters,
+      l: params.location,
+      p: page,
+    };
+    const cacheKey = `search:${JSON.stringify(cacheParams, Object.keys(cacheParams).sort())}`;
     const cached = await this.cache.get<{ results: any[]; total: number }>(cacheKey);
     if (cached) {
       return { ...cached, searchType, responseTimeMs: Date.now() - start };

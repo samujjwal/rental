@@ -126,7 +126,7 @@ export class PaymentIdempotencyService {
 
     try {
       // Acquire advisory lock to serialize concurrent attempts
-      await this.prisma.$executeRawUnsafe('SELECT pg_advisory_xact_lock($1)', lockKey);
+      await this.prisma.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       // Check if operation can proceed
       const check = await this.canProceed(idempotencyKey, input.entityType, input.entityId);

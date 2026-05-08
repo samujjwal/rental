@@ -1,3 +1,10 @@
+---
+status: canonical
+owner: architecture
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # Architecture Overview
 
 This document is the canonical high-level architecture summary for the monorepo.
@@ -72,6 +79,6 @@ through environment-specific settings documented in
 
 ## Related Docs
 
-- [`domain-model.md`](domain-model.md)
-- [`capabilities/policy-engine.md`](capabilities/policy-engine.md)
+- [`domain-model.md`](domain-model.md) - Core domain model and entity relationships
+- [`capabilities.md`](capabilities.md) - System capabilities and feature specifications
 - [`../adr/`](../adr/)

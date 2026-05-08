@@ -1,10 +1,10 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AvailabilityRepository, AvailabilityBulkUpdateInput } from '../repositories/availability.repository';
 import { PrismaService } from '../../../common/prisma/prisma.service';
-import { AvailabilityRepository } from '../repositories/availability.repository';
+import { CacheService } from '../../../common/cache/cache.service';
 import { BookingRepository } from '../../bookings/repositories/booking.repository';
 import { ListingRepository } from '../../listings/repositories/listing.repository';
-import { CacheService } from '../../../common/cache/cache.service';
 
 @Injectable()
 export class AvailabilityLogicService {
@@ -53,7 +53,7 @@ export class AvailabilityLogicService {
 
     try {
       // Use advisory lock to serialize concurrent reservation attempts for the same listing
-      await this.prisma.$executeRawUnsafe('SELECT pg_advisory_xact_lock($1)', lockKey);
+      await this.prisma.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       // Check for existing conflicts
       const conflicts = await this.detectConflicts(listingId, startDate, endDate);
@@ -155,14 +155,18 @@ export class AvailabilityLogicService {
       return matchingSlot;
     }
 
-    // Create new slot
+    // Fetch listing to get its currency
+    const listing = await this.listingRepository.findById(listingId);
+    const currency = listing?.currency || this.configService.get('DEFAULT_CURRENCY', 'NPR');
+
+    // Create new slot with listing's currency
     return this.availabilityRepository.createAvailabilitySlot({
       listingId,
       inventoryUnitId,
       startTime: startDate,
       endTime: endDate,
       status: 'AVAILABLE',
-      currency: 'NPR', // Default to NPR for GharBatai
+      currency,
       price: null, // Price determined by pricing engine
     } as any);
   }
@@ -803,15 +807,13 @@ export class AvailabilityLogicService {
     return resolution;
   }
 
-  async bulkUpdateAvailability(bulkUpdates: any[]): Promise<any> {
-    const result = await this.availabilityRepository.bulkUpdateAvailability(bulkUpdates);
-    
+  async bulkUpdateAvailability(bulkUpdates: AvailabilityBulkUpdateInput[]): Promise<void> {
+    await this.availabilityRepository.bulkUpdateAvailability(bulkUpdates);
+
     // Invalidate cache for all affected listings
     for (const update of bulkUpdates) {
-      const cacheKey = `availability:${update.listingId}:${update.startDate}:${update.endDate}`;
+      const cacheKey = `availability:${update.propertyId}`;
       await this.cacheService.del(cacheKey);
     }
-    
-    return result;
   }
 }

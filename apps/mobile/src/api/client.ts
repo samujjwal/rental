@@ -82,8 +82,22 @@ function createMobileClient(config: MobileClientConfig = {}) {
       }
 
       if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || `Request failed (${response.status})`);
+        const text = await response.text();
+        // Try to parse as JSON error envelope
+        try {
+          const errorJson = JSON.parse(text);
+          const errorMessage = errorJson.message || errorJson.error || text;
+          const errorCode = errorJson.code || errorJson.statusCode;
+          const errorDetails = errorJson.errors || errorJson.details;
+          throw new Error(
+            typeof errorMessage === 'string'
+              ? errorMessage
+              : JSON.stringify(errorMessage),
+          );
+        } catch {
+          // If JSON parsing fails, throw the original text
+          throw new Error(text || `Request failed (${response.status})`);
+        }
       }
 
       if (response.status === 204) {
@@ -171,19 +185,27 @@ function createMobileClient(config: MobileClientConfig = {}) {
 
     getMyListings: () => request<ListingDetail[]>('/listings/my-listings'),
 
-    getMyBookings: (status?: string) =>
-      request<BookingSummary[]>(
-        `/bookings/my-bookings${
-          status ? `?status=${encodeURIComponent(status.toUpperCase())}` : ''
-        }`,
-      ),
+    getMyBookings: (status?: string, page?: number, limit?: number) => {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status.toUpperCase());
+      if (page) params.set('page', page.toString());
+      if (limit) params.set('limit', limit.toString());
+      const queryString = params.toString();
+      return request<{ data: BookingSummary[]; total: number; page: number; limit: number }>(
+        `/bookings/my-bookings${queryString ? `?${queryString}` : ''}`,
+      );
+    },
 
-    getHostBookings: (status?: string) =>
-      request<BookingSummary[]>(
-        `/bookings/host-bookings${
-          status ? `?status=${encodeURIComponent(status.toUpperCase())}` : ''
-        }`,
-      ),
+    getHostBookings: (status?: string, page?: number, limit?: number) => {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status.toUpperCase());
+      if (page) params.set('page', page.toString());
+      if (limit) params.set('limit', limit.toString());
+      const queryString = params.toString();
+      return request<{ data: BookingSummary[]; total: number; page: number; limit: number }>(
+        `/bookings/host-bookings${queryString ? `?${queryString}` : ''}`,
+      );
+    },
 
     getConversations: async () => {
       const response = await request<{ conversations: any[] }>('/conversations');
@@ -731,12 +753,13 @@ export const mobileClient = createMobileClient({
 });
 
 /**
- * Authenticated fetch wrapper with automatic 401 refresh.
+ * Authenticated fetch wrapper with automatic 401 refresh and timeout.
  * Use this for custom API calls not covered by mobileClient.
  */
 export async function authenticatedFetch<T>(
   path: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  timeoutMs: number = 15000,
 ): Promise<T> {
   const headers = new Headers(init.headers || {});
   if (!headers.has('Content-Type')) {
@@ -746,26 +769,62 @@ export async function authenticatedFetch<T>(
     headers.set('Authorization', `Bearer ${cachedToken}`);
   }
 
-  let response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (response.status === 401) {
-    const refreshed = await attemptTokenRefresh();
-    if (refreshed) {
-      headers.set('Authorization', `Bearer ${cachedToken}`);
-      response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
-    } else {
-      await authStore.clearTokens();
-      cachedToken = null;
-      onForceLogout?.();
-      throw new Error('Session expired. Please sign in again.');
+  try {
+    let response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
+
+    if (response.status === 401) {
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed) {
+        headers.set('Authorization', `Bearer ${cachedToken}`);
+        // Create a fresh AbortController for the retry
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), timeoutMs);
+        try {
+          response = await fetch(`${API_BASE_URL}${path}`, {
+            ...init,
+            headers,
+            signal: retryController.signal,
+          });
+        } finally {
+          clearTimeout(retryTimeoutId);
+        }
+      } else {
+        await authStore.clearTokens();
+        cachedToken = null;
+        onForceLogout?.();
+        throw new Error('Session expired. Please sign in again.');
+      }
     }
-  }
 
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed (${response.status})`);
-  }
+    if (!response.ok) {
+      const text = await response.text();
+      // Try to parse as JSON error envelope
+      try {
+        const errorJson = JSON.parse(text);
+        const errorMessage = errorJson.message || errorJson.error || text;
+        const errorCode = errorJson.code || errorJson.statusCode;
+        const errorDetails = errorJson.errors || errorJson.details;
+        throw new Error(
+          typeof errorMessage === 'string'
+            ? errorMessage
+            : JSON.stringify(errorMessage),
+        );
+      } catch {
+        // If JSON parsing fails, throw the original text
+        throw new Error(text || `Request failed (${response.status})`);
+      }
+    }
 
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+    if (response.status === 204) return undefined as T;
+    return response.json() as Promise<T>;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

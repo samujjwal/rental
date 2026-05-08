@@ -270,12 +270,13 @@ export class WebhookService implements OnModuleInit {
 
   /**
    * Handle successful payment intent
+   * Canonical lookup: uses paymentIntentId as the single source of truth for payment records
    */
   private async handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
     const { id, amount, currency, metadata } = paymentIntent;
 
     try {
-      // Find payment record by Stripe payment intent ID
+      // Canonical lookup: use paymentIntentId as the single source of truth
       const payment = await this.prisma.payment.findFirst({
         where: { stripePaymentIntentId: id },
         include: { booking: true },
@@ -404,11 +405,13 @@ export class WebhookService implements OnModuleInit {
 
   /**
    * Handle failed payment intent
+   * Canonical lookup: uses paymentIntentId as the single source of truth for payment records
    */
   private async handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
     const { id, last_payment_error } = paymentIntent;
 
     try {
+      // Canonical lookup: use paymentIntentId as the single source of truth
       const payment = await this.prisma.payment.findFirst({
         where: { stripePaymentIntentId: id },
         include: { booking: true },
@@ -476,11 +479,13 @@ export class WebhookService implements OnModuleInit {
 
   /**
    * Handle canceled payment intent
+   * Canonical lookup: uses paymentIntentId as the single source of truth for payment records
    */
   private async handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) {
     const { id } = paymentIntent;
 
     try {
+      // Canonical lookup: use paymentIntentId as the single source of truth
       const payment = await this.prisma.payment.findFirst({
         where: { stripePaymentIntentId: id },
       });
@@ -504,11 +509,13 @@ export class WebhookService implements OnModuleInit {
   /**
    * Handle payment intent requires action (3DS/SCA authentication needed).
    * Updates payment status and notifies the renter to complete authentication.
+   * Canonical lookup: uses paymentIntentId as the single source of truth for payment records
    */
   private async handlePaymentIntentRequiresAction(paymentIntent: Stripe.PaymentIntent) {
     const { id } = paymentIntent;
 
     try {
+      // Canonical lookup: use paymentIntentId as the single source of truth
       const payment = await this.prisma.payment.findFirst({
         where: { stripePaymentIntentId: id },
         include: { booking: true },
@@ -569,7 +576,7 @@ export class WebhookService implements OnModuleInit {
    * Handle refunded charge
    */
   private async handleChargeRefunded(charge: Stripe.Charge) {
-    const { id, amount_refunded, amount, refunds } = charge;
+    const { id, amount_refunded, amount, refunds, payment_intent } = charge;
 
     if (!refunds?.data?.length) {
       this.logger.warn(`Charge ${id} marked as refunded but no refund data present`);
@@ -590,8 +597,15 @@ export class WebhookService implements OnModuleInit {
     const isFullRefund = amount > 0 && amount_refunded >= amount;
 
     try {
+      // Canonical lookup: use paymentIntentId instead of chargeId
+      const paymentIntentId = typeof payment_intent === 'string' ? payment_intent : payment_intent?.id;
+      if (!paymentIntentId) {
+        this.logger.warn(`Charge ${id} has no payment_intent, cannot look up payment`);
+        return;
+      }
+
       const payment = await this.prisma.payment.findFirst({
-        where: { stripeChargeId: id },
+        where: { stripePaymentIntentId: paymentIntentId },
         include: { booking: true },
       });
 

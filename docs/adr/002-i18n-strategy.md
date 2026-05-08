@@ -1,4 +1,11 @@
-# ADR-002: Internationalization Strategy
+---
+status: canonical
+owner: architecture
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
+# ADR 002: Internationalization Strategy
 
 **Status:** Accepted  
 **Date:** 2026-02-22  

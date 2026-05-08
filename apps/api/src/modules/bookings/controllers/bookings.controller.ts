@@ -332,6 +332,13 @@ export class BookingsController {
     };
   }
 
+  @Get('state-machine-metadata')
+  @ApiOperation({ summary: 'Get booking state machine metadata' })
+  @ApiResponse({ status: 200, description: 'State machine metadata retrieved' })
+  async getStateMachineMetadata() {
+    return this.stateMachine.getMetadata();
+  }
+
   @Get(':id/available-transitions')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

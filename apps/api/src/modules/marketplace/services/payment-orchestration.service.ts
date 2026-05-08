@@ -280,6 +280,7 @@ export class PaymentOrchestrationService {
   /**
    * Create an escrow hold for a booking.
    * Funds are held until check-in + hold period expires.
+   * Idempotent: duplicate calls for the same bookingId return the existing escrow.
    */
   async createEscrowHold(params: {
     bookingId: string;
@@ -288,6 +289,29 @@ export class PaymentOrchestrationService {
     holdDays: number;
     transactionId: string;
   }): Promise<any> {
+    // Idempotency check: return existing escrow if already created for this booking
+    const existingEscrow = await this.prisma.escrowTransaction.findFirst({
+      where: {
+        bookingId: params.bookingId,
+        status: { in: ['FUNDED', 'RELEASED', 'DISPUTED'] },
+      },
+    });
+
+    if (existingEscrow) {
+      this.logger.log(`Escrow already exists for booking ${params.bookingId}, returning existing escrow ${existingEscrow.id}`);
+      return existingEscrow;
+    }
+
+    // Use idempotency key to prevent race conditions
+    const idemKey = `${PaymentOrchestrationService.IDEMPOTENCY_PREFIX}escrow:${params.bookingId}`;
+    const idemSet = await this.cache.setNx(idemKey, '1', PaymentOrchestrationService.IDEMPOTENCY_TTL);
+    
+    if (!idemSet) {
+      // Another request is processing this escrow creation
+      this.logger.warn(`Escrow creation already in progress for booking ${params.bookingId}`);
+      throw new Error('Escrow creation already in progress');
+    }
+
     const releaseDate = new Date();
     releaseDate.setDate(releaseDate.getDate() + params.holdDays);
 

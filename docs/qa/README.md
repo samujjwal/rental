@@ -1,3 +1,10 @@
+---
+status: canonical
+owner: qa
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # QA Documentation
 
 This area contains human-readable validation material including manual test cases, release gates, and QA checklists.

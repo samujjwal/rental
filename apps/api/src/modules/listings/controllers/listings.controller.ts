@@ -17,6 +17,8 @@ import {
   Inject,
   forwardRef,
   NotFoundException,
+  ForbiddenException,
+  BadRequestException,
   Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
@@ -77,14 +79,28 @@ export class ListingsController {
   @ApiQuery({ name: 'minPrice', required: false, type: Number })
   @ApiQuery({ name: 'maxPrice', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'ownerId', required: false, type: String, description: 'Filter by owner ID (admin only)' })
   @ApiResponse({ status: 200, description: 'Listings retrieved successfully' })
   async findAll(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query() filters?: ListingFilters,
+    @Query('ownerId') ownerId?: string,
+    @CurrentUser('id') currentUserId?: string,
+    @CurrentUser('role') currentUserRole?: string,
   ) {
+    // Only admins can filter by ownerId
+    if (ownerId && currentUserRole !== 'ADMIN') {
+      throw new ForbiddenException('Only admins can filter by ownerId');
+    }
+
+    // If ownerId is provided and user is admin, add it to filters
+    const filtersWithOwner = ownerId && currentUserRole === 'ADMIN'
+      ? { ...filters, ownerId }
+      : filters || {};
+
     const result = await this.listingsService.findAll(
-      filters || {},
+      filtersWithOwner,
       page || 1,
       limit || 20,
     );
@@ -155,18 +171,6 @@ export class ListingsController {
   @ApiResponse({ status: 404, description: 'Listing not found' })
   async findBySlug(@Param('slug') slug: string) {
     const listing = await this.listingsService.findBySlug(slug);
-    return this.mapToFrontendListing(listing);
-  }
-
-  @Get(':id')
-  @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Get listing by ID' })
-  @ApiResponse({ status: 200, description: 'Listing retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Listing not found' })
-  async findById(@Param('id') id: string, @Req() req: any) {
-    // Optionally use authenticated user context to allow owners/admins to see their own non-AVAILABLE listings
-    const user = req.user as { id?: string; role?: string } | undefined;
-    const listing = await this.listingsService.findById(id, false, user?.id, user?.role);
     return this.mapToFrontendListing(listing);
   }
 
@@ -361,11 +365,18 @@ export class ListingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create availability rule for listing' })
   @ApiResponse({ status: 201, description: 'Availability rule created' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not listing owner or authorized org member' })
   async createAvailability(
     @Param('id') listingId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole: string,
     @Body() dto: Omit<CreateAvailabilityDto, 'propertyId'>,
   ) {
-    return this.availabilityService.createAvailability({ ...dto, propertyId: listingId });
+    return this.availabilityService.createAvailability(
+      { ...dto, propertyId: listingId },
+      userId,
+      userRole,
+    );
   }
 
   @Get(':id/availability')
@@ -436,11 +447,18 @@ export class ListingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update listing availability (alias for POST)' })
   @ApiResponse({ status: 200, description: 'Availability updated' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not listing owner or authorized org member' })
   async updateAvailability(
     @Param('id') listingId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole: string,
     @Body() dto: Omit<CreateAvailabilityDto, 'propertyId'>,
   ) {
-    return this.availabilityService.createAvailability({ ...dto, propertyId: listingId });
+    return this.availabilityService.createAvailability(
+      { ...dto, propertyId: listingId },
+      userId,
+      userRole,
+    );
   }
 
   @Post(':id/images')
@@ -448,6 +466,8 @@ export class ListingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Upload images for a listing' })
   @ApiResponse({ status: 200, description: 'Images uploaded' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not listing owner' })
+  @ApiResponse({ status: 404, description: 'Listing not found' })
   async uploadImages(
     @Param('id') listingId: string,
     @CurrentUser('id') userId: string,
@@ -455,8 +475,19 @@ export class ListingsController {
   ) {
     const listing = await this.listingsService.findOne(listingId);
     if (!listing) throw new NotFoundException('Listing not found');
+    if (listing.ownerId !== userId) {
+      throw new ForbiddenException('Only the listing owner can upload images');
+    }
+    // Validate URLs
+    if (!Array.isArray(urls)) {
+      throw new BadRequestException('urls must be an array');
+    }
+    const validUrls = urls.filter((url) => typeof url === 'string' && url.length > 0);
+    if (validUrls.length === 0) {
+      throw new BadRequestException('No valid image URLs provided');
+    }
     const existingImages = Array.isArray(listing.photos) ? listing.photos : [];
-    const updatedImages = [...existingImages, ...(urls || [])];
+    const updatedImages = [...existingImages, ...validUrls];
     await this.listingsService.update(listingId, userId, { images: updatedImages });
     return { images: updatedImages };
   }
@@ -466,6 +497,8 @@ export class ListingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete images from a listing' })
   @ApiResponse({ status: 200, description: 'Images removed' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not listing owner' })
+  @ApiResponse({ status: 404, description: 'Listing not found' })
   async deleteImages(
     @Param('id') listingId: string,
     @CurrentUser('id') userId: string,
@@ -473,6 +506,13 @@ export class ListingsController {
   ) {
     const listing = await this.listingsService.findOne(listingId);
     if (!listing) throw new NotFoundException('Listing not found');
+    if (listing.ownerId !== userId) {
+      throw new ForbiddenException('Only the listing owner can delete images');
+    }
+    // Validate URLs
+    if (!Array.isArray(urls)) {
+      throw new BadRequestException('urls must be an array');
+    }
     const existingImages = Array.isArray(listing.photos) ? listing.photos : [];
     const updatedImages = existingImages.filter((img: string) => !urls.includes(img));
     await this.listingsService.update(listingId, userId, { images: updatedImages });
@@ -504,5 +544,18 @@ export class ListingsController {
       radius: radiusKm,
       limit: maxResults,
     } as SearchQuery);
+  }
+
+  // IMPORTANT: This route must be LAST to avoid conflicts with nested routes like :id/stats, :id/availability, etc.
+  @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get listing by ID' })
+  @ApiResponse({ status: 200, description: 'Listing retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Listing not found' })
+  async findById(@Param('id') id: string, @Req() req: any) {
+    // Optionally use authenticated user context to allow owners/admins to see their own non-AVAILABLE listings
+    const user = req.user as { id?: string; role?: string } | undefined;
+    const listing = await this.listingsService.findById(id, false, user?.id, user?.role);
+    return this.mapToFrontendListing(listing);
   }
 }

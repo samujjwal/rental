@@ -29,7 +29,9 @@ export type BookingTransition =
   | 'RESOLVE_DISPUTE_OWNER_FAVOR'
   | 'RESOLVE_DISPUTE_RENTER_FAVOR'
   | 'REFUND'
-  | 'EXPIRE';
+  | 'EXPIRE'
+  | 'ADMIN_APPROVE_REVIEW'
+  | 'ADMIN_REJECT_REVIEW';
 
 interface StateTransition {
   from: BookingStatus;
@@ -110,6 +112,29 @@ export class BookingStateMachineService {
         to: BookingStatus.CONFIRMED,
         transition: 'COMPLETE_PAYMENT',
         allowedRoles: ['RENTER', 'SYSTEM'],
+        preconditions: async (booking: any) => {
+          // Prevent payment completion if booking is in MANUAL_REVIEW status
+          if (booking.status === 'MANUAL_REVIEW') {
+            return false;
+          }
+          return true;
+        },
+      },
+
+      // MANUAL_REVIEW → PENDING_PAYMENT (admin approves manual review)
+      {
+        from: 'MANUAL_REVIEW' as BookingStatus,
+        to: BookingStatus.PENDING_PAYMENT,
+        transition: 'ADMIN_APPROVE_REVIEW',
+        allowedRoles: ['ADMIN'],
+      },
+
+      // MANUAL_REVIEW → CANCELLED (admin rejects manual review)
+      {
+        from: 'MANUAL_REVIEW' as BookingStatus,
+        to: BookingStatus.CANCELLED,
+        transition: 'ADMIN_REJECT_REVIEW',
+        allowedRoles: ['ADMIN'],
       },
 
       // PENDING_PAYMENT → PAYMENT_FAILED (payment attempt failed)
@@ -394,6 +419,49 @@ export class BookingStateMachineService {
       .map((t) => t.transition);
   }
 
+  getMetadata() {
+    // Extract all unique statuses from transitions
+    const allStatuses = new Set<BookingStatus>();
+    const statusLabels: Record<string, string> = {};
+    const transitionsByStatus: Record<string, Record<string, BookingTransition[]>> = {};
+
+    // Add all statuses from schema enum
+    Object.values(BookingStatus).forEach((status) => {
+      allStatuses.add(status);
+      // Convert snake_case to Title Case for labels
+      statusLabels[status] = status
+        .split('_')
+        .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+        .join(' ');
+    });
+
+    // Build transitions map by status and role
+    this.transitions.forEach((t) => {
+      if (!transitionsByStatus[t.from]) {
+        transitionsByStatus[t.from] = {};
+      }
+      t.allowedRoles.forEach((role) => {
+        if (!transitionsByStatus[t.from][role]) {
+          transitionsByStatus[t.from][role] = [];
+        }
+        transitionsByStatus[t.from][role].push(t.transition);
+      });
+    });
+
+    return {
+      statuses: Array.from(allStatuses),
+      statusLabels,
+      transitions: this.transitions.map((t) => ({
+        from: t.from,
+        to: t.to,
+        transition: t.transition,
+        allowedRoles: t.allowedRoles,
+      })),
+      transitionsByStatus,
+      roles: ['RENTER', 'OWNER', 'ADMIN', 'SYSTEM'],
+    };
+  }
+
   private async emitStateChangeEvent(
     bookingId: string,
     newState: BookingStatus,
@@ -442,7 +510,7 @@ export class BookingStateMachineService {
         this.logger.log(`Payment failed for booking ${bookingId}, grace period started`);
         await this.notificationsService.sendNotification({
           userId: booking.renterId,
-          type: NotificationType.BOOKING_CANCELLED,
+          type: 'PAYMENT_FAILED' as NotificationType,
           title: 'Payment failed',
           message: `Your payment for booking ${bookingId} failed. Please retry before the booking is cancelled.`,
           data: { bookingId, action: 'retry_payment' },

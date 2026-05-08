@@ -1,4 +1,11 @@
-# ADR-003: Currency and FX Strategy
+---
+status: canonical
+owner: architecture
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
+# ADR 003: Currency and FX Strategy
 
 **Status:** Accepted  
 **Date:** 2026-02-22  

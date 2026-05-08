@@ -1,3 +1,10 @@
+---
+status: canonical
+owner: product
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # Product Requirements
 
 This document is the canonical home for durable product requirements. It

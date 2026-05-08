@@ -1,8 +1,13 @@
+---
+status: canonical
+owner: engineering
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # Integrations Guide
 
 This document is the canonical summary of third-party services used by the platform.
-
-## Core Integrations
 
 ### Payments
 

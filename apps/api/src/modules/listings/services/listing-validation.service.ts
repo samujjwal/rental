@@ -78,7 +78,14 @@ export class PropertyValidationService {
    * Validate pricing configuration for a listing.
    * Checks that prices are positive and pricing mode is consistent.
    */
-  validatePricingConfiguration(listing: Partial<Listing>): ValidationResult {
+  validatePricingConfiguration(listing: Partial<Listing> & {
+    hourlyPrice?: number | string;
+    dailyPrice?: number | string;
+    weeklyPrice?: number | string;
+    monthlyPrice?: number | string;
+    requiresDeposit?: boolean;
+    depositAmount?: number | string;
+  }): ValidationResult {
     const errors: string[] = [];
 
     if (listing.basePrice !== undefined && listing.basePrice !== null) {
@@ -91,10 +98,10 @@ export class PropertyValidationService {
     // Check that at least one price is set
     const hasAnyPrice = [
       listing.basePrice,
-      (listing as any).hourlyPrice,
-      (listing as any).dailyPrice,
-      (listing as any).weeklyPrice,
-      (listing as any).monthlyPrice,
+      listing.hourlyPrice,
+      listing.dailyPrice,
+      listing.weeklyPrice,
+      listing.monthlyPrice,
     ].some((p) => p !== undefined && p !== null && toNumber(p) > 0);
 
     if (!hasAnyPrice && listing.basePrice === undefined) {
@@ -102,9 +109,7 @@ export class PropertyValidationService {
     }
 
     // Validate deposit configuration
-    const requiresDeposit = (listing as any).requiresDeposit;
-    const depositAmount = (listing as any).depositAmount;
-    if (requiresDeposit && (!depositAmount || toNumber(depositAmount) <= 0)) {
+    if (listing.requiresDeposit && (!listing.depositAmount || toNumber(listing.depositAmount) <= 0)) {
       errors.push('Deposit amount must be positive when deposit is required');
     }
 
@@ -118,11 +123,14 @@ export class PropertyValidationService {
    * Validate booking configuration for a listing.
    * Checks min/max booking duration and booking mode settings.
    */
-  validateBookingConfiguration(listing: Partial<Listing>): ValidationResult {
+  validateBookingConfiguration(listing: Partial<Listing> & {
+    minBookingHours?: number;
+    maxBookingDays?: number;
+  }): ValidationResult {
     const errors: string[] = [];
 
-    const minHours = (listing as any).minBookingHours;
-    const maxDays = (listing as any).maxBookingDays;
+    const minHours = listing.minBookingHours;
+    const maxDays = listing.maxBookingDays;
 
     if (minHours !== undefined && minHours < 1) {
       errors.push('Minimum booking duration must be at least 1 hour');

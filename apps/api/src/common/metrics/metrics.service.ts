@@ -303,4 +303,231 @@ export class MetricsService {
       { name: 'disputes.open', value: openDisputes, dimensions: {}, period, periodStart: now },
     ];
   }
+
+  // --- Real-time metrics for critical flows ---
+
+  /**
+   * Record booking creation metric
+   */
+  async recordBookingCreated(bookingId: string, listingId: string, amount: number): Promise<void> {
+    const cacheKey = `metrics:booking:created`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Booking created metric: ${bookingId}`, {
+      bookingId,
+      listingId,
+      amount,
+    });
+  }
+
+  /**
+   * Record booking failure metric
+   */
+  async recordBookingFailed(bookingId: string, reason: string): Promise<void> {
+    const cacheKey = `metrics:booking:failed`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Booking failed metric: ${bookingId}`, {
+      bookingId,
+      reason,
+    });
+  }
+
+  /**
+   * Record double-booking prevention metric
+   */
+  async recordDoubleBookingPrevented(bookingId: string, listingId: string): Promise<void> {
+    const cacheKey = `metrics:booking:double_booking_prevented`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.warn(`Double-booking prevented: ${bookingId}`, {
+      bookingId,
+      listingId,
+    });
+  }
+
+  /**
+   * Record webhook processing metric
+   */
+  async recordWebhookProcessed(eventType: string, paymentIntentId: string): Promise<void> {
+    const cacheKey = `metrics:webhook:processed:${eventType}`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Webhook processed: ${eventType}`, {
+      eventType,
+      paymentIntentId: this.redactPaymentId(paymentIntentId),
+    });
+  }
+
+  /**
+   * Record webhook retry metric
+   */
+  async recordWebhookRetried(eventType: string, attempt: number): Promise<void> {
+    const cacheKey = `metrics:webhook:retried:${eventType}`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.warn(`Webhook retried: ${eventType}`, {
+      eventType,
+      attempt,
+    });
+  }
+
+  /**
+   * Record webhook DLQ (dead letter queue) metric
+   */
+  async recordWebhookDLQ(eventType: string, error: string): Promise<void> {
+    const cacheKey = `metrics:webhook:dlq:${eventType}`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.error(`Webhook DLQ: ${eventType}`, {
+      eventType,
+      error,
+    });
+  }
+
+  /**
+   * Record notification delivered metric
+   */
+  async recordNotificationDelivered(notificationId: string, type: string, userId: string): Promise<void> {
+    const cacheKey = `metrics:notification:delivered:${type}`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Notification delivered: ${type}`, {
+      notificationId,
+      type,
+      userId: this.redactUserId(userId),
+    });
+  }
+
+  /**
+   * Record notification failed metric
+   */
+  async recordNotificationFailed(notificationId: string, type: string, error: string): Promise<void> {
+    const cacheKey = `metrics:notification:failed:${type}`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.warn(`Notification failed: ${type}`, {
+      notificationId,
+      type,
+      error,
+    });
+  }
+
+  /**
+   * Record payout created metric
+   */
+  async recordPayoutCreated(payoutId: string, ownerId: string, amount: number): Promise<void> {
+    const cacheKey = `metrics:payout:created`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Payout created: ${payoutId}`, {
+      payoutId,
+      ownerId: this.redactUserId(ownerId),
+      amount,
+    });
+  }
+
+  /**
+   * Record payout failed metric
+   */
+  async recordPayoutFailed(payoutId: string, error: string): Promise<void> {
+    const cacheKey = `metrics:payout:failed`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.error(`Payout failed: ${payoutId}`, {
+      payoutId,
+      error,
+    });
+  }
+
+  /**
+   * Record refund processed metric
+   */
+  async recordRefundProcessed(refundId: string, paymentId: string, amount: number): Promise<void> {
+    const cacheKey = `metrics:refund:processed`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Refund processed: ${refundId}`, {
+      refundId,
+      paymentId: this.redactPaymentId(paymentId),
+      amount,
+    });
+  }
+
+  /**
+   * Record booking state transition metric
+   */
+  async recordStateTransition(
+    bookingId: string,
+    fromStatus: string,
+    toStatus: string,
+    transition: string,
+  ): Promise<void> {
+    const cacheKey = `metrics:booking:transition:${toStatus}`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Booking state transition: ${bookingId}`, {
+      bookingId,
+      fromStatus,
+      toStatus,
+      transition,
+    });
+  }
+
+  /**
+   * Record availability reservation metric
+   */
+  async recordAvailabilityReserved(listingId: string, startDate: Date, endDate: Date): Promise<void> {
+    const cacheKey = `metrics:availability:reserved`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Availability reserved: ${listingId}`, {
+      listingId,
+      startDate,
+      endDate,
+    });
+  }
+
+  /**
+   * Record availability release metric
+   */
+  async recordAvailabilityReleased(listingId: string, startDate: Date, endDate: Date): Promise<void> {
+    const cacheKey = `metrics:availability:released`;
+    await this.cache.increment(cacheKey);
+    await this.cache.expire(cacheKey, 3600);
+    
+    this.logger.debug(`Availability released: ${listingId}`, {
+      listingId,
+      startDate,
+      endDate,
+    });
+  }
+
+  // --- Helper methods for PII redaction in logs ---
+
+  private redactPaymentId(id: string): string {
+    if (!id) return '[NONE]';
+    if (id.startsWith('pi_')) {
+      return `pi_${id.substring(3, 10)}...`;
+    }
+    return `${id.substring(0, 8)}...`;
+  }
+
+  private redactUserId(id: string): string {
+    if (!id) return '[NONE]';
+    return `${id.substring(0, 8)}...`;
+  }
 }

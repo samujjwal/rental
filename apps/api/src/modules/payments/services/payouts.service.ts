@@ -1,5 +1,6 @@
 import { InjectQueue } from '@nestjs/bull';
 import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
@@ -27,6 +28,7 @@ export class PayoutsService {
       select: {
         stripeConnectId: true,
         stripeOnboardingComplete: true,
+        stripePayoutsEnabled: true,
       },
     });
 
@@ -36,6 +38,29 @@ export class PayoutsService {
 
     if (!owner.stripeOnboardingComplete) {
       throw i18nBadRequest('payment.ownerNotVerified');
+    }
+
+    if (!owner.stripePayoutsEnabled) {
+      throw new BadRequestException({
+        message: 'Stripe payouts are not enabled for this account',
+        code: 'PAYOUTS_NOT_ENABLED',
+      });
+    }
+
+    // Validate KYC (Know Your Customer) verification
+    const verifiedIdentity = await this.prisma.identityDocument.findFirst({
+      where: {
+        userId: ownerId,
+        status: 'VERIFIED',
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (!verifiedIdentity) {
+      throw new BadRequestException({
+        message: 'KYC verification is required before creating payouts',
+        code: 'KYC_NOT_VERIFIED',
+      });
     }
 
     // Get pending earnings

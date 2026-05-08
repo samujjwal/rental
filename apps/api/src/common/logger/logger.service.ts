@@ -2,20 +2,36 @@ import { Injectable, LoggerService as NestLoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as winston from 'winston';
 import DailyRotateFile = require('winston-daily-rotate-file');
+import { sanitizeLogData, getCorrelationId, generateCorrelationId } from './redaction.util';
+
+interface LogContext {
+  context?: string;
+  correlationId?: string;
+  [key: string]: any;
+}
 
 @Injectable()
 export class LoggerService implements NestLoggerService {
   private logger: winston.Logger;
+  private static currentCorrelationId: string | null = null;
 
   constructor(private configService: ConfigService) {
     const logLevel = this.configService.get('LOG_LEVEL', 'info');
     const isProduction = this.configService.get('NODE_ENV') === 'production';
 
-    // Define log format
+    // Define log format with correlation ID
     const logFormat = winston.format.combine(
       winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       winston.format.errors({ stack: true }),
       winston.format.splat(),
+      winston.format((info) => {
+        // Add correlation ID to all logs
+        if (!info.correlationId) {
+          info.correlationId = LoggerService.currentCorrelationId || generateCorrelationId();
+        }
+        // Sanitize sensitive data
+        return sanitizeLogData(info);
+      })(),
       winston.format.json(),
     );
 
@@ -23,8 +39,9 @@ export class LoggerService implements NestLoggerService {
     const consoleFormat = winston.format.combine(
       winston.format.colorize(),
       winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-      winston.format.printf(({ timestamp, level, message, context, trace }) => {
-        return `${timestamp} [${context || 'Application'}] ${level}: ${message}${trace ? `\n${trace}` : ''}`;
+      winston.format.printf(({ timestamp, level, message, context, trace, correlationId }) => {
+        const correlationPrefix = correlationId ? `[${correlationId}] ` : '';
+        return `${timestamp} ${correlationPrefix}[${context || 'Application'}] ${level}: ${message}${trace ? `\n${trace}` : ''}`;
       }),
     );
 
@@ -83,6 +100,27 @@ export class LoggerService implements NestLoggerService {
     });
   }
 
+  /**
+   * Set the current correlation ID for this request context
+   */
+  static setCorrelationId(correlationId: string): void {
+    LoggerService.currentCorrelationId = correlationId;
+  }
+
+  /**
+   * Get the current correlation ID
+   */
+  static getCorrelationId(): string | null {
+    return LoggerService.currentCorrelationId;
+  }
+
+  /**
+   * Clear the current correlation ID
+   */
+  static clearCorrelationId(): void {
+    LoggerService.currentCorrelationId = null;
+  }
+
   log(message: string, context?: string) {
     this.logger.info(message, { context });
   }
@@ -105,9 +143,12 @@ export class LoggerService implements NestLoggerService {
 
   // Additional methods for structured logging
   logRequest(req: any, context?: string) {
+    const correlationId = getCorrelationId(req.headers || {});
+    LoggerService.setCorrelationId(correlationId);
+
     this.logger.info('HTTP Request', {
       context: context || 'HTTP',
-      requestId: req.requestId,
+      correlationId,
       method: req.method,
       url: req.url,
       ip: req.ip,
@@ -119,7 +160,7 @@ export class LoggerService implements NestLoggerService {
   logResponse(req: any, res: any, responseTime: number, context?: string) {
     this.logger.info('HTTP Response', {
       context: context || 'HTTP',
-      requestId: req.requestId,
+      correlationId: req.requestId || LoggerService.currentCorrelationId,
       method: req.method,
       url: req.url,
       statusCode: res.statusCode,
@@ -131,7 +172,8 @@ export class LoggerService implements NestLoggerService {
   logDatabaseQuery(query: string, duration: number, context?: string) {
     this.logger.debug('Database Query', {
       context: context || 'Database',
-      query,
+      correlationId: LoggerService.currentCorrelationId,
+      query: query.substring(0, 500), // Truncate long queries
       duration: `${duration}ms`,
     });
   }
@@ -139,23 +181,26 @@ export class LoggerService implements NestLoggerService {
   logPaymentTransaction(transactionData: any, context?: string) {
     this.logger.info('Payment Transaction', {
       context: context || 'Payment',
-      ...transactionData,
+      correlationId: LoggerService.currentCorrelationId,
+      ...sanitizeLogData(transactionData),
     });
   }
 
   logSecurityEvent(event: string, details: any, context?: string) {
     this.logger.warn('Security Event', {
       context: context || 'Security',
+      correlationId: LoggerService.currentCorrelationId,
       event,
-      ...details,
+      ...sanitizeLogData(details),
     });
   }
 
   logBusinessEvent(event: string, details: any, context?: string) {
     this.logger.info('Business Event', {
       context: context || 'Business',
+      correlationId: LoggerService.currentCorrelationId,
       event,
-      ...details,
+      ...sanitizeLogData(details),
     });
   }
 }

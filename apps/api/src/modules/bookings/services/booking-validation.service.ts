@@ -123,14 +123,13 @@ export class BookingValidationService {
     endDate: Date,
   ): Promise<AvailabilityResult> {
     // Check for blocked periods
+    // Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
     const blockedPeriods = await this.prisma.availability.findMany({
       where: {
         propertyId: listingId,
         status: 'BLOCKED',
         OR: [
-          { AND: [{ startDate: { lte: startDate } }, { endDate: { gte: startDate } }] },
-          { AND: [{ startDate: { lte: endDate } }, { endDate: { gte: endDate } }] },
-          { AND: [{ startDate: { gte: startDate } }, { endDate: { lte: endDate } }] },
+          { AND: [{ startDate: { lt: endDate } }, { endDate: { gt: startDate } }] },
         ],
       },
     });
@@ -147,14 +146,13 @@ export class BookingValidationService {
     }
 
     // Check for existing confirmed bookings
+    // Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
     const existingBookings = await this.prisma.booking.findMany({
       where: {
         listingId,
         status: { in: ['CONFIRMED', 'PENDING'] },
         OR: [
-          { AND: [{ startDate: { lte: startDate } }, { endDate: { gt: startDate } }] },
-          { AND: [{ startDate: { lt: endDate } }, { endDate: { gte: endDate } }] },
-          { AND: [{ startDate: { gte: startDate } }, { endDate: { lte: endDate } }] },
+          { AND: [{ startDate: { lt: endDate } }, { endDate: { gt: startDate } }] },
         ],
       },
     });
@@ -220,14 +218,13 @@ export class BookingValidationService {
    * falls back to the booking-conflict check inside the transaction.
    */
   async checkBlockedPeriods(listingId: string, startDate: Date, endDate: Date): Promise<void> {
+    // Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
     const blockedPeriods = await this.prisma.availability.findMany({
       where: {
         propertyId: listingId,
         status: 'BLOCKED',
         OR: [
-          { AND: [{ startDate: { lte: startDate } }, { endDate: { gte: startDate } }] },
-          { AND: [{ startDate: { lte: endDate } }, { endDate: { gte: endDate } }] },
-          { AND: [{ startDate: { gte: startDate } }, { endDate: { lte: endDate } }] },
+          { AND: [{ startDate: { lt: endDate } }, { endDate: { gt: startDate } }] },
         ],
       },
     });

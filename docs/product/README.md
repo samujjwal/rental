@@ -1,3 +1,10 @@
+---
+status: canonical
+owner: product
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # Product Docs
 
 This area is for stable product documentation:

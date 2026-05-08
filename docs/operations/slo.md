@@ -1,3 +1,10 @@
+---
+status: canonical
+owner: operations
+last_reviewed: 2026-05-08
+source_of_truth: true
+---
+
 # Service Level Objectives
 
 This is the canonical home for service-level objectives and error-budget policy.

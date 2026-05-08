@@ -7,8 +7,11 @@ import { AdminContentService } from './services/admin-content.service';
 import { AdminEntityService } from './services/admin-entity.service';
 import { FilterBuilderService } from './services/filter-builder.service';
 import { AdminController } from './controllers/admin.controller';
+import { DLQModule } from './dlq/dlq.module';
+import { AIOverrideModule } from './ai-override/ai-override.module';
 
 @Module({
+  imports: [DLQModule, AIOverrideModule],
   controllers: [AdminController],
   providers: [
     AdminService,

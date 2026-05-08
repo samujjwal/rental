@@ -252,7 +252,7 @@ export class BookingsService {
       constraintEvaluationFailed = true;
     }
 
-    // Determine initial status based on booking mode
+    // Determine initial status based on booking mode and safety/tax check failures
     let initialStatus: BookingStatus;
     // Corrected Enum usage matching Prisma Schema
     if (listing.bookingMode === BookingMode.INSTANT_BOOK) {
@@ -261,48 +261,34 @@ export class BookingsService {
       initialStatus = BookingStatus.PENDING_OWNER_APPROVAL;
     }
 
+    // If safety/tax checks failed non-fatally, set status to MANUAL_REVIEW
+    // This prevents payment/confirmation until admin review clears the booking
+    if (taxCalculationFailed || constraintEvaluationFailed || safetyChecksSkipped.length > 0) {
+      initialStatus = 'MANUAL_REVIEW' as BookingStatus;
+      this.logger.warn(
+        `Booking for listing ${dto.listingId} requires manual review: ` +
+        `taxFailed=${taxCalculationFailed}, constraintFailed=${constraintEvaluationFailed}, ` +
+        `skippedChecks=${safetyChecksSkipped.join(',')}`,
+      );
+    }
+
     // Create booking within transaction to prevent race conditions
-    const booking = (await this.prisma.$transaction(async (tx: any) => {
-      // Acquire PostgreSQL advisory lock on listing ID to serialize booking attempts.
-      // Hash the ID to produce stable 32-bit lock keys regardless of ID format (UUID or CUID).
-      const idHash = createHash('sha256').update(dto.listingId).digest();
-      const lockKeyHi = idHash.readInt32BE(0);
-      const lockKeyLo = idHash.readInt32BE(4);
-      await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock($1, $2)`, lockKeyHi, lockKeyLo);
+    // Use the canonical availability reservation service to check and reserve slots
+    const reservationResult = await this.availabilityService.checkAndReserve(
+      dto.listingId,
+      startDate,
+      endDate,
+    );
 
-      // Check for conflicting bookings within the transaction
-      const conflicts = await tx.booking.findMany({
-        where: {
-          listingId: dto.listingId,
-          status: {
-            notIn: [BookingStatus.CANCELLED, BookingStatus.REFUNDED],
-          },
-          OR: [
-            {
-              AND: [{ startDate: { lte: startDate } }, { endDate: { gte: startDate } }],
-            },
-            {
-              AND: [{ startDate: { lte: endDate } }, { endDate: { gte: endDate } }],
-            },
-            {
-              AND: [{ startDate: { gte: startDate } }, { endDate: { lte: endDate } }],
-            },
-          ],
-        },
+    if (!reservationResult.success) {
+      throw new BadRequestException({
+        message: 'Listing not available for selected dates',
+        conflicts: reservationResult.conflicts,
       });
+    }
 
-      if (conflicts.length > 0) {
-        throw new BadRequestException({
-          message: 'Listing not available for selected dates',
-          conflicts: conflicts.map((c: any) => ({
-            startDate: c.startDate,
-            endDate: c.endDate,
-            bookingId: c.id,
-          })),
-        });
-      }
-
-      // Create booking atomically
+    const booking = (await this.prisma.$transaction(async (tx: any) => {
+      // Create booking atomically (availability already reserved by checkAndReserve)
       const bookingMetadata: Record<string, any> = {};
       if (dto.deliveryMethod) {
         bookingMetadata.deliveryMethod = dto.deliveryMethod;
@@ -379,26 +365,43 @@ export class BookingsService {
       });
 
       // Persist price breakdown line items for the booking (inside transaction)
+      // Price breakdown is REQUIRED for invoice generation and refund calculations
       const days = Math.max(
         1,
         Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
       );
       
-      try {
-        await this.pricing.persistBreakdown(createdBooking.id, {
-          basePrice: pricing.breakdown.basePrice,
-          nights: days,
-          securityDeposit: pricing.depositAmount,
-          taxRate: taxBreakdown.totalTax > 0 ? taxBreakdown.totalTax / pricing.subtotal : undefined,
-          currency: listing.currency,
-        });
-      } catch (err) {
-        // Log but don't fail the booking - price breakdown is non-critical
-        this.logger.warn(`Failed to persist price breakdown for booking ${createdBooking.id}`, err);
-      }
+      await this.pricing.persistBreakdown(createdBooking.id, {
+        basePrice: pricing.breakdown.basePrice,
+        nights: days,
+        securityDeposit: pricing.depositAmount,
+        taxRate: taxBreakdown.totalTax > 0 ? taxBreakdown.totalTax / pricing.subtotal : undefined,
+        currency: listing.currency,
+      });
 
       return createdBooking;
     })) as unknown as Booking;
+
+    // Confirm the reservation after successful booking creation
+    try {
+      await this.availabilityService.confirmReservation(
+        dto.listingId,
+        startDate,
+        endDate,
+        booking.id,
+        reservationResult.unitId,
+      );
+    } catch (err) {
+      this.logger.error(`Failed to confirm reservation for booking ${booking.id}`, err);
+      // If confirmation fails, release the reservation to prevent double-booking
+      await this.availabilityService.releaseReservation(
+        dto.listingId,
+        startDate,
+        endDate,
+        reservationResult.unitId,
+      );
+      throw err;
+    }
 
     // Capture FX rate snapshot when listing currency differs from platform default
     const platformDefaults = this.contextResolver.resolve({});
@@ -778,6 +781,18 @@ export class BookingsService {
       booking.renterId === userId ? 'RENTER' : 'OWNER',
       { reason, refund },
     );
+
+    // Release the reservation using the canonical availability service
+    try {
+      await this.availabilityService.releaseReservation(
+        booking.listingId,
+        booking.startDate,
+        booking.endDate,
+      );
+    } catch (err) {
+      this.logger.error(`Failed to release reservation for cancelled booking ${bookingId}`, err);
+      // Don't fail the cancellation if reservation release fails, but log it
+    }
 
     return this.findById(bookingId);
   }

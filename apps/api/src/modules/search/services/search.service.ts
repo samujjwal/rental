@@ -197,22 +197,26 @@ export class SearchService {
       verificationStatus: VerificationStatus.VERIFIED,
     };
 
-    // Full-text search via ILIKE (simplified version to avoid tsvector issues)
-    // with fallback to Prisma query if raw SQL fails
+    // Full-text search using PostgreSQL indexed full-text search
+    // Uses tsvector/tsquery for efficient indexed search instead of ILIKE
     if (searchQuery.query) {
       let ids: string[] = [];
       try {
-        const ftsIds = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+        // Use PostgreSQL full-text search with tsquery for better performance
+        // This leverages GIN indexes on tsvector columns
+        const ftsIds = await this.prisma.$queryRaw<{ id: string }[]>(
           `SELECT id FROM properties
-           WHERE title ILIKE '%' || $1 || '%'
-           OR description ILIKE '%' || $1 || '%'
-           OR city ILIKE '%' || $1 || '%'`,
+           WHERE to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(city, '')) 
+           @@ plainto_tsquery('english', $1)
+           AND status = 'AVAILABLE' 
+           AND verificationStatus = 'VERIFIED'
+           LIMIT 1000`,
           searchQuery.query,
         );
         ids = ftsIds.map((r) => r.id);
       } catch (sqlError) {
-        // Fallback to Prisma-based search if raw SQL fails
-        this.logger.warn('Raw SQL search failed, falling back to Prisma query', sqlError);
+        // Fallback to Prisma-based search if full-text search fails
+        this.logger.warn('Full-text search failed, falling back to Prisma query', sqlError);
         const fallbackListings = await this.prisma.listing.findMany({
           where: {
             status: PropertyStatus.AVAILABLE,
@@ -395,7 +399,23 @@ export class SearchService {
       // items that fall outside the actual radius circle, then filter+paginate
       const isGeoFiltered = hasGeoSearch;
       const fetchLimit = isGeoFiltered ? size * 5 : size;
-      const fetchSkip = isGeoFiltered ? 0 : skip;
+      const fetchSkip = isGeoFiltered ? 0 : (searchQuery.cursor ? 0 : skip);
+
+      // Apply cursor-based pagination if cursor is provided
+      const cursorField = searchQuery.cursorField || 'id';
+      const cursorDirection = searchQuery.cursorDirection || 'asc';
+      
+      if (searchQuery.cursor) {
+        const cursorWhere = this.buildCursorWhere(searchQuery.cursor, cursorField, cursorDirection);
+        Object.assign(where, cursorWhere);
+      }
+
+      // Build order clause - include cursor field for cursor pagination
+      const orderBy = this.buildSortOrder(isGeoFiltered ? undefined : searchQuery.sort) as Record<string, 'asc' | 'desc'>;
+      if (searchQuery.cursor) {
+        // Ensure cursor field is in the order by clause for consistent pagination
+        orderBy[cursorField] = cursorDirection;
+      }
 
       // Get listings with relations
       const listings = await this.prisma.listing.findMany({
@@ -417,7 +437,7 @@ export class SearchService {
             },
           },
         },
-        orderBy: this.buildSortOrder(isGeoFiltered ? undefined : searchQuery.sort),
+        orderBy,
         take: fetchLimit,
         skip: fetchSkip,
       });
@@ -447,9 +467,14 @@ export class SearchService {
       }
 
       // Calculate correct total and paginate for geo searches
-      const total = isGeoFiltered
-        ? filteredListings.length
-        : await this.prisma.listing.count({ where });
+      // For geo searches, count the actual matching records, not just the fetched subset
+      let total: number;
+      if (isGeoFiltered) {
+        // Count all listings in the bounding box (not just the fetched subset)
+        total = await this.prisma.listing.count({ where });
+      } else {
+        total = await this.prisma.listing.count({ where });
+      }
 
       const paginatedListings = isGeoFiltered
         ? filteredListings.slice(skip, skip + size)
@@ -618,16 +643,15 @@ export class SearchService {
       // Get aggregations
       const aggregations = await this.getAggregations(where);
 
-      // Determine cursor field for pagination
-      const cursorField = searchQuery.cursorField || 'id';
-      const cursorDirection = searchQuery.cursorDirection || 'asc';
-      
       // Generate next cursor from last result
       const lastResult = results.length > 0 ? results[results.length - 1] : null;
       const nextCursor = this.generateNextCursor(lastResult, cursorField);
       
       // Determine if there are more results
-      const hasMore = results.length === size;
+      // For geo searches, check if there are more results beyond current page
+      const hasMore = isGeoFiltered 
+        ? skip + size < total 
+        : results.length === size;
 
       const result = {
         results,
