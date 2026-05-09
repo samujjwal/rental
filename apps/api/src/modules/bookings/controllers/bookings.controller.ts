@@ -38,6 +38,7 @@ import { Idempotent } from '@/common/guards/idempotency.guard';
 import { isAdminRole } from '@/common/auth/admin-roles';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { BookingStatus } from '@rental-portal/database';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
 
@@ -52,6 +53,7 @@ export class BookingsController {
     private readonly prisma: PrismaService,
     private readonly policyEngine: PolicyEngineService,
     private readonly contextResolver: ContextResolverService,
+    private readonly organizationScopeService: OrganizationScopeService,
   ) {}
 
   @Post()
@@ -136,6 +138,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  @Idempotent()
   @ApiOperation({ summary: 'Approve booking (owner only)' })
   @ApiResponse({ status: 200, description: 'Booking approved' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
@@ -150,6 +153,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  @Idempotent()
   @ApiOperation({ summary: 'Reject booking (owner only)' })
   @ApiResponse({ status: 200, description: 'Booking rejected' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
@@ -165,6 +169,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  @Idempotent()
   @ApiOperation({ summary: 'Cancel booking' })
   @ApiResponse({ status: 200, description: 'Booking cancelled' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
@@ -180,6 +185,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  @Idempotent()
   @ApiOperation({ summary: 'Start rental period' })
   @ApiResponse({ status: 200, description: 'Rental started' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
@@ -194,6 +200,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  @Idempotent()
   @ApiOperation({ summary: 'Request return inspection (renter)' })
   @ApiResponse({ status: 200, description: 'Return requested' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
@@ -208,6 +215,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  @Idempotent()
   @ApiOperation({ summary: 'Approve return (owner)' })
   @ApiResponse({ status: 200, description: 'Return approved' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
@@ -222,6 +230,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  @Idempotent()
   @ApiOperation({ summary: 'Reject return — report issues found during inspection (owner)' })
   @ApiResponse({ status: 200, description: 'Return rejected, booking moved to DISPUTED' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
@@ -237,6 +246,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  @Idempotent()
   @ApiOperation({ summary: 'Initiate dispute' })
   @ApiResponse({ status: 200, description: 'Dispute initiated' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
@@ -348,12 +358,31 @@ export class BookingsController {
   async getAvailableTransitions(@Param('id') id: string, @CurrentUser('id') userId: string) {
     const booking = await this.bookingsService.findById(id);
 
-    // Determine user role
+    // Use organization scope resolver to determine access
+    const scopeResult = await this.organizationScopeService.checkScope(
+      userId,
+      'USER',
+      {
+        resourceType: 'booking',
+        resourceId: id,
+        ownerId: booking.ownerId,
+        renterId: booking.renterId,
+        organizationId: booking.listing?.organizationId,
+      },
+    );
+
+    // Determine user role based on scope
     let role: 'RENTER' | 'OWNER' | 'ADMIN';
     if (booking.renterId === userId) {
       role = 'RENTER';
-    } else if (booking.ownerId === userId || booking.listing?.ownerId === userId) {
+    } else if (scopeResult.scopeType === 'INDIVIDUAL_OWNER' || 
+               scopeResult.scopeType === 'ORG_OWNER' || 
+               scopeResult.scopeType === 'ORG_ADMIN' ||
+               booking.ownerId === userId || 
+               booking.listing?.ownerId === userId) {
       role = 'OWNER';
+    } else if (scopeResult.scopeType === 'SUPPORT_ADMIN' || scopeResult.scopeType === 'FINANCE_ADMIN') {
+      role = 'ADMIN';
     } else {
       // Verify the user actually has an admin role before granting admin access
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });

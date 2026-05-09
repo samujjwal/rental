@@ -1,73 +1,503 @@
-# End-to-End Rental Marketplace Correctness TODOs
+I executed the tailored root-cause audit against `samujjwal/rental` at commit `6913fc8e9257adf7ea27c071dcbf4f8f8880b5b0` using the pasted audit structure. 
 
-**Repository:** `samujjwal/rental`  
-**Audited commit:** `6407b6d8cd27798d07a689f5504059c05a108672`  
-**Generated:** 2026-05-09T16:39:57Z  
+I reviewed the repo through GitHub connector evidence only. I did **not** run build, lint, typecheck, migrations, or tests locally, so runtime pass/fail is marked as **not verified** where applicable.
 
-## Scope
+# 7.1 Production Readiness Verdict
 
-This TODO file is generated from the ultra-strict rental marketplace audit prompt. It focuses on actionable remediation items across web, mobile, API, database, payments, bookings, listings, search, tests, security, observability, and documentation.
+**Production ready: No**
 
-## Execution Limitation
+**Confidence level:** High for architectural/readiness blockers; medium for exact runtime failures because I did not execute tests.
 
-The repository could not be cloned or test-executed from the container because external GitHub DNS access was unavailable. The audit is therefore evidence-based from direct connected GitHub file reads at the specified commit, plus the canonical repository docs and fetched source files. Before closing any item, run the required tests locally/CI against the same commit or the fix branch.
+The repo has a credible production direction: canonical docs exist, the monorepo shape is clear, and the product vision matches the implemented domains: web, API, mobile, Prisma, Stripe Connect, Socket.io/Redis, booking, payments, disputes, insurance, organizations, and admin operations. The README describes this as a Turbo monorepo with `apps/api`, `apps/web`, `apps/mobile`, and `packages/database`, using NestJS, React Router, Expo, Prisma/Postgres, Stripe Connect, Socket.io, Redis, and Docker.  Canonical documentation is also now organized under `docs/` with product, architecture, engineering, operations, QA, users, traceability, and archive sections. 
 
-## Production Readiness Gate
+However, the implementation is **not production-ready** because several critical paths still contain production-breaking or production-risk patterns:
 
-- **Ready for production:** No
-- **Ready for internal demo:** Only after P0 items are fixed or explicitly disabled behind production-safe feature flags
-- **Ready behind feature flag:** Only for incomplete non-critical surfaces with backend and UI gates
-- **Primary blockers:** media upload contract mismatch, fake/default search result fields, payment status inference, inconsistent pricing/tax quote path, booking reservation atomicity, manual-review state formalization, production bypass flag validation
+Main blockers:
 
-## TODO Table
+1. Storage/upload endpoints are disabled to unblock compilation.
+2. Idempotency is in-memory and not request/user/route fingerprinted.
+3. Critical state mutations are only partially idempotent.
+4. Booking/payment route contracts drift between tests, API, and clients.
+5. Pricing/payment logic still contains mock/simplified production paths.
+6. Organization/team scope is not consistently enforced in booking/payment surfaces.
+7. Availability has overlapping models and query paths.
+8. Web/mobile/API parity is not proven.
+9. Smoke/E2E tests include stale endpoint expectations.
+10. Cleanup is still needed for deprecated fields, duplicate lifecycle systems, and archived/generated docs.
 
-| Priority | TODO | Area | File(s) | Evidence | Why It Matters | Implementation Guidance | Acceptance Criteria | Required Tests |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| P0 | Unify listing image/media upload contract across web, mobile, and API. | Listings / Media Upload / Contracts | apps/web/app/lib/api/listings.ts; apps/mobile/src/api/client.ts; apps/api/src/modules/listings/controllers/listings.controller.ts | Web uploadImages sends multipart field `photos` to `/listings/:id/images`; mobile uploadImages sends multipart field `files` to `/upload/images`; API listing image endpoint expects JSON body `urls: string[]` on `/listings/:id/images`. | Listing creation/editing is a critical owner flow. The current cross-surface contract mismatch can make image upload appear wired while failing at runtime, or can require undocumented two-step/manual URL behavior. | Define one canonical media flow: either (A) upload binary files to a storage endpoint returning validated URLs, then attach URLs to listing, or (B) make `/listings/:id/images` accept multipart with FileInterceptor. Use one field name, one response shape, one shared contract type, content-type/size validation, virus/safety hooks if available, ownership checks, and storage cleanup on failure. | Web and mobile can upload, delete, reorder/display listing images through the same documented API contract; backend rejects invalid file types/sizes and unauthorized users; no route accepts unvalidated arbitrary URLs as trusted media. | API integration for multipart upload/delete; web Playwright listing creation with images; mobile Maestro/RTL upload flow; unauthorized upload/delete tests; invalid file/oversize tests. |
-| P0 | Remove fake/default search listing data from production search mapping. | Search / Listing Cards / UI Data Integrity | apps/web/app/lib/api/listings.ts | `mapSearchResponse` assigns placeholder values such as `ownerId: ''`, owner `id: ''`, `availability: 'available'`, `securityDeposit: 0`, `verified: false`, `createdAt: ''`, and empty address fields. | Search is the primary marketplace entry point. Placeholder owner, availability, verification, and deposit values can mislead renters and can break downstream actions that depend on owner/listing identity. | Update `/search` API response to return every field needed by cards/list/detail handoff, or introduce an explicit compact `SearchListing` type and ensure UI does not render unavailable fields as real values. Do not invent availability, verification, owner id, dates, deposit, or location values. | Every visible search-card field comes from backend data or is intentionally hidden; downstream navigation/favorite/message/book actions have real identifiers; empty values render as unavailable/unknown, not fake defaults. | Unit tests for search response mapping; Playwright search-card assertions against seeded data; contract test between `/search` response and web/mobile search types. |
-| P0 | Make payment status truth come from Payment/Stripe state, not inferred booking status. | Bookings / Payments / UI State | apps/api/src/modules/bookings/services/bookings.service.ts | `attachPaymentStatus` maps booking statuses such as `CONFIRMED`, `IN_PROGRESS`, `COMPLETED`, and `SETTLED` to `paymentStatus: 'PAID'` when no payment row exists. | A booking can appear paid in UI/API responses without a verified payment record. This is a critical marketplace trust and financial integrity risk. | Return payment status only from latest Payment row and, where necessary, provider reconciliation. If a booking status implies a payment should exist but no payment record exists, return `paymentStatus: 'UNKNOWN'` or `RECONCILIATION_REQUIRED` and surface an operational alert. | No API response reports `PAID` without a succeeded/completed payment record or verified provider state; inconsistent booking/payment states are observable and block unsafe fulfillment/payout actions. | Unit tests for booking status/payment status matrix; integration test with confirmed booking and no Payment row; E2E checkout success/failure/status polling tests. |
-| P0 | Use one canonical pricing/tax quote path for search, booking quote, booking create, checkout, invoice, refund, and payout. | Pricing / Tax / Checkout | apps/api/src/modules/bookings/controllers/bookings.controller.ts; apps/api/src/modules/bookings/services/bookings.service.ts; apps/api/src/modules/payments/controllers/payments.controller.ts | `calculate-price` response returns `taxes: 0` and empty `taxLines`; `BookingsService.create` performs policy-engine tax calculation and persists tax; payment intent uses booking total price. | A renter can see one price before checkout and be charged another once the booking is created. Taxes, fees, deposit, platform fee, owner earnings, refunds, and invoice lines must be deterministic. | Create a canonical quote service that returns versioned line items: base, duration, discounts, tax lines, service fee, platform fee, deposit, delivery, total, owner earnings, refund basis, currency, FX snapshot. Use it in `calculate-price`, booking creation, checkout/payment intent, invoice, refund calculation, and tests. | The same input produces identical line items and totals across quote, booking, payment intent, invoice, and refund; taxes are never hardcoded to zero unless jurisdiction rules explicitly produce zero. | Golden price calculation tests; API contract tests for quote and booking create; E2E checkout price consistency; refund calculation tests using stored breakdown. |
-| P0 | Make booking availability reservation and booking creation atomic or fully compensated. | Booking / Availability / Concurrency | apps/api/src/modules/bookings/services/bookings.service.ts; apps/api/src/modules/listings/services/availability.service.ts | Booking creation calls `availabilityService.checkAndReserve` before the Prisma booking transaction and calls `confirmReservation` after booking creation; release is shown only if confirmation fails. | If booking creation fails after reservation, a slot can remain reserved without a booking. If reservation confirmation fails or concurrent attempts interleave, inventory can be blocked or double-booked. | Move reservation and booking creation into one transaction using row-level/optimistic locking, or wrap pre-reservation in try/finally compensation for every failure path. Include idempotency key support for repeated booking submissions. | No orphan reserved slots after booking failures; concurrent booking attempts for the same listing/date produce exactly one successful booking; failed attempts leave availability unchanged. | DB integration test for transaction rollback; concurrency E2E with parallel booking attempts; failure-injection test after reserve before booking create. |
-| P0 | Verify and formalize `MANUAL_REVIEW` as a real BookingStatus with migration, UI states, and blocked checkout behavior. | Booking State Machine / Manual Review | apps/api/src/modules/bookings/services/bookings.service.ts; apps/api/src/modules/bookings/services/booking-state-machine.service.ts; packages/database/prisma/schema.prisma; apps/web/app/routes/bookings.$id.tsx; apps/mobile/src/screens/BookingDetailScreen.tsx | Booking creation sets `initialStatus = 'MANUAL_REVIEW' as BookingStatus`; state machine transitions also cast `MANUAL_REVIEW` as `BookingStatus`. | If the enum/migration/UI contract is incomplete, bookings that require manual review can fail at runtime or become payable/fulfillable before safety review. | Confirm `MANUAL_REVIEW` exists in Prisma enum and all generated shared types. Add UI labels, allowed transitions, admin approve/reject flow, and explicit checkout/payment blocking for this state. | `MANUAL_REVIEW` is a first-class persisted state; renters cannot pay; owners cannot start fulfillment; admins can approve/reject with audit trail; web/mobile render actionable state. | Schema/type generation test; state-machine tests; API tests for payment blocking; web/mobile UI tests for manual review status. |
-| P0 | Add production startup validation for all bypass/fail-open flags. | Security / Configuration / Production Guardrails | apps/api/src/app.module.ts; apps/api/src/modules/payments/services/stripe.service.ts; apps/api/src/modules/bookings/bookings.module.ts; scripts/dev/*; apps/web/package.json | Global throttler uses `skipIf: () => process.env.DISABLE_THROTTLE === 'true'`; booking dev controller is conditionally registered with `STRIPE_TEST_BYPASS` in test/e2e; Stripe bypass is guarded; web E2E scripts intentionally set `STRIPE_TEST_BYPASS=true`. | Fail-open flags are necessary for tests but catastrophic if enabled in staging/production. Throttling, payment, safety, and dev-login bypasses must fail closed. | Centralize config validation at startup. For production/staging, reject `DISABLE_THROTTLE=true`, `STRIPE_TEST_BYPASS=true`, `ALLOW_DEV_LOGIN=true`, `SAFETY_CHECKS_FAIL_OPEN=true`, and weak secrets. Add CI checks to prevent these in deployment manifests. | Application refuses to start in production/staging with unsafe bypass flags; test/e2e modes still work; docs list allowed environments for each flag. | Config validation unit tests; startup integration tests for unsafe env combinations; CI guardrail script test. |
-| P1 | Implement or remove/feature-gate PaymentMethod persistence and service. | Payments / Saved Payment Methods | apps/api/src/modules/payments/payments.module.ts; apps/api/src/modules/payments/controllers/payments.controller.ts; packages/database/prisma/schema.prisma; apps/web/app/routes/settings.billing.tsx; apps/mobile/src/api/client.ts | `PaymentMethodService` is commented out with TODO because `PaymentMethod` model is not in schema, while payments controller exposes methods endpoints and mobile client calls payment methods. | Saved payment method UX can look supported while lacking persistence/domain ownership. Returning data directly from Stripe without a local model may be acceptable only if explicitly designed and tested. | Choose canonical design: Stripe-only source with no local model, or add PaymentMethod model with tokenized metadata only. Remove commented service code or implement it fully. Hide UI if not supported. | Billing/payment method UI has real backend support or is hidden; no commented TODO remains in production module; docs and tests match chosen design. | Controller tests for list/attach/default/remove flows; UI billing tests; contract tests for mobile/web payment methods. |
-| P1 | Fix mobile API error parsing so structured backend errors are preserved. | Mobile / API Client / Error Handling | apps/mobile/src/api/client.ts | The non-OK response branch parses JSON and throws inside the `try`, then the `catch` catches that thrown error and falls back to the original raw text. | Mobile users lose actionable validation/security/payment errors. This makes booking, payment, dispute, and auth failures hard to recover from. | Separate JSON parsing from throwing: parse into a variable, then throw outside the parse catch. Preserve backend `message`, `code`, `errors`, and status. | Mobile client surfaces structured backend errors consistently for validation, auth, payment, and network failures. | Unit tests for JSON error envelope, plain-text error, empty body, 401 refresh failure, and timeout. |
-| P1 | Create a public-safe owner/profile listings endpoint instead of using admin-only `ownerId` filter. | Listings / Profile / Mobile-Web Contract | apps/mobile/src/api/client.ts; apps/api/src/modules/listings/controllers/listings.controller.ts; apps/web/app/routes/profile.$userId.tsx | Mobile `getUserListings` calls `/listings?ownerId=...`; backend `findAll` says `ownerId` filter is admin-only and throws unless current user role is ADMIN. | Public profile pages and owner profile listing lists are normal marketplace flows. They should not depend on an admin-only query parameter. | Add `/users/:id/listings` or `/listings/by-owner/:ownerId` that returns only public/available listings for that owner. Keep `/listings?ownerId` admin-only and guarded. | Guest/renter can view public listings on an owner profile; admin can still filter all owner listings including inactive/internal states; unauthorized private listing exposure is impossible. | API tests for public owner listings, admin owner filter, non-admin rejection of admin filter; web/mobile profile listing E2E. |
-| P1 | Add proper auth guard behavior to admin-only listing filters. | Listings / Authorization | apps/api/src/modules/listings/controllers/listings.controller.ts | `findAll` checks `currentUserRole !== 'ADMIN'` for `ownerId` but does not show an auth guard on the method, while it uses `@CurrentUser` parameters. | Admin-only filters need deterministic auth behavior. Without an explicit optional/required guard, role context may be absent or inconsistent. | Use `OptionalJwtAuthGuard` for public listing search and branch on authenticated role, or split admin listing search into a protected admin endpoint. | Public listing search remains public; admin-only filters require authenticated admin; non-admin cannot query inactive/private owner inventory. | Controller tests for anonymous, renter, owner, admin filter behavior. |
-| P1 | Add server-side Idempotency-Key handling for critical mutations. | API / Idempotency / Reliability | apps/web/app/lib/api-client.ts; apps/api/src/**/*.controller.ts; packages/database/prisma/schema.prisma | Web client attaches `Idempotency-Key` to POST/PUT/PATCH/DELETE requests, but fetched backend controllers do not show a canonical idempotency middleware/service. | Frontend idempotency headers alone do not prevent duplicate bookings, refunds, payments, payouts, messages, or listing mutations. | Implement an IdempotencyKey table/service or request middleware scoped by user, method, path, and payload hash. Store status/result for critical mutations and reject conflicting replays. | Duplicate submissions with same key return the original result; same key with different payload is rejected; keys expire safely; critical payment/booking mutations are covered. | API integration tests for create booking, create payment intent, request refund, payout, listing creation, message send duplicate replay. |
-| P1 | Make refund requests idempotent and remove timestamp-generated external identifiers. | Payments / Refunds / Reconciliation | apps/api/src/modules/payments/controllers/payments.controller.ts; apps/api/src/modules/payments/services/stripe.service.ts; packages/database/prisma/schema.prisma | `requestRefund` creates `refundId: pending_${bookingId}_${Date.now()}` and queues a refund job; StripeService default refund idempotency key is based on payment intent and amount. | Retrying the same refund request can create multiple pending refund records or ambiguous reconciliation rows. | Use a deterministic refund request idempotency key from booking/payment/requester/reason/amount or require client-provided key. Separate internal refund request id from provider refund id. | Retrying the same refund request does not create duplicate refund rows/jobs; provider refund id is populated only after Stripe confirms; reconciliation can trace every refund. | API duplicate refund request tests; queue job idempotency test; Stripe webhook reconciliation tests. |
-| P1 | Stop silently returning empty payment methods when Stripe fails. | Payments / Error Handling / Billing UX | apps/api/src/modules/payments/controllers/payments.controller.ts | `getPaymentMethods` catches Stripe errors and returns `{ data: [] }`. | Users may think they have no saved payment methods when the payment provider is down or misconfigured. This hides operational/payment issues. | Return an actionable 503/502 error for provider failures, with safe error shape and no secret leakage. Only return empty data when the customer truly has no payment methods. | Provider failure is observable and surfaced; true empty state remains distinct; logs/metrics capture provider errors. | Controller tests for no customer, no methods, Stripe unavailable, Stripe customer missing. |
-| P1 | Centralize admin role matrix and remove hardcoded role lists. | Authorization / Admin / Source of Truth | apps/api/src/modules/bookings/services/bookings.service.ts; apps/api/src/modules/bookings/services/booking-state-machine.service.ts; apps/api/src/modules/payments/controllers/payments.controller.ts; apps/api/src/modules/bookings/controllers/bookings.controller.ts | Some code reads `security.adminRoles` from config, while other paths hardcode lists such as `ADMIN`, `SUPER_ADMIN`, `SUPPORT_ADMIN`, `FINANCE_ADMIN`, and `OPERATIONS_ADMIN`. | Role drift can create inconsistent access across payments, disputes, bookings, admin review, and support operations. | Create a shared `AdminRolePolicy`/permission service used by guards and services. Prefer permission capabilities over ad hoc role names. | All admin checks use one policy source; adding/removing an admin role updates all flows; tests cover every protected action. | Authorization matrix tests for booking, payment, dispute, listing, admin system routes. |
-| P1 | Complete dynamic category attributes and ensure listing creation/editing uses server-defined fields. | Categories / Listings / Dynamic Metadata | docs/traceability/requirements-matrix.md; packages/database/prisma/schema.prisma; apps/api/src/modules/categories/*; apps/web/app/lib/api/listings.ts; apps/web/app/routes/listings.new.tsx; apps/mobile/src/screens/CreateListingScreen.tsx | Traceability marks `REQ-002 Dynamic category attributes` as Not Started while schema includes `CategoryAttributeDefinition` and `ListingAttributeValue`, and web API comments reference canonical field definitions. | The product vision requires category-flexible rentals without rebuilding for every category. | Implement category field definition CRUD/read APIs, validation, listing create/edit persistence, search/filter indexing for filterable/searchable attributes, and web/mobile form rendering from server definitions. | Category-specific required fields are enforced server-side; web/mobile render fields from API; search can filter searchable/filterable fields; no static category-field source competes with backend. | API category field tests; listing create/edit validation; web/mobile dynamic form tests; search filter tests. |
-| P1 | Complete listing versioning and audit trail. | Listings / Audit / Compliance | docs/traceability/requirements-matrix.md; packages/database/prisma/schema.prisma; apps/api/src/modules/listings/services/listing-version.service.ts; apps/api/src/modules/listings/controllers/listing-version.controller.ts | Traceability marks `REQ-003 Listing versioning/audit` as Not Started while schema/module includes ListingVersion support. | Marketplace trust, moderation, dispute review, and rollback need immutable listing history. | Create a ListingVersion on every material listing change, include changedBy and change summary, expose owner/admin version history, and integrate moderation/audit logs. | Every create/update/publish/pause/activate/delete operation has audit/version records; admins can inspect changes; disputes can reference historical listing content. | Service tests for version increments; controller auth tests; E2E edit listing audit visibility. |
-| P1 | Complete slot-based and inventory-unit availability. | Availability / Inventory / Booking | docs/traceability/requirements-matrix.md; packages/database/prisma/schema.prisma; apps/api/src/modules/listings/services/availability-slot.service.ts; apps/api/src/modules/listings/services/inventory-unit.service.ts; apps/api/src/modules/bookings/services/bookings.service.ts | Traceability marks `REQ-007 Slot-based availability` and `REQ-008 Inventory availability` as Not Started while schema has `InventoryUnit` and `AvailabilitySlot`. | Multi-category rental inventory often needs multiple units and slot-based booking, not only date-range property booking. | Implement inventory unit lifecycle, slot generation/update, slot reservation, unit assignment, release, and conflict rules. Wire into booking create and UI calendars. | Listings can support one or many inventory units; slot/date availability is accurate; concurrent bookings cannot double-book a unit or slot. | Unit/integration tests for slots and inventory; concurrency tests; owner calendar UI tests. |
-| P1 | Complete deposit, refund, dispute-financial-resolution, and payout determinism. | Payments / Escrow / Disputes / Payouts | docs/traceability/requirements-matrix.md; apps/api/src/modules/bookings/services/booking-state-machine.service.ts; apps/api/src/modules/payments/*; apps/api/src/modules/disputes/*; packages/database/prisma/schema.prisma | Traceability marks deposit lifecycle, refund lifecycle, dispute financial resolution as Partial and payout determinism as Not Started. | Rental marketplace settlement must be deterministic to avoid owner/renter financial harm. | Define a financial state model that connects booking state, escrow/deposit holds, refunds, dispute outcomes, ledger entries, payouts, and Stripe webhooks. Make webhooks idempotent and reconciliation-first. | Every financial transition has one ledger representation, one provider command, one idempotency key, and one reconciliation path; disputes hold/release/capture funds deterministically. | Payment lifecycle integration tests; webhook replay tests; dispute outcome financial tests; payout command/reconciliation tests. |
-| P1 | Unify notifications across in-app, email, SMS, and push with preferences and idempotency. | Notifications / Messaging / Mobile | docs/traceability/requirements-matrix.md; apps/api/src/modules/notifications/*; apps/mobile/src/api/client.ts; apps/web/app/routes/notifications.tsx | Traceability marks `REQ-017 Notification unification` as Not Started; product features require email, SMS, push, and in-app channels. | Booking, payment, return, dispute, and safety workflows rely on reliable notifications. | Create a notification orchestrator that applies preferences, channel capabilities, templates, retries, idempotency keys, and delivery audit records. | Each critical event creates exactly one logical notification with channel delivery records; user preferences are respected; failures are retryable and observable. | Unit tests for preferences/channel selection; integration tests for booking/payment/dispute notification events; mobile push registration tests. |
-| P1 | Enforce admin MFA and verification gates for sensitive actions. | Auth / Admin / Trust & Safety | docs/traceability/requirements-matrix.md; apps/api/src/modules/auth/*; apps/api/src/modules/admin/*; apps/api/src/common/guards/* | Traceability marks `REQ-018 Admin MFA enforcement` and `REQ-020 Verification gates` as Not Started; AuthController supports MFA and email/phone verification endpoints. | Admin moderation, disputes, payouts, system settings, and power operations must require stronger authentication and verified identity. | Add guards/policies requiring MFA for admin/sensitive routes and verification for owner listing publish, checkout/payment, disputes, and high-risk operations. | Sensitive admin/system/payment/moderation routes reject non-MFA admin sessions; configured renter/owner flows enforce email/phone/KYC gates. | Admin route MFA tests; verification-gate tests; E2E blocked/allowed flows. |
-| P1 | Fix mobile/web/API type and payload drift for price suggestions, reviews, OTP/MFA, KYC, and uploads. | Contract Drift / Shared Types | docs/traceability/requirements-matrix.md; apps/mobile/src/api/client.ts; apps/web/app/lib/api/listings.ts; apps/api/src/modules/*/controllers/*.ts; packages/shared-types/* | Traceability marks `REQ-022 Contract drift tests` as Not Started. Mobile expects price suggestion `suggestedRange: { min, max }`; web API typing expects `{ low, high }`; mobile review, OTP, KYC, and upload endpoints need verification against backend controllers. | Contract drift creates runtime-only failures across web, mobile, and API despite TypeScript compiling per package. | Move request/response contracts to shared generated/openapi-backed types or contract tests. Validate each mobile/web API method against real backend routes and DTOs. | Every web/mobile API client method has a matching backend route, DTO, response type, and test; mismatches fail CI. | OpenAPI/contract drift tests; mobile/web client route existence tests; DTO compatibility tests. |
-| P1 | Add mobile baseline tests for all critical renter and owner flows. | Mobile / QA | docs/traceability/requirements-matrix.md; apps/mobile/package.json; apps/mobile/.maestro/*; apps/mobile/src/screens/* | Traceability marks `REQ-021 Mobile test baseline` as Not Started, while mobile package defines Maestro E2E scripts and app contains many critical screens. | Mobile is part of current product scope; untested mobile booking/payment/listing flows can regress independently of web. | Add Maestro/RTL coverage for auth, browse/search, listing detail, booking, checkout handoff, messaging, favorites, profile, owner listings, disputes, insurance upload, and notifications. | Mobile CI validates core flows and syntax/doctor checks; critical mobile screens are not placeholders and call real APIs or show explicit disabled states. | Maestro core suite; screen component tests; API client mock-contract tests; push/device permission tests. |
-| P1 | Add booking/payment concurrency and webhook replay tests. | Testing / Reliability | docs/traceability/requirements-matrix.md; apps/api/test/*; apps/api/src/modules/bookings/*; apps/api/src/modules/payments/* | Traceability marks `REQ-023 Concurrency tests` as Not Started; booking and payment flows use optimistic locking, queues, and external webhooks. | Concurrency defects cause double bookings, duplicate charges/refunds, or stale state transitions. | Create API/DB tests that run parallel booking attempts, repeated payment intent calls, duplicate webhook deliveries, duplicate refund/payout jobs, and state-transition races. | Parallel operations produce deterministic outcomes; webhook replay is idempotent; failed jobs can be retried without duplicate financial effects. | Concurrency e2e; webhook replay tests; queue idempotency tests; optimistic locking tests. |
-| P1 | Validate and cap public quote, blocked-date, nearby, and search parameters. | API Validation / Abuse Resistance | apps/api/src/modules/bookings/controllers/bookings.controller.ts; apps/api/src/modules/listings/controllers/listings.controller.ts; apps/api/src/modules/search/* | Public endpoints parse date/lat/lng/radius/page/limit values directly in controllers, including `calculate-price`, `blocked-dates`, and `nearby`. | Unbounded date ranges, invalid coordinates, and oversized limits can create expensive queries, incorrect prices, or noisy errors. | Use DTOs with class-validator for all query/body params. Enforce date validity, max range, coordinate bounds, radius limits, page/limit caps, and deterministic sorting. | Invalid inputs return structured 400 responses; large ranges are capped; all public endpoints have tests for bounds and abuse cases. | Controller validation tests; property tests for invalid date/coordinate inputs; load tests for capped queries. |
-| P2 | Clean and correct root package scripts after repository cleanup. | Build / Scripts / Developer Experience | package.json; README.md; scripts/env/start-env.sh; scripts/dev/start-dev.sh; scripts/test/* | Root `env:start`, `env:stop`, `env:restart`, `env:status`, and `env:logs` all call `./scripts/env/start-env.sh`; `check-deps` targets root `src`; deploy scripts use `sudo` from package.json. | Developers and CI can run misleading commands after cleanup, causing false confidence or environment damage. | Make env commands pass explicit subcommands or split scripts; point dependency-cruiser at actual workspace paths; remove `sudo` from package scripts and document required privileges in deployment runbooks. | Every root command works from a clean clone and has a documented purpose; CI validates scripts; README command list matches package.json. | Script smoke tests; CI dry-run validation; docs command consistency check. |
-| P2 | Restore enough README/runbook detail to make cleanup safe without recreating root documentation sprawl. | Documentation / Traceability | README.md; docs/README.md; docs/engineering/testing.md; docs/engineering/deployment.md; docs/operations/runbooks.md | Commit `cleanup 1` reduced README from a detailed command/API/status document to a compact quick start while docs/README says canonical docs are the live source of truth. | The README should stay concise, but after cleanup it must still route developers to exact setup, isolated validation, testing, environment, and deployment details. | Keep README short but add a command matrix link, validation stack link, and production safety warning links. Ensure removed information exists in canonical docs and no stale root docs compete. | A new developer can find setup/test/deploy/isolated-stack docs in one click; no duplicate stale root reports remain; docs map reflects actual files. | Markdown link check; docs inventory review; command docs consistency check. |
-| P2 | Centralize listing response mapping and remove duplicated frontend/backend/mobile mapping logic. | Shared Types / Listing Contracts | apps/api/src/modules/listings/controllers/listings.controller.ts; apps/web/app/lib/api/listings.ts; apps/mobile/src/types/*; packages/shared-types/* | Backend `mapToFrontendListing` and web `mapSearchResponse` independently transform listing fields and defaults; mobile has separate listing detail/search types. | Duplicated mapping causes drift in owner, availability, category, price, verification, media, and location fields. | Define canonical `ListingSummary`, `ListingSearchResult`, and `ListingDetail` contracts in shared types or generated OpenAPI. Use backend serializers and frontend consumers from the same contracts. | One contract per listing view type; no UI invents backend values; contract drift tests fail on breaking changes. | Serializer unit tests; shared type compile tests; web/mobile mapping removal tests. |
-| P2 | Guard all browser-only storage/geolocation access in React Router routes. | Web / SSR-Hydration Safety / Privacy UX | apps/web/app/routes/search.tsx | Search route uses localStorage and geolocation for recent searches and auto-location behavior; some but not all browser-only access is guarded. | React Router framework mode can execute code in contexts where browser APIs are unavailable, and auto-applying GPS/saved location can surprise users. | Wrap all localStorage/window/navigator access with `typeof window !== 'undefined'`; only auto-apply geolocation after user consent or clearly reversible UI. | Search route renders without browser globals in tests; saved/GPS location behavior is explicit and accessible; privacy copy is clear. | SSR-safe route unit test; Playwright search route load; geolocation permission denied/allowed tests. |
-| P2 | Improve auth throttling and credential-stuffing protections. | Auth / Security | apps/api/src/modules/auth/controllers/auth.controller.ts; apps/api/src/modules/auth/services/auth.service.ts; apps/api/src/app.module.ts | AuthController rate limits include register 50/min and login 100/min while User model includes loginAttempts and lockedUntil. | Marketplace accounts control identity, payments, owner inventory, and dispute/admin actions. Login/register throttles should be stricter and risk-aware. | Use layered limits per IP/email/device, progressive lockouts, suspicious login audit events, and alerting. Ensure development/test limits do not weaken production. | Brute-force attempts are throttled and audited; valid users receive actionable account-lock messaging; tests cover IP/email lockouts. | Security tests for login/register/reset throttles; account lock/unlock tests; audit-log tests. |
-| P2 | Add observability around payment commands, booking transitions, uploads, notifications, and search degradation. | Observability / Operations | apps/api/src/common/telemetry/*; apps/api/src/common/metrics/*; apps/api/src/modules/bookings/*; apps/api/src/modules/payments/*; apps/api/src/modules/notifications/*; docs/operations/slo.md; docs/operations/runbooks.md | AppModule includes telemetry, metrics, health, scheduler, cleanup, and request-id middleware; product docs require operational health and audit-friendly flows. | Critical marketplace flows must be diagnosable in production, especially external provider failures and async jobs. | Emit structured logs, metrics, traces, and audit events for state transitions, payment/refund/payout commands, webhooks, upload failures, notification delivery, and search fallback/degradation. | Runbooks identify relevant logs/metrics for each critical flow; dashboards can be built from emitted signals; PII/secrets are not logged. | Unit tests for audit event emission; integration tests verifying correlation ids; log redaction tests. |
-| P2 | Complete load-test baseline for search, booking, checkout, messaging, and admin operations. | Performance / Load Testing | docs/traceability/requirements-matrix.md; scripts/test/*; tests/load/*; apps/api/src/modules/search/*; apps/api/src/modules/bookings/* | Traceability marks `REQ-024 Load tests` as Partial; package scripts expose performance/load-related test commands. | Search and booking flows are latency-sensitive and can become expensive with geospatial/vector queries and concurrent bookings. | Define k6/scenario load tests for public search, listing detail, booking quote/create, payment status polling, messaging, and admin dashboards with realistic data volumes. | Load tests run locally/CI with documented thresholds; failures identify endpoint and bottleneck; indexes support expected query patterns. | k6 load suites; DB query plan checks for search/availability; performance regression gate. |
-| P2 | Remove deprecated schema fields or complete forward migration plan. | Database / Schema Cleanup | packages/database/prisma/schema.prisma; apps/api/src/modules/listings/*; apps/api/src/modules/payments/* | Schema marks `Listing.views` deprecated in favor of `viewCount` and `Payment.stripePaymentIntentId` deprecated in favor of `paymentIntentId`, while controller code still reads/writes both in places. | Deprecated duplicated fields invite inconsistent reads and writes. | Migrate data, update all reads/writes to canonical fields, add compatibility tests during migration, and then remove deprecated fields when safe. | Only canonical fields are written; old fields are either removed or strictly read-only until migration completes; docs mention migration status. | Migration tests; API serializer tests; payment/listing regression tests. |
-| P3 | Expose state-machine metadata only as needed and document public contract. | API / Documentation | apps/api/src/modules/bookings/controllers/bookings.controller.ts; docs/users/*; docs/engineering/* | `GET /bookings/state-machine-metadata` is public and returns status/transition metadata. | Public metadata is useful for UI but should be intentionally versioned and not expose internal-only transitions. | Document the endpoint as public UI metadata or protect it if internal. Return only stable user-facing status/action metadata. | Endpoint contract is documented, tested, and stable; internal transitions remain internal if needed. | Contract test for metadata shape; auth test if protected. |
+Highest-risk area: **booking + payment + refund + storage evidence lifecycle**, because it combines money movement, availability locking, disputes, condition reports, uploads, and state transitions.
 
-## Priority Counts
+# 7.2 Root Architectural Blockers
 
-- **P0:** 7
-- **P1:** 18
-- **P2:** 8
-- **P3:** 1
+## P0-1 Storage and evidence upload path is disabled
 
-## Recommended Fix Order
+**Why it matters:** Listing photos, avatars, organization logos, dispute evidence, condition reports, insurance evidence, and user documents all depend on reliable upload/download/delete behavior.
 
-1. Close all P0 correctness and safety blockers before any production-like release.
-2. Close P1 contract, financial, mobile, authorization, and testing gaps before release candidate.
-3. Close P2 build/docs/observability/performance hardening before broad beta.
-4. Treat P3 as follow-up once product contracts and operational safety are stable.
+**Root cause:** The storage controller exists but its endpoints are commented out with a TODO saying the storage endpoints need to be reimplemented and are temporarily disabled to unblock compilation. 
+
+**Evidence:**
+
+* `apps/api/src/common/storage/storage.controller.ts`
+* Disabled endpoints include upload, presigned upload/download, file delete, list files, listing photos, user avatar, organization logo, statistics, S3 test, bucket exists, and ensure bucket. 
+
+**Affected surfaces:**
+
+* Listing creation/edit media
+* Profile/avatar
+* Organization branding
+* Disputes evidence
+* Insurance claims
+* Condition reports
+* KYC/identity documents
+* Admin moderation
+
+**Target pattern:** A production upload service with scoped object keys, MIME/size validation, ownership checks, signed URLs, malware/content validation if needed, audit events, lifecycle cleanup, and tests.
+
+**Required fix:** Re-enable storage endpoints through the updated `StorageService` API; route every file upload through canonical ownership/scope validation.
+
+**Required tests:** Upload/listing-photo/avatar/org-logo/dispute-evidence/condition-report/insurance-claim tests with unauthorized, wrong-owner, oversized, bad-MIME, deleted-object, and signed URL expiry cases.
+
+**Cleanup implication:** Remove commented production code after reimplementation; do not keep “temporarily disabled” code in production files.
+
+---
+
+## P0-2 Idempotency is not production-safe
+
+**Why it matters:** Booking creation, refund, payment, payout, deposit, and state transitions must be safe under retries, mobile double-taps, network timeouts, webhook retries, and distributed deployments.
+
+**Root cause:** The global idempotency interceptor uses a process-local `Map`, keyed only by `Idempotency-Key`, with no route, user, request body hash, tenant/org scope, or persisted backing store. The code itself notes that production should use Redis, request fingerprinting, and invalidation strategies. 
+
+**Evidence:**
+
+* `apps/api/src/common/guards/idempotency.guard.ts`
+* `AppModule` registers the interceptor globally, but it only applies to decorated endpoints. 
+* Booking create has `@Idempotent()`, but many critical booking mutations do not. 
+* Mobile booking client sends create/approve/cancel/reject/start/request-return calls without any visible idempotency key handling. 
+
+**Affected surfaces:**
+
+* Create booking
+* Payment intent creation
+* Refund request
+* Booking approval/rejection/cancel/start/return/dispute
+* Deposit release
+* Payout
+* Mobile client retries
+
+**Target pattern:** Persistent Redis/Postgres idempotency table keyed by actor + route + method + request fingerprint + idempotency key, with TTL, response replay, conflict detection, and replay-safe error semantics.
+
+**Required fix:** Replace process-local `Map` with durable idempotency storage and require keys for every money/state-changing mutation.
+
+**Required tests:** Concurrent retry tests, same key/different payload conflict tests, cross-user key reuse tests, process restart tests, duplicate mobile submit tests, webhook retry tests.
+
+**Cleanup implication:** Remove the simplified Map implementation from production path.
+
+---
+
+## P0-3 Booking lifecycle is strong but still has enum/state and side-effect consistency risks
+
+**Why it matters:** Booking is the core marketplace lifecycle. Invalid states, stale transitions, or duplicate side effects can corrupt availability, refunds, payouts, condition reports, deposits, and disputes.
+
+**Root cause:** The repo has a real booking state machine with optimistic locking and state history, which is good. It defines transitions and writes state history in the same transaction.  But the implementation also casts `MANUAL_REVIEW` as `BookingStatus`, and the Prisma schema stores booking status and state-history status as `BookingStatus`, so the enum must be verified end-to-end. 
+
+**Evidence:**
+
+* `BookingStateMachineService` defines transitions and optimistic locking. 
+* `BookingsService.create` can move a booking into manual review when tax, constraints, or safety checks fail. 
+* Prisma stores `Booking.status` and `BookingStateHistory.toStatus` as `BookingStatus`. 
+* The state machine triggers side effects after transition, including notifications, deposit hold, settlement, refund, condition reports, and admin dispute notification. 
+
+**Affected surfaces:**
+
+* Booking create
+* Manual review
+* Payment confirmation
+* Refund
+* Payout
+* Deposit hold/release
+* Condition reports
+* Dispute resolution
+
+**Target pattern:** One canonical booking state enum, one transition registry, one state-effect outbox, and generated web/mobile/API contracts.
+
+**Required fix:** Verify `MANUAL_REVIEW` exists in Prisma enum and shared types; move side effects to durable outbox/command records where they must be exactly-once or retryable.
+
+**Required tests:** Full transition matrix against generated Prisma enum, manual-review approval/rejection tests, outbox retry tests, state-history tests, and duplicate side-effect prevention tests.
+
+**Cleanup implication:** Remove all casts used to bypass enum correctness.
+
+---
+
+## P0-4 Pricing and payment parity is not yet production-grade
+
+**Why it matters:** Rental pricing must match search, listing detail, booking preview, checkout, invoice, refunds, payouts, and ledger entries.
+
+**Root cause:** Pricing is split across booking pricing ports, policy engine, booking calculation service, payment controller, ledger, and persisted price breakdowns. Some parts are good, but `BookingCalculationService` still contains mock/simplified pricing behavior, including mock add-on pricing, simplified tax recalculation, and hardcoded loyalty/seasonal adjustments. 
+
+**Evidence:**
+
+* `BookingCalculationService.calculatePrice` uses policy engine or config fallbacks for taxes/fees. 
+* `calculateModificationPrice` uses a hardcoded add-on service price and simplified tax recalculation. 
+* `calculateLoyaltyDiscount` uses default/hardcoded loyalty and seasonal behavior. 
+* `PaymentsController` creates payment intents and payment records, but the current API path is `POST /payments/intents/:bookingId`. 
+* The E2E test still expects `/api/payments/create-intent`, which does not match the fetched controller. 
+
+**Affected surfaces:**
+
+* Search/listing price display
+* Booking calculate-price
+* Booking create
+* Checkout
+* Payment intent
+* Invoice
+* Refund
+* Owner earnings
+* Payout
+* Ledger
+
+**Target pattern:** One canonical pricing engine with versioned quote snapshots used by booking, payment, invoice, refund, payout, and ledger.
+
+**Required fix:** Remove mock pricing paths, persist quote snapshots, enforce quote-to-payment parity, and align API clients/tests to real routes.
+
+**Required tests:** Golden-master pricing tests for day/week/month/hour, taxes, fees, discounts, deposits, refunds, payouts, ledger, invoice, and web/mobile checkout parity.
+
+**Cleanup implication:** Delete mock add-on/seasonal logic or move incomplete features behind explicit feature flags.
+
+---
+
+## P0-5 API/test/client route contracts are drifting
+
+**Why it matters:** Stale tests create false confidence and repeated audit noise.
+
+**Root cause:** Some E2E tests call routes that do not match the current controller. This means coverage may be testing old contracts rather than the current application.
+
+**Evidence:**
+
+* Current `BookingsController` exposes `POST /bookings/:id/start`. 
+* The booking lifecycle E2E test calls `/api/bookings/:id/start-rental`. 
+* Current `PaymentsController` exposes `POST /payments/intents/:bookingId`. 
+* The booking lifecycle E2E test calls `/api/payments/create-intent`. 
+* The same E2E file also expects routes such as booking payments, audit logs, archive, payout-create, and refund paths that were not visible in the fetched controllers. 
+
+**Affected surfaces:**
+
+* API E2E
+* Playwright E2E
+* Mobile client
+* Web client
+* Release confidence
+
+**Target pattern:** Generated route contract or shared API client used by web, mobile, and tests.
+
+**Required fix:** Create a route/action registry; update all E2E tests and clients to current controller routes.
+
+**Required tests:** Contract tests that fail if a route exists in client/tests but not in API controller metadata.
+
+**Cleanup implication:** Delete or quarantine stale E2E tests until aligned.
+
+---
+
+## P1-6 Organization/team scope is incomplete in booking/payment surfaces
+
+**Why it matters:** The product vision includes owners operating individually or as organizations. Organization-owned listings, bookings, earnings, and team actions must not be treated as simple owner-user ownership only.
+
+**Root cause:** The schema supports organizations and organization members.  But booking queries and payment checks reviewed here mostly use `listing.ownerId`, `booking.ownerId`, or renter/owner direct checks rather than a canonical organization scope resolver.
+
+**Evidence:**
+
+* `getOwnerBookings` filters bookings through `listing.ownerId`. 
+* `findById` allows renter, listing owner, or admin. 
+* Payment release/refund logic uses local admin checks in some places instead of the centralized role helper. 
+* The architecture docs name identity and organization as a dominant domain, and owner organization flows as part of the system. 
+
+**Affected surfaces:**
+
+* Owner dashboard
+* Organization dashboard
+* Organization-owned listings
+* Bookings
+* Earnings
+* Payouts
+* Ledger
+* Messages
+* Disputes
+* Admin support
+
+**Target pattern:** Canonical `ScopeResolver` and `PermissionGuard` used everywhere.
+
+**Required fix:** Implement one organization/user/admin/support access policy and replace direct `ownerId === userId` checks where organization delegation applies.
+
+**Required tests:** Individual owner, org owner, org admin, org member, renter, support admin, finance admin, and unrelated user access matrix.
+
+**Cleanup implication:** Remove scattered local role/scope checks.
+
+---
+
+## P1-7 Availability has duplicate representations
+
+**Why it matters:** Availability is the marketplace’s inventory lock. Duplicate models create double-booking and stale blocked-date risk.
+
+**Root cause:** The schema contains both `Availability` and `AvailabilitySlot`, while booking creation uses a reservation service and blocked-date retrieval combines bookings with the older `availability` table.  
+
+**Evidence:**
+
+* `Availability` uses `propertyId`, start/end, and status. 
+* `AvailabilitySlot` uses listing, optional inventory unit, start/end, status, booking, and version. 
+* `BookingsService.getBlockedDates` queries bookings plus `prisma.availability.findMany`. 
+
+**Affected surfaces:**
+
+* Search availability filters
+* Listing detail calendar
+* Booking creation
+* Blocked dates
+* Inventory-unit rentals
+* Owner calendar
+* Mobile availability
+
+**Target pattern:** One canonical availability engine, likely `AvailabilitySlot` + inventory units, with legacy `Availability` migrated or clearly scoped.
+
+**Required fix:** Decide canonical availability model; migrate old blocked-date paths; add conflict tests around concurrent bookings.
+
+**Required tests:** Same listing/date concurrent booking, inventory-unit booking, owner-blocked periods, search filter parity, listing-detail calendar parity, cancellation release.
+
+**Cleanup implication:** Deprecate/remove old availability paths after migration.
+
+---
+
+## P1-8 Web/mobile/API parity is partial
+
+**Why it matters:** The repo supports web and mobile. Both must behave consistently for booking, pricing, state transitions, invoices, messages, and payments.
+
+**Root cause:** Mobile has its own booking client with direct endpoint strings and no visible idempotency key behavior.  Web tests verify portal layout, but not the full lifecycle across all routes. 
+
+**Evidence:**
+
+* Mobile client directly calls `/bookings`, `/bookings/:id/approve`, `/cancel`, `/reject`, `/start`, `/request-return`, `/approve-return`, `/reject-return`, and invoice. 
+* Portal layout tests validate shared shell, dashboard, bookings, favorites, messages, notifications, and mobile drawer behavior. 
+* Smoke tests mostly verify page visibility, non-404, and coarse health checks. 
+
+**Affected surfaces:**
+
+* Mobile booking lifecycle
+* Web booking lifecycle
+* Route registry
+* Shared contracts
+* Test coverage
+
+**Target pattern:** Generated SDK/shared typed API client with route constants and required headers.
+
+**Required fix:** Centralize API contracts and use them in web, mobile, and tests.
+
+**Required tests:** Contract parity test for every mobile and web action against API route metadata.
+
+**Cleanup implication:** Remove duplicate string-based clients where possible.
+
+---
+
+## P1-9 Privacy/security/i18n/a11y are improving but not pervasive
+
+**Why it matters:** The rental platform handles PII, location, payments, evidence, private messages, disputes, insurance, and identity documents.
+
+**Root cause:** Good platform controls exist, but coverage is inconsistent and not yet proven end-to-end.
+
+**Evidence:**
+
+* Config validation fails fast and forbids production/staging bypass flags such as Stripe bypass, safety fail-open, throttle disable, and dev login. 
+* `AppModule` has global throttling, CSRF guard, request ID middleware, telemetry, logger, encryption, metrics, health, and cleanup modules. 
+* Storage endpoints are disabled, leaving file privacy/security paths unresolved. 
+* Many notification/user-facing messages in backend are hardcoded English strings. 
+
+**Affected surfaces:**
+
+* Uploads
+* Evidence
+* PII
+* Admin/support workflows
+* Notifications
+* Invoices
+* Mobile
+* Accessibility state handling
+
+**Target pattern:** Pervasive privacy/security/i18n/a11y gates in controllers, services, UI, and tests.
+
+**Required fix:** Add privacy redaction policy, storage security, i18n message catalog, a11y E2E, and admin/support access audits.
+
+**Required tests:** PII redaction, evidence access, keyboard navigation, modal focus, screen-reader labels, i18n fallback, locale formatting, unauthorized states.
+
+**Cleanup implication:** Remove hardcoded strings from durable backend/user-facing paths where feasible.
+
+---
+
+## P2-10 Documentation is much cleaner, but domain-rule docs are still too high-level
+
+**Why it matters:** The docs are now organized, but production readiness needs precise source-of-truth rules for pricing, booking state, payments, refunds, disputes, insurance, organization scope, and route/action contracts.
+
+**Root cause:** Canonical docs exist, but the feature catalog remains high-level. It names capabilities without defining all operational rules. 
+
+**Evidence:**
+
+* `docs/README.md` says documentation consolidation is complete and establishes canonical docs. 
+* Product vision and features describe expected capabilities.  
+* Architecture overview describes domains and layers. 
+
+**Affected surfaces:**
+
+* Booking state
+* Pricing
+* Payments/refunds/payouts
+* Disputes
+* Insurance
+* Organization/team permissions
+* QA/release gates
+
+**Target pattern:** Small canonical rule docs for each critical domain, linked from docs map and tested through traceability.
+
+**Required fix:** Add concise canonical rule specs for lifecycle, pricing/payment, permissions, evidence/storage, and test matrix.
+
+**Cleanup implication:** Keep archives, but ensure no old status/audit docs compete with canonical docs.
+
+# 7.3 Migration Matrix
+
+| Surface               | Route Registry | Scope Resolver | Permission Guard | Canonical State | Pricing/Payment |        Web/API |    Mobile/API | Privacy/Security | i18n/a11y |          Tests | Cleanup | Status     |
+| --------------------- | -------------: | -------------: | ---------------: | --------------: | --------------: | -------------: | ------------: | ---------------: | --------: | -------------: | ------: | ---------- |
+| `/dashboard`          |             🟡 |             🟡 |               🟡 |               ⚫ |               ⚫ |             🟡 |             ⚫ |               🟡 |        🟡 |             🟡 |      🟡 | 🟡 Partial |
+| Renter dashboard      |             🟡 |             🟡 |               🟡 |              🟡 |              🟡 |             🟡 |            🟡 |               🟡 |        🟡 |             🟡 |      🟡 | 🟡 Partial |
+| Owner dashboard       |             🟡 |             🔴 |               🟡 |              🟡 |              🟡 |             🟡 |            🟡 |               🟡 |        🟡 |             🟡 |      🟡 | 🟡 Partial |
+| Search/discovery      |             🟡 |              ⚫ |                ⚫ |               ⚫ |              🟡 |             🟡 |            🟡 |               🟡 |        🟡 |             🟡 |      🟡 | 🟡 Partial |
+| Listing create/edit   |             🟡 |             🟡 |               🟡 |              🟡 |              🟡 |             🟡 |            🟡 |       🔴 storage |        🟡 |             🟡 |      🔴 | 🔴 Blocked |
+| Booking create        |             🟡 |             🟡 |               🟡 |              🟡 |              🟡 |             🟡 |            🟡 |               🟡 |        🟡 |             🟡 |      🟡 | 🟡 Partial |
+| Booking transitions   |             🟡 |             🟡 |               🟡 |              🟡 |              🟡 |             🟡 |            🟡 |               🟡 |        🟡 |             🟡 |      🟡 | 🟡 Partial |
+| Checkout/payment      |             🟡 |             🟡 |               🟡 |              🟡 |              🟡 | 🔴 route drift |            🟡 |               🟡 |        🟡 | 🔴 stale tests |      🟡 | 🔴 Blocked |
+| Refund/deposit/payout |             🟡 |             🟡 |               🟡 |              🟡 |              🟡 |             🟡 | 🔴 not proven |               🟡 |        🟡 |             🟡 |      🟡 | 🟡 Partial |
+| Disputes/evidence     |             🟡 |             🟡 |               🟡 |              🟡 |              🟡 |             🟡 | 🔴 not proven |       🔴 storage |        🟡 |             🟡 |      🔴 | 🔴 Blocked |
+| Insurance/claims      |             🟡 |             🟡 |               🟡 |              🟡 |               ⚫ |             🟡 | 🔴 not proven |       🔴 storage |        🟡 |             🟡 |      🔴 | 🔴 Blocked |
+| Organizations         |             🟡 |             🔴 |               🟡 |               ⚫ |              🟡 |             🟡 | 🔴 not proven |               🟡 |        🟡 |             🔴 |      🟡 | 🟡 Partial |
+| Storage/uploads       |             🟡 |             🔴 |               🔴 |               ⚫ |               ⚫ |             🔴 |            🔴 |               🔴 |         ⚫ |             🔴 |      🔴 | 🔴 Missing |
+| API E2E               |             🔴 |             🟡 |               🟡 |              🟡 |              🟡 |             🔴 |            🔴 |               🟡 |        🔴 |             🔴 |      🟡 | 🔴 Blocked |
+| Repo cleanup          |             🟡 |              ⚫ |                ⚫ |              🟡 |              🟡 |             🟡 |            🟡 |               🟡 |        🟡 |             🟡 |      🟡 | 🟡 Partial |
+
+# 7.4 File-Level Gaps
+
+| Root blocker             | Path                                                                         | What is wrong/missing                                                            | Required fix                                                        | Required tests                                      |
+| ------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| Storage disabled         | `apps/api/src/common/storage/storage.controller.ts`                          | Upload/download/delete/listing-photo/avatar/org-logo endpoints are commented out | Reimplement against updated `StorageService`; remove commented code | Upload/evidence/avatar/org-logo auth and validation |
+| Idempotency unsafe       | `apps/api/src/common/guards/idempotency.guard.ts`                            | Process-local Map, no fingerprint, no actor/route scoping                        | Redis/Postgres-backed idempotency store                             | Retry/replay/conflict/cross-user tests              |
+| Mutations not idempotent | `apps/api/src/modules/bookings/controllers/bookings.controller.ts`           | Create is idempotent; approve/cancel/start/return/dispute are not                | Require idempotency on all state-changing endpoints                 | Duplicate submit and retry tests                    |
+| Payment route drift      | `apps/api/src/modules/payments/controllers/payments.controller.ts` + E2E     | Controller and E2E use different payment intent routes                           | Align tests and clients to controller or update controller          | API contract route tests                            |
+| Stale E2E                | `apps/api/test/e2e/booking-lifecycle-complete.e2e-spec.ts`                   | Uses routes not visible in current controllers                                   | Rewrite against current routes and real flow                        | Full lifecycle E2E                                  |
+| Mock pricing             | `apps/api/src/modules/bookings/services/booking-calculation.service.ts`      | Hardcoded add-on, loyalty, seasonal and simplified tax behavior                  | Remove or feature-flag incomplete pricing features                  | Pricing golden masters                              |
+| Organization scope       | `apps/api/src/modules/bookings/services/bookings.service.ts`                 | Owner bookings use direct listing owner only                                     | Use canonical scope resolver for user/org/team                      | Role/org matrix tests                               |
+| Availability duplication | `packages/database/prisma/schema.prisma` + `BookingsService.getBlockedDates` | `Availability` and `AvailabilitySlot` coexist with mixed access paths            | Choose/migrate to canonical availability model                      | Concurrent booking + calendar parity tests          |
+| Deprecated fields        | `packages/database/prisma/schema.prisma`                                     | Deprecated `views`, `stripePaymentIntentId`, `stripeId` remain in active models  | Finish migration or document compatibility window                   | Migration and API compatibility tests               |
+| Shallow smoke tests      | `apps/web/e2e/smoke.spec.ts`                                                 | Mostly body visible / non-404 checks                                             | Replace with action/result assertions                               | Journey-specific Playwright tests                   |
+
+# 7.5 Prioritized Implementation Sequence
+
+1. **Restore storage as a production path**
+   Rebuild upload/download/delete/listing-photo/avatar/org-logo/evidence endpoints with ownership checks, signed URL TTLs, MIME/size validation, object key scoping, and audit events.
+
+2. **Replace idempotency implementation**
+   Move from in-memory `Map` to Redis/Postgres idempotency records with route/method/user/body fingerprinting.
+
+3. **Align API route contracts**
+   Create a route/action registry and update API tests, web clients, mobile clients, and docs to the current controller routes.
+
+4. **Harden booking state machine**
+   Verify Prisma enum parity, remove string casts, and move transition side effects into durable command/outbox records.
+
+5. **Canonicalize pricing and quote snapshots**
+   Remove mock add-on/seasonal/loyalty logic from production paths; persist quote snapshots and use them through checkout, invoice, refund, payout, and ledger.
+
+6. **Harden payment flow**
+   Add idempotency to payment intent creation, avoid external Stripe calls inside DB transactions where possible, and enforce payment/booking/ledger reconciliation.
+
+7. **Unify availability**
+   Choose `AvailabilitySlot`/inventory-unit path as canonical or explicitly justify the old `Availability` model; migrate blocked-date and calendar reads.
+
+8. **Implement organization scope resolver everywhere**
+   Replace direct owner checks with user/org/team/admin/support policies.
+
+9. **Strengthen web/mobile/API parity**
+   Generate or share typed API clients; enforce required headers and route metadata.
+
+10. **Replace shallow/stale tests**
+    Turn smoke tests into behavior tests and rewrite stale API E2E to current routes.
+
+11. **Privacy/security/i18n/a11y gates**
+    Add evidence access tests, private-data redaction tests, keyboard/screen-reader tests, and locale formatting tests.
+
+12. **Repository cleanup**
+    Remove commented production code, stale tests, deprecated fields after migration, and archived docs that are still referenced as active.
+
+# 7.6 Regression and Release Gates
+
+Minimum gates before production readiness:
+
+* `/dashboard` redirects correctly for guest/renter/owner/admin.
+* Renter, owner, organization member, org admin, support admin, finance admin, and platform admin access matrix passes.
+* Storage upload/download/delete works for listing photos, avatars, org logos, dispute evidence, condition reports, insurance claims, and KYC documents.
+* Every mutation with booking/payment/refund/deposit/payout side effects requires durable idempotency.
+* Booking state-machine golden master covers all valid/invalid transitions.
+* Manual-review state is present in Prisma, shared types, API contracts, web/mobile UI, and tests.
+* Payment intent creation is idempotent and reconciled with booking/payment records.
+* Stripe webhook retry tests pass.
+* Refund/deposit/payout ledger reconciliation passes.
+* Availability conflict and concurrent booking tests pass.
+* Search/listing/detail/checkout price parity passes.
+* Invoice/refund/payout values match stored quote snapshots.
+* Web and mobile clients use shared route/action contracts.
+* No stale E2E routes remain.
+* Privacy redaction tests pass for private profile, payment, evidence, and admin/support views.
+* i18n locale/date/currency tests pass.
+* Accessibility tests pass for dashboards, dialogs, tables, forms, checkout, upload, messages, and disputes.
+* Build/lint/typecheck/test pass after cleanup.
+
+# Repository Cleanup Plan
+
+| Priority | Classification         | Path                                                       | Reason                                               | Evidence                                                  | Safe Fix                                           | Tests/Validation              |
+| -------- | ---------------------- | ---------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------- | ----------------------------- |
+| P0       | Replace                | `apps/api/src/common/storage/storage.controller.ts`        | Production endpoints disabled                        | Entire controller methods commented out                   | Reimplement and delete commented block             | Upload/evidence tests         |
+| P0       | Replace                | `apps/api/src/common/guards/idempotency.guard.ts`          | In-memory process-local cache                        | Uses `new Map()` and comment says simplified              | Redis/Postgres idempotency service                 | Retry/replay tests            |
+| P0       | Replace                | `apps/api/test/e2e/booking-lifecycle-complete.e2e-spec.ts` | Stale route expectations                             | Uses `/payments/create-intent`, `/start-rental`           | Rewrite against current routes                     | E2E route contract validation |
+| P0       | Replace                | `apps/mobile/src/api/clients/bookings-client.ts`           | Direct endpoint strings and no visible idempotency   | Calls booking mutations directly                          | Use shared generated client                        | Mobile/API contract tests     |
+| P1       | Merge                  | `Availability` + `AvailabilitySlot` schema paths           | Duplicate availability concepts                      | Both models exist                                         | Canonicalize slot model or document split          | Calendar/search/booking tests |
+| P1       | Replace                | `BookingCalculationService` mock pricing areas             | Mock/simplified production pricing                   | Hardcoded add-on/seasonal logic                           | Move behind feature flag or real rule engine       | Pricing golden masters        |
+| P1       | Merge                  | Scattered admin checks                                     | Some code uses helper, some hardcoded roles          | Payments controller hardcodes ADMIN/SUPER_ADMIN in places | Use centralized admin-role helpers                 | Admin role matrix             |
+| P1       | Deprecate/remove       | Deprecated schema fields                                   | Active schema still has deprecated fields            | `views`, `stripePaymentIntentId`, `stripeId`              | Finish migration or document retention             | Migration tests               |
+| P2       | Keep, but document why | `docs/archive/**`                                          | Archive is valid but must not compete with live docs | docs map marks archive historical                         | Keep only as non-source-of-truth                   | Link audit                    |
+| P2       | Merge                  | Domain rules scattered across docs/code                    | Canonical docs are high-level                        | Feature catalog is concise                                | Add rule specs for booking/pricing/payment/dispute | Traceability checks           |
+
+## Canonical Docs Matrix
+
+| Doc                                     |     Keep |     Merge | Archive |         Delete | Notes                                      |
+| --------------------------------------- | -------: | --------: | ------: | -------------: | ------------------------------------------ |
+| `docs/README.md`                        |        ✅ |           |         |                | Canonical docs map                         |
+| `docs/product/vision.md`                |        ✅ |           |         |                | Keep as product north star                 |
+| `docs/product/features.md`              |        ✅ |           |         |                | Keep, but add links to detailed rule specs |
+| `docs/product/requirements.md`          |        ✅ |           |         |                | Should own current requirement source      |
+| `docs/architecture/overview.md`         |        ✅ |           |         |                | Keep                                       |
+| `docs/architecture/domain-model.md`     |        ✅ |           |         |                | Should become schema/source parity map     |
+| Booking lifecycle rules doc             | ✅ create |           |         |                | Needed as canonical state-machine spec     |
+| Pricing/payment/refund/payout rules doc | ✅ create |           |         |                | Needed for financial parity                |
+| Storage/evidence security doc           | ✅ create |           |         |                | Needed because storage is critical         |
+| Organization authorization matrix       | ✅ create |           |         |                | Needed for org/team scope                  |
+| `docs/archive/audits/**`                |          |           |       ✅ |                | Keep only as historical material           |
+| Old root status/audit/generated docs    |          | ✅/archive |       ✅ | ✅ if duplicate | Not verified from current code/docs        |
+
+Final cleanup checklist:
+
+* [ ] Storage controller restored and commented production code removed
+* [ ] In-memory idempotency removed from production path
+* [ ] All critical mutations have durable idempotency
+* [ ] API/web/mobile route contracts aligned
+* [ ] Stale E2E routes rewritten or removed
+* [ ] Booking enum/state-machine/shared types aligned
+* [ ] Mock pricing paths removed or feature-flagged
+* [ ] Availability model duplication resolved
+* [ ] Organization scope resolver applied consistently
+* [ ] Deprecated payment/listing schema fields migrated or documented
+* [ ] Canonical rule docs added for lifecycle, pricing, storage, and authorization
+* [ ] Build/lint/typecheck/test pass after cleanup
+
+Bottom line: the repo is moving in the right direction, especially around canonical docs, modular API domains, config validation, booking state machine, and payment command patterns. But it is not yet production-ready because storage is disabled, idempotency is not durable, tests are stale in critical places, pricing still has mock paths, and org/payment/availability contracts are not consistently canonicalized.

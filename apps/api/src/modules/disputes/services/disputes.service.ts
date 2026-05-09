@@ -12,6 +12,7 @@ import { EmailService } from '@/common/email/email.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { escapeHtml } from '@/common/utils/sanitize';
+import { AdminService } from '@/modules/admin/services/admin.service';
 import {
   Dispute,
   DisputeStatus,
@@ -21,6 +22,7 @@ import {
 } from '@rental-portal/database';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { BookingStateMachineService } from '@/modules/bookings/services/booking-state-machine.service';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 /** Valid forward transitions for each dispute status */
 const DISPUTE_VALID_TRANSITIONS: Record<string, DisputeStatus[]> = {
@@ -103,6 +105,7 @@ export class DisputesService {
     private readonly notificationsService: NotificationsService,
     private readonly stateMachine: BookingStateMachineService,
     private readonly config: ConfigService,
+    private readonly organizationScopeService: OrganizationScopeService,
     @InjectQueue('payments') private readonly paymentsQueue: Queue,
   ) {}
 
@@ -125,12 +128,13 @@ export class DisputesService {
       throw i18nNotFound('booking.notFound');
     }
 
-    const isParticipant =
-      booking.renterId === userId || booking.listing.ownerId === userId;
-
-    if (!isParticipant) {
-      throw i18nForbidden('dispute.unauthorized');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'booking',
+      resourceId: bookingId,
+      ownerId: booking.listing.ownerId,
+      renterId: booking.renterId,
+    });
 
     // Enforce 30-day dispute window from booking completion
     const completedAt = booking.completedAt ?? booking.endDate;
@@ -424,7 +428,7 @@ export class DisputesService {
       where: { id: userId },
     });
 
-    const isAdmin = user?.role === UserRole.ADMIN;
+    const isAdmin = AdminService.isAdminUser(user);
     const isParty = dispute.initiatorId === userId || dispute.defendantId === userId;
 
     if (!isAdmin && !isParty) {

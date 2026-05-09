@@ -13,6 +13,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { i18nForbidden } from '@/common/errors/i18n-exceptions';
+import { AdminService } from '@/modules/admin/services/admin.service';
 import { UserRole } from '@rental-portal/database';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ReviewsService } from '../services/reviews.service';
@@ -101,7 +102,7 @@ export class ReviewsController {
     @Query('limit') limit?: number,
     @Query('rating') rating?: number,
   ) {
-    if (currentUser.id !== userId && currentUser.role !== UserRole.ADMIN) {
+    if (currentUser.id !== userId && !AdminService.isAdminUser(currentUser)) {
       throw i18nForbidden('review.ownOnly');
     }
     return this.reviewsService.getUserReviews(userId, type, page, limit, rating ? Number(rating) : undefined);

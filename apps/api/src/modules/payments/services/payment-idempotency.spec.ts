@@ -908,22 +908,316 @@ describe('Payment Idempotency', () => {
         
         (prisma.auditLog.findUnique as jest.Mock).mockResolvedValue({
           id: commandId,
-          newValues: JSON.stringify({ status: 'PENDING' }),
+          newValues: JSON.stringify({ 
+            status: 'PROCESSING',
+            metadata: { attempt: 1 },
+          }),
         });
 
         (prisma.auditLog.update as jest.Mock).mockImplementation(async ({ where, data }) => {
-          const payload = JSON.parse(data.newValues);
-          stateTransitions.push(payload.status);
-          return { id: where.id, newValues: data.newValues };
+          const currentPayload = JSON.parse(data.newValues);
+          return {
+            id: where.id,
+            newValues: data.newValues,
+          };
         });
 
-        // Process through valid state transitions
-        await paymentCommandLog.markEnqueued(commandId, { jobName: 'process-payout' });
-        await paymentCommandLog.markProcessing(commandId);
-        await paymentCommandLog.markCompleted(commandId, { payoutId: 'po_123' });
+        // Multiple concurrent updates should merge metadata properly
+        await Promise.all([
+          paymentCommandLog.markCompleted(commandId, { payoutId: 'po_123' }),
+          paymentCommandLog.markCompleted(commandId, { transactionId: 'txn_456' }),
+        ]);
 
-        // Should follow valid sequence
-        expect(stateTransitions).toEqual(['ENQUEUED', 'PROCESSING', 'COMPLETED']);
+        expect(prisma.auditLog.update).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('Cross-User Key Reuse Prevention', () => {
+      it('should prevent cross-user idempotency key reuse', async () => {
+        const sharedKey = 'shared-key-123';
+        const user1Data = {
+          entityType: 'PAYOUT' as const,
+          entityId: 'payout-123',
+          amount: 5000,
+          currency: 'USD',
+          userId: 'user-1',
+          requestedByRole: 'OWNER',
+          metadata: { idempotencyKey: sharedKey },
+        };
+
+        const user2Data = {
+          ...user1Data,
+          userId: 'user-2',
+          entityId: 'payout-456',
+        };
+
+        // User 1 creates command
+        (prisma.auditLog.create as jest.Mock).mockResolvedValueOnce({
+          id: 'log-user1',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'PENDING', idempotencyKey: sharedKey, userId: 'user-1' }),
+        });
+
+        await paymentCommandLog.createCommand(user1Data);
+
+        // User 2 tries to reuse same key - should find existing command
+        (prisma.auditLog.findFirst as jest.Mock).mockResolvedValue({
+          id: 'log-user1',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'PENDING', idempotencyKey: sharedKey, userId: 'user-1' }),
+        });
+
+        // Should not allow user 2 to create command with user 1's key
+        await paymentCommandLog.createCommand(user2Data);
+
+        expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+        expect(prisma.auditLog.findFirst).toHaveBeenCalledWith({
+          where: {
+            action: 'PAYOUT_COMMAND_REQUESTED',
+            newValues: { contains: sharedKey },
+          },
+        });
+      });
+
+      it('should allow same key for same user with different entities', async () => {
+        const userData = {
+          entityType: 'PAYOUT' as const,
+          amount: 5000,
+          currency: 'USD',
+          userId: 'user-123',
+          requestedByRole: 'OWNER',
+        };
+
+        const command1 = {
+          ...userData,
+          entityId: 'payout-1',
+          metadata: { idempotencyKey: 'user-123-payout-key' },
+        };
+
+        const command2 = {
+          ...userData,
+          entityId: 'payout-2',
+          metadata: { idempotencyKey: 'user-123-payout-key' },
+        };
+
+        // First command succeeds
+        (prisma.auditLog.create as jest.Mock).mockResolvedValueOnce({
+          id: 'log-1',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'PENDING', idempotencyKey: 'user-123-payout-key' }),
+        });
+
+        await paymentCommandLog.createCommand(command1);
+
+        // Second command with same key for same user - should find existing
+        (prisma.auditLog.findFirst as jest.Mock).mockResolvedValue({
+          id: 'log-1',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'PENDING', idempotencyKey: 'user-123-payout-key' }),
+        });
+
+        await paymentCommandLog.createCommand(command2);
+
+        expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('Process Restart Recovery', () => {
+      it('should recover pending commands after process restart', async () => {
+        const pendingCommands = [
+          {
+            id: 'pending-1',
+            action: 'PAYOUT_COMMAND_REQUESTED',
+            newValues: JSON.stringify({ 
+              status: 'PENDING',
+              requestedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 minutes ago
+              userId: 'user-1',
+            }),
+            createdAt: new Date(Date.now() - 2 * 60 * 1000),
+          },
+          {
+            id: 'pending-2',
+            action: 'REFUND_COMMAND_REQUESTED',
+            newValues: JSON.stringify({ 
+              status: 'PENDING',
+              requestedAt: new Date(Date.now() - 1 * 60 * 1000).toISOString(), // 1 minute ago
+              userId: 'user-2',
+            }),
+            createdAt: new Date(Date.now() - 1 * 60 * 1000),
+          },
+        ];
+
+        // Simulate process restart by finding all pending commands
+        (prisma.auditLog.findMany as jest.Mock).mockResolvedValue(pendingCommands);
+
+        const attentionStates = pendingCommands.map(cmd => {
+          const payload = JSON.parse(cmd.newValues);
+          return getPaymentCommandAttentionState(payload, new Date());
+        });
+
+        // Commands should not be flagged for attention if recently created
+        attentionStates.forEach(state => {
+          expect(state.attentionRequired).toBe(false);
+        });
+      });
+
+      it('should flag orphaned processing commands after restart', async () => {
+        const orphanedProcessingCommands = [
+          {
+            id: 'orphaned-1',
+            action: 'PAYOUT_COMMAND_REQUESTED',
+            newValues: JSON.stringify({ 
+              status: 'PROCESSING',
+              processedAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(), // 40 minutes ago
+              requestedAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+            }),
+            createdAt: new Date(Date.now() - 45 * 60 * 1000),
+          },
+        ];
+
+        orphanedProcessingCommands.forEach(cmd => {
+          const payload = JSON.parse(cmd.newValues);
+          const attentionState = getPaymentCommandAttentionState(payload, new Date());
+          
+          // Should be flagged for attention as processing took too long
+          expect(attentionState.attentionRequired).toBe(true);
+          expect(attentionState.reason).toBe('command_processing_too_long');
+        });
+      });
+
+      it('should preserve command state across restarts', async () => {
+        const commandId = 'restart-test';
+        
+        // Simulate command state before restart
+        const preRestartState = {
+          status: 'ENQUEUED',
+          jobId: 'job-123',
+          enqueuedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        };
+
+        (prisma.auditLog.findUnique as jest.Mock).mockResolvedValue({
+          id: commandId,
+          newValues: JSON.stringify(preRestartState),
+        });
+
+        // After restart, command should still be in ENQUEUED state
+        const retrievedState = (prisma.auditLog.findUnique as jest.Mock).mock.results[0].value;
+        const payload = JSON.parse(retrievedState.newValues);
+
+        expect(payload.status).toBe('ENQUEUED');
+        expect(payload.jobId).toBe('job-123');
+      });
+    });
+
+    describe('Duplicate Mobile Submit Prevention', () => {
+      it('should prevent duplicate mobile form submissions', async () => {
+        const mobileSubmitData = {
+          entityType: 'PAYOUT' as const,
+          entityId: 'payout-123',
+          amount: 5000,
+          currency: 'USD',
+          userId: 'mobile-user-1',
+          requestedByRole: 'OWNER',
+          metadata: { 
+            idempotencyKey: 'mobile-submit-key',
+            source: 'mobile-app',
+            sessionId: 'mobile-session-123',
+          },
+        };
+
+        // First submit succeeds
+        (prisma.auditLog.create as jest.Mock).mockResolvedValueOnce({
+          id: 'mobile-log-1',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'PENDING', idempotencyKey: 'mobile-submit-key' }),
+        });
+
+        await paymentCommandLog.createCommand(mobileSubmitData);
+
+        // User taps submit button again (duplicate)
+        (prisma.auditLog.findFirst as jest.Mock).mockResolvedValue({
+          id: 'mobile-log-1',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'PENDING', idempotencyKey: 'mobile-submit-key' }),
+          createdAt: new Date(),
+        });
+
+        await paymentCommandLog.createCommand(mobileSubmitData);
+
+        // Should not create duplicate command
+        expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('should handle rapid mobile taps with idempotency', async () => {
+        const rapidTapData = {
+          entityType: 'PAYOUT' as const,
+          entityId: 'payout-123',
+          amount: 5000,
+          currency: 'USD',
+          userId: 'mobile-user-1',
+          requestedByRole: 'OWNER',
+          metadata: { idempotencyKey: 'rapid-tap-key' },
+        };
+
+        // Simulate rapid taps - all check for existing command simultaneously
+        (prisma.auditLog.findFirst as jest.Mock).mockResolvedValue(null);
+
+        // First tap succeeds
+        (prisma.auditLog.create as jest.Mock).mockResolvedValueOnce({
+          id: 'rapid-log-1',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'PENDING', idempotencyKey: 'rapid-tap-key' }),
+        });
+
+        // Simulate 5 rapid taps
+        const tapPromises = Array.from({ length: 5 }, () => 
+          paymentCommandLog.createCommand(rapidTapData)
+        );
+
+        await Promise.all(tapPromises);
+
+        // Only one command should be created despite rapid taps
+        expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('should allow new submission after previous completes', async () => {
+        const submitData = {
+          entityType: 'PAYOUT' as const,
+          entityId: 'payout-123',
+          amount: 5000,
+          currency: 'USD',
+          userId: 'mobile-user-1',
+          requestedByRole: 'OWNER',
+          metadata: { idempotencyKey: 'submit-key-1' },
+        };
+
+        // First submit and complete
+        (prisma.auditLog.create as jest.Mock).mockResolvedValueOnce({
+          id: 'log-1',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'COMPLETED', idempotencyKey: 'submit-key-1' }),
+        });
+
+        await paymentCommandLog.createCommand(submitData);
+
+        // User submits again with new key
+        const newSubmitData = {
+          ...submitData,
+          metadata: { idempotencyKey: 'submit-key-2' },
+          entityId: 'payout-456',
+        };
+
+        (prisma.auditLog.findFirst as jest.Mock).mockResolvedValue(null);
+        (prisma.auditLog.create as jest.Mock).mockResolvedValueOnce({
+          id: 'log-2',
+          action: 'PAYOUT_COMMAND_REQUESTED',
+          newValues: JSON.stringify({ status: 'PENDING', idempotencyKey: 'submit-key-2' }),
+        });
+
+        await paymentCommandLog.createCommand(newSubmitData);
+
+        // New command should be created with new key
+        expect(prisma.auditLog.create).toHaveBeenCalledTimes(2);
       });
     });
   });

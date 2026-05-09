@@ -1,8 +1,9 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler, HttpException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { Reflector } from '@nestjs/core';
 import { Request, Response } from 'express';
+import { IdempotencyService } from '../idempotency/idempotency.service';
 
 /**
  * Idempotency Key Header
@@ -29,27 +30,25 @@ export const Idempotent = () => (target: any, propertyKey: string, descriptor: P
 /**
  * Idempotency Interceptor
  * 
- * Provides server-side idempotency for critical mutations by:
+ * Provides production-grade server-side idempotency for critical mutations by:
  * 1. Checking for Idempotency-Key header
- * 2. Storing successful responses keyed by the idempotency key
- * 3. Returning cached responses for duplicate requests
+ * 2. Storing successful responses in durable storage (Postgres/Redis)
+ * 3. Using request fingerprinting (route, method, user, body hash) to detect key reuse
+ * 4. Returning cached responses for duplicate requests
+ * 5. Supporting TTL-based expiration
  * 
- * Note: This is a simplified implementation. For production use, consider:
- * - Using Redis for caching instead of database
- * - Adding request fingerprinting to prevent key reuse across different requests
- * - Implementing proper cache invalidation strategies
+ * This implementation uses durable storage and prevents key reuse across different requests.
  */
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
   private readonly logger = new Logger(IdempotencyInterceptor.name);
-  private readonly cache = new Map<string, { response: any; timestamp: Date }>();
-  private readonly IDEMPOTENCY_KEY_TTL_HOURS = 24;
 
   constructor(
     private readonly reflector: Reflector,
+    private readonly idempotencyService: IdempotencyService,
   ) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
     const handler = context.getHandler();
     const isIdempotent = this.reflector.get<boolean>('idempotent', handler);
 
@@ -78,30 +77,55 @@ export class IdempotencyInterceptor implements NestInterceptor {
       );
     }
 
-    // Check for existing cached response
-    const cached = this.cache.get(idempotencyKey);
+    // Extract request context for fingerprinting
+    const route = request.route?.path || request.url;
+    const method = request.method;
+    const userId = (request as any).user?.id || null;
+    const body = request.body;
 
-    if (cached) {
-      // Check if cache is expired
-      const ageHours = (Date.now() - cached.timestamp.getTime()) / (1000 * 60 * 60);
-      if (ageHours >= this.IDEMPOTENCY_KEY_TTL_HOURS) {
-        this.cache.delete(idempotencyKey);
-      } else {
+    try {
+      // Check for existing idempotency record with fingerprinting
+      const result = await this.idempotencyService.check({
+        key: idempotencyKey,
+        userId,
+        route,
+        method,
+        body,
+      });
+
+      if (result.isReplay && result.response) {
         this.logger.log(`Returning cached response for idempotency key: ${idempotencyKey}`);
         response.setHeader(IDEMPOTENCY_REPLAY_HEADER, 'true');
+        if (result.statusCode) {
+          response.status(result.statusCode);
+        }
         return new Observable((subscriber) => {
-          subscriber.next(cached.response);
+          subscriber.next(result.response);
           subscriber.complete();
         });
       }
-    }
 
-    // Execute the handler and cache the response
-    return next.handle().pipe(
-      tap((data) => {
-        this.cache.set(idempotencyKey, { response: data, timestamp: new Date() });
-        this.logger.log(`Cached response for idempotency key: ${idempotencyKey}`);
-      }),
-    );
+      // Execute the handler and store the response
+      return next.handle().pipe(
+        tap(async (data) => {
+          const statusCode = response.statusCode;
+          if (result.record) {
+            await this.idempotencyService.storeResponse(result.record, data, statusCode);
+            this.logger.log(`Stored response for idempotency key: ${idempotencyKey}`);
+          }
+        }),
+      );
+    } catch (error) {
+      // Handle idempotency check failures (e.g., key reuse with different payload)
+      if (error instanceof NotFoundException) {
+        throw new HttpException(
+          error.message,
+          HttpStatus.CONFLICT,
+        );
+      }
+      // Log other errors but don't block the request
+      this.logger.error('Idempotency check failed, proceeding with request', error);
+      return next.handle();
+    }
   }
 }

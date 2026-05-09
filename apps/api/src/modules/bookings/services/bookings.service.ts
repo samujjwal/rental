@@ -46,6 +46,8 @@ import { BookingStateMachineService } from './booking-state-machine.service';
 import { BookingValidationService } from './booking-validation.service';
 import { PolicyEngineService } from '@/modules/policy-engine/services/policy-engine.service';
 import { ContextResolverService } from '@/modules/policy-engine/services/context-resolver.service';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
+import { QuoteSnapshotService } from './quote-snapshot.service';
 import {
   BOOKING_ELIGIBILITY_PORT,
   type BookingEligibilityPort,
@@ -85,6 +87,8 @@ export class BookingsService {
     private readonly eligibilityChecks: BookingEligibilityPort,
     private readonly policyEngine: PolicyEngineService,
     private readonly contextResolver: ContextResolverService,
+    private readonly organizationScopeService: OrganizationScopeService,
+    private readonly quoteSnapshotService: QuoteSnapshotService,
     @Inject(BOOKING_PRICING_PORT)
     private readonly pricing: BookingPricingPort,
     private readonly configService: ConfigService,
@@ -347,6 +351,28 @@ export class BookingsService {
               },
             },
           },
+        });
+
+        // Create quote snapshot for pricing parity across checkout, invoice, refund, payout, and ledger
+        await this.quoteSnapshotService.createSnapshot({
+          bookingId: createdBooking.id,
+          userId: renterId,
+          listingId: dto.listingId,
+          currency: listing.currency || 'USD',
+          basePrice: pricing.subtotal,
+          duration: pricing.breakdown.duration,
+          durationType: pricing.breakdown.durationType,
+          subtotal: pricing.subtotal,
+          platformFee: pricing.platformFee,
+          serviceFee: pricing.serviceFee,
+          taxes: pricing.taxes,
+          depositAmount: pricing.depositAmount,
+          total: pricing.total,
+          ownerEarnings: pricing.ownerEarnings,
+          breakdown: pricing.breakdown,
+          taxLines: pricing.taxLines,
+          discountBreakdown: pricing.breakdown.discounts,
+          pricingVersion: '1.0',
         });
 
         // Persist price breakdown line items for the booking (inside transaction)
@@ -764,9 +790,13 @@ export class BookingsService {
   async cancelBooking(bookingId: string, userId: string, reason?: string): Promise<Booking> {
     const booking = await this.findById(bookingId);
 
-    if (booking.renterId !== userId && booking.listing.ownerId !== userId) {
-      throw i18nForbidden('booking.unauthorizedAction');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'booking',
+      resourceId: bookingId,
+      ownerId: booking.listing.ownerId,
+      renterId: booking.renterId,
+    });
 
     // Calculate refund
     const refund = await this.pricing.calculateRefund(bookingId, new Date());
@@ -848,9 +878,13 @@ export class BookingsService {
   async initiateDispute(bookingId: string, userId: string, reason: string): Promise<Booking> {
     const booking = await this.findById(bookingId);
 
-    if (booking.renterId !== userId && booking.listing.ownerId !== userId) {
-      throw i18nForbidden('common.notAuthorized');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'booking',
+      resourceId: bookingId,
+      ownerId: booking.listing.ownerId,
+      renterId: booking.renterId,
+    });
 
     await this.stateMachine.transition(
       bookingId,

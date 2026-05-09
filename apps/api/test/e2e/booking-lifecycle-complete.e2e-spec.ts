@@ -252,10 +252,9 @@ describe('Booking Lifecycle - Complete E2E Tests', () => {
   describe('Payment Processing Flow', () => {
     it('should create payment intent', async () => {
       const response = await request(app.getHttpServer())
-        .post('/api/payments/create-intent')
+        .post(`/api/payments/intents/${bookingId}`)
         .set('Authorization', `Bearer ${renterAccessToken}`)
         .send({
-          bookingId,
           amount: 30000, // $300.00 in cents
           currency: 'USD',
         })
@@ -326,7 +325,7 @@ describe('Booking Lifecycle - Complete E2E Tests', () => {
 
     it('should start rental (owner action)', async () => {
       const response = await request(app.getHttpServer())
-        .post(`/api/bookings/${bookingId}/start-rental`)
+        .post(`/api/bookings/${bookingId}/start`)
         .set('Authorization', `Bearer ${ownerAccessToken}`)
         .send({
           notes: 'Keys handed over, condition noted',
@@ -489,10 +488,9 @@ describe('Booking Lifecycle - Complete E2E Tests', () => {
 
     it('should create payment intent for cancellation booking', async () => {
       const response = await request(app.getHttpServer())
-        .post('/api/payments/create-intent')
+        .post(`/api/payments/intents/${cancellationBookingId}`)
         .set('Authorization', `Bearer ${renterAccessToken}`)
         .send({
-          bookingId: cancellationBookingId,
           amount: 40000,
           currency: 'USD',
         })
@@ -561,10 +559,9 @@ describe('Booking Lifecycle - Complete E2E Tests', () => {
     it('should complete booking through payment and state transitions', async () => {
       // Create payment intent
       const paymentResponse = await request(app.getHttpServer())
-        .post('/api/payments/create-intent')
+        .post(`/api/payments/intents/${disputeBookingId}`)
         .set('Authorization', `Bearer ${renterAccessToken}`)
         .send({
-          bookingId: disputeBookingId,
           amount: 30000,
           currency: 'USD',
         })
@@ -593,7 +590,7 @@ describe('Booking Lifecycle - Complete E2E Tests', () => {
 
       // Start rental
       await request(app.getHttpServer())
-        .post(`/api/bookings/${disputeBookingId}/start-rental`)
+        .post(`/api/bookings/${disputeBookingId}/start`)
         .set('Authorization', `Bearer ${ownerAccessToken}`)
         .expect(200);
 
@@ -697,10 +694,9 @@ describe('Booking Lifecycle - Complete E2E Tests', () => {
 
     it('should reject payment for non-existent booking', async () => {
       await request(app.getHttpServer())
-        .post('/api/payments/create-intent')
+        .post(`/api/payments/intents/non-existent-booking`)
         .set('Authorization', `Bearer ${renterAccessToken}`)
         .send({
-          bookingId: 'non-existent-booking',
           amount: 10000,
           currency: 'USD',
         })

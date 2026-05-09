@@ -7,6 +7,7 @@ import {
 import { i18nNotFound, i18nForbidden, i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { AdminService } from './admin.service';
 import {
   UserRole,
   PropertyStatus,
@@ -181,7 +182,7 @@ export class AdminUsersService {
       throw i18nNotFound('auth.userNotFound');
     }
 
-    if (suspend && ([UserRole.ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(user.role)) {
+    if (suspend && AdminService.isAdminUser(user)) {
       throw i18nBadRequest('admin.cannotSuspendAdmin');
     }
 

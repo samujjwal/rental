@@ -52,11 +52,11 @@ export class AvailabilityGraphService {
     const hasActiveLock = await this.cache.exists(lockKey);
 
     const [availabilities, bookings, listing] = await Promise.all([
-      this.prisma.availability.findMany({
+      this.prisma.availabilitySlot.findMany({
         where: {
-          propertyId: listingId,
-          startDate: { lte: endDate },
-          endDate: { gte: startDate },
+          listingId,
+          startTime: { lte: endDate },
+          endTime: { gte: startDate },
           status: 'BLOCKED',
         },
       }),
@@ -76,8 +76,8 @@ export class AvailabilityGraphService {
 
     const blockedDates: Date[] = [];
     for (const a of availabilities) {
-      const cur = new Date(a.startDate);
-      while (cur <= a.endDate && cur <= endDate) {
+      const cur = new Date(a.startTime);
+      while (cur <= a.endTime && cur <= endDate) {
         if (cur >= startDate) blockedDates.push(new Date(cur));
         cur.setDate(cur.getDate() + 1);
       }
@@ -142,11 +142,11 @@ export class AvailabilityGraphService {
           status: { in: ['CONFIRMED', 'PENDING'] },
         },
       }),
-      this.prisma.availability.findMany({
+      this.prisma.availabilitySlot.findMany({
         where: {
-          propertyId: listingId,
-          startDate: { lte: endDate },
-          endDate: { gte: startDate },
+          listingId,
+          startTime: { lte: endDate },
+          endTime: { gte: startDate },
           status: 'BLOCKED',
         },
       }),
@@ -164,8 +164,8 @@ export class AvailabilityGraphService {
     }
 
     for (const a of blockedSlots) {
-      const d = new Date(a.startDate);
-      while (d <= a.endDate) {
+      const d = new Date(a.startTime);
+      while (d <= a.endTime) {
         blockedDates.add(d.toISOString().split('T')[0]);
         d.setDate(d.getDate() + 1);
       }
@@ -243,11 +243,11 @@ export class AvailabilityGraphService {
           throw new BadRequestException('SLOT_CONFLICT: Dates already booked');
         }
 
-        const blocked = await tx.availability.findMany({
+        const blocked = await tx.availabilitySlot.findMany({
           where: {
-            propertyId: params.listingId,
-            startDate: { lte: params.endDate },
-            endDate: { gte: params.startDate },
+            listingId: params.listingId,
+            startTime: { lte: params.endDate },
+            endTime: { gte: params.startDate },
             status: 'BLOCKED',
           },
         });

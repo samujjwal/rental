@@ -12,9 +12,9 @@ export interface RecurrenceRule {
 }
 
 export interface CreateAvailabilityDto {
-  propertyId: string;
-  startDate: Date;
-  endDate: Date;
+  listingId: string;
+  startTime: Date;
+  endTime: Date;
   isAvailable: boolean;
   recurrenceRule?: RecurrenceRule;
   overrideBookings?: boolean;
@@ -23,9 +23,9 @@ export interface CreateAvailabilityDto {
 export type UpdateAvailabilityDto = Partial<CreateAvailabilityDto>;
 
 export interface AvailabilityCheckDto {
-  propertyId: string;
-  startDate: string | Date;
-  endDate: string | Date;
+  listingId: string;
+  startTime: string | Date;
+  endTime: string | Date;
 }
 
 export interface AvailabilityResult {
@@ -33,8 +33,8 @@ export interface AvailabilityResult {
   availableUnits?: string[];  // Inventory unit IDs available
   conflicts?: Array<{
     id: string;
-    startDate: Date;
-    endDate: Date;
+    startTime: Date;
+    endTime: Date;
     reason: string;
     unitId?: string;
   }>;
@@ -54,7 +54,7 @@ export class AvailabilityService {
    * Allows: listing owner, admins, and organization members with appropriate roles.
    */
   private async validateListingAccess(
-    propertyId: string,
+    listingId: string,
     userId?: string,
     userRole?: string,
   ): Promise<void> {
@@ -69,7 +69,7 @@ export class AvailabilityService {
 
     // Fetch the listing with organization membership info
     const listing = await this.prisma.listing.findUnique({
-      where: { id: propertyId },
+      where: { id: listingId },
       include: {
         organization: {
           include: {
@@ -107,19 +107,19 @@ export class AvailabilityService {
 
   async createAvailability(dto: CreateAvailabilityDto, userId?: string, userRole?: string): Promise<any> {
     // Validate dates
-    if (dto.startDate >= dto.endDate) {
+    if (dto.startTime >= dto.endTime) {
       throw new BadRequestException('End date must be after start date');
     }
 
     // Validate listing ownership for mutation operations
-    await this.validateListingAccess(dto.propertyId, userId, userRole);
+    await this.validateListingAccess(dto.listingId, userId, userRole);
 
     // Check for overlapping availability rules
-    const overlapping = await this.prisma.availability.findMany({
+    const overlapping = await this.prisma.availabilitySlot.findMany({
       where: {
-        propertyId: dto.propertyId,
-        startDate: { lt: dto.endDate }, // Existing starts before new ends
-        endDate: { gt: dto.startDate }, // Existing ends after new starts
+        listingId: dto.listingId,
+        startTime: { lt: dto.endTime }, // Existing starts before new ends
+        endTime: { gt: dto.startTime }, // Existing ends after new starts
       },
     });
 
@@ -127,23 +127,24 @@ export class AvailabilityService {
       throw new BadRequestException('Availability period overlaps with existing rules');
     }
 
-    return this.prisma.availability.create({
+    return this.prisma.availabilitySlot.create({
       data: {
-        propertyId: dto.propertyId,
-        startDate: dto.startDate,
-        endDate: dto.endDate,
+        listingId: dto.listingId,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
         status: dto.isAvailable ? 'AVAILABLE' : 'BLOCKED',
+        currency: 'NPR',
       },
     });
   }
 
   async updateAvailability(id: string, dto: UpdateAvailabilityDto, userId?: string, userRole?: string): Promise<any> {
-    if (dto.startDate && dto.endDate && dto.startDate >= dto.endDate) {
+    if (dto.startTime && dto.endTime && dto.startTime >= dto.endTime) {
       throw new BadRequestException('End date must be after start date');
     }
 
-    // Get the availability record to check propertyId
-    const existing = await this.prisma.availability.findUnique({
+    // Get the availability record to check listingId
+    const existing = await this.prisma.availabilitySlot.findUnique({
       where: { id },
     });
 
@@ -152,17 +153,22 @@ export class AvailabilityService {
     }
 
     // Validate listing ownership
-    await this.validateListingAccess(existing.propertyId, userId, userRole);
+    await this.validateListingAccess(existing.listingId, userId, userRole);
 
-    return this.prisma.availability.update({
+    const updateData: any = {};
+    if (dto.startTime !== undefined) updateData.startTime = dto.startTime;
+    if (dto.endTime !== undefined) updateData.endTime = dto.endTime;
+    if (dto.isAvailable !== undefined) updateData.status = dto.isAvailable ? 'AVAILABLE' : 'BLOCKED';
+
+    return this.prisma.availabilitySlot.update({
       where: { id },
-      data: dto,
+      data: updateData,
     });
   }
 
   async deleteAvailability(id: string, userId?: string, userRole?: string): Promise<void> {
-    // Get the availability record to check propertyId
-    const existing = await this.prisma.availability.findUnique({
+    // Get the availability record to check listingId
+    const existing = await this.prisma.availabilitySlot.findUnique({
       where: { id },
     });
 
@@ -171,55 +177,55 @@ export class AvailabilityService {
     }
 
     // Validate listing ownership
-    await this.validateListingAccess(existing.propertyId, userId, userRole);
+    await this.validateListingAccess(existing.listingId, userId, userRole);
 
-    await this.prisma.availability.delete({
+    await this.prisma.availabilitySlot.delete({
       where: { id },
     });
   }
 
-  async getListingAvailability(propertyId: string, startDate: Date, endDate: Date): Promise<any[]> {
+  async getListingAvailability(listingId: string, startTime: Date, endTime: Date): Promise<any[]> {
     // Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
-    return this.prisma.availability.findMany({
+    return this.prisma.availabilitySlot.findMany({
       where: {
-        propertyId,
+        listingId,
         OR: [
           {
-            AND: [{ startDate: { lt: endDate } }, { endDate: { gt: startDate } }],
+            AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
           },
         ],
       },
-      orderBy: { startDate: 'asc' },
+      orderBy: { startTime: 'asc' },
     });
   }
 
   async checkAvailability(dto: AvailabilityCheckDto): Promise<AvailabilityResult> {
-    const { propertyId, startDate, endDate } = dto;
+    const { listingId, startTime, endTime } = dto;
 
     // Parse dates if they are strings
-    const parsedStartDate = typeof startDate === 'string' ? new Date(startDate) : startDate;
-    const parsedEndDate = typeof endDate === 'string' ? new Date(endDate) : endDate;
+    const parsedStartTime = typeof startTime === 'string' ? new Date(startTime) : startTime;
+    const parsedEndTime = typeof endTime === 'string' ? new Date(endTime) : endTime;
 
-    this.logger.log(`Checking availability for property ${propertyId} from ${parsedStartDate} to ${parsedEndDate}`);
+    this.logger.log(`Checking availability for listing ${listingId} from ${parsedStartTime} to ${parsedEndTime}`);
 
     try {
       // Validate dates
       const now = new Date();
       // Reset time to start of day for comparison
       now.setHours(0, 0, 0, 0);
-      const startDateStartOfDay = new Date(parsedStartDate);
-      startDateStartOfDay.setHours(0, 0, 0, 0);
+      const startTimeStartOfDay = new Date(parsedStartTime);
+      startTimeStartOfDay.setHours(0, 0, 0, 0);
 
-      if (startDateStartOfDay < now) {
+      if (startTimeStartOfDay < now) {
         throw new BadRequestException('Start date cannot be in the past');
       }
 
-      if (parsedStartDate >= parsedEndDate) {
+      if (parsedStartTime >= parsedEndTime) {
         throw new BadRequestException('End date must be after start date');
       }
 
       // Check availability rules - fail closed on DB errors
-      const availabilityRules = await this.getListingAvailability(propertyId, parsedStartDate, parsedEndDate);
+      const availabilityRules = await this.getListingAvailability(listingId, parsedStartTime, parsedEndTime);
 
       const unavailableRules = availabilityRules.filter((rule) => rule.status !== 'AVAILABLE');
       if (unavailableRules.length > 0) {
@@ -227,8 +233,8 @@ export class AvailabilityService {
           isAvailable: false,
           conflicts: unavailableRules.map((rule) => ({
             id: rule.id,
-            startDate: rule.startDate,
-            endDate: rule.endDate,
+            startTime: rule.startTime,
+            endTime: rule.endTime,
             reason: 'Blocked by availability rule',
           })),
         };
@@ -238,7 +244,7 @@ export class AvailabilityService {
       // Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
       const conflictingBookings = await this.prisma.booking.findMany({
         where: {
-          listingId: propertyId,
+          listingId,
           status: {
             in: [
               'PENDING_OWNER_APPROVAL',
@@ -253,7 +259,7 @@ export class AvailabilityService {
           },
           OR: [
             {
-              AND: [{ startDate: { lt: parsedEndDate } }, { endDate: { gt: parsedStartDate } }],
+              AND: [{ startDate: { lt: parsedEndTime } }, { endDate: { gt: parsedStartTime } }],
             },
           ],
         },
@@ -264,8 +270,8 @@ export class AvailabilityService {
           isAvailable: false,
           conflicts: conflictingBookings.map((booking) => ({
             id: booking.id,
-            startDate: booking.startDate,
-            endDate: booking.endDate,
+            startTime: new Date(booking.startDate),
+            endTime: new Date(booking.endDate),
             reason: 'Already booked',
           })),
         };
@@ -282,13 +288,13 @@ export class AvailabilityService {
   }
 
   async bulkUpdateAvailability(
-    propertyId: string,
+    listingId: string,
     dates: Array<{ date: Date; isAvailable: boolean }>,
     userId?: string,
     userRole?: string,
   ): Promise<number> {
     // Validate listing ownership before bulk update
-    await this.validateListingAccess(propertyId, userId, userRole);
+    await this.validateListingAccess(listingId, userId, userRole);
 
     let count = 0;
 
@@ -300,25 +306,26 @@ export class AvailabilityService {
       endOfDay.setHours(23, 59, 59, 999);
 
       // Check if availability exists for this date
-      const existing = await this.prisma.availability.findFirst({
+      const existing = await this.prisma.availabilitySlot.findFirst({
         where: {
-          propertyId,
-          startDate: startOfDay,
+          listingId,
+          startTime: startOfDay,
         },
       });
 
       if (existing) {
-        await this.prisma.availability.update({
+        await this.prisma.availabilitySlot.update({
           where: { id: existing.id },
           data: { status: isAvailable ? 'AVAILABLE' : 'BLOCKED' },
         });
       } else {
-        await this.prisma.availability.create({
+        await this.prisma.availabilitySlot.create({
           data: {
-            propertyId,
-            startDate: startOfDay,
-            endDate: endOfDay,
+            listingId,
+            startTime: startOfDay,
+            endTime: endOfDay,
             status: isAvailable ? 'AVAILABLE' : 'BLOCKED',
+            currency: 'NPR',
           },
         });
       }
@@ -329,15 +336,15 @@ export class AvailabilityService {
     return count;
   }
 
-  async getAvailableDates(propertyId: string, startDate: Date, endDate: Date): Promise<Date[]> {
+  async getAvailableDates(listingId: string, startTime: Date, endTime: Date): Promise<Date[]> {
     // Batch fetch all availability rules for the date range
-    const availabilityRules = await this.getListingAvailability(propertyId, startDate, endDate);
+    const availabilityRules = await this.getListingAvailability(listingId, startTime, endTime);
     
     // Batch fetch all conflicting bookings for the date range
     // Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
     const conflictingBookings = await this.prisma.booking.findMany({
       where: {
-        listingId: propertyId,
+        listingId,
         status: {
           in: [
             'PENDING_OWNER_APPROVAL',
@@ -352,7 +359,7 @@ export class AvailabilityService {
         },
         OR: [
           {
-            AND: [{ startDate: { lt: endDate } }, { endDate: { gt: startDate } }],
+            AND: [{ startDate: { lt: endTime } }, { endDate: { gt: startTime } }],
           },
         ],
       },
@@ -364,9 +371,9 @@ export class AvailabilityService {
 
     // Compute available dates in-memory using half-open interval overlap
     const availableDates: Date[] = [];
-    const currentDate = new Date(startDate);
+    const currentDate = new Date(startTime);
     
-    while (currentDate <= endDate) {
+    while (currentDate <= endTime) {
       const nextDate = new Date(currentDate);
       nextDate.setDate(nextDate.getDate() + 1);
       
@@ -374,7 +381,7 @@ export class AvailabilityService {
       const isBlockedByRule = availabilityRules.some((rule) => {
         if (rule.status !== 'AVAILABLE') {
           // Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
-          return rule.startDate < nextDate && rule.endDate > currentDate;
+          return rule.startTime < nextDate && rule.endTime > currentDate;
         }
         return false;
       });
@@ -406,19 +413,19 @@ export class AvailabilityService {
    * Returns the reservation result with allocated unit (for multi-unit listings).
    */
   async checkAndReserve(
-    propertyId: string,
-    startDate: Date,
-    endDate: Date,
+    listingId: string,
+    startTime: Date,
+    endTime: Date,
     inventoryUnitId?: string,
   ): Promise<{ success: boolean; unitId?: string; conflicts?: any[] }> {
     const result = await this.prisma.$transaction(async (tx: any) => {
       // Acquire advisory lock on the listing to serialize reservation attempts
-      const lockKey = Buffer.from(propertyId).reduce((h, b) => (h * 31 + b) | 0, 0);
+      const lockKey = Buffer.from(listingId).reduce((h, b) => (h * 31 + b) | 0, 0);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
       // Check for available inventory units
       const units = await tx.inventoryUnit.findMany({
-        where: { listingId: propertyId, isActive: true },
+        where: { listingId, isActive: true },
       });
 
       if (units.length > 0) {
@@ -432,8 +439,8 @@ export class AvailabilityService {
             where: {
               inventoryUnitId: unit.id,
               status: { in: ['RESERVED', 'BOOKED'] },
-              startTime: { lt: endDate },
-              endTime: { gt: startDate },
+              startTime: { lt: endTime },
+              endTime: { gt: startTime },
             },
           });
 
@@ -443,10 +450,10 @@ export class AvailabilityService {
             try {
               await tx.availabilitySlot.create({
                 data: {
-                  listingId: propertyId,
+                  listingId,
                   inventoryUnitId: unit.id,
-                  startTime: startDate,
-                  endTime: endDate,
+                  startTime,
+                  endTime,
                   status: 'RESERVED',
                   currency: 'USD', // Will be overridden by booking
                 },
@@ -464,7 +471,7 @@ export class AvailabilityService {
             }
 
             this.logger.log(
-              `Reserved unit ${unit.id} of listing ${propertyId} for ${startDate.toISOString()} - ${endDate.toISOString()}`,
+              `Reserved unit ${unit.id} of listing ${listingId} for ${startTime.toISOString()} - ${endTime.toISOString()}`,
             );
             return { success: true, unitId: unit.id };
           }
@@ -479,12 +486,12 @@ export class AvailabilityService {
       // Single-unit listing: check standard booking conflicts
       const conflicts = await tx.booking.findMany({
         where: {
-          listingId: propertyId,
+          listingId,
           status: {
             notIn: ['CANCELLED', 'REFUNDED', 'DRAFT'],
           },
-          startDate: { lt: endDate },
-          endDate: { gte: startDate },
+          startTime: { lt: endTime },
+          endDate: { gte: startTime },
         },
       });
 
@@ -493,8 +500,8 @@ export class AvailabilityService {
           success: false,
           conflicts: conflicts.map((c: any) => ({
             id: c.id,
-            startDate: c.startDate,
-            endDate: c.endDate,
+            startTime: c.startDate,
+            endTime: c.endDate,
             reason: 'Already booked',
           })),
         };
@@ -509,23 +516,23 @@ export class AvailabilityService {
    * Release a previously reserved slot (e.g., on booking cancellation or timeout).
    */
   async releaseReservation(
-    propertyId: string,
-    startDate: Date,
-    endDate: Date,
+    listingId: string,
+    startTime: Date,
+    endTime: Date,
     inventoryUnitId?: string,
   ): Promise<{ released: number }> {
     const result = await this.prisma.availabilitySlot.updateMany({
       where: {
-        listingId: propertyId,
-        startTime: startDate,
-        endTime: endDate,
+        listingId,
+        startTime,
+        endTime,
         status: 'RESERVED',
         ...(inventoryUnitId ? { inventoryUnitId } : {}),
       },
       data: { status: 'AVAILABLE' },
     });
 
-    this.logger.log(`Released ${result.count} reservation(s) for listing ${propertyId}`);
+    this.logger.log(`Released ${result.count} reservation(s) for listing ${listingId}`);
     return { released: result.count };
   }
 
@@ -533,17 +540,17 @@ export class AvailabilityService {
    * Confirm a reservation (convert RESERVED → BOOKED).
    */
   async confirmReservation(
-    propertyId: string,
-    startDate: Date,
-    endDate: Date,
+    listingId: string,
+    startTime: Date,
+    endTime: Date,
     bookingId: string,
     inventoryUnitId?: string,
   ): Promise<{ confirmed: boolean }> {
     const result = await this.prisma.availabilitySlot.updateMany({
       where: {
-        listingId: propertyId,
-        startTime: startDate,
-        endTime: endDate,
+        listingId,
+        startTime,
+        endTime,
         status: 'RESERVED',
         ...(inventoryUnitId ? { inventoryUnitId } : {}),
       },
@@ -558,19 +565,19 @@ export class AvailabilityService {
    * Returns per-day availability including unit-level details for multi-unit listings.
    */
   async getAvailabilitySummary(
-    propertyId: string,
-    startDate: Date,
-    endDate: Date,
+    listingId: string,
+    startTime: Date,
+    endTime: Date,
   ): Promise<Array<{ date: string; available: boolean; availableUnits: number; totalUnits: number }>> {
     const units = await this.prisma.inventoryUnit.findMany({
-      where: { listingId: propertyId, isActive: true },
+      where: { listingId, isActive: true },
     });
 
     const totalUnits = Math.max(units.length, 1);
     const summary: Array<{ date: string; available: boolean; availableUnits: number; totalUnits: number }> = [];
-    const current = new Date(startDate);
+    const current = new Date(startTime);
 
-    while (current <= endDate) {
+    while (current <= endTime) {
       const dayStart = new Date(current);
       const dayEnd = new Date(current);
       dayEnd.setDate(dayEnd.getDate() + 1);
@@ -579,7 +586,7 @@ export class AvailabilityService {
         // Multi-unit: count booked/reserved slots per day
         const occupied = await this.prisma.availabilitySlot.count({
           where: {
-            listingId: propertyId,
+            listingId,
             status: { in: ['RESERVED', 'BOOKED'] },
             startTime: { lt: dayEnd },
             endTime: { gt: dayStart },
@@ -596,7 +603,7 @@ export class AvailabilityService {
         // Single-unit: check booking conflicts
         const booked = await this.prisma.booking.count({
           where: {
-            listingId: propertyId,
+            listingId,
             status: { notIn: ['CANCELLED', 'REFUNDED', 'DRAFT'] },
             startDate: { lt: dayEnd },
             endDate: { gt: dayStart },

@@ -12,6 +12,8 @@ import { CacheModule } from './common/cache/cache.module';
 import { QueueModule } from './common/queue/queue.module';
 import { EmailModule } from './common/email/email.module';
 import { StorageModule } from './common/storage/storage.module';
+import { IdempotencyModule } from './common/idempotency/idempotency.module';
+import { AuthorizationModule } from './common/authorization/authorization.module';
 import { EventsModule } from './common/events/events.module';
 import { TelemetryModule, RequestIdMiddleware } from './common/telemetry';
 import { FxModule } from './common/fx/fx.module';
@@ -93,19 +95,21 @@ import { IdempotencyInterceptor } from './common/guards/idempotency.guard';
 
     // Elasticsearch removed - now using PostgreSQL search
 
-    // Common modules
-    LoggerModule,
+    // Common imports
     EncryptionModule,
     PrismaModule,
     CacheModule,
     QueueModule,
     EmailModule,
     StorageModule,
+    IdempotencyModule,
+    AuthorizationModule,
     EventsModule,
     TelemetryModule,
     FxModule,
+    LoggerModule,
 
-    // Feature modules
+    // Feature imports
     AuthModule,
     UsersModule,
     CategoriesModule,
@@ -144,7 +148,7 @@ import { IdempotencyInterceptor } from './common/guards/idempotency.guard';
     // Global CSRF guard: JWT Bearer routes are auto-exempt; webhooks use @SkipCsrf()
     { provide: APP_GUARD, useClass: CsrfGuard },
     // Idempotency interceptor (only applies to methods decorated with @Idempotent())
-    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
+    IdempotencyInterceptor,
   ],
 })
 export class AppModule implements NestModule {

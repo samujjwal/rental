@@ -12,6 +12,7 @@ import { CacheService } from '../../../common/cache/cache.service';
 import { Review, ReviewType } from '@rental-portal/database';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { CreateReviewInput, UpdateReviewInput } from '@rental-portal/shared-types';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 /**
  * Internal DTO for service layer - maps from shared types to internal structure
@@ -94,6 +95,7 @@ export class ReviewsService {
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly moderationService: ContentModerationService,
+    private readonly organizationScopeService: OrganizationScopeService,
   ) {}
 
   async create(userId: string, dto: CreateReviewInput): Promise<ReviewResponse> {
@@ -132,17 +134,23 @@ export class ReviewsService {
     let dbReviewType: ReviewType;
 
     if (internalDto.reviewType === 'RENTER_TO_OWNER') {
-      if (booking.renterId !== userId) {
-        throw i18nForbidden('review.renterOnly');
-      }
+      // Use organization scope resolver for authorization
+      await this.organizationScopeService.requireScope(userId, 'USER', {
+        resourceType: 'booking',
+        resourceId: internalDto.bookingId,
+        renterId: booking.renterId,
+      });
       reviewerId = booking.renterId;
       revieweeId = booking.listing.ownerId;
       listingId = booking.listingId;
       dbReviewType = ReviewType.LISTING_REVIEW;
     } else if (internalDto.reviewType === 'OWNER_TO_RENTER') {
-      if (booking.listing.ownerId !== userId) {
-        throw i18nForbidden('review.ownerOnly');
-      }
+      // Use organization scope resolver for authorization
+      await this.organizationScopeService.requireScope(userId, 'USER', {
+        resourceType: 'listing',
+        resourceId: booking.listingId,
+        ownerId: booking.listing.ownerId,
+      });
       reviewerId = booking.listing.ownerId;
       revieweeId = booking.renterId;
       listingId = booking.listingId;
@@ -618,8 +626,19 @@ export class ReviewsService {
       });
 
       if (booking) {
-        const isParty = booking.renterId === userId || booking.listing.ownerId === userId;
-        if (!isParty) {
+        // Use organization scope resolver for authorization
+        const hasAccess = (await this.organizationScopeService.checkScope(
+          userId,
+          'USER',
+          {
+            resourceType: 'booking',
+            resourceId: bookingId,
+            ownerId: booking.listing.ownerId,
+            renterId: booking.renterId,
+          },
+        )).allowed;
+
+        if (!hasAccess) {
           // Check admin
           const user = await this.prisma.user.findUnique({
             where: { id: userId },

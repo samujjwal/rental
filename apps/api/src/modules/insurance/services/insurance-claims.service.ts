@@ -8,7 +8,7 @@ import {
 import { i18nBadRequest, i18nNotFound } from '@/common/errors/i18n-exceptions';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { isCoreAdmin } from '@/common/auth/admin-roles';
+import { AdminService } from '@/modules/admin/services/admin.service';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { ClaimStatus, NotificationType, toNumber } from '@rental-portal/database';
 import { CreateClaimDto } from '../dto/insurance.dto';
@@ -134,7 +134,7 @@ export class InsuranceClaimsService {
     // If no admin can be found, log and skip — don't crash the claim filing.
     this.prisma.user
       .findFirst({
-        where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } }, // Keep this for DB query - isCoreAdmin is for runtime checks
+        where: { role: { in: [...AdminService['ADMIN_ROLES']] as any } },
         orderBy: { createdAt: 'asc' },
         select: { id: true },
       })

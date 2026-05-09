@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 export interface CreateListingContentDto {
   listingId: string;
@@ -27,7 +28,10 @@ export interface UpdateListingContentDto {
 export class ListingContentService {
   private readonly logger = new Logger(ListingContentService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly organizationScopeService: OrganizationScopeService,
+  ) {}
 
   /**
    * Create or update content for a listing in a given locale.
@@ -163,13 +167,18 @@ export class ListingContentService {
   async verifyOwnership(listingId: string, userId: string): Promise<void> {
     const listing = await this.prisma.listing.findUnique({
       where: { id: listingId },
-      select: { ownerId: true },
+      select: { ownerId: true, organizationId: true },
     });
     if (!listing) {
       throw new NotFoundException(`Listing ${listingId} not found`);
     }
-    if (listing.ownerId !== userId) {
-      throw new ForbiddenException(`You do not have permission to modify this listing`);
-    }
+    
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listingId,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
   }
 }

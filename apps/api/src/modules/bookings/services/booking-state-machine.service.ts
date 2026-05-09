@@ -9,6 +9,7 @@ import { BookingStatus, toNumber, Booking } from '@rental-portal/database';
 import { isSupportAdmin } from '@/common/auth/admin-roles';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { BookingCalculationService } from './booking-calculation.service';
+import { BookingOutboxService } from './booking-outbox.service';
 import { NotificationType } from '@rental-portal/database';
 import { randomUUID } from 'crypto';
 
@@ -100,6 +101,7 @@ export class BookingStateMachineService {
     private readonly cacheService: CacheService,
     private readonly notificationsService: NotificationsService,
     private readonly calculationService: BookingCalculationService,
+    private readonly outboxService: BookingOutboxService,
     @InjectQueue('payments') private readonly paymentsQueue: Queue,
     @InjectQueue('bookings') private readonly bookingsQueue: Queue,
   ) {
@@ -479,35 +481,53 @@ export class BookingStateMachineService {
       timestamp: new Date().toISOString(),
     });
 
-    // Handle automatic actions based on new state
+    // Create durable outbox events for side effects based on new state
+    // This ensures exactly-once processing and durability
     switch (newState) {
       case BookingStatus.CONFIRMED:
-        // Schedule reminder before rental start
-        await this.scheduleReminderNotification(bookingId, booking.startDate);
-        // Trigger deposit hold if the listing has a security deposit
-        await this.triggerDepositHold(bookingId);
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'SCHEDULE_REMINDER',
+          payload: { startDate: booking.startDate },
+        });
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'TRIGGER_DEPOSIT_HOLD',
+          payload: { bookingId },
+        });
         break;
 
       case BookingStatus.IN_PROGRESS:
-        // Create condition report if configured
-        await this.createInitialConditionReport(bookingId);
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'CREATE_INITIAL_CONDITION_REPORT',
+          payload: { bookingId },
+        });
         break;
 
       case BookingStatus.COMPLETED:
-        // Trigger settlement process
-        await this.triggerSettlementProcess(bookingId);
-        // Release deposit hold if no damage claims
-        await this.releaseDepositIfClean(bookingId);
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'TRIGGER_SETTLEMENT',
+          payload: { bookingId },
+        });
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'RELEASE_DEPOSIT_IF_CLEAN',
+          payload: { bookingId },
+        });
         break;
 
       case BookingStatus.CANCELLED:
-        // Trigger refund process
-        await this.triggerRefundProcess(bookingId);
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'TRIGGER_REFUND',
+          payload: { bookingId },
+        });
         break;
 
       case BookingStatus.PAYMENT_FAILED:
-        // Immediately notify renter so they can retry — then schedule grace-period expiration
-        this.logger.log(`Payment failed for booking ${bookingId}, grace period started`);
+        // Immediate notification (not queued in outbox for urgency)
         await this.notificationsService.sendNotification({
           userId: booking.renterId,
           type: 'PAYMENT_FAILED' as NotificationType,
@@ -518,27 +538,33 @@ export class BookingStateMachineService {
         }).catch((err) =>
           this.logger.error(`Failed to send payment-failed notification for booking ${bookingId}`, err),
         );
-        await this.bookingsQueue.add(
-          'expire-payment-failed',
-          { bookingId },
-          {
-            delay: 24 * 60 * 60 * 1000, // 24 hours
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 5000 },
-            removeOnComplete: true,
-          },
-        );
+        // Queue expiration in outbox for durability
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'EXPIRE_PAYMENT_FAILED',
+          payload: { bookingId, delayMs: 24 * 60 * 60 * 1000 },
+        });
         break;
 
       case BookingStatus.AWAITING_RETURN_INSPECTION:
-        await this.createReturnConditionReport(bookingId);
-        // Notify owner that the renter has requested a return inspection
-        await this.notifyOwnerReturnRequested(bookingId, booking);
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'CREATE_RETURN_CONDITION_REPORT',
+          payload: { bookingId },
+        });
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'NOTIFY_OWNER_RETURN_REQUESTED',
+          payload: { bookingId },
+        });
         break;
 
       case BookingStatus.DISPUTED:
-        // Notify admin and hold funds
-        await this.notifyAdminDispute(bookingId);
+        await this.outboxService.createEvent({
+          bookingId,
+          eventType: 'NOTIFY_ADMIN_DISPUTE',
+          payload: { bookingId },
+        });
         break;
     }
   }

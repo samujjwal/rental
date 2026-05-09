@@ -13,6 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@ne
 import { JwtAuthGuard, RolesGuard, CurrentUser } from '@/common/auth';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { ListingVersionService } from '../services/listing-version.service';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 @ApiTags('Listing Versions')
 @Controller('listings/:listingId/versions')
@@ -20,15 +21,23 @@ export class ListingVersionController {
   constructor(
     private readonly versionService: ListingVersionService,
     private readonly prisma: PrismaService,
+    private readonly organizationScopeService: OrganizationScopeService,
   ) {}
 
   private async verifyOwnership(listingId: string, userId: string): Promise<void> {
     const listing = await this.prisma.listing.findUnique({
       where: { id: listingId },
-      select: { ownerId: true },
+      select: { ownerId: true, organizationId: true },
     });
     if (!listing) throw i18nNotFound('listing.notFound');
-    if (listing.ownerId !== userId) throw i18nForbidden('listing.unauthorized');
+    
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listingId,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
   }
 
   @Post()

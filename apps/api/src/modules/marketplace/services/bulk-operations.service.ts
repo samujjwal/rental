@@ -351,23 +351,24 @@ export class BulkOperationsService {
   // ============================================================================
 
   private async blockDates(listingId: string, startDate: Date, endDate: Date, reason?: string) {
-    await this.prisma.availability.create({
+    await this.prisma.availabilitySlot.create({
       data: {
-        propertyId: listingId,
-        startDate,
-        endDate,
+        listingId,
+        startTime: startDate,
+        endTime: endDate,
         status: 'BLOCKED',
+        currency: 'NPR',
         notes: reason,
       },
     });
   }
 
   private async unblockDates(listingId: string, startDate: Date, endDate: Date) {
-    await this.prisma.availability.deleteMany({
+    await this.prisma.availabilitySlot.deleteMany({
       where: {
-        propertyId: listingId,
-        startDate: { gte: startDate },
-        endDate: { lte: endDate },
+        listingId,
+        startTime: { gte: startDate },
+        endTime: { lte: endDate },
         status: 'BLOCKED',
       },
     });
@@ -380,17 +381,17 @@ export class BulkOperationsService {
     price: number,
     reason?: string,
   ) {
-    const existing = await this.prisma.availability.findFirst({
+    const existing = await this.prisma.availabilitySlot.findFirst({
       where: {
-        propertyId: listingId,
-        startDate,
-        endDate,
+        listingId,
+        startTime: startDate,
+        endTime: endDate,
       },
       select: { id: true },
     });
 
     if (existing) {
-      await this.prisma.availability.update({
+      await this.prisma.availabilitySlot.update({
         where: { id: existing.id },
         data: {
           price,
@@ -400,13 +401,14 @@ export class BulkOperationsService {
       return;
     }
 
-    await this.prisma.availability.create({
+    await this.prisma.availabilitySlot.create({
       data: {
-        propertyId: listingId,
-        startDate,
-        endDate,
+        listingId,
+        startTime: startDate,
+        endTime: endDate,
         status: 'AVAILABLE',
         price,
+        currency: 'NPR',
         notes: reason,
       },
     });

@@ -14,6 +14,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { EventsService } from '@/common/events/events.service';
 import { CacheService } from '@/common/cache/cache.service';
+import { AdminService } from '@/modules/admin/services/admin.service';
 import { DisputeEscalation } from '@rental-portal/database';
 
 export type EscalationLevel =
@@ -265,12 +266,13 @@ export class DisputeEscalationService {
    * Round-robin mediator assignment.
    */
   private async assignMediator(level: EscalationLevel): Promise<string | null> {
-    const role = level === 'SENIOR_MEDIATOR' ? 'ADMIN' : 'ADMIN';
+    // Use ADMIN_ROLES for mediator assignment to include all admin types
+    const adminRoles = [...AdminService['ADMIN_ROLES']] as any;
 
     // Find admins with fewest active dispute assignments
     const admins = await this.prisma.user.findMany({
       where: {
-        role,
+        role: { in: adminRoles },
         status: 'ACTIVE',
       },
       select: {

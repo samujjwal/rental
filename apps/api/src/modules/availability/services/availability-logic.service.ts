@@ -812,7 +812,7 @@ export class AvailabilityLogicService {
 
     // Invalidate cache for all affected listings
     for (const update of bulkUpdates) {
-      const cacheKey = `availability:${update.propertyId}`;
+      const cacheKey = `availability:${update.listingId}`;
       await this.cacheService.del(cacheKey);
     }
   }

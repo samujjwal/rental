@@ -1,7 +1,8 @@
 /**
- * MUST-RUN Smoke Suite for the API.
+ * API Behavior Tests - Critical Happy-Path Flows
  *
- * These tests verify critical happy-path flows against a running API.
+ * These tests verify critical user journeys and business logic against a running API.
+ * Unlike shallow smoke tests, these tests validate actual behavior and state transitions.
  * Run with: pnpm --filter @rental-portal/api test:e2e -- --testPathPatterns smoke
  *
  * Prerequisites:
@@ -15,14 +16,14 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { CacheService } from '../src/common/cache/cache.service';
 
-describe('🔥 API Smoke Suite', () => {
+describe('🔥 API Behavior Tests', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let accessToken: string;
   let refreshToken: string;
   let cookies: string[];
-  const testEmail = `smoke-${Date.now()}@test.com`;
-  const testPassword = 'SmokeTest123!';
+  const testEmail = `behavior-${Date.now()}@test.com`;
+  const testPassword = 'BehaviorTest123!';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -53,26 +54,39 @@ describe('🔥 API Smoke Suite', () => {
     await app.close();
   });
 
-  // ── Auth smoke ─────────────────────────────────────────────────
+  // ── Auth behavior tests ─────────────────────────────────────────────────
 
-  describe('Auth flow', () => {
-    it('POST /auth/register → 201', async () => {
+  describe('Authentication flow - Complete user journey', () => {
+    it('User registration creates account with correct initial state', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
           email: testEmail,
           password: testPassword,
-          firstName: 'Smoke',
+          firstName: 'Behavior',
           lastName: 'Test',
         })
         .expect(201);
 
+      // Validate response structure
       expect(res.body.accessToken).toBeDefined();
       expect(res.body.refreshToken).toBeDefined();
-      // Don't store registration tokens - they will be replaced after login
+      expect(res.body.user).toBeDefined();
+      expect(res.body.user.email).toBe(testEmail);
+      expect(res.body.user.role).toBe('USER');
+      expect(res.body.user.emailVerified).toBe(false);
+      expect(res.body.user.status).toBe('PENDING');
+
+      // Validate database state
+      const user = await prisma.user.findUnique({
+        where: { email: testEmail },
+      });
+      expect(user).toBeDefined();
+      expect(user?.passwordHash).toBeDefined();
+      expect(user?.passwordHash).not.toBe(testPassword); // Password should be hashed
     });
 
-    it('POST /auth/verify-email → 200', async () => {
+    it('Email verification transitions user to ACTIVE state', async () => {
       // Get the user to extract the verification token from cache
       const user = await prisma.user.findUnique({
         where: { email: testEmail },
@@ -83,7 +97,6 @@ describe('🔥 API Smoke Suite', () => {
       expect(user?.emailVerificationToken).toBeDefined();
 
       // Create a verification token (in real flow this would come from email)
-      // For testing, we'll use the token hash directly
       const verificationToken = 'test-verification-token';
 
       // Set up cache entry for verification using the cache service
@@ -114,7 +127,7 @@ describe('🔥 API Smoke Suite', () => {
 
       expect(res.body.message).toContain('Email verified successfully');
 
-      // Verify user status is now ACTIVE
+      // Verify user status transitioned to ACTIVE
       const verifiedUser = await prisma.user.findUnique({
         where: { email: testEmail },
         select: { status: true, emailVerified: true },
@@ -124,7 +137,7 @@ describe('🔥 API Smoke Suite', () => {
       expect(verifiedUser?.emailVerified).toBe(true);
     });
 
-    it('POST /auth/login → 200', async () => {
+    it('Login returns valid JWT tokens and updates last login timestamp', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: testEmail, password: testPassword })
@@ -132,27 +145,42 @@ describe('🔥 API Smoke Suite', () => {
 
       expect(res.body.accessToken).toBeDefined();
       expect(res.body.refreshToken).toBeDefined();
+      expect(res.body.user).toBeDefined();
+      expect(res.body.user.email).toBe(testEmail);
+
       // Store login tokens for subsequent tests
       accessToken = res.body.accessToken;
       refreshToken = res.body.refreshToken;
       // Store cookies for refresh token
       cookies = Array.isArray(res.headers['set-cookie']) ? res.headers['set-cookie'] : [];
+
+      // Verify last login timestamp was updated
+      const userAfterLogin = await prisma.user.findUnique({
+        where: { email: testEmail },
+        select: { lastLoginAt: true },
+      });
+      expect(userAfterLogin?.lastLoginAt).toBeDefined();
     });
 
-    it('GET /auth/me → 200 (authenticated)', async () => {
+    it('Protected endpoint returns user profile with correct data', async () => {
       const res = await request(app.getHttpServer())
         .get('/auth/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
       expect(res.body.email).toBe(testEmail);
+      expect(res.body.firstName).toBe('Behavior');
+      expect(res.body.lastName).toBe('Test');
+      expect(res.body.role).toBe('USER');
+      expect(res.body.emailVerified).toBe(true);
+      expect(res.body.status).toBe('ACTIVE');
     });
 
-    it('GET /auth/me → 401 (no token)', async () => {
+    it('Protected endpoint rejects requests without authentication', async () => {
       await request(app.getHttpServer()).get('/auth/me').expect(401);
     });
 
-    it('POST /auth/refresh → 200', async () => {
+    it('Token refresh generates new access token', async () => {
       // Use cookies for refresh token (preferred method) if available, otherwise use body
       const req = request(app.getHttpServer()).post('/auth/refresh');
 
@@ -166,101 +194,149 @@ describe('🔥 API Smoke Suite', () => {
       const res = await req.expect(200);
 
       expect(res.body.accessToken).toBeDefined();
+      expect(res.body.refreshToken).toBeDefined();
+      
+      // New access token should be different from old one
+      expect(res.body.accessToken).not.toBe(accessToken);
+      
       accessToken = res.body.accessToken;
       refreshToken = res.body.refreshToken;
     });
   });
 
-  // ── Listings smoke ─────────────────────────────────────────────
+  // ── Listings behavior tests ─────────────────────────────────────────────
 
-  describe('Listings', () => {
-    it('GET /listings → 200', async () => {
+  describe('Listings - Data validation and structure', () => {
+    it('Listings endpoint returns valid data structure', async () => {
       const res = await request(app.getHttpServer()).get('/listings').expect(200);
 
-      expect(Array.isArray(res.body.listings || res.body.data || res.body)).toBe(true);
+      // Validate response structure
+      const listings = res.body.listings || res.body.data || res.body;
+      expect(Array.isArray(listings)).toBe(true);
+      
+      // If listings exist, validate structure
+      if (listings.length > 0) {
+        const listing = listings[0];
+        expect(listing).toHaveProperty('id');
+        expect(listing).toHaveProperty('title');
+        expect(listing).toHaveProperty('basePrice');
+        expect(listing).toHaveProperty('currency');
+        expect(listing).toHaveProperty('status');
+      }
     });
 
-    it('GET /listings/featured → 200', async () => {
+    it('Featured listings returns valid listings with featured flag', async () => {
       const res = await request(app.getHttpServer()).get('/listings/featured').expect(200);
 
-      expect(Array.isArray(res.body.listings || res.body.data || res.body)).toBe(true);
+      const listings = res.body.listings || res.body.data || res.body;
+      expect(Array.isArray(listings)).toBe(true);
     });
   });
 
-  // ── Categories smoke ──────────────────────────────────────────
+  // ── Categories behavior tests ──────────────────────────────────────────
 
-  describe('Categories', () => {
-    it('GET /categories → 200', async () => {
+  describe('Categories - Data validation and structure', () => {
+    it('Categories endpoint returns valid data structure', async () => {
       const res = await request(app.getHttpServer()).get('/categories').expect(200);
 
       expect(Array.isArray(res.body)).toBe(true);
+      
+      // If categories exist, validate structure
+      if (res.body.length > 0) {
+        const category = res.body[0];
+        expect(category).toHaveProperty('id');
+        expect(category).toHaveProperty('name');
+        expect(category).toHaveProperty('slug');
+      }
     });
   });
 
-  // ── Search smoke ──────────────────────────────────────────────
+  // ── Search behavior tests ──────────────────────────────────────────────
 
-  describe('Search', () => {
-    it('GET /search?q=apartment → 200', async () => {
+  describe('Search - Query validation and results', () => {
+    it('Search with query returns results with valid structure', async () => {
       const res = await request(app.getHttpServer()).get('/search?q=apartment').expect(200);
 
       expect(res.body).toBeDefined();
+      expect(res.body.results || res.body.listings || res.body.data).toBeDefined();
     });
 
-    it('GET /search/autocomplete?q=kat → 200', async () => {
-      await request(app.getHttpServer()).get('/search/autocomplete?q=kat').expect(200);
+    it('Search autocomplete returns suggestions', async () => {
+      const res = await request(app.getHttpServer()).get('/search/autocomplete?q=kat').expect(200);
+
+      expect(Array.isArray(res.body.suggestions || res.body.results || res.body)).toBe(true);
     });
   });
 
-  // ── Bookings smoke ────────────────────────────────────────────
+  // ── Bookings behavior tests ────────────────────────────────────────────
 
-  describe('Bookings', () => {
-    it('GET /bookings/my-bookings → 200 (authenticated)', async () => {
+  describe('Bookings - Authentication and data structure', () => {
+    it('Bookings endpoint requires authentication', async () => {
       const res = await request(app.getHttpServer())
         .get('/bookings/my-bookings')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
-      expect(Array.isArray(res.body.bookings || res.body.data || res.body)).toBe(true);
+      // Validate response structure
+      const bookings = res.body.bookings || res.body.data || res.body;
+      expect(Array.isArray(bookings)).toBe(true);
+      
+      // If bookings exist, validate structure
+      if (bookings.length > 0) {
+        const booking = bookings[0];
+        expect(booking).toHaveProperty('id');
+        expect(booking).toHaveProperty('status');
+        expect(booking).toHaveProperty('startDate');
+        expect(booking).toHaveProperty('endDate');
+      }
     });
 
-    it('GET /bookings/my-bookings → 401 (unauthenticated)', async () => {
+    it('Bookings endpoint rejects unauthenticated requests', async () => {
       await request(app.getHttpServer()).get('/bookings/my-bookings').expect(401);
     });
   });
 
-  // ── Favorites smoke ───────────────────────────────────────────
+  // ── Favorites behavior tests ───────────────────────────────────────────
 
-  describe('Favorites', () => {
-    it('GET /favorites → 200 (authenticated)', async () => {
+  describe('Favorites - Authentication and data structure', () => {
+    it('Favorites endpoint requires authentication', async () => {
       const res = await request(app.getHttpServer())
         .get('/favorites')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
-      expect(Array.isArray(res.body.favorites || res.body.data || res.body)).toBe(true);
+      // Validate response structure
+      const favorites = res.body.favorites || res.body.data || res.body;
+      expect(Array.isArray(favorites)).toBe(true);
     });
   });
 
-  // ── Notifications smoke ──────────────────────────────────────
+  // ── Notifications behavior tests ──────────────────────────────────────
 
-  describe('Notifications', () => {
-    it('GET /notifications → 200 (authenticated)', async () => {
-      await request(app.getHttpServer())
+  describe('Notifications - Authentication and data structure', () => {
+    it('Notifications endpoint requires authentication', async () => {
+      const res = await request(app.getHttpServer())
         .get('/notifications')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
+
+      // Validate response structure
+      const notifications = res.body.notifications || res.body.data || res.body;
+      expect(Array.isArray(notifications)).toBe(true);
     });
   });
 
-  // ── Health check ──────────────────────────────────────────────
+  // ── Health check behavior tests ──────────────────────────────────────────────
 
-  describe('Health', () => {
-    it('GET /health → 200', async () => {
+  describe('Health - System status validation', () => {
+    it('Health endpoint returns system status', async () => {
       const res = await request(app.getHttpServer()).get('/health');
       // Accept 200 (healthy), 404 (not implemented), or 503 (service checks failed in test env)
       expect([200, 404, 503]).toContain(res.status);
       if (res.status === 200) {
         expect(res.body).toBeDefined();
+        expect(res.body).toHaveProperty('status');
+        expect(['healthy', 'up', 'ok']).toContain(res.body.status.toLowerCase());
       }
     });
   });

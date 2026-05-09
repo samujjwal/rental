@@ -9,6 +9,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { EmailService } from '@/common/email/email.service';
 import { escapeHtml } from '@/common/utils/sanitize';
 import { Organization, OrganizationRole, OrganizationStatus, PropertyStatus } from '@rental-portal/database';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 export interface CreateOrganizationDto {
   name: string;
@@ -49,6 +50,7 @@ export class OrganizationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly organizationScopeService: OrganizationScopeService,
   ) {}
 
   /**
@@ -513,7 +515,14 @@ export class OrganizationsService {
   async deactivateOrganization(orgId: string, userId: string): Promise<void> {
     const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
     if (!org) throw i18nNotFound('organization.notFound');
-    if (org.ownerId !== userId) throw i18nForbidden('organization.ownerOnlyDeactivate');
+    
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'organization',
+      resourceId: orgId,
+      ownerId: org.ownerId,
+    });
+    
     await this.prisma.organization.update({
       where: { id: orgId },
       data: { status: 'SUSPENDED' },

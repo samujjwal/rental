@@ -20,6 +20,7 @@ import { ModerationModule } from '../moderation/moderation.module';
 import { AiModule } from '../ai/ai.module';
 import { SearchModule } from '../search/search.module';
 import { CurrencyModule } from '../currency/currency.module';
+import { AuthorizationModule } from '@/common/authorization/authorization.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { CurrencyModule } from '../currency/currency.module';
     AiModule,
     SearchModule,
     CurrencyModule,
+    AuthorizationModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

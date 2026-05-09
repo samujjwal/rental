@@ -46,6 +46,7 @@ import { EmailVerifiedGuard, RequireEmailVerification } from '@/common/guards/em
 import { Idempotent } from '@/common/guards/idempotency.guard';
 import { isAdminRole } from '@/common/auth/admin-roles';
 import { randomUUID } from 'crypto';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
 
@@ -62,6 +63,7 @@ export class PaymentsController {
     private readonly prisma: PrismaService,
     private readonly stateMachine: BookingStateMachineService,
     private readonly paymentCommandLog: PaymentCommandLogService,
+    private readonly organizationScopeService: OrganizationScopeService,
     @InjectQueue('payments') private readonly paymentsQueue: Queue,
   ) {}
 
@@ -105,6 +107,7 @@ export class PaymentsController {
   @Post('intents/:bookingId')
   @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   @RequireEmailVerification()
+  @Idempotent()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create payment intent for booking' })
   @ApiResponse({ status: 201, description: 'Payment intent created' })
@@ -142,14 +145,16 @@ export class PaymentsController {
       throw i18nBadRequest('booking.notReady');
     }
 
-    const result = await this.prisma.$transaction(async (tx: any) => {
-      const paymentResult = await this.stripe.createPaymentIntent(
-        bookingId,
-        toNumber(booking.totalPrice),
-        booking.currency,
-        booking.renter.stripeCustomerId || undefined,
-      );
+    // Move Stripe call OUTSIDE transaction to avoid long-running transactions
+    const paymentResult = await this.stripe.createPaymentIntent(
+      bookingId,
+      toNumber(booking.totalPrice),
+      booking.currency,
+      booking.renter.stripeCustomerId || undefined,
+    );
 
+    // Transaction only for DB writes - much faster
+    await this.prisma.$transaction(async (tx: any) => {
       await this.paymentData.updateBookingPaymentIntent(bookingId, paymentResult.paymentIntentId, tx);
 
       await this.paymentData.createPaymentRecord({
@@ -164,11 +169,9 @@ export class PaymentsController {
           providerId: paymentResult.providerId ?? null,
         },
       }, tx);
+    });
 
-      return paymentResult;
-    }) as unknown as { paymentIntentId: string; clientSecret: string };
-
-    return result;
+    return paymentResult;
   }
 
   @Get('bookings/:bookingId/status')
@@ -183,7 +186,19 @@ export class PaymentsController {
     const booking = await this.paymentData.getBookingForPayment(bookingId);
     const isAdmin = isAdminRole(user.role);
 
-    if (booking.renterId !== user.id && booking.ownerId !== user.id && !isAdmin) {
+    // Use organization scope resolver for authorization
+    const hasAccess = (await this.organizationScopeService.checkScope(
+      user.id,
+      user.role,
+      {
+        resourceType: 'booking',
+        resourceId: bookingId,
+        ownerId: booking.ownerId,
+        renterId: booking.renterId,
+      },
+    )).allowed;
+
+    if (!hasAccess && !isAdmin) {
       throw i18nForbidden('booking.unauthorizedAction');
     }
 
@@ -280,12 +295,13 @@ export class PaymentsController {
   ) {
     const { deposit, booking } = await this.paymentData.getDepositWithBooking(depositId);
 
-    // Only the booking owner or an admin can release a deposit
-    const isOwner = booking.ownerId === user.id;
-    const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
-    if (!isOwner && !isAdmin) {
-      throw i18nForbidden('booking.unauthorizedAction');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(user.id, user.role, {
+      resourceType: 'booking',
+      resourceId: booking.id,
+      ownerId: booking.ownerId,
+      renterId: booking.renterId,
+    });
 
     const command = await this.paymentCommandLog.createCommand({
       userId: user.id,
@@ -402,9 +418,14 @@ export class PaymentsController {
     if (!booking) {
       throw i18nNotFound('booking.notFound');
     }
-    if (booking.renterId !== userId && booking.listing?.ownerId !== userId) {
-      throw i18nForbidden('booking.unauthorizedAction');
-    }
+
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'booking',
+      resourceId: bookingId,
+      ownerId: booking.listing.ownerId,
+      renterId: booking.renterId,
+    });
     return this.ledger.getBookingLedger(bookingId);
   }
 

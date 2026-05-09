@@ -33,11 +33,11 @@ import {
   ListingFilters,
 } from '../services/listings.service';
 import { CreateListingDto, UpdateListingDto } from '../dto/listing.dto';
-import {
-  AvailabilityService,
+import { AvailabilityService,
   CreateAvailabilityDto,
   AvailabilityCheckDto,
 } from '../services/availability.service';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 export class NearbyListingsDto {
   @ApiProperty({ description: 'Latitude', required: true })
@@ -89,6 +89,7 @@ export class ListingsController {
     private readonly availabilityService: AvailabilityService,
     private readonly completenessService: ListingCompletenessService,
     private readonly searchService: SearchService,
+    private readonly organizationScopeService: OrganizationScopeService,
   ) {}
 
   @Post()
@@ -415,10 +416,10 @@ export class ListingsController {
     @Param('id') listingId: string,
     @CurrentUser('id') userId: string,
     @CurrentUser('role') userRole: string,
-    @Body() dto: Omit<CreateAvailabilityDto, 'propertyId'>,
+    @Body() dto: Omit<CreateAvailabilityDto, 'listingId'>,
   ) {
     return this.availabilityService.createAvailability(
-      { ...dto, propertyId: listingId },
+      { ...dto, listingId },
       userId,
       userRole,
     );
@@ -447,17 +448,17 @@ export class ListingsController {
   @ApiResponse({ status: 200, description: 'Availability check completed' })
   async checkAvailability(
     @Param('id') listingId: string,
-    @Body() dto: Omit<AvailabilityCheckDto, 'propertyId'>,
+    @Body() dto: Omit<AvailabilityCheckDto, 'listingId'>,
   ) {
     const result = await this.availabilityService.checkAvailability({
       ...dto,
-      propertyId: listingId,
+      listingId,
     });
 
     const blockedDates =
       result.conflicts?.flatMap((conflict) => [
-        conflict.startDate.toISOString(),
-        conflict.endDate.toISOString(),
+        conflict.startTime.toISOString(),
+        conflict.endTime.toISOString(),
       ]) || [];
 
     return {
@@ -497,10 +498,10 @@ export class ListingsController {
     @Param('id') listingId: string,
     @CurrentUser('id') userId: string,
     @CurrentUser('role') userRole: string,
-    @Body() dto: Omit<CreateAvailabilityDto, 'propertyId'>,
+    @Body() dto: Omit<CreateAvailabilityDto, 'listingId'>,
   ) {
     return this.availabilityService.createAvailability(
-      { ...dto, propertyId: listingId },
+      { ...dto, listingId },
       userId,
       userRole,
     );
@@ -592,9 +593,14 @@ export class ListingsController {
     const files = req.files as any[];
     const listing = await this.listingsService.findOne(listingId);
     if (!listing) throw new NotFoundException('Listing not found');
-    if (listing.ownerId !== userId) {
-      throw new ForbiddenException('Only the listing owner can upload images');
-    }
+    
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listingId,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
 
     // Validate files
     if (!files || files.length === 0) {
@@ -654,9 +660,14 @@ export class ListingsController {
   ) {
     const listing = await this.listingsService.findOne(listingId);
     if (!listing) throw new NotFoundException('Listing not found');
-    if (listing.ownerId !== userId) {
-      throw new ForbiddenException('Only the listing owner can delete images');
-    }
+    
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listingId,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
     // Validate URLs
     if (!Array.isArray(urls)) {
       throw new BadRequestException('urls must be an array');

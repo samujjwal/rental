@@ -3,12 +3,13 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
 /**
- * Strict type for availability bulk updates that enforces propertyId inclusion
+ * Strict type for availability bulk updates that enforces listingId inclusion
  * and separates it from mutable fields to prevent type safety violations.
+ * Note: This repository now uses AvailabilitySlot as the canonical model.
  */
 export interface AvailabilityBulkUpdateInput {
-  propertyId: string;
-  updateData: Prisma.AvailabilityUpdateInput;
+  listingId: string;
+  updateData: Prisma.AvailabilitySlotUpdateInput;
 }
 
 @Injectable()
@@ -18,48 +19,48 @@ export class AvailabilityRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAvailability(id: string): Promise<any | null> {
-    return this.prisma.availability.findUnique({
+    return this.prisma.availabilitySlot.findUnique({
       where: { id },
-      include: { property: true },
+      include: { listing: true, inventoryUnit: true, booking: true },
     });
   }
 
-  async createAvailability(data: Prisma.AvailabilityCreateInput): Promise<any> {
-    return this.prisma.availability.create({
+  async createAvailability(data: Prisma.AvailabilitySlotCreateInput): Promise<any> {
+    return this.prisma.availabilitySlot.create({
       data,
-      include: { property: true },
+      include: { listing: true, inventoryUnit: true, booking: true },
     });
   }
 
-  async updateAvailability(listingId: string, updateData: Prisma.AvailabilityUpdateInput): Promise<any> {
-    return this.prisma.availability.updateMany({
-      where: { propertyId: listingId },
+  async updateAvailability(listingId: string, updateData: Prisma.AvailabilitySlotUpdateInput): Promise<any> {
+    return this.prisma.availabilitySlot.updateMany({
+      where: { listingId },
       data: updateData,
     });
   }
 
   async deleteAvailability(id: string): Promise<void> {
-    await this.prisma.availability.delete({
+    await this.prisma.availabilitySlot.delete({
       where: { id },
     });
-    this.logger.log(`Deleted availability ${id}`);
+    this.logger.log(`Deleted availability slot ${id}`);
   }
 
   async findConflicts(listingId: string, startDate: Date, endDate: Date): Promise<any[]> {
     const conflicts = await this.prisma.$queryRaw`
       SELECT 
         id,
-        propertyId,
-        startDate,
-        endDate,
+        listingId,
+        startTime,
+        endTime,
         status,
         'booking_conflict' as conflictType
-      FROM availability
-      WHERE propertyId = ${listingId}
-        AND status IN ('BOOKED', 'BLOCKED')
+      FROM availability_slot
+      WHERE listingId = ${listingId}
+        AND status IN ('BOOKED', 'BLOCKED', 'RESERVED')
         AND (
           -- Canonical half-open interval overlap: [a, b) overlaps [c, d) if a < d AND c < b
-          (startDate < ${endDate} AND endDate > ${startDate})
+          (startTime < ${endDate} AND endTime > ${startDate})
         )
     `;
     return conflicts;
@@ -73,7 +74,7 @@ export class AvailabilityRepository {
       try {
         // Resolution logic depends on conflict type
         // For now, log and mark as reviewed
-        await this.prisma.availability.update({
+        await this.prisma.availabilitySlot.update({
           where: { id: conflict.id },
           data: { notes: `Conflict resolved: ${new Date().toISOString()}` },
         });
@@ -89,12 +90,12 @@ export class AvailabilityRepository {
   }
 
   async findBlockedPeriods(listingId: string): Promise<any[]> {
-    return this.prisma.availability.findMany({
+    return this.prisma.availabilitySlot.findMany({
       where: {
-        propertyId: listingId,
+        listingId,
         status: 'BLOCKED',
       },
-      orderBy: { startDate: 'asc' },
+      orderBy: { startTime: 'asc' },
     });
   }
 
@@ -118,20 +119,20 @@ export class AvailabilityRepository {
     startDate?: Date,
     endDate?: Date,
   ): Promise<any> {
-    const where: Prisma.AvailabilityWhereInput = {
-      propertyId: listingId,
+    const where: Prisma.AvailabilitySlotWhereInput = {
+      listingId,
     };
 
     if (startDate && endDate) {
-      where.startDate = { gte: startDate };
-      where.endDate = { lte: endDate };
+      where.startTime = { gte: startDate };
+      where.endTime = { lte: endDate };
     }
 
     const [total, available, booked, blocked] = await Promise.all([
-      this.prisma.availability.count({ where }),
-      this.prisma.availability.count({ where: { ...where, status: 'AVAILABLE' } }),
-      this.prisma.availability.count({ where: { ...where, status: 'BOOKED' } }),
-      this.prisma.availability.count({ where: { ...where, status: 'BLOCKED' } }),
+      this.prisma.availabilitySlot.count({ where }),
+      this.prisma.availabilitySlot.count({ where: { ...where, status: 'AVAILABLE' } }),
+      this.prisma.availabilitySlot.count({ where: { ...where, status: 'BOOKED' } }),
+      this.prisma.availabilitySlot.count({ where: { ...where, status: 'BLOCKED' } }),
     ]);
 
     return {
@@ -145,44 +146,44 @@ export class AvailabilityRepository {
   async bulkUpdateAvailability(updates: AvailabilityBulkUpdateInput[]): Promise<void> {
     await this.prisma.$transaction(
       updates.map((update) =>
-        this.prisma.availability.updateMany({
-          where: { propertyId: update.propertyId },
+        this.prisma.availabilitySlot.updateMany({
+          where: { listingId: update.listingId },
           data: update.updateData,
         }),
       ),
     );
-    this.logger.log(`Bulk updated ${updates.length} availability records`);
+    this.logger.log(`Bulk updated ${updates.length} availability slot records`);
   }
 
   async findAvailabilityByListing(listingIds: string): Promise<Record<string, any[]>> {
     const listingIdArray = listingIds.split(',');
-    const availabilities = await this.prisma.availability.findMany({
+    const availabilities = await this.prisma.availabilitySlot.findMany({
       where: {
-        propertyId: { in: listingIdArray },
-        startDate: { gte: new Date() },
+        listingId: { in: listingIdArray },
+        startTime: { gte: new Date() },
       },
-      include: { property: true },
-      orderBy: { startDate: 'asc' },
+      include: { listing: true, inventoryUnit: true, booking: true },
+      orderBy: { startTime: 'asc' },
     });
 
     // Group by listingId
     const result: Record<string, any[]> = {};
     for (const listingId of listingIdArray) {
-      result[listingId] = availabilities.filter((a) => a.propertyId === listingId);
+      result[listingId] = availabilities.filter((a) => a.listingId === listingId);
     }
 
     return result;
   }
 
-  async createBlockedPeriod(data: Prisma.AvailabilityCreateInput): Promise<any> {
-    return this.prisma.availability.create({
+  async createBlockedPeriod(data: Prisma.AvailabilitySlotCreateInput): Promise<any> {
+    return this.prisma.availabilitySlot.create({
       data: { ...data, status: 'BLOCKED' },
-      include: { property: true },
+      include: { listing: true, inventoryUnit: true, booking: true },
     });
   }
 
   async removeBlockedPeriod(id: string): Promise<void> {
-    await this.prisma.availability.delete({
+    await this.prisma.availabilitySlot.delete({
       where: { id },
     });
     this.logger.log(`Removed blocked period ${id}`);

@@ -27,6 +27,33 @@ export class AdminService {
   ) {}
 
   /**
+   * Centralized list of admin roles for consistency across the codebase
+   */
+  private static readonly ADMIN_ROLES: readonly string[] = [
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.OPERATIONS_ADMIN,
+    UserRole.FINANCE_ADMIN,
+    UserRole.SUPPORT_ADMIN,
+  ] as const;
+
+  /**
+   * Check if a role is an admin role
+   * Use this helper instead of hardcoded role checks like `role === UserRole.ADMIN`
+   */
+  static isAdminRole(role: string): boolean {
+    return this.ADMIN_ROLES.includes(role);
+  }
+
+  /**
+   * Check if a user object has an admin role
+   * Use this helper instead of hardcoded checks like `user.role === UserRole.ADMIN`
+   */
+  static isAdminUser(user: { role: string } | null | undefined): boolean {
+    return user ? this.isAdminRole(user.role) : false;
+  }
+
+  /**
    * Verify user is admin.
    * NOTE: The previous dev bypass has been removed for security.
    * Use proper role assignment (ADMIN/SUPER_ADMIN) in all environments.
@@ -40,15 +67,7 @@ export class AdminService {
       throw i18nForbidden('auth.userNotFound');
     }
 
-    const adminRoles: string[] = [
-      UserRole.ADMIN,
-      UserRole.SUPER_ADMIN,
-      UserRole.OPERATIONS_ADMIN,
-      UserRole.FINANCE_ADMIN,
-      UserRole.SUPPORT_ADMIN,
-    ];
-
-    if (!adminRoles.includes(user.role)) {
+    if (!AdminService.isAdminUser(user)) {
       throw i18nForbidden('admin.accessRequired');
     }
   }

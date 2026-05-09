@@ -26,6 +26,7 @@ import { CategoryAttributeService } from '../../categories/services/category-att
 import { ListingValidationService } from './listing-validation.service';
 import { ListingVersionService } from './listing-version.service';
 import { MultiCurrencyService } from '../../currency/services/multi-currency.service';
+import { OrganizationScopeService } from '@/common/authorization/organization-scope.service';
 
 export interface CreateListingDto {
   categoryId?: string;
@@ -104,6 +105,7 @@ export class ListingsService {
     private readonly versionService: ListingVersionService,
     private readonly configService: ConfigService,
     private readonly multiCurrencyService: MultiCurrencyService,
+    private readonly organizationScopeService: OrganizationScopeService,
   ) {}
 
   /**
@@ -530,10 +532,21 @@ export class ListingsService {
       throw i18nNotFound('listing.notFound');
     }
 
-    // Allow owner or admin to see non-AVAILABLE listings
-    const isOwner = viewerUserId && listing.ownerId === viewerUserId;
+    // Use organization scope resolver for ownership check
+    const hasAccess = viewerUserId 
+      ? (await this.organizationScopeService.checkScope(
+          viewerUserId,
+          viewerRole,
+          {
+            resourceType: 'listing',
+            resourceId: listing.id,
+            ownerId: listing.ownerId,
+            organizationId: listing.organizationId,
+          },
+        )).allowed
+      : false;
     const isAdmin = isCoreAdmin(viewerRole);
-    const canSeePrivate = includePrivate || isOwner || isAdmin;
+    const canSeePrivate = includePrivate || hasAccess || isAdmin;
 
     if (!canSeePrivate && listing.status !== PropertyStatus.AVAILABLE) {
       throw i18nNotFound('listing.notFound');
@@ -596,10 +609,13 @@ export class ListingsService {
   async update(id: string, userId: string, dto: UpdateListingDto): Promise<Property> {
     const listing = await this.findById(id, true);
 
-    // Check ownership
-    if (listing.ownerId !== userId) {
-      throw i18nForbidden('listing.unauthorized');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listing.id,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
 
     // Validate organization ownership if organizationId is being changed
     if ((dto as any).organizationId && (dto as any).organizationId !== listing.organizationId) {
@@ -796,9 +812,13 @@ export class ListingsService {
   async publish(id: string, userId: string): Promise<Property> {
     const listing = await this.findById(id, true);
 
-    if (listing.ownerId !== userId) {
-      throw i18nForbidden('listing.unauthorized');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listing.id,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
 
     if (listing.status !== PropertyStatus.DRAFT) {
       throw i18nBadRequest('listing.draftOnly');
@@ -880,9 +900,13 @@ export class ListingsService {
   async pause(id: string, userId: string): Promise<Property> {
     const listing = await this.findById(id, true);
 
-    if (listing.ownerId !== userId) {
-      throw i18nForbidden('listing.unauthorized');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listing.id,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
 
     if (listing.status !== PropertyStatus.AVAILABLE) {
       throw i18nBadRequest('listing.cannotPause');
@@ -915,9 +939,13 @@ export class ListingsService {
       VerificationStatus.APPROVED,
     ];
 
-    if (listing.ownerId !== userId) {
-      throw i18nForbidden('listing.unauthorized');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listing.id,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
 
     if (listing.status !== PropertyStatus.UNAVAILABLE) {
       throw i18nBadRequest('listing.cannotActivate');
@@ -952,9 +980,13 @@ export class ListingsService {
   async delete(id: string, userId: string): Promise<void> {
     const listing = await this.findById(id, true);
 
-    if (listing.ownerId !== userId) {
-      throw i18nForbidden('listing.unauthorized');
-    }
+    // Use organization scope resolver for authorization
+    await this.organizationScopeService.requireScope(userId, 'USER', {
+      resourceType: 'listing',
+      resourceId: listing.id,
+      ownerId: listing.ownerId,
+      organizationId: listing.organizationId,
+    });
 
     // Check for active bookings (any in-progress state)
     const activeBookings = await this.prisma.booking.count({

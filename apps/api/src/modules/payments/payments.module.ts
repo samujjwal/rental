@@ -20,12 +20,14 @@ import { WebhookService } from './webhook.service';
 import { BookingsModule } from '../bookings/bookings.module';
 import { EventsModule } from '@/common/events/events.module';
 import { CurrencyModule } from '../currency/currency.module';
+import { AuthorizationModule } from '@/common/authorization/authorization.module';
 
 @Module({
   imports: [
     forwardRef(() => BookingsModule),
     EventsModule,
     forwardRef(() => CurrencyModule),
+    AuthorizationModule,
     BullModule.registerQueue({ name: 'payments' }),
   ],
   controllers: [PaymentsController, TaxController, WebhookController],

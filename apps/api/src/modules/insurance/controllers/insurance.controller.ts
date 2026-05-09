@@ -13,6 +13,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole, ClaimStatus } from '@rental-portal/database';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
+import { AdminService } from '@/modules/admin/services/admin.service';
 import { InsuranceService } from '../services/insurance.service';
 import { InsuranceClaimsService, ReviewClaimDto } from '../services/insurance-claims.service';
 import { UploadPolicyDto, CreateClaimDto } from '../dto/insurance.dto';
@@ -155,7 +156,7 @@ export class InsuranceController {
   ) {
     return this.claimsService.getClaim(
       claimId,
-      role === 'ADMIN' ? undefined : userId,
+      AdminService.isAdminRole(role) ? undefined : userId,
     );
   }
 
