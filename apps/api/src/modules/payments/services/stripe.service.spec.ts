@@ -16,7 +16,6 @@ jest.mock('stripe', () => {
     refunds: { create: jest.fn() },
     payouts: { create: jest.fn() },
     customers: { create: jest.fn(), update: jest.fn() },
-    paymentMethods: { attach: jest.fn(), list: jest.fn() },
     webhooks: { constructEvent: jest.fn() },
   }));
   // Copy over static properties (especially errors)

@@ -164,6 +164,7 @@ export async function clientLoader({ params, request }: LoaderFunctionArgs) {
     const normalizedStatus = safeStatus(booking.status);
 
     // Check if booking is in correct status for payment
+    // MANUAL_REVIEW blocks checkout until admin approval
     if (!["PENDING_PAYMENT", "PAYMENT_FAILED"].includes(normalizedStatus)) {
       throw redirect(`/bookings/${bookingId}`);
     }

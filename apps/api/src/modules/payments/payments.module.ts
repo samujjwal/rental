@@ -10,7 +10,7 @@ import { EscrowService } from './services/escrow.service';
 import { PaymentCommandLogService } from './services/payment-command-log.service';
 import { PaymentCommandReconciliationService } from './services/payment-command-reconciliation.service';
 import { FxRateService } from './services/fx-rate.service';
-// import { PaymentMethodService } from './services/payment-method.service'; // TODO: PaymentMethod model not in schema
+import { FinancialDeterminismService } from './services/financial-determinism.service';
 import { PaymentProcessor } from './processors/payment.processor';
 import { PAYMENT_PROVIDER } from './interfaces/payment-provider.interface';
 import { PaymentsController } from './controllers/payments.controller';
@@ -41,7 +41,7 @@ import { CurrencyModule } from '../currency/currency.module';
     PaymentCommandLogService,
     PaymentCommandReconciliationService,
     FxRateService,
-    // PaymentMethodService, // TODO: PaymentMethod model not in schema
+    FinancialDeterminismService,
     PaymentProcessor,
     {
       provide: PAYMENT_PROVIDER,
@@ -52,12 +52,11 @@ import { CurrencyModule } from '../currency/currency.module';
     StripeService,
     LedgerService,
     StripeTaxService,
-    PaymentDataService,
     PaymentProviderFactory,
     EscrowService,
     PaymentCommandLogService,
     FxRateService,
-    // PaymentMethodService, // TODO: PaymentMethod model not in schema
+    FinancialDeterminismService,
     PAYMENT_PROVIDER,
   ],
 })

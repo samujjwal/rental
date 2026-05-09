@@ -5,12 +5,54 @@ import { Queue } from 'bull';
 import type { PaymentCommandPayload, PaymentCommandType } from '@/common/payments/payment-command.types';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
-import { BookingStatus } from '@rental-portal/database';
+import { BookingStatus, toNumber, Booking } from '@rental-portal/database';
+import { isSupportAdmin } from '@/common/auth/admin-roles';
 import { NotificationsService } from '@/modules/notifications/services/notifications.service';
 import { BookingCalculationService } from './booking-calculation.service';
 import { NotificationType } from '@rental-portal/database';
 import { randomUUID } from 'crypto';
 
+/**
+ * Booking State Machine - Public Contract
+ *
+ * This service manages booking state transitions with role-based authorization and precondition checks.
+ *
+ * PUBLIC API:
+ * - transition(bookingId, transition, actorId, actorRole, metadata?): Promise<StateMachineResult>
+ *   Execute a state transition on a booking. Returns success/failure and new state.
+ *
+ * - canTransition(bookingId, transition, actorRole): Promise<{ allowed: boolean; reason?: string }>
+ *   Check if a transition is allowed without executing it. Useful for UI state validation.
+ *
+ * - getAvailableTransitions(currentState, actorRole): BookingTransition[]
+ *   Get all valid transitions for a given state and role. Useful for rendering available actions.
+ *
+ * INTERNAL (not part of public contract):
+ * - defineTransitions(): Internal transition table
+ * - emitStateChangeEvent(): Internal event emission
+ *
+ * TRANSITION TYPES:
+ * - SUBMIT_REQUEST: RENTER submits booking request (DRAFT → PENDING_OWNER_APPROVAL)
+ * - OWNER_APPROVE: OWNER approves booking (PENDING_OWNER_APPROVAL → PENDING_PAYMENT)
+ * - OWNER_REJECT: OWNER rejects booking (PENDING_OWNER_APPROVAL → CANCELLED)
+ * - COMPLETE_PAYMENT: Payment completed (PENDING_PAYMENT → CONFIRMED)
+ * - FAIL_PAYMENT: Payment failed (PENDING_PAYMENT → PAYMENT_FAILED)
+ * - RETRY_PAYMENT: RENTER retries payment (PAYMENT_FAILED → PENDING_PAYMENT)
+ * - START_RENTAL: Rental period begins (CONFIRMED → IN_PROGRESS)
+ * - CANCEL: Cancel booking (various states → CANCELLED)
+ * - REQUEST_RETURN: Renter returns item (IN_PROGRESS → AWAITING_RETURN_INSPECTION)
+ * - APPROVE_RETURN: Owner approves return (AWAITING_RETURN_INSPECTION → COMPLETED)
+ * - REJECT_RETURN: Owner rejects return (AWAITING_RETURN_INSPECTION → DISPUTED)
+ * - COMPLETE: Mark as complete (various states → COMPLETED)
+ * - SETTLE: Release payment to owner (COMPLETED → SETTLED)
+ * - INITIATE_DISPUTE: Raise dispute (IN_PROGRESS/COMPLETED → DISPUTED)
+ * - RESOLVE_DISPUTE_OWNER_FAVOR: Admin resolves for owner (DISPUTED → COMPLETED)
+ * - RESOLVE_DISPUTE_RENTER_FAVOR: Admin resolves for renter (DISPUTED → REFUNDED)
+ * - REFUND: Process refund (CANCELLED → REFUNDED)
+ * - EXPIRE: System timeout (various states → CANCELLED/COMPLETED)
+ * - ADMIN_APPROVE_REVIEW: Admin approves manual review (MANUAL_REVIEW → PENDING_PAYMENT)
+ * - ADMIN_REJECT_REVIEW: Admin rejects manual review (MANUAL_REVIEW → CANCELLED)
+ */
 export type BookingTransition =
   | 'SUBMIT_REQUEST'
   | 'OWNER_APPROVE'
@@ -419,48 +461,6 @@ export class BookingStateMachineService {
       .map((t) => t.transition);
   }
 
-  getMetadata() {
-    // Extract all unique statuses from transitions
-    const allStatuses = new Set<BookingStatus>();
-    const statusLabels: Record<string, string> = {};
-    const transitionsByStatus: Record<string, Record<string, BookingTransition[]>> = {};
-
-    // Add all statuses from schema enum
-    Object.values(BookingStatus).forEach((status) => {
-      allStatuses.add(status);
-      // Convert snake_case to Title Case for labels
-      statusLabels[status] = status
-        .split('_')
-        .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-        .join(' ');
-    });
-
-    // Build transitions map by status and role
-    this.transitions.forEach((t) => {
-      if (!transitionsByStatus[t.from]) {
-        transitionsByStatus[t.from] = {};
-      }
-      t.allowedRoles.forEach((role) => {
-        if (!transitionsByStatus[t.from][role]) {
-          transitionsByStatus[t.from][role] = [];
-        }
-        transitionsByStatus[t.from][role].push(t.transition);
-      });
-    });
-
-    return {
-      statuses: Array.from(allStatuses),
-      statusLabels,
-      transitions: this.transitions.map((t) => ({
-        from: t.from,
-        to: t.to,
-        transition: t.transition,
-        allowedRoles: t.allowedRoles,
-      })),
-      transitionsByStatus,
-      roles: ['RENTER', 'OWNER', 'ADMIN', 'SYSTEM'],
-    };
-  }
 
   private async emitStateChangeEvent(
     bookingId: string,
@@ -782,9 +782,8 @@ export class BookingStateMachineService {
   }
 
   private async notifyAdminDispute(bookingId: string): Promise<void> {
-    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'];
     const admins = await this.prisma.user.findMany({
-      where: { role: { in: adminRoles as any[] } },
+      where: { role: { in: ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'] } }, // Keep for DB query
       select: { id: true },
     });
 

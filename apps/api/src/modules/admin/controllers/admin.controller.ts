@@ -11,21 +11,21 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from '../services/admin.service';
 import { AdminAnalyticsService } from '../services/admin-analytics.service';
 import { AdminUsersService } from '../services/admin-users.service';
 import { AdminSystemService } from '../services/admin-system.service';
 import { AdminContentService } from '../services/admin-content.service';
 import { AdminEntityService } from '../services/admin-entity.service';
-import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
+import { JwtAuthGuard, RolesGuard, Roles, CurrentUser, RequireMFA, MfaGuard } from '@/common/auth';
 import { UserRole, ListingStatus, OrganizationStatus, DisputeStatus, BookingStatus } from '@rental-portal/database';
 import { UpdateUserRoleDto } from '../dto/admin.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth()
 @Controller('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, MfaGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.OPERATIONS_ADMIN, UserRole.FINANCE_ADMIN, UserRole.SUPPORT_ADMIN)
 export class AdminController {
   constructor(
@@ -77,6 +77,7 @@ export class AdminController {
 
   @Patch('users/:id/role')
   @ApiOperation({ summary: 'Update user role' })
+  @RequireMFA()
   async updateUserRole(
     @CurrentUser('id') adminId: string,
     @Param('id') userId: string,
@@ -87,12 +88,14 @@ export class AdminController {
 
   @Post('users/:id/suspend')
   @ApiOperation({ summary: 'Suspend user' })
+  @RequireMFA()
   async suspendUser(@CurrentUser('id') adminId: string, @Param('id') userId: string) {
     return this.usersService.toggleUserStatus(adminId, userId, true);
   }
 
   @Post('users/:id/activate')
   @ApiOperation({ summary: 'Activate user' })
+  @RequireMFA()
   async activateUser(@CurrentUser('id') adminId: string, @Param('id') userId: string) {
     return this.usersService.toggleUserStatus(adminId, userId, false);
   }
@@ -128,6 +131,7 @@ export class AdminController {
 
   @Patch('organizations/:id/status')
   @ApiOperation({ summary: 'Update organization status' })
+  @RequireMFA()
   async updateOrganizationStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') orgId: string,
@@ -181,12 +185,14 @@ export class AdminController {
 
   @Post('listings/:id/approve')
   @ApiOperation({ summary: 'Approve a listing — makes it AVAILABLE and bookable' })
+  @RequireMFA()
   async approveListing(@CurrentUser('id') adminId: string, @Param('id') listingId: string) {
     return this.adminService.approveListing(adminId, listingId);
   }
 
   @Post('listings/:id/reject')
   @ApiOperation({ summary: 'Reject a listing — resets it to DRAFT so the owner can fix it' })
+  @RequireMFA()
   async rejectListing(
     @CurrentUser('id') adminId: string,
     @Param('id') listingId: string,
@@ -197,6 +203,7 @@ export class AdminController {
 
   @Patch('listings/:id/status')
   @ApiOperation({ summary: 'Update listing status (generic override)' })
+  @RequireMFA()
   async updateListingStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') listingId: string,
@@ -207,6 +214,7 @@ export class AdminController {
 
   @Delete('listings/:id')
   @ApiOperation({ summary: 'Delete listing' })
+  @RequireMFA()
   async deleteListing(@CurrentUser('id') adminId: string, @Param('id') listingId: string) {
     await this.adminService.deleteListing(adminId, listingId);
     return { message: 'Listing deleted successfully' };
@@ -250,6 +258,7 @@ export class AdminController {
       'Directly sets booking status, bypassing the state machine and Stripe. ' +
       'Intended for admin intervention and E2E test environments.',
   })
+  @RequireMFA()
   async updateBookingStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') bookingId: string,
@@ -474,6 +483,7 @@ export class AdminController {
 
   @Patch('reviews/:id/status')
   @ApiOperation({ summary: 'Update review status' })
+  @RequireMFA()
   async updateReviewStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') reviewId: string,
@@ -513,6 +523,7 @@ export class AdminController {
   }
   @Patch('disputes/:id/status')
   @ApiOperation({ summary: 'Update dispute status' })
+  @RequireMFA()
   async updateDisputeStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') id: string,
@@ -529,6 +540,7 @@ export class AdminController {
 
   @Patch('refunds/:id/status')
   @ApiOperation({ summary: 'Update refund status' })
+  @RequireMFA()
   async updateRefundStatus(
     @CurrentUser('id') adminId: string,
     @Param('id') id: string,

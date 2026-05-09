@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import {
@@ -66,6 +67,11 @@ export class AuthService {
   ) {}
 
   private readonly logger = new Logger(AuthService.name);
+
+  public sanitizeUser(user: any) {
+    const { passwordHash, mfaSecret, mfaBackupCodes, governmentIdNumber, passwordResetToken, passwordResetExpires, emailVerificationToken, ...sanitized } = user;
+    return sanitized;
+  }
 
   async register(dto: RegisterDto): Promise<AuthResponse> {
     // Check if user exists
@@ -623,30 +629,43 @@ export class AuthService {
     const isPasswordValid = await this.passwordService.verify(password, user.passwordHash);
 
     if (!isPasswordValid) {
-      throw i18nUnauthorized('auth.invalidPassword');
+      throw i18nBadRequest('auth.invalidPassword');
     }
 
     await this.prisma.user.update({
       where: { id: userId },
       data: {
-        mfaEnabled: false,
         mfaSecret: null,
+        mfaEnabled: false,
+        mfaBackupCodes: null,
       },
     });
+
+    this.logger.log(`MFA disabled for user ${userId}`);
   }
 
-  sanitizeUser(user: User): Omit<User, 'passwordHash' | 'mfaSecret' | 'mfaBackupCodes' | 'governmentIdNumber' | 'passwordResetToken' | 'passwordResetExpires' | 'emailVerificationToken'> {
-    const {
-      passwordHash,
-      mfaSecret,
-      mfaBackupCodes,
-      governmentIdNumber,
-      passwordResetToken,
-      passwordResetExpires,
-      emailVerificationToken,
-      ...sanitized
-    } = user;
-    return sanitized;
+  async verifyMfaForSession(userId: string, code: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw i18nBadRequest('auth.userNotFound');
+    }
+
+    if (!user.mfaEnabled || !user.mfaSecret) {
+      throw new ForbiddenException('MFA is not enabled for this account');
+    }
+
+    const isValid = await this.mfaService.verifyToken(this.fieldEncryption.decrypt(user.mfaSecret), code);
+
+    if (!isValid) {
+      this.logger.warn(`MFA verification failed for user ${userId}`);
+      return false;
+    }
+
+    this.logger.log(`MFA verified for session for user ${userId}`);
+    return true;
   }
 
   /**

@@ -37,8 +37,6 @@ describe('PaymentsController', () => {
             holdDeposit: jest.fn(),
             releaseDeposit: jest.fn(),
             createCustomer: jest.fn(),
-            getPaymentMethods: jest.fn(),
-            attachPaymentMethod: jest.fn(),
             createRefund: jest.fn(),
           },
         },
@@ -406,39 +404,6 @@ describe('PaymentsController', () => {
     });
   });
 
-  // ── getPaymentMethods ──
-  describe('getPaymentMethods', () => {
-    it('returns empty data when no stripe customer', async () => {
-      paymentData.getUserStripeCustomerId.mockResolvedValue(null as any);
-      const result = await controller.getPaymentMethods('u1');
-      expect(result).toEqual({ data: [] as any[] });
-    });
-
-    it('delegates to stripe when customer exists', async () => {
-      paymentData.getUserStripeCustomerId.mockResolvedValue('cus_123');
-      stripe.getPaymentMethods.mockResolvedValue({ data: [{ id: 'pm_1' }] } as any);
-      const result = await controller.getPaymentMethods('u1');
-      expect(result).toEqual({ data: [{ id: 'pm_1' }] });
-    });
-  });
-
-  // ── attachPaymentMethod ──
-  describe('attachPaymentMethod', () => {
-    it('attaches payment method', async () => {
-      paymentData.getUserStripeCustomerId.mockResolvedValue('cus_123');
-      const result = await controller.attachPaymentMethod('u1', { paymentMethodId: 'pm_1' } as any);
-      expect(stripe.attachPaymentMethod).toHaveBeenCalledWith('cus_123', 'pm_1');
-      expect(result).toEqual({ success: true });
-    });
-
-    it('throws BadRequestException when no customer', async () => {
-      paymentData.getUserStripeCustomerId.mockResolvedValue(null as any);
-      await expect(
-        controller.attachPaymentMethod('u1', { paymentMethodId: 'pm_1' } as any),
-      ).rejects.toThrow(BadRequestException);
-    });
-  });
-
   // ── requestPayout ──
   describe('requestPayout', () => {
     it('delegates to payouts service', async () => {
@@ -756,14 +721,6 @@ describe('PaymentsController', () => {
       // Admin should be able to access but not modify payment intent
       await expect(controller.createPaymentIntent('b1', 'admin-user'))
         .rejects.toThrow(ForbiddenException);
-    });
-
-    it('validates payment method security', async () => {
-      paymentData.getUserStripeCustomerId.mockResolvedValue('cus_123');
-      stripe.attachPaymentMethod.mockRejectedValue(new Error('Invalid payment method'));
-      
-      await expect(controller.attachPaymentMethod('u1', { paymentMethodId: 'invalid_pm' } as any))
-        .rejects.toThrow('Invalid payment method');
     });
   });
 });

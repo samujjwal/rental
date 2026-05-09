@@ -65,8 +65,8 @@ export function ReviewsScreen() {
     try {
       await mobileClient.createReview({
         bookingId: selectedBookingId,
-        reviewType: reviewMode === "owner" ? "OWNER_TO_RENTER" : "RENTER_TO_OWNER",
-        overallRating: Number(rating),
+        direction: reviewMode === "owner" ? "OWNER_TO_RENTER" : "RENTER_TO_LISTING",
+        rating: Number(rating),
         comment,
       });
       setStatus("Review submitted.");

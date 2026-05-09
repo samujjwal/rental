@@ -1,7 +1,7 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../../common/prisma/prisma.service';
-import { CategoryTemplateService } from '../../categories/services/category-template.service';
-import { Listing, toNumber } from '@rental-portal/database';
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '@/common/prisma/prisma.service';
+import { CategoryTemplateService } from '@/modules/categories/services/category-template.service';
+import { CategoryAttributeService } from '@/modules/categories/services/category-attribute.service';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -9,10 +9,11 @@ export interface ValidationResult {
 }
 
 @Injectable()
-export class PropertyValidationService {
+export class ListingValidationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly templateService: CategoryTemplateService,
+    private readonly attributeService: CategoryAttributeService,
   ) {}
 
   async validateCategoryData(
@@ -30,6 +31,14 @@ export class PropertyValidationService {
       };
     }
 
+    // First, try to validate using server-defined dynamic attributes
+    const attributeDefinitions = await this.attributeService.findDefinitionsByCategory(categoryId);
+    
+    if (attributeDefinitions.length > 0) {
+      return this.validateAgainstAttributeDefinitions(data, attributeDefinitions);
+    }
+
+    // Fallback to template-based validation for backward compatibility
     const template = this.templateService.getTemplate(category.slug);
     if (!template) {
       return {
@@ -41,141 +50,110 @@ export class PropertyValidationService {
     return this.templateService.validateData(category.slug, data);
   }
 
-  validatePropertyCompleteness(listing: Listing): ValidationResult {
-    const errors: string[] = [];
-
-    // Required basic fields
-    if (!listing.title || listing.title.length < 10) {
-      errors.push('Title must be at least 10 characters long');
-    }
-
-    if (!listing.description || listing.description.length < 50) {
-      errors.push('Description must be at least 50 characters long');
-    }
-
-    // Location
-    if (!listing.address || !listing.city || !listing.country) {
-      errors.push('Complete address information is required');
-    }
-
-    // Photos
-    if (!listing.photos || listing.photos.length === 0) {
-      errors.push('At least one photo is required');
-    }
-
-    // Pricing
-    if (!listing.basePrice || toNumber(listing.basePrice) <= 0) {
-      errors.push('Base price must be greater than zero');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    };
-  }
-
-  /**
-   * Validate pricing configuration for a listing.
-   * Checks that prices are positive and pricing mode is consistent.
-   */
-  validatePricingConfiguration(listing: Partial<Listing> & {
-    hourlyPrice?: number | string;
-    dailyPrice?: number | string;
-    weeklyPrice?: number | string;
-    monthlyPrice?: number | string;
-    requiresDeposit?: boolean;
-    depositAmount?: number | string;
-  }): ValidationResult {
-    const errors: string[] = [];
-
-    if (listing.basePrice !== undefined && listing.basePrice !== null) {
-      const price = toNumber(listing.basePrice);
-      if (price < 0) {
-        errors.push('Base price cannot be negative');
-      }
-    }
-
-    // Check that at least one price is set
-    const hasAnyPrice = [
-      listing.basePrice,
-      listing.hourlyPrice,
-      listing.dailyPrice,
-      listing.weeklyPrice,
-      listing.monthlyPrice,
-    ].some((p) => p !== undefined && p !== null && toNumber(p) > 0);
-
-    if (!hasAnyPrice && listing.basePrice === undefined) {
-      errors.push('At least one pricing tier must be set');
-    }
-
-    // Validate deposit configuration
-    if (listing.requiresDeposit && (!listing.depositAmount || toNumber(listing.depositAmount) <= 0)) {
-      errors.push('Deposit amount must be positive when deposit is required');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    };
-  }
-
-  /**
-   * Validate booking configuration for a listing.
-   * Checks min/max booking duration and booking mode settings.
-   */
-  validateBookingConfiguration(listing: Partial<Listing> & {
-    minBookingHours?: number;
-    maxBookingDays?: number;
-  }): ValidationResult {
-    const errors: string[] = [];
-
-    const minHours = listing.minBookingHours;
-    const maxDays = listing.maxBookingDays;
-
-    if (minHours !== undefined && minHours < 1) {
-      errors.push('Minimum booking duration must be at least 1 hour');
-    }
-
-    if (maxDays !== undefined && maxDays < 1) {
-      errors.push('Maximum booking duration must be at least 1 day');
-    }
-
-    if (minHours !== undefined && maxDays !== undefined) {
-      const maxHours = maxDays * 24;
-      if (minHours > maxHours) {
-        errors.push('Minimum booking hours cannot exceed maximum booking days');
-      }
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    };
-  }
-
-  validatePhotoUrls(
-    photos: Array<{ url: string; order: number; caption?: string }>,
+  private validateAgainstAttributeDefinitions(
+    data: Record<string, any>,
+    attributeDefinitions: any[],
   ): ValidationResult {
     const errors: string[] = [];
 
-    if (!photos || photos.length === 0) {
-      errors.push('At least one photo is required');
+    for (const definition of attributeDefinitions) {
+      const value = data[definition.slug];
+
+      // Check required fields
+      if (definition.isRequired && (value === undefined || value === null || value === '')) {
+        errors.push(`Field '${definition.label}' is required`);
+        continue;
+      }
+
+      // Skip validation if value is not provided and not required
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+
+      // Validate based on field type using CategoryAttributeService's validation
+      try {
+        (this.attributeService as any).validateValue(value, definition);
+      } catch (error: any) {
+        errors.push(error.message || `Invalid value for '${definition.label}'`);
+      }
     }
 
-    const orders = new Set<number>();
-    for (const photo of photos) {
-      if (!photo.url || !photo.url.startsWith('http')) {
-        errors.push(`Invalid photo URL: ${photo.url}`);
-      }
+    // Check for unknown fields (fields not defined in attribute definitions)
+    const definedSlugs = new Set(attributeDefinitions.map((d) => d.slug));
+    const unknownFields = Object.keys(data).filter((key) => !definedSlugs.has(key));
+    
+    if (unknownFields.length > 0) {
+      errors.push(`Unknown fields: ${unknownFields.join(', ')}`);
+    }
 
-      if (photo.order < 0) {
-        errors.push('Photo order must be non-negative');
-      }
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
 
-      if (orders.has(photo.order)) {
-        errors.push(`Duplicate photo order: ${photo.order}`);
-      }
-      orders.add(photo.order);
+  validatePricingConfiguration(dto: any): ValidationResult {
+    const errors: string[] = [];
+
+    if (dto.basePrice !== undefined && dto.basePrice < 0) {
+      errors.push('Base price cannot be negative');
+    }
+
+    if (dto.minBookingHours !== undefined && dto.minBookingHours < 0) {
+      errors.push('Minimum booking hours cannot be negative');
+    }
+
+    if (dto.maxBookingDays !== undefined && dto.maxBookingDays < 0) {
+      errors.push('Maximum booking days cannot be negative');
+    }
+
+    if (dto.leadTime !== undefined && dto.leadTime < 0) {
+      errors.push('Lead time cannot be negative');
+    }
+
+    if (dto.advanceNotice !== undefined && dto.advanceNotice < 0) {
+      errors.push('Advance notice cannot be negative');
+    }
+
+    if (dto.capacity !== undefined && dto.capacity < 1) {
+      errors.push('Capacity must be at least 1');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  validatePropertyCompleteness(listing: any): ValidationResult {
+    const errors: string[] = [];
+
+    if (!listing.title || listing.title.trim().length === 0) {
+      errors.push('Title is required');
+    }
+
+    if (!listing.description || listing.description.trim().length === 0) {
+      errors.push('Description is required');
+    }
+
+    if (!listing.basePrice || listing.basePrice < 0) {
+      errors.push('Base price is required and must be non-negative');
+    }
+
+    if (!listing.city || listing.city.trim().length === 0) {
+      errors.push('City is required');
+    }
+
+    if (!listing.state || listing.state.trim().length === 0) {
+      errors.push('State is required');
+    }
+
+    if (!listing.country || listing.country.trim().length === 0) {
+      errors.push('Country is required');
+    }
+
+    if (!listing.categoryId) {
+      errors.push('Category is required');
     }
 
     return {
@@ -184,6 +162,3 @@ export class PropertyValidationService {
     };
   }
 }
-
-// Export alias for backward compatibility with tests
-export const ListingValidationService = PropertyValidationService;

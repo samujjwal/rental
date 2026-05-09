@@ -1,14 +1,15 @@
 import {
   IsString,
-  IsDateString,
-  IsOptional,
   IsInt,
   IsEnum,
-  IsArray,
+  IsOptional,
+  IsDateString,
+  IsNotEmpty,
+  MaxLength,
   Min,
   Max,
-  MaxLength,
-  IsNotEmpty,
+  IsUUID,
+  IsArray,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -130,6 +131,7 @@ export class RejectReturnDto {
 export class CalculatePriceDto {
   @ApiProperty({ description: 'Listing ID' })
   @IsString()
+  @IsUUID()
   listingId: string;
 
   @ApiProperty({ description: 'Start date', example: '2025-03-01T00:00:00Z' })
@@ -145,11 +147,11 @@ export class CalculatePriceDto {
   @IsEnum(DeliveryMethod)
   deliveryMethod?: DeliveryMethod;
 
-  @ApiProperty({ description: 'Number of guests / quantity', required: false, minimum: 1 })
+  @ApiProperty({ description: 'Number of guests / quantity', required: false, minimum: 1, maximum: 50 })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(50)
   guestCount?: number;
 
   @ApiProperty({ description: 'Promo code', required: false })

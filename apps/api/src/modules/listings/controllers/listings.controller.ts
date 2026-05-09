@@ -20,10 +20,14 @@ import {
   ForbiddenException,
   BadRequestException,
   Req,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiProperty, ApiConsumes } from '@nestjs/swagger';
 import { UserRole } from '@rental-portal/database';
 import { PropertyStatus } from '@rental-portal/database';
+import { IsNumber, IsOptional, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
 import {
   ListingsService,
   ListingFilters,
@@ -34,11 +38,44 @@ import {
   CreateAvailabilityDto,
   AvailabilityCheckDto,
 } from '../services/availability.service';
+
+export class NearbyListingsDto {
+  @ApiProperty({ description: 'Latitude', required: true })
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  @Type(() => Number)
+  lat: number;
+
+  @ApiProperty({ description: 'Longitude', required: true })
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  @Type(() => Number)
+  lng: number;
+
+  @ApiProperty({ description: 'Radius in km (max 100, default 10)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(100)
+  @Type(() => Number)
+  radius?: number;
+
+  @ApiProperty({ description: 'Max results (max 100, default 20)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  limit?: number;
+}
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '@/modules/auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
+import { Idempotent } from '@/common/guards/idempotency.guard';
 import { SearchService, SearchQuery } from '@/modules/search/services/search.service';
 import { ListingCompletenessService } from '../services/listing-completeness.service';
 
@@ -57,6 +94,7 @@ export class ListingsController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.USER, UserRole.HOST, UserRole.ADMIN)
+  @Idempotent()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new listing' })
   @ApiResponse({ status: 201, description: 'Listing created successfully' })
@@ -70,6 +108,7 @@ export class ListingsController {
   }
 
   @Get()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get all listings' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -79,28 +118,14 @@ export class ListingsController {
   @ApiQuery({ name: 'minPrice', required: false, type: Number })
   @ApiQuery({ name: 'maxPrice', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
-  @ApiQuery({ name: 'ownerId', required: false, type: String, description: 'Filter by owner ID (admin only)' })
   @ApiResponse({ status: 200, description: 'Listings retrieved successfully' })
   async findAll(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query() filters?: ListingFilters,
-    @Query('ownerId') ownerId?: string,
-    @CurrentUser('id') currentUserId?: string,
-    @CurrentUser('role') currentUserRole?: string,
   ) {
-    // Only admins can filter by ownerId
-    if (ownerId && currentUserRole !== 'ADMIN') {
-      throw new ForbiddenException('Only admins can filter by ownerId');
-    }
-
-    // If ownerId is provided and user is admin, add it to filters
-    const filtersWithOwner = ownerId && currentUserRole === 'ADMIN'
-      ? { ...filters, ownerId }
-      : filters || {};
-
     const result = await this.listingsService.findAll(
-      filtersWithOwner,
+      filters || {},
       page || 1,
       limit || 20,
     );
@@ -122,6 +147,26 @@ export class ListingsController {
     const listings = await this.listingsService.getOwnerProperties(
       userId,
       all === true,
+    );
+    return listings.map((l) => this.mapToFrontendListing(l));
+  }
+
+  @Get('user/:userId')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get public listings for a specific user (public-safe endpoint)' })
+  @ApiQuery({ name: 'all', required: false, type: Boolean, description: 'Include all statuses (owner only)' })
+  @ApiResponse({ status: 200, description: 'User listings retrieved successfully' })
+  async getUserListings(
+    @Param('userId') userId: string,
+    @Query('all') all?: boolean,
+    @CurrentUser('id') currentUserId?: string,
+  ) {
+    // Only the owner themselves can request 'all' statuses
+    const includeAll = all === true && currentUserId === userId;
+
+    const listings = await this.listingsService.getOwnerProperties(
+      userId,
+      includeAll,
     );
     return listings.map((l) => this.mapToFrontendListing(l));
   }
@@ -461,35 +506,138 @@ export class ListingsController {
     );
   }
 
+  @Post(':id/check-and-reserve')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Atomically check and reserve availability for booking' })
+  @ApiResponse({ status: 200, description: 'Availability checked and reserved' })
+  async checkAndReserve(
+    @Param('id') listingId: string,
+    @Body() dto: { startDate: string | Date; endDate: string | Date; inventoryUnitId?: string },
+  ) {
+    return this.availabilityService.checkAndReserve(
+      listingId,
+      new Date(dto.startDate),
+      new Date(dto.endDate),
+      dto.inventoryUnitId,
+    );
+  }
+
+  @Post(':id/release-reservation')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Release a previously reserved time slot' })
+  @ApiResponse({ status: 200, description: 'Reservation released' })
+  async releaseReservation(
+    @Param('id') listingId: string,
+    @Body() dto: { startDate: string | Date; endDate: string | Date; inventoryUnitId?: string },
+  ) {
+    return this.availabilityService.releaseReservation(
+      listingId,
+      new Date(dto.startDate),
+      new Date(dto.endDate),
+      dto.inventoryUnitId,
+    );
+  }
+
+  @Post(':id/confirm-reservation')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Confirm a reservation as booked' })
+  @ApiResponse({ status: 200, description: 'Reservation confirmed' })
+  async confirmReservation(
+    @Param('id') listingId: string,
+    @Body() dto: { startDate: string | Date; endDate: string | Date; bookingId: string; inventoryUnitId?: string },
+  ) {
+    return this.availabilityService.confirmReservation(
+      listingId,
+      new Date(dto.startDate),
+      new Date(dto.endDate),
+      dto.bookingId,
+      dto.inventoryUnitId,
+    );
+  }
+
+  @Get(':id/availability-summary')
+  @ApiOperation({ summary: 'Get availability summary for a date range' })
+  @ApiQuery({ name: 'startDate', required: true, type: String })
+  @ApiQuery({ name: 'endDate', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Availability summary retrieved' })
+  async getAvailabilitySummary(
+    @Param('id') listingId: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.availabilityService.getAvailabilitySummary(
+      listingId,
+      new Date(startDate),
+      new Date(endDate),
+    );
+  }
+
   @Post(':id/images')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Upload images for a listing' })
-  @ApiResponse({ status: 200, description: 'Images uploaded' })
+  @ApiOperation({ summary: 'Upload images for a listing (canonical multipart endpoint)' })
+  @ApiResponse({ status: 200, description: 'Images uploaded successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - not listing owner' })
   @ApiResponse({ status: 404, description: 'Listing not found' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('images', 20, { limits: { fileSize: 10 * 1024 * 1024 } }))
   async uploadImages(
     @Param('id') listingId: string,
     @CurrentUser('id') userId: string,
-    @Body('urls') urls: string[],
+    @Req() req: any,
   ) {
+    const files = req.files as any[];
     const listing = await this.listingsService.findOne(listingId);
     if (!listing) throw new NotFoundException('Listing not found');
     if (listing.ownerId !== userId) {
       throw new ForbiddenException('Only the listing owner can upload images');
     }
-    // Validate URLs
-    if (!Array.isArray(urls)) {
-      throw new BadRequestException('urls must be an array');
+
+    // Validate files
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files provided');
     }
-    const validUrls = urls.filter((url) => typeof url === 'string' && url.length > 0);
-    if (validUrls.length === 0) {
-      throw new BadRequestException('No valid image URLs provided');
+
+    const validImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    const validFiles = files.filter((file) => {
+      if (!file.mimetype || !validImageTypes.includes(file.mimetype)) {
+        return false;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length === 0) {
+      throw new BadRequestException('No valid image files provided. Allowed types: JPEG, PNG, WebP, GIF (max 10MB each)');
     }
+
+    // Upload files using storage service
+    const { StorageService } = await import('@/common/storage/storage.service');
+    const storageService = new StorageService(this.listingsService['configService']);
+
+    const uploadPromises = validFiles.map(async (file) => {
+      return storageService.uploadListingImage(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+      );
+    });
+
+    const uploadResults = await Promise.all(uploadPromises);
+    const newImageUrls = uploadResults.map((result) => result.url);
+
+    // Update listing with new image URLs
     const existingImages = Array.isArray(listing.photos) ? listing.photos : [];
-    const updatedImages = [...existingImages, ...validUrls];
+    const updatedImages = [...existingImages, ...newImageUrls];
+
     await this.listingsService.update(listingId, userId, { images: updatedImages });
-    return { images: updatedImages };
+
+    return { images: updatedImages, uploaded: newImageUrls };
   }
 
   @Delete(':id/images')
@@ -521,26 +669,15 @@ export class ListingsController {
 
   @Get('nearby')
   @ApiOperation({ summary: 'Get nearby listings by coordinates' })
-  @ApiQuery({ name: 'lat', required: true, type: Number })
-  @ApiQuery({ name: 'lng', required: true, type: Number })
-  @ApiQuery({ name: 'radius', required: false, type: Number, description: 'Radius in km (default 10)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max results (default 20)' })
   @ApiResponse({ status: 200, description: 'Nearby listings retrieved' })
-  async getNearbyListings(
-    @Query('lat') lat: string,
-    @Query('lng') lng: string,
-    @Query('radius') radius?: string,
-    @Query('limit') limit?: string,
-  ) {
-    const latitude = parseFloat(lat);
-    const longitude = parseFloat(lng);
-    const radiusKm = radius ? parseFloat(radius) : 10;
-    const maxResults = limit ? parseInt(limit, 10) : 20;
+  async getNearbyListings(@Query() dto: NearbyListingsDto) {
+    const radiusKm = dto.radius ?? 10;
+    const maxResults = dto.limit ?? 20;
 
     // Haversine-based search using raw SQL for distance calculation
     return this.searchService.search({
-      latitude,
-      longitude,
+      latitude: dto.lat,
+      longitude: dto.lng,
       radius: radiusKm,
       limit: maxResults,
     } as SearchQuery);

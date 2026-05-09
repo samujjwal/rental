@@ -1,26 +1,27 @@
-import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, ForbiddenException, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { UserRole } from '@rental-portal/database';
 import { i18nForbidden } from '@/common/errors/i18n-exceptions';
+import { ALL_ADMIN_ROLES } from '@/common/auth/admin-roles';
 
 /**
  * Resource Authorization Guard
  * 
- * Provides object-level authorization for resources by checking:
- * - User owns the resource (ownerId/renterId matches userId)
- * - User has admin role (ADMIN, SUPER_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN)
- * - User is a member of the organization that owns the resource
- * - Custom authorization logic via decorator metadata
+ * Protects resources based on ownership or admin role.
  * 
  * Usage:
- * @UseGuards(ResourceAuthorizationGuard)
- * @ResourceOwner('listing') // Checks listing.ownerId === user.id
- * @ResourceOwner('booking', 'renterId') // Checks booking.renterId === user.id
- * @ResourceOwner('organization', 'ownerId', 'members') // Checks org.ownerId === user.id OR user in org.members
+ * @UseGuards(ResourceAuthGuard)
+ * 
+ * The guard checks:
+ * - User has admin role (ADMIN, SUPER_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN)
+ * - User is the resource owner (ownerId matches user.id)
+ * - User is an organization member with appropriate permissions
  */
 @Injectable()
-export class ResourceAuthorizationGuard implements CanActivate {
+export class ResourceAuthGuard implements CanActivate {
+  private readonly logger = new Logger(ResourceAuthGuard.name);
+
   constructor(
     private reflector: Reflector,
     private prisma: PrismaService,
@@ -31,12 +32,12 @@ export class ResourceAuthorizationGuard implements CanActivate {
     const user = request.user;
 
     if (!user) {
-      throw i18nForbidden('auth.notAuthenticated');
+      this.logger.warn('Resource authorization guard: No user found in request');
+      return false;
     }
 
-    // Admins bypass resource ownership checks
-    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'];
-    if (adminRoles.includes(user.role as string)) {
+    // Admin bypass: Allow all admin roles to access any resource
+    if (ALL_ADMIN_ROLES.includes(user.role as string)) {
       return true;
     }
 

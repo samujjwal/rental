@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InAppNotificationService } from './notification.service';
+import { NotificationsService } from './notifications.service';
 import { QueueService } from './queue.service';
 
 interface RetryConfig {
@@ -53,7 +53,7 @@ export class NotificationRetryService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly notificationService: InAppNotificationService,
+    private readonly notificationService: NotificationsService,
     private readonly queueService: QueueService,
   ) {}
 
@@ -146,13 +146,13 @@ export class NotificationRetryService {
       // Attempt to send the notification
       let deliveryId: string | undefined;
       if (notification.type === 'email') {
-        const result = await this.notificationService.sendEmail(recipient, notification.content || '');
+        const result = await this.notificationService.sendEmail(recipient, 'Notification', notification.content || '');
         deliveryId = result?.messageId;
       } else if (notification.type === 'sms') {
         const result = await this.notificationService.sendSMS(recipient, notification.content || '');
         deliveryId = (result as any)?.sid || (result as any)?.messageId;
       } else if (notification.type === 'push') {
-        const result = await this.notificationService.sendPush(recipient, notification.content || '');
+        const result = await this.notificationService.sendPush(recipient, 'Notification', notification.content || '');
         deliveryId = result?.messageId;
       } else {
         // Unknown notification type
@@ -355,13 +355,13 @@ export class NotificationRetryService {
     attemptedChannels.push(primaryChannel);
     try {
       if (primaryChannel === 'email' && this.notificationService.sendEmail) {
-        await this.notificationService.sendEmail(notification.to || '', notification.body || '');
+        await this.notificationService.sendEmail(notification.to || '', 'Notification', notification.body || '');
         return { success: true };
       } else if (primaryChannel === 'sms' && this.notificationService.sendSMS) {
         await this.notificationService.sendSMS(notification.to, notification.body || '');
         return { success: true };
       } else if (primaryChannel === 'push' && this.notificationService.sendPush) {
-        await this.notificationService.sendPush(notification.to, notification.body || '');
+        await this.notificationService.sendPush(notification.to, 'Notification', notification.body || '');
         return { success: true };
       }
     } catch (error) {
@@ -375,7 +375,7 @@ export class NotificationRetryService {
       attemptedChannels.push(fallbackChannel);
       try {
         if (fallbackChannel === 'email' && this.notificationService.sendEmail) {
-          await this.notificationService.sendEmail(notification.to || '', notification.body || '');
+          await this.notificationService.sendEmail(notification.to || '', 'Notification', notification.body || '');
           return {
             success: true,
             primaryChannelFailed: true,
@@ -395,7 +395,7 @@ export class NotificationRetryService {
             errors,
           };
         } else if (fallbackChannel === 'push' && this.notificationService.sendPush) {
-          await this.notificationService.sendPush(notification.to, notification.body || '');
+          await this.notificationService.sendPush(notification.to, 'Notification', notification.body || '');
           return {
             success: true,
             primaryChannelFailed: true,
@@ -434,11 +434,11 @@ export class NotificationRetryService {
         const body = notification.body || notification.content || '';
         
         if (notification.type === 'email' && this.notificationService.sendEmail) {
-          await this.notificationService.sendEmail(to, body);
+          await this.notificationService.sendEmail(to, 'Notification', body);
         } else if (notification.type === 'sms' && this.notificationService.sendSMS) {
           await this.notificationService.sendSMS(to, body);
         } else if (notification.type === 'push' && this.notificationService.sendPush) {
-          await this.notificationService.sendPush(to, body);
+          await this.notificationService.sendPush(to, 'Notification', body);
         }
       }
       
@@ -630,7 +630,7 @@ export class NotificationRetryService {
     for (const channel of alternativeChannels) {
       try {
         if (channel === 'email' && this.notificationService.sendEmail) {
-          await this.notificationService.sendEmail(to, body);
+          await this.notificationService.sendEmail(to, 'Notification', body);
           (this.logger as any).info('Notification sent via alternative channel', {
             notificationId: notification.id,
             originalChannel,
@@ -646,7 +646,7 @@ export class NotificationRetryService {
           });
           return { success: true, channelUsed: 'sms', alternativeChannelUsed: 'sms', originalChannel };
         } else if (channel === 'push' && this.notificationService.sendPush) {
-          await this.notificationService.sendPush(to, body);
+          await this.notificationService.sendPush(to, 'Notification', body);
           (this.logger as any).info('Notification sent via alternative channel', {
             notificationId: notification.id,
             originalChannel,
@@ -694,11 +694,11 @@ export class NotificationRetryService {
       const body = notification?.body || notification?.content || '';
       
       if (notification?.type === 'email' && this.notificationService.sendEmail) {
-        await this.notificationService.sendEmail(to, body);
+        await this.notificationService.sendEmail(to, 'Notification', body);
       } else if (notification?.type === 'sms' && this.notificationService.sendSMS) {
         await this.notificationService.sendSMS(to, body);
       } else if (notification?.type === 'push' && this.notificationService.sendPush) {
-        await this.notificationService.sendPush(to, body);
+        await this.notificationService.sendPush(to, 'Notification', body);
       }
       
       return { success: true, retried: true, triggeredBy: userId, reason, isManualRetry: true };
@@ -743,7 +743,7 @@ export class NotificationRetryService {
       }
       
       if (partialDelivery.push === false && this.notificationService.sendPush) {
-        await this.notificationService.sendPush(recipient, content);
+        await this.notificationService.sendPush(recipient, 'Notification', content);
         recoveredChannels.push('push');
       }
       

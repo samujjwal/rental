@@ -10,6 +10,7 @@ export const STATUS_COLORS: Record<string, string> = {
   pending_owner_approval: "bg-yellow-100 text-yellow-800",
   pending_payment: "bg-orange-100 text-orange-800",
   pending: "bg-yellow-100 text-yellow-800",
+  manual_review: "bg-purple-100 text-purple-800",
   confirmed: "bg-blue-100 text-blue-800",
   active: "bg-green-100 text-green-800",
   return_requested: "bg-amber-100 text-amber-800",
@@ -30,6 +31,7 @@ export const PAYMENT_STATUS_COLORS: Record<string, string> = {
 
 export const TIMELINE_STEPS = [
   { status: "pending_owner_approval", label: "Booking Requested", icon: Clock },
+  { status: "manual_review", label: "Manual Review", icon: Clock },
   { status: "pending_payment", label: "Pending Payment", icon: Clock },
   { status: "confirmed", label: "Confirmed", icon: CheckCircle },
   { status: "active", label: "In Progress", icon: Package },

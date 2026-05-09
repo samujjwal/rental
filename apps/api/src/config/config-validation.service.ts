@@ -5,24 +5,28 @@
  * App fails fast for unsafe/missing production config.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 interface EnvVarRule {
   name: string;
   required: boolean;
   forbidden: boolean;
-  environments: ('development' | 'test' | 'e2e' | 'production')[];
+  environments: ('development' | 'test' | 'e2e' | 'staging' | 'production')[];
   description: string;
   validator?: (value: string) => boolean;
   errorMessage?: string;
 }
 
 @Injectable()
-export class ConfigValidationService {
+export class ConfigValidationService implements OnModuleInit {
   private readonly logger = new Logger(ConfigValidationService.name);
 
   constructor(private readonly configService: ConfigService) {}
+
+  async onModuleInit(): Promise<void> {
+    this.validate();
+  }
 
   /**
    * Validate all configuration rules for the current environment
@@ -88,7 +92,7 @@ export class ConfigValidationService {
         name: 'JWT_SECRET',
         required: true,
         forbidden: false,
-        environments: ['development', 'production'],
+        environments: ['development', 'staging', 'production'],
         description: 'JWT signing secret',
         validator: (value) => value.length >= 32,
         errorMessage: 'JWT_SECRET must be at least 32 characters',
@@ -97,32 +101,32 @@ export class ConfigValidationService {
         name: 'DATABASE_URL',
         required: true,
         forbidden: false,
-        environments: ['development', 'test', 'e2e', 'production'],
+        environments: ['development', 'test', 'e2e', 'staging', 'production'],
         description: 'Database connection string',
       },
       {
         name: 'REDIS_HOST',
         required: true,
         forbidden: false,
-        environments: ['development', 'test', 'e2e', 'production'],
+        environments: ['development', 'test', 'e2e', 'staging', 'production'],
         description: 'Redis host',
       },
       {
         name: 'REDIS_PORT',
         required: true,
         forbidden: false,
-        environments: ['development', 'test', 'e2e', 'production'],
+        environments: ['development', 'test', 'e2e', 'staging', 'production'],
         description: 'Redis port',
         validator: (value) => !isNaN(parseInt(value, 10)),
         errorMessage: 'REDIS_PORT must be a valid number',
       },
 
-      // Payment configuration (required in production)
+      // Payment configuration (required in production and staging)
       {
         name: 'STRIPE_SECRET_KEY',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Stripe secret key',
         validator: (value) => value.startsWith('sk_'),
         errorMessage: 'STRIPE_SECRET_KEY must start with "sk_"',
@@ -131,56 +135,74 @@ export class ConfigValidationService {
         name: 'STRIPE_WEBHOOK_SECRET',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Stripe webhook secret',
       },
       {
         name: 'STRIPE_PUBLISHABLE_KEY',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Stripe publishable key',
         validator: (value) => value.startsWith('pk_'),
         errorMessage: 'STRIPE_PUBLISHABLE_KEY must start with "pk_"',
       },
 
-      // Payment test bypass (forbidden in production)
+      // Payment test bypass (forbidden in production and staging)
       {
         name: 'STRIPE_TEST_BYPASS',
         required: false,
         forbidden: true,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Stripe test payment bypass flag',
       },
 
-      // Frontend URL (required in production)
+      // Safety checks fail-open mode (forbidden in production and staging)
+      {
+        name: 'SAFETY_CHECKS_FAIL_OPEN',
+        required: false,
+        forbidden: true,
+        environments: ['staging', 'production'],
+        description: 'Safety checks fail-open mode (allows bookings to proceed when safety checks fail)',
+      },
+
+      // Rate limiting bypass (forbidden in production and staging)
+      {
+        name: 'DISABLE_THROTTLE',
+        required: false,
+        forbidden: true,
+        environments: ['staging', 'production'],
+        description: 'Disables API rate limiting (security risk in production)',
+      },
+
+      // Frontend URL (required in production and staging)
       {
         name: 'FRONTEND_URL',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Frontend application URL',
         validator: (value) => value.startsWith('https://'),
-        errorMessage: 'FRONTEND_URL must use HTTPS in production',
+        errorMessage: 'FRONTEND_URL must use HTTPS in production/staging',
       },
 
-      // CORS origins (no wildcard in production)
+      // CORS origins (no wildcard in production and staging)
       {
         name: 'CORS_ORIGINS',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'CORS allowed origins',
         validator: (value) => !value.includes('*'),
-        errorMessage: 'CORS_ORIGINS must not contain wildcard (*) in production',
+        errorMessage: 'CORS_ORIGINS must not contain wildcard (*) in production/staging',
       },
 
-      // Email configuration (required in production)
+      // Email configuration (required in production and staging)
       {
         name: 'EMAIL_FROM',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Email sender address',
         validator: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
         errorMessage: 'EMAIL_FROM must be a valid email address',
@@ -189,73 +211,80 @@ export class ConfigValidationService {
         name: 'SENDGRID_API_KEY',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'SendGrid API key',
       },
 
-      // AWS configuration (required in production for file uploads)
+      // AWS configuration (required in production and staging for file uploads)
       {
         name: 'AWS_ACCESS_KEY_ID',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'AWS access key ID',
       },
       {
         name: 'AWS_SECRET_ACCESS_KEY',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'AWS secret access key',
       },
       {
         name: 'AWS_S3_BUCKET',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'AWS S3 bucket name',
       },
 
-      // Development login (forbidden in production)
+      // Development login (forbidden in production and staging)
+      {
+        name: 'ALLOW_DEV_LOGIN',
+        required: false,
+        forbidden: true,
+        environments: ['staging', 'production'],
+        description: 'Allow development login bypass flag',
+      },
       {
         name: 'DEV_LOGIN_ENABLED',
         required: false,
         forbidden: true,
-        environments: ['production'],
-        description: 'Development login bypass flag',
+        environments: ['staging', 'production'],
+        description: 'Development login bypass flag (legacy)',
       },
       {
         name: 'DEV_LOGIN_SECRET',
         required: false,
         forbidden: true,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Development login secret',
       },
 
-      // Admin disputes email (required in production)
+      // Admin disputes email (required in production and staging)
       {
         name: 'ADMIN_DISPUTES_EMAIL',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Admin disputes notification email',
         validator: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
         errorMessage: 'ADMIN_DISPUTES_EMAIL must be a valid email address',
       },
 
-      // Platform configuration (required in production)
+      // Platform configuration (required in production and staging)
       {
         name: 'BRAND_NAME',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Brand name',
       },
       {
         name: 'BRAND_SUPPORT_EMAIL',
         required: true,
         forbidden: false,
-        environments: ['production'],
+        environments: ['staging', 'production'],
         description: 'Brand support email',
         validator: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
         errorMessage: 'BRAND_SUPPORT_EMAIL must be a valid email address',
@@ -266,10 +295,10 @@ export class ConfigValidationService {
         name: 'NODE_ENV',
         required: true,
         forbidden: false,
-        environments: ['development', 'test', 'e2e', 'production'],
+        environments: ['development', 'test', 'e2e', 'staging', 'production'],
         description: 'Node environment',
-        validator: (value) => ['development', 'test', 'e2e', 'production'].includes(value),
-        errorMessage: 'NODE_ENV must be one of: development, test, e2e, production',
+        validator: (value) => ['development', 'test', 'e2e', 'staging', 'production'].includes(value),
+        errorMessage: 'NODE_ENV must be one of: development, test, e2e, staging, production',
       },
     ];
   }

@@ -11,12 +11,132 @@ import {
   HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiOkResponse, ApiProperty } from '@nestjs/swagger';
 import { SearchService, SearchQuery } from '../services/search.service';
 import { RecommendationService } from '../services/recommendation.service';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
 import { UserRole } from '@rental-portal/database';
 import { SearchResponseDto } from '../dto/search.dto';
+import { IsNumber, IsOptional, Min, Max, IsString, MaxLength, IsBoolean, IsDateString } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class NearbyListingsDto {
+  @ApiProperty({ description: 'Latitude', required: true })
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  @Type(() => Number)
+  lat: number;
+
+  @ApiProperty({ description: 'Longitude', required: true })
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  @Type(() => Number)
+  lng: number;
+
+  @ApiProperty({ description: 'Radius in km (max 100, default 10)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(100)
+  @Type(() => Number)
+  radius?: number;
+
+  @ApiProperty({ description: 'Max results (max 100, default 20)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  limit?: number;
+}
+
+export class SearchListingsDto {
+  @ApiProperty({ description: 'Search query string', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  query?: string;
+
+  @ApiProperty({ description: 'Category ID filter', required: false })
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
+  @ApiProperty({ description: 'Latitude for location-based search', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  @Type(() => Number)
+  lat?: number;
+
+  @ApiProperty({ description: 'Longitude for location-based search', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  @Type(() => Number)
+  lon?: number;
+
+  @ApiProperty({ description: 'Radius in km (max 500)', required: false })
+  @IsOptional()
+  @IsString()
+  radius?: string;
+
+  @ApiProperty({ description: 'Minimum price filter', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1000000)
+  @Type(() => Number)
+  minPrice?: number;
+
+  @ApiProperty({ description: 'Maximum price filter', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1000000)
+  @Type(() => Number)
+  maxPrice?: number;
+
+  @ApiProperty({ description: 'Delivery method filter', required: false })
+  @IsOptional()
+  @IsBoolean()
+  delivery?: boolean;
+
+  @ApiProperty({ description: 'Sort order', required: false, enum: ['relevance', 'price_asc', 'price_desc', 'rating', 'newest', 'distance'] })
+  @IsOptional()
+  @IsString()
+  sort?: 'relevance' | 'price_asc' | 'price_desc' | 'rating' | 'newest' | 'distance';
+
+  @ApiProperty({ description: 'Page number (max 1000)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(1000)
+  @Type(() => Number)
+  page?: number;
+
+  @ApiProperty({ description: 'Results per page (max 100)', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  size?: number;
+
+  @ApiProperty({ description: 'Availability start date (ISO 8601)', required: false })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiProperty({ description: 'Availability end date (ISO 8601)', required: false })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+}
 
 @ApiTags('Search')
 @Controller('search')
@@ -28,79 +148,28 @@ export class SearchController {
 
   @Get()
   @ApiOperation({ summary: 'Search listings' })
-  @ApiQuery({ name: 'query', required: false, type: String })
-  @ApiQuery({ name: 'categoryId', required: false, type: String })
-  @ApiQuery({ name: 'lat', required: false, type: Number })
-  @ApiQuery({ name: 'lon', required: false, type: Number })
-  @ApiQuery({ name: 'radius', required: false, type: String })
-  @ApiQuery({ name: 'minPrice', required: false, type: Number })
-  @ApiQuery({ name: 'maxPrice', required: false, type: Number })
-  @ApiQuery({ name: 'delivery', required: false, type: Boolean })
-  @ApiQuery({
-    name: 'sort',
-    required: false,
-    enum: ['relevance', 'price_asc', 'price_desc', 'rating', 'newest', 'distance'],
-  })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'size', required: false, type: Number })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'ISO 8601 date for availability start' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'ISO 8601 date for availability end' })
   @ApiOkResponse({ type: SearchResponseDto, description: 'Search results retrieved' })
-  async search(
-    @Query('query') query?: string,
-    @Query('categoryId') categoryId?: string,
-    @Query('lat') lat?: number,
-    @Query('lon') lon?: number,
-    @Query('radius') radius?: string,
-    @Query('minPrice') minPrice?: number,
-    @Query('maxPrice') maxPrice?: number,
-    @Query('bookingMode') bookingMode?: string,
-    @Query('condition') condition?: string,
-    @Query('delivery') delivery?: string,
-    @Query('features') features?: string,
-    @Query('sort') sort?: string,
-    @Query('page') page?: number,
-    @Query('size') size?: number,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-  ) {
+  async search(@Query() dto: SearchListingsDto) {
     const searchQuery: SearchQuery = {
-      query,
-      categoryId,
-      page,
-      size,
-      sort: sort as any,
+      query: dto.query,
+      categoryId: dto.categoryId,
+      page: dto.page,
+      size: dto.size,
+      sort: dto.sort as any,
     };
 
-    if (lat && lon) {
-      searchQuery.location = { lat, lon, radius };
+    if (dto.lat && dto.lon) {
+      searchQuery.location = { lat: dto.lat, lon: dto.lon, radius: dto.radius };
     }
 
-    if (minPrice || maxPrice) {
-      searchQuery.priceRange = { min: minPrice, max: maxPrice };
+    if (dto.minPrice || dto.maxPrice) {
+      searchQuery.priceRange = { min: dto.minPrice, max: dto.maxPrice };
     }
 
-    if (startDate && endDate) {
-      const parsedStart = new Date(startDate);
-      const parsedEnd = new Date(endDate);
-      if (!isNaN(parsedStart.getTime()) && !isNaN(parsedEnd.getTime())) {
-        searchQuery.dates = { startDate: parsedStart, endDate: parsedEnd };
-      }
-    }
-
-    const deliveryEnabled = delivery === 'true' || delivery === '1';
-    const normalizedBookingMode = bookingMode
-      ? bookingMode.toUpperCase() === 'INSTANT'
-        ? 'INSTANT_BOOK'
-        : bookingMode.toUpperCase()
-      : undefined;
-
-    if (normalizedBookingMode || condition || features || deliveryEnabled) {
-      searchQuery.filters = {
-        bookingMode: normalizedBookingMode,
-        condition,
-        delivery: deliveryEnabled,
-        features: features ? features.split(',') : undefined,
+    if (dto.startDate || dto.endDate) {
+      searchQuery.dates = {
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
       };
     }
 
@@ -181,31 +250,15 @@ export class SearchController {
 
   @Get('nearby')
   @ApiOperation({ summary: 'Get nearby listings by coordinates' })
-  @ApiQuery({ name: 'lat', required: true, type: Number })
-  @ApiQuery({ name: 'lng', required: true, type: Number })
-  @ApiQuery({ name: 'radius', required: false, type: Number, description: 'Radius in km (default 10)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max results (default 20)' })
   @ApiResponse({ status: 200, description: 'Nearby listings retrieved' })
-  async getNearbyListings(
-    @Query('lat') lat: string,
-    @Query('lng') lng: string,
-    @Query('radius') radius?: string,
-    @Query('limit') limit?: string,
-  ) {
-    const latitude = parseFloat(lat);
-    const longitude = parseFloat(lng);
-
-    if (isNaN(latitude) || isNaN(longitude)) {
-      throw new BadRequestException('lat and lng must be valid numbers');
-    }
-
-    const radiusKm = radius ? parseFloat(radius) : 10;
-    const maxResults = limit ? parseInt(limit, 10) : 20;
+  async getNearbyListings(@Query() dto: NearbyListingsDto) {
+    const radiusKm = dto.radius ?? 10;
+    const maxResults = dto.limit ?? 20;
 
     return this.searchService.search({
       location: {
-        lat: latitude,
-        lon: longitude,
+        lat: dto.lat,
+        lon: dto.lng,
         radius: `${radiusKm}km`,
       },
       size: maxResults,

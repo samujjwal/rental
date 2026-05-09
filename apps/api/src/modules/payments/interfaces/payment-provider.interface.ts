@@ -91,11 +91,6 @@ export interface PaymentProvider {
   // ─── Refunds & Payouts ──────────────────────────────────────────
   createRefund(params: RefundParams): Promise<string>;
   createPayout(params: PayoutParams): Promise<string>;
-
-  // ─── Payment Methods ────────────────────────────────────────────
-  attachPaymentMethod(customerId: string, paymentMethodId: string): Promise<void>;
-  setDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void>;
-  getPaymentMethods(customerId: string): Promise<any>;
 }
 
 /**

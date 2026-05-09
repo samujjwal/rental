@@ -88,7 +88,7 @@ const getStoredAuthUserId = (): string | null => {
   }
 
   try {
-    const persistedAuth = localStorage.getItem("auth-storage");
+    const persistedAuth = window.localStorage.getItem("auth-storage");
     if (persistedAuth) {
       const parsed = JSON.parse(persistedAuth) as {
         state?: { user?: { id?: unknown } };
@@ -98,7 +98,7 @@ const getStoredAuthUserId = (): string | null => {
       }
     }
 
-    const rawUser = localStorage.getItem("user");
+    const rawUser = window.localStorage.getItem("user");
     if (!rawUser) {
       return null;
     }

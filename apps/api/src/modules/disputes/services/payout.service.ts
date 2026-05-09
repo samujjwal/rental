@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PaymentRepository } from '../../payments/repositories/payment.repository';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 /**
  * PayoutService
@@ -86,8 +87,8 @@ export class PayoutService {
     return {
       success: true,
       payoutId: updatedPayout.id,
-      referenceNumber: payoutData.referenceNumber || `PAY-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-      transactionId: `txn-${Date.now()}`,
+      referenceNumber: payoutData.referenceNumber || `PAY-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
+      transactionId: `txn-${randomUUID().slice(0, 12)}`,
       status: 'completed',
       amount: payoutData.amount,
     };
@@ -257,7 +258,7 @@ export class PayoutService {
         statusValid: true,
         timestampValid: true,
       },
-      blockchainHash: `hash-${Date.now()}`,
+      blockchainHash: `hash-${randomUUID().slice(0, 16)}`,
     };
   }
 

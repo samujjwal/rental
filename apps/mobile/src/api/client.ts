@@ -32,6 +32,19 @@ import type { DisputeResponse as DisputeResponseType } from '@rental-portal/shar
 import { authStore } from './authStore';
 import { API_BASE_URL } from '../config';
 
+// Custom error class to preserve structured backend errors
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+    public statusCode?: number,
+    public details?: any,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // createMobileClient — previously in @rental-portal/mobile-sdk
 // ---------------------------------------------------------------------------
@@ -87,16 +100,24 @@ function createMobileClient(config: MobileClientConfig = {}) {
         try {
           const errorJson = JSON.parse(text);
           const errorMessage = errorJson.message || errorJson.error || text;
-          const errorCode = errorJson.code || errorJson.statusCode;
-          const errorDetails = errorJson.errors || errorJson.details;
-          throw new Error(
+          const errorCode = errorJson.statusCode || errorJson.code;
+          const errorDetails = {
+            messageKey: errorJson.messageKey,
+            requestId: errorJson.requestId,
+            path: errorJson.path,
+            timestamp: errorJson.timestamp,
+          };
+          throw new ApiError(
             typeof errorMessage === 'string'
               ? errorMessage
               : JSON.stringify(errorMessage),
+            errorCode,
+            response.status,
+            errorDetails,
           );
         } catch {
-          // If JSON parsing fails, throw the original text
-          throw new Error(text || `Request failed (${response.status})`);
+          // If JSON parsing fails, throw the original text as ApiError
+          throw new ApiError(text || `Request failed (${response.status})`, undefined, response.status);
         }
       }
 
@@ -337,7 +358,7 @@ function createMobileClient(config: MobileClientConfig = {}) {
       request<UserProfile>(`/users/${userId}`),
 
     getUserListings: (userId: string) =>
-      request<{ listings: ListingDetail[] }>(`/listings?ownerId=${encodeURIComponent(userId)}`),
+      request<{ listings: ListingDetail[] }>(`/listings/user/${encodeURIComponent(userId)}`),
 
     getUserReviews: (
       userId: string,
@@ -371,10 +392,10 @@ function createMobileClient(config: MobileClientConfig = {}) {
         body: JSON.stringify(payload),
       }),
 
-    uploadImages: async (images: Array<{ uri: string; fileName?: string; mimeType?: string }>): Promise<string[]> => {
+    uploadImages: async (listingId: string, images: Array<{ uri: string; fileName?: string; mimeType?: string }>): Promise<{ images: string[]; uploaded: string[] }> => {
       const formData = new FormData();
       images.forEach((img, i) => {
-        formData.append('files', {
+        formData.append('images', {
           uri: img.uri,
           name: img.fileName || `image_${i}.jpg`,
           type: img.mimeType || 'image/jpeg',
@@ -384,7 +405,7 @@ function createMobileClient(config: MobileClientConfig = {}) {
       const doUpload = async (token: string | null) => {
         const headers: Record<string, string> = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const response = await fetch(`${baseUrl}/upload/images`, {
+        const response = await fetch(`${baseUrl}/listings/${listingId}/images`, {
           method: 'POST',
           headers,
           body: formData,
@@ -413,8 +434,8 @@ function createMobileClient(config: MobileClientConfig = {}) {
         const text = await response.text();
         throw new Error(text || 'Image upload failed');
       }
-      const results: { url: string }[] = await response.json();
-      return results.map((r) => r.url);
+      const results: { images: string[]; uploaded: string[] } = await response.json();
+      return results;
     },
 
     updateListing: (listingId: string, payload: any) =>
@@ -811,14 +832,17 @@ export async function authenticatedFetch<T>(
         const errorMessage = errorJson.message || errorJson.error || text;
         const errorCode = errorJson.code || errorJson.statusCode;
         const errorDetails = errorJson.errors || errorJson.details;
-        throw new Error(
+        throw new ApiError(
           typeof errorMessage === 'string'
             ? errorMessage
             : JSON.stringify(errorMessage),
+          errorCode,
+          response.status,
+          errorDetails,
         );
       } catch {
-        // If JSON parsing fails, throw the original text
-        throw new Error(text || `Request failed (${response.status})`);
+        // If JSON parsing fails, throw the original text as ApiError
+        throw new ApiError(text || `Request failed (${response.status})`, undefined, response.status);
       }
     }
 

@@ -98,23 +98,6 @@ export interface BookingAvailableTransitionsResponse {
   availableTransitions: BookingTransition[];
 }
 
-/** State machine metadata from backend */
-export interface BookingStateMachineMetadata {
-  statuses: BookingStatus[];
-  statusLabels: Record<string, string>;
-  transitions: Array<{
-    from: BookingStatus;
-    to: BookingStatus;
-    transition: BookingTransition;
-    allowedRoles: ('RENTER' | 'OWNER' | 'ADMIN' | 'SYSTEM')[];
-  }>;
-  transitionsByStatus: Record<
-    string,
-    Record<string, BookingTransition[]>
-  >;
-  roles: ('RENTER' | 'OWNER' | 'ADMIN' | 'SYSTEM')[];
-}
-
 /** Create booking request body (web-compatible) */
 export interface CreateBookingRequest {
   listingId: string;

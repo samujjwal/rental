@@ -74,6 +74,7 @@ function haversineDistanceKm(
 
 export interface SearchResult {
   id: string;
+  ownerId: string;
   title: string;
   description: string;
   slug: string;
@@ -98,8 +99,12 @@ export interface SearchResult {
   features: string[];
   score?: number;
   distance?: number;
+  availability?: string;
+  securityDeposit?: number;
+  verified?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   // Cursor fields for pagination
-  createdAt?: Date;
 }
 
 @Injectable()
@@ -427,6 +432,8 @@ export class SearchService {
               firstName: true,
               lastName: true,
               averageRating: true,
+              email: true,
+              profilePhotoUrl: true,
             },
           },
           category: {
@@ -480,9 +487,10 @@ export class SearchService {
         ? filteredListings.slice(skip, skip + size)
         : filteredListings;
 
-      // Format results
+      // Format results - return all fields needed by frontend without fake defaults
       const results: SearchResult[] = paginatedListings.map((listing: any) => ({
         id: listing.id,
+        ownerId: listing.ownerId,
         title: listing.title,
         description: listing.description,
         slug: listing.slug,
@@ -507,6 +515,15 @@ export class SearchService {
         features: Array.isArray(listing.features) ? listing.features : [],
         score: this.calculateRelevanceScore(listing, searchQuery.query),
         distance: distanceMap.get(listing.id),
+        availability: listing.status === 'AVAILABLE' ? 'available' : (listing.status === 'RENTED' ? 'rented' : (listing.status === 'MAINTENANCE' ? 'maintenance' : 'unavailable')),
+        securityDeposit: listing.securityDeposit,
+        verified: listing.verificationStatus === 'VERIFIED',
+        createdAt: listing.createdAt?.toISOString(),
+        updatedAt: listing.updatedAt?.toISOString(),
+        // Additional fields needed by Listing type
+        featured: listing.featured || false,
+        totalBookings: listing.totalBookings || 0,
+        views: listing.views || 0,
       }));
 
       // If text search returned few results, try semantic search for enrichment
@@ -554,6 +571,7 @@ export class SearchService {
             results.push(
               ...similarListings.map((listing: any) => ({
                 id: listing.id,
+                ownerId: listing.ownerId,
                 title: listing.title,
                 description: listing.description,
                 slug: listing.slug,
@@ -575,6 +593,11 @@ export class SearchService {
                 features: Array.isArray(listing.features) ? listing.features : [],
                 score: this.calculateRelevanceScore(listing, searchQuery.query),
                 isSimilarMatch: true,
+                availability: listing.status || 'available',
+                securityDeposit: listing.securityDeposit || 0,
+                verified: listing.verificationStatus === 'VERIFIED',
+                createdAt: listing.createdAt?.toISOString(),
+                updatedAt: listing.updatedAt?.toISOString(),
               })),
             );
           }
@@ -610,6 +633,7 @@ export class SearchService {
 
               const additionalResults: SearchResult[] = additionalListings.map((listing: any) => ({
                 id: listing.id,
+                ownerId: listing.ownerId,
                 title: listing.title,
                 description: listing.description,
                 slug: listing.slug,
@@ -630,6 +654,11 @@ export class SearchService {
                 condition: listing.condition,
                 features: Array.isArray(listing.features) ? listing.features : [],
                 score: 1 - (semanticDistanceMap.get(listing.id) || 1), // Convert distance to score
+                availability: listing.status || 'available',
+                securityDeposit: listing.securityDeposit || 0,
+                verified: listing.verificationStatus === 'VERIFIED',
+                createdAt: listing.createdAt?.toISOString(),
+                updatedAt: listing.updatedAt?.toISOString(),
               }));
 
               results.push(...additionalResults);
@@ -894,6 +923,7 @@ export class SearchService {
 
       const results: SearchResult[] = similarListings.map((l: any) => ({
         id: l.id,
+        ownerId: l.ownerId,
         title: l.title,
         description: l.description,
         slug: l.slug,
@@ -917,6 +947,11 @@ export class SearchService {
         condition: l.condition,
         features: Array.isArray(l.features) ? l.features : [],
         score: this.calculateSimilarityScore(l, listing),
+        availability: l.status || 'available',
+        securityDeposit: l.securityDeposit || 0,
+        verified: l.verificationStatus === 'VERIFIED',
+        createdAt: l.createdAt?.toISOString(),
+        updatedAt: l.updatedAt?.toISOString(),
       }));
 
       // Cache for 30 minutes

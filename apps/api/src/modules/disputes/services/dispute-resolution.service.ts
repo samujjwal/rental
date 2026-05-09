@@ -7,6 +7,7 @@ import { PaymentRepository } from '../../payments/repositories/payment.repositor
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../notifications/services/resend.service';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 /**
  * DisputeResolutionService
@@ -67,8 +68,8 @@ export class DisputeResolutionService {
       }
     }
 
-    // Generate reference number
-    const referenceNumber = `DISP-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    // Generate deterministic reference number using UUID
+    const referenceNumber = `DISP-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
 
     // Determine initiator and defendant
     const initiatorId = disputeData.initiatedBy;
@@ -534,7 +535,7 @@ export class DisputeResolutionService {
     }
 
     return {
-      reportId: `report-${Date.now()}`,
+      reportId: `report-${randomUUID().slice(0, 8)}`,
       period: reportConfig.period || 'last_30_days',
       generatedAt: new Date(),
       summary: {
@@ -576,7 +577,7 @@ export class DisputeResolutionService {
     // In a real implementation, we would create an appeal record
     // For now, return the appeal submission result
     return {
-      appealId: `appeal-${Date.now()}`,
+      appealId: `appeal-${randomUUID().slice(0, 8)}`,
       disputeId,
       submittedBy: appealData.submittedBy,
       reason: appealData.reason,

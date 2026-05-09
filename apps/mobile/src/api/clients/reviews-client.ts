@@ -44,6 +44,10 @@ export class ReviewsClient extends BaseClient {
     bookingId: string;
     reviewType: 'RENTER_TO_OWNER' | 'OWNER_TO_RENTER';
     overallRating: number;
+    accuracyRating?: number;
+    communicationRating?: number;
+    cleanlinessRating?: number;
+    valueRating?: number;
     comment?: string;
   }): Promise<ReviewResponse> {
     return this.request<ReviewResponse>('/reviews', {

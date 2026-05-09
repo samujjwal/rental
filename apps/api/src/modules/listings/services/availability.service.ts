@@ -1,8 +1,8 @@
 import { Injectable, BadRequestException, ConflictException, Logger, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-// import { i18nBadRequest } from '@/common/errors/i18n-exceptions';
-import { PrismaService } from '../../../common/prisma/prisma.service';
-import { CacheService } from '../../../common/cache/cache.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
+import { CacheService } from '@/common/cache/cache.service';
+import { isOperationsAdmin } from '@/common/auth/admin-roles';
 
 export interface RecurrenceRule {
   frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
@@ -58,9 +58,8 @@ export class AvailabilityService {
     userId?: string,
     userRole?: string,
   ): Promise<void> {
-    // Admins bypass ownership checks
-    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'];
-    if (userRole && adminRoles.includes(userRole)) {
+    // Admins bypass ownership checks - use centralized admin role check
+    if (isOperationsAdmin(userRole)) {
       return;
     }
 

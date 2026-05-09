@@ -16,6 +16,7 @@ import { i18nForbidden } from '@/common/errors/i18n-exceptions';
 import { UserRole } from '@rental-portal/database';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ReviewsService } from '../services/reviews.service';
+import { Idempotent } from '@/common/guards/idempotency.guard';
 import { CreateReviewDto, UpdateReviewDto } from '../dto/review.dto';
 import { JwtAuthGuard, CurrentUser } from '@/common/auth';
 
@@ -26,6 +27,7 @@ export class ReviewsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
+  @Idempotent()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a review' })
   @ApiResponse({ status: 201, description: 'Review created successfully' })

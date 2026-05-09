@@ -5,6 +5,10 @@ export interface CreateReviewRequest {
   bookingId: string;
   reviewType: "RENTER_TO_OWNER" | "OWNER_TO_RENTER";
   overallRating: number;
+  accuracyRating?: number;
+  communicationRating?: number;
+  cleanlinessRating?: number;
+  valueRating?: number;
   comment?: string;
 }
 

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ListingsService } from './services/listings.service';
-import { PropertyValidationService } from './services/listing-validation.service';
+import { ListingValidationService } from './services/listing-validation.service';
 import { AvailabilityService } from './services/availability.service';
 import { AvailabilitySlotService } from './services/availability-slot.service';
 import { ListingCompletenessService } from './services/listing-completeness.service';
@@ -13,6 +13,8 @@ import { ListingAuthMonitorService } from './services/listing-auth-monitor.servi
 import { ListingsController } from './controllers/listings.controller';
 import { ListingContentController } from './controllers/listing-content.controller';
 import { ListingVersionController } from './controllers/listing-version.controller';
+import { AvailabilitySlotController } from './controllers/availability-slot.controller';
+import { InventoryUnitController } from './controllers/inventory-unit.controller';
 import { CategoriesModule } from '../categories/categories.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { AiModule } from '../ai/ai.module';
@@ -37,10 +39,10 @@ import { CurrencyModule } from '../currency/currency.module';
       inject: [ConfigService],
     }),
   ],
-  controllers: [ListingsController, ListingContentController, ListingVersionController],
+  controllers: [ListingsController, ListingContentController, ListingVersionController, AvailabilitySlotController, InventoryUnitController],
   providers: [
     ListingsService,
-    PropertyValidationService,
+    ListingValidationService,
     AvailabilityService,
     AvailabilitySlotService,
     ListingCompletenessService,

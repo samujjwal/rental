@@ -142,18 +142,26 @@ export class BaseClient {
     try {
       const errorJson = JSON.parse(text);
       const errorMessage = errorJson.message || errorJson.error || text;
-      const errorCode = errorJson.code || errorJson.statusCode;
-      const errorDetails = errorJson.errors || errorJson.details;
+      const errorCode = errorJson.statusCode || errorJson.code;
+      const errorDetails = {
+        messageKey: errorJson.messageKey,
+        requestId: errorJson.requestId,
+        path: errorJson.path,
+        timestamp: errorJson.timestamp,
+      };
       
       const error = new Error(
         typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage),
       );
       (error as any).code = errorCode;
+      (error as any).statusCode = response.status;
       (error as any).details = errorDetails;
       throw error;
     } catch {
-      // If JSON parsing fails, throw the original text
-      throw new Error(text || `Request failed (${response.status})`);
+      // If JSON parsing fails, throw a generic error with the text
+      const error = new Error(text || `Request failed (${response.status})`);
+      (error as any).statusCode = response.status;
+      throw error;
     }
   }
 

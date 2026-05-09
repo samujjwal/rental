@@ -12,6 +12,7 @@ import {
   Res,
   Header,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { i18nForbidden } from '@/common/errors/i18n-exceptions';
 import { Response } from 'express';
@@ -33,6 +34,8 @@ import { PolicyEngineService } from '../../policy-engine/services/policy-engine.
 import { ContextResolverService } from '../../policy-engine/services/context-resolver.service';
 import { JwtAuthGuard, CurrentUser } from '@/common/auth';
 import { EmailVerifiedGuard, RequireEmailVerification } from '@/common/guards/email-verified.guard';
+import { Idempotent } from '@/common/guards/idempotency.guard';
+import { isAdminRole } from '@/common/auth/admin-roles';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { BookingStatus } from '@rental-portal/database';
 
@@ -54,6 +57,7 @@ export class BookingsController {
   @Post()
   @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   @RequireEmailVerification()
+  @Idempotent()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new booking' })
   @ApiResponse({ status: 201, description: 'Booking created successfully' })
@@ -287,6 +291,10 @@ export class BookingsController {
   @ApiOperation({ summary: 'Get blocked dates for a listing' })
   @ApiResponse({ status: 200, description: 'Blocked dates retrieved' })
   async getBlockedDates(@Param('listingId') listingId: string) {
+    // Validate listingId is a valid UUID
+    if (!listingId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      throw new BadRequestException('Invalid listing ID format');
+    }
     return this.bookingsService.getBlockedDates(listingId);
   }
 
@@ -325,18 +333,11 @@ export class BookingsController {
         weeklyDiscount: discounts.find((discount) => discount.type === 'weekly')?.amount ?? 0,
         monthlyDiscount: discounts.find((discount) => discount.type === 'monthly')?.amount ?? 0,
         platformFee: pricing.platformFee,
-        taxes: 0,
-        taxLines: [] as Array<{ name: string; amount: number }>,
+        taxes: pricing.taxes,
+        taxLines: pricing.taxLines,
         discounts,
       },
     };
-  }
-
-  @Get('state-machine-metadata')
-  @ApiOperation({ summary: 'Get booking state machine metadata' })
-  @ApiResponse({ status: 200, description: 'State machine metadata retrieved' })
-  async getStateMachineMetadata() {
-    return this.stateMachine.getMetadata();
   }
 
   @Get(':id/available-transitions')
@@ -356,8 +357,7 @@ export class BookingsController {
     } else {
       // Verify the user actually has an admin role before granting admin access
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
-      const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'SUPPORT_ADMIN', 'FINANCE_ADMIN'];
-      if (!user || !adminRoles.includes(user.role)) {
+      if (!user || !isAdminRole(user.role)) {
         throw i18nForbidden('booking.unauthorizedAction');
       }
       role = 'ADMIN';

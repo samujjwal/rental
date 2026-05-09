@@ -11,6 +11,8 @@ import { PushNotificationService } from './services/push-notification.service';
 import { NotificationPreferencesService } from './services/notification-preferences.service';
 import { NotificationRetryService } from './services/notification-retry.service';
 import { QueueService } from './services/queue.service';
+import { UnifiedNotificationService } from './services/unified-notification.service';
+import { NotificationTemplateService } from './services/notification-template.service';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
@@ -26,8 +28,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
     NotificationPreferencesService,
     NotificationRetryService,
     QueueService,
+    UnifiedNotificationService,
+    NotificationTemplateService,
     EventEmitter2,
   ],
-  exports: [NotificationsService, EmailService, SmsService, InAppNotificationService, PushNotificationService, NotificationRetryService, QueueService],
+  exports: [NotificationsService, EmailService, SmsService, PushNotificationService, NotificationRetryService, QueueService, UnifiedNotificationService],
 })
 export class NotificationsModule {}

@@ -131,14 +131,10 @@ export interface UserProfile {
 export type UpdateProfilePayload = Partial<Omit<UserProfile, 'id' | 'email'>>;
 
 /**
- * Mobile review response (a review entity, different from shared-types ReviewResponse which is an owner reply).
+ * Mobile review response - using shared types from @rental-portal/shared-types
+ * Import Review from shared-types instead of defining locally
  */
-export interface ReviewResponse {
-  id: string;
-  overallRating: number;
-  comment?: string | null;
-  createdAt: string;
-}
+export type { Review } from '@rental-portal/shared-types';
 
 /**
  * Mobile organization — richer than shared-types OrganizationDetail.

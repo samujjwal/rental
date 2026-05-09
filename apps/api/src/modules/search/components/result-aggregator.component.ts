@@ -47,6 +47,7 @@ export class ResultAggregatorComponent {
       basePrice: Number(listing.basePrice),
       currency: listing.currency,
       photos: Array.isArray(listing.photos) ? listing.photos : [],
+      ownerId: listing.ownerId || listing.owner?.id || '',
       ownerName: `${listing.owner.firstName} ${listing.owner.lastName}`.trim(),
       ownerRating: listing.owner.averageRating || 0,
       averageRating: listing.averageRating || 0,

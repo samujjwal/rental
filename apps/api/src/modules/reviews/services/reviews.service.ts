@@ -5,20 +5,20 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
+import { i18nBadRequest, i18nNotFound, i18nForbidden } from '@/common/errors/i18n-exceptions';
+import { isSupportAdmin } from '@/common/auth/admin-roles';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
 import { Review, ReviewType } from '@rental-portal/database';
 import { ContentModerationService } from '../../moderation/services/content-moderation.service';
+import { CreateReviewInput, UpdateReviewInput } from '@rental-portal/shared-types';
 
-export enum ReviewDirection {
-  RENTER_TO_OWNER = 'RENTER_TO_OWNER',
-  OWNER_TO_RENTER = 'OWNER_TO_RENTER',
-}
-
-export interface CreateReviewDto {
+/**
+ * Internal DTO for service layer - maps from shared types to internal structure
+ */
+export interface InternalCreateReviewDto {
   bookingId: string;
-  reviewType: ReviewDirection;
+  reviewType: 'RENTER_TO_OWNER' | 'OWNER_TO_RENTER';
   overallRating: number;
   accuracyRating?: number;
   communicationRating?: number;
@@ -27,9 +27,14 @@ export interface CreateReviewDto {
   comment?: string;
 }
 
-export type UpdateReviewDto = Partial<
-  Omit<CreateReviewDto, 'bookingId' | 'reviewType'>
->;
+export interface InternalUpdateReviewDto {
+  overallRating?: number;
+  accuracyRating?: number;
+  communicationRating?: number;
+  cleanlinessRating?: number;
+  valueRating?: number;
+  comment?: string;
+}
 
 export interface ReviewResponse extends Review {
   reviewer?: {
@@ -51,6 +56,36 @@ export interface ReviewResponse extends Review {
   };
 }
 
+/**
+ * Map shared CreateReviewInput to internal DTO
+ */
+function mapToInternalCreateDto(dto: CreateReviewInput): InternalCreateReviewDto {
+  return {
+    bookingId: dto.bookingId,
+    reviewType: dto.direction === 'OWNER_TO_RENTER' ? 'OWNER_TO_RENTER' : 'RENTER_TO_OWNER',
+    overallRating: dto.rating,
+    accuracyRating: dto.categories?.accuracy,
+    communicationRating: dto.categories?.communication,
+    cleanlinessRating: dto.categories?.cleanliness,
+    valueRating: dto.categories?.value,
+    comment: dto.comment,
+  };
+}
+
+/**
+ * Map shared UpdateReviewInput to internal DTO
+ */
+function mapToInternalUpdateDto(dto: UpdateReviewInput): InternalUpdateReviewDto {
+  return {
+    overallRating: dto.rating,
+    accuracyRating: dto.categories?.accuracy,
+    communicationRating: dto.categories?.communication,
+    cleanlinessRating: dto.categories?.cleanliness,
+    valueRating: dto.categories?.value,
+    comment: dto.comment,
+  };
+}
+
 @Injectable()
 export class ReviewsService {
   private readonly logger = new Logger(ReviewsService.name);
@@ -61,9 +96,10 @@ export class ReviewsService {
     private readonly moderationService: ContentModerationService,
   ) {}
 
-  async create(userId: string, dto: CreateReviewDto): Promise<ReviewResponse> {
+  async create(userId: string, dto: CreateReviewInput): Promise<ReviewResponse> {
+    const internalDto = mapToInternalCreateDto(dto);
     const booking = await this.prisma.booking.findUnique({
-      where: { id: dto.bookingId },
+      where: { id: internalDto.bookingId },
       include: {
         listing: {
           include: { owner: true },
@@ -95,7 +131,7 @@ export class ReviewsService {
     let listingId: string;
     let dbReviewType: ReviewType;
 
-    if (dto.reviewType === ReviewDirection.RENTER_TO_OWNER) {
+    if (internalDto.reviewType === 'RENTER_TO_OWNER') {
       if (booking.renterId !== userId) {
         throw i18nForbidden('review.renterOnly');
       }
@@ -103,7 +139,7 @@ export class ReviewsService {
       revieweeId = booking.listing.ownerId;
       listingId = booking.listingId;
       dbReviewType = ReviewType.LISTING_REVIEW;
-    } else if (dto.reviewType === ReviewDirection.OWNER_TO_RENTER) {
+    } else if (internalDto.reviewType === 'OWNER_TO_RENTER') {
       if (booking.listing.ownerId !== userId) {
         throw i18nForbidden('review.ownerOnly');
       }
@@ -117,7 +153,7 @@ export class ReviewsService {
 
     const existingReview = await this.prisma.review.findFirst({
       where: {
-        bookingId: dto.bookingId,
+        bookingId: internalDto.bookingId,
         reviewerId: reviewerId,
         type: dbReviewType,
       },
@@ -128,11 +164,11 @@ export class ReviewsService {
     }
 
     // Moderate review content before saving
-    if (dto.comment) {
+    if (internalDto.comment) {
       try {
         const modResult = await this.moderationService.moderateReview({
-          content: dto.comment,
-          rating: dto.overallRating,
+          content: internalDto.comment,
+          rating: internalDto.overallRating,
         });
         if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
           throw new BadRequestException({
@@ -146,24 +182,24 @@ export class ReviewsService {
       }
     }
 
-    this.validateRatings(dto);
+    this.validateRatings(internalDto);
 
     // Use transaction to ensure data consistency
     const review: ReviewResponse = await (this.prisma.$transaction(async (tx: any): Promise<ReviewResponse> => {
       const newReview = await tx.review.create({
         data: {
-          bookingId: dto.bookingId,
+          bookingId: internalDto.bookingId,
           listingId,
           reviewerId,
           revieweeId,
           type: dbReviewType,
-          rating: dto.overallRating,
-          overallRating: dto.overallRating,
-          accuracyRating: dto.accuracyRating,
-          communicationRating: dto.communicationRating,
-          cleanlinessRating: dto.cleanlinessRating,
-          valueRating: dto.valueRating,
-          comment: dto.comment || '',
+          rating: internalDto.overallRating,
+          overallRating: internalDto.overallRating,
+          accuracyRating: internalDto.accuracyRating,
+          communicationRating: internalDto.communicationRating,
+          cleanlinessRating: internalDto.cleanlinessRating,
+          valueRating: internalDto.valueRating,
+          comment: internalDto.comment || '',
         },
         include: {
           reviewer: {
@@ -206,7 +242,8 @@ export class ReviewsService {
     return review;
   }
 
-  async update(reviewId: string, userId: string, dto: UpdateReviewDto): Promise<ReviewResponse> {
+  async update(reviewId: string, userId: string, dto: UpdateReviewInput): Promise<ReviewResponse> {
+    const internalDto = mapToInternalUpdateDto(dto);
     const review = await this.prisma.review.findUnique({
       where: { id: reviewId },
     });
@@ -227,18 +264,18 @@ export class ReviewsService {
       throw i18nBadRequest('review.editWindow');
     }
 
-    if (dto.overallRating !== undefined) {
-      this.validateRatings(dto as any);
+    if (internalDto.overallRating !== undefined) {
+      this.validateRatings(internalDto as any);
     }
 
-    const { comment, ...ratings } = dto;
+    const { comment, ...ratings } = internalDto;
 
     // Moderate updated review content
     if (comment) {
       try {
         const modResult = await this.moderationService.moderateReview({
           content: comment,
-          rating: dto.overallRating ?? review.overallRating,
+          rating: internalDto.overallRating ?? review.overallRating,
         });
         if (modResult.status === 'REJECTED' || modResult.status === 'FLAGGED') {
           throw new BadRequestException({
@@ -588,8 +625,7 @@ export class ReviewsService {
             where: { id: userId },
             select: { role: true },
           });
-          const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'];
-          if (!user?.role || !adminRoles.includes(user.role)) {
+          if (!user?.role || !isSupportAdmin(user.role)) {
             throw i18nForbidden('review.unauthorized');
           }
         }
@@ -617,7 +653,7 @@ export class ReviewsService {
     bookingId: string,
   ): Promise<{
     canReview: boolean;
-    reviewType?: ReviewDirection;
+    reviewType?: 'RENTER_TO_OWNER' | 'OWNER_TO_RENTER';
     reason?: string;
   }> {
     const booking = await this.prisma.booking.findUnique({
@@ -634,14 +670,14 @@ export class ReviewsService {
       return { canReview: false, reason: 'Booking not completed' };
     }
 
-    let reviewType: ReviewDirection;
+    let reviewType: 'RENTER_TO_OWNER' | 'OWNER_TO_RENTER';
     let limitType: ReviewType;
 
     if (booking.renterId === userId) {
-      reviewType = ReviewDirection.RENTER_TO_OWNER;
+      reviewType = 'RENTER_TO_OWNER';
       limitType = ReviewType.LISTING_REVIEW;
     } else if (booking.listing.ownerId === userId) {
-      reviewType = ReviewDirection.OWNER_TO_RENTER;
+      reviewType = 'OWNER_TO_RENTER';
       limitType = ReviewType.RENTER_REVIEW;
     } else {
       return { canReview: false, reason: 'Not part of this booking' };
@@ -662,7 +698,7 @@ export class ReviewsService {
     return { canReview: true, reviewType };
   }
 
-  private validateRatings(dto: Partial<CreateReviewDto>) {
+  private validateRatings(dto: Partial<InternalCreateReviewDto>) {
     const ratings = [
       dto.overallRating,
       dto.accuracyRating,

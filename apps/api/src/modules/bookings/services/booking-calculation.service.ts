@@ -14,6 +14,8 @@ export interface PriceCalculation {
   depositAmount: number;
   total: number;
   ownerEarnings: number;
+  taxes: number;
+  taxLines: Array<{ type: string; name: string; rate: number; amount: number }>;
   breakdown: {
     basePrice: number;
     duration: number;
@@ -137,6 +139,57 @@ export class BookingCalculationService {
     const depositAmount = this.calculateDeposit(listing, subtotal);
     const currency = listing.currency || this.config.get('platform.defaultCurrency', 'USD');
 
+    // Calculate taxes using PolicyEngine for jurisdiction-aware tax calculation
+    let taxes = 0;
+    let taxLines: Array<{ type: string; name: string; rate: number; amount: number }> = [];
+    if (this.policyEngine) {
+      try {
+        const taxContext: Partial<PolicyContext> = {
+          country: listing.country || this.config.get('platform.country', ''),
+          state: listing.state || null,
+          city: listing.city || null,
+          currency: listing.currency || this.config.get('platform.defaultCurrency', 'USD'),
+          locale: this.config.get('platform.defaultLocale', 'en'),
+          timezone: this.config.get('platform.defaultTimezone', 'UTC'),
+          listingId,
+          listingCategory: listing.category?.slug || null,
+          listingCountry: listing.country || null,
+          listingState: listing.state || null,
+          listingCity: listing.city || null,
+          bookingValue: subtotal,
+          bookingDuration: duration.value,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          requestTimestamp: new Date().toISOString(),
+          evaluationDate: new Date().toISOString().split('T')[0],
+          platform: 'api',
+        } as any;
+
+        const taxBreakdown = await this.policyEngine.calculateTax(
+          taxContext as PolicyContext,
+          subtotal,
+          'Listing',
+          listingId,
+        );
+
+        taxes = taxBreakdown.totalTax;
+        taxLines = taxBreakdown.taxLines.map((line) => ({
+          type: line.type,
+          name: line.name,
+          rate: line.rate,
+          amount: line.amount,
+        }));
+      } catch (err) {
+        // PolicyEngine tax calculation failed — default to zero tax
+        this.logger.warn(
+          `PolicyEngine tax calculation failed for listing ${listingId} — defaulting to zero tax. Check PolicyEngine configuration.`,
+          err instanceof Error ? err.stack : String(err),
+        );
+        taxes = 0;
+        taxLines = [];
+      }
+    }
+
     // For PER_DAY pricing, use actual days in breakdown for accuracy
     // For PER_MONTH pricing, use adjusted duration (calendar months)
     // For partial days (< 1 day), round up to 1 day minimum
@@ -192,7 +245,7 @@ export class BookingCalculationService {
           serviceFee = serviceLine?.amount ?? subtotal * this.serviceFeeRate;
           // When PolicyEngine returns fees, include platform fee in total
           const total = roundForCurrency(
-            subtotal + platformFee + serviceFee + depositAmount,
+            subtotal + platformFee + serviceFee + depositAmount + taxes,
             currency,
           );
           const ownerEarnings = roundForCurrency(subtotal - platformFee, currency);
@@ -203,6 +256,8 @@ export class BookingCalculationService {
             depositAmount,
             total,
             ownerEarnings,
+            taxes,
+            taxLines,
             breakdown: {
               basePrice,
               duration: breakdownDuration,
@@ -232,7 +287,7 @@ export class BookingCalculationService {
       isPerMonthPricing || isPerWeekPricing ? basePrice * this.platformFeeRate : platformFee;
     const finalServiceFee =
       isPerMonthPricing || isPerWeekPricing ? basePrice * this.serviceFeeRate : serviceFee;
-    const total = roundForCurrency(subtotal + finalServiceFee + depositAmount, currency);
+    const total = roundForCurrency(subtotal + finalServiceFee + depositAmount + taxes, currency);
     // For all pricing modes, ownerEarnings = basePrice - platformFee (service fee charged to customer)
     const ownerEarnings = roundForCurrency(basePrice - finalPlatformFee, currency);
 
@@ -243,6 +298,8 @@ export class BookingCalculationService {
       depositAmount,
       total,
       ownerEarnings,
+      taxes,
+      taxLines,
       breakdown: {
         basePrice,
         duration: breakdownDuration,

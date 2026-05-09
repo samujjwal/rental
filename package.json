@@ -11,10 +11,6 @@
   "scripts": {
     "setup": "./setup-env.sh",
     "env:start": "./scripts/env/start-env.sh",
-    "env:stop": "./scripts/env/start-env.sh",
-    "env:restart": "./scripts/env/start-env.sh",
-    "env:status": "./scripts/env/start-env.sh",
-    "env:logs": "./scripts/env/start-env.sh",
     "dev": "./scripts/dev/start-dev.sh",
     "dev:apps": "turbo run dev",
     "dev:api": "pnpm --filter @rental-portal/api run dev",
@@ -50,10 +46,8 @@
     "audit:security": "./scripts/test/run-security-audit.sh",
     "deploy": "sudo ./scripts/deploy/deploy.sh production",
     "deploy:prod": "sudo ./scripts/deploy/deploy.sh production",
-    "deploy:mvp": "sudo ./scripts/deploy/deploy.sh",
     "backup": "./scripts/backup/backup.sh production",
     "backup:prod": "./scripts/backup/backup.sh production",
-    "backup:mvp": "./scripts/backup/backup.sh mvp",
     "validate": "./validate-build.sh",
     "prepare": "husky",
     "lint-staged": "lint-staged"

@@ -2,14 +2,14 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } fro
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@/common/auth';
 import { UserRole } from '@rental-portal/database';
-import { InAppNotificationService } from '../services/notification.service';
+import { NotificationsService, NotificationPreferences } from '../services/notifications.service';
 
 @ApiTags('in-app notifications')
 @Controller('notifications/inapp')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class InAppNotificationController {
-  constructor(private readonly notificationService: InAppNotificationService) {}
+  constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
   @ApiOperation({ summary: 'Get current user notifications' })
@@ -25,7 +25,7 @@ export class InAppNotificationController {
       offset?: number;
     },
   ) {
-    return this.notificationService.getUserNotifications({
+    return this.notificationsService.getUserNotifications({
       ...query,
       userId,
     } as any);
@@ -35,7 +35,7 @@ export class InAppNotificationController {
   @ApiOperation({ summary: 'Get current user notification count' })
   @ApiResponse({ status: 200, description: 'Notification count retrieved successfully' })
   async getNotificationCount(@CurrentUser('id') userId: string) {
-    return this.notificationService.getNotificationCount(userId);
+    return this.notificationsService.getUnreadCount(userId).then(count => ({ count }));
   }
 
   @Post()
@@ -55,7 +55,7 @@ export class InAppNotificationController {
       priority?: string;
     },
   ) {
-    return this.notificationService.createNotification({
+    return this.notificationsService.createNotification({
       userId: data.userId,
       type: data.type as any,
       title: data.title,
@@ -71,7 +71,7 @@ export class InAppNotificationController {
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
   ) {
-    await this.notificationService.markAsRead(id, userId);
+    await this.notificationsService.markAsRead(id, userId);
     return { status: 'marked_as_read' };
   }
 
@@ -79,7 +79,7 @@ export class InAppNotificationController {
   @ApiOperation({ summary: 'Mark all notifications as read' })
   @ApiResponse({ status: 200, description: 'All notifications marked as read' })
   async markAllAsRead(@CurrentUser('id') userId: string) {
-    await this.notificationService.markAllAsRead(userId);
+    await this.notificationsService.markAllAsRead(userId);
     return { status: 'all_marked_as_read' };
   }
 
@@ -90,7 +90,7 @@ export class InAppNotificationController {
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
   ) {
-    await this.notificationService.deleteNotification(id, userId);
+    await this.notificationsService.deleteNotification(id, userId);
     return { status: 'deleted' };
   }
 
@@ -98,7 +98,7 @@ export class InAppNotificationController {
   @ApiOperation({ summary: 'Get current user notification preferences' })
   @ApiResponse({ status: 200, description: 'Notification preferences retrieved successfully' })
   async getNotificationPreferences(@CurrentUser('id') userId: string) {
-    return this.notificationService.getNotificationPreferences(userId);
+    return this.notificationsService.getPreferences(userId);
   }
 
   @Put('preferences')
@@ -123,7 +123,7 @@ export class InAppNotificationController {
       };
     },
   ) {
-    await this.notificationService.updateNotificationPreferences(userId, data.preferences);
+    await this.notificationsService.updatePreferences(userId, data.preferences);
     return { status: 'updated' };
   }
 }

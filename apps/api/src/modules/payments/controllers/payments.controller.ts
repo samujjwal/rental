@@ -2,15 +2,27 @@ import {
   Controller,
   Get,
   Post,
+  Put,
+  Delete,
+  Patch,
   Body,
   Param,
+  Query,
   UseGuards,
+  ParseIntPipe,
+  DefaultValuePipe,
+  ParseArrayPipe,
   HttpCode,
   HttpStatus,
-  Query,
+  Inject,
+  forwardRef,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  HttpException,
+  Req,
+  UseInterceptors,
+  Logger,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { i18nNotFound,i18nForbidden,i18nBadRequest } from '@/common/errors/i18n-exceptions';
@@ -25,19 +37,23 @@ import { BookingStateMachineService } from '@/modules/bookings/services/booking-
 import { PaymentCommandLogService } from '../services/payment-command-log.service';
 import {
   StartOnboardingDto,
-  AttachPaymentMethodDto,
   RequestPayoutDto,
   RequestRefundDto,
 } from '../dto/payment.dto';
 import { toNumber } from '@rental-portal/database';
 import { JwtAuthGuard, CurrentUser } from '@/common/auth';
 import { EmailVerifiedGuard, RequireEmailVerification } from '@/common/guards/email-verified.guard';
+import { Idempotent } from '@/common/guards/idempotency.guard';
+import { isAdminRole } from '@/common/auth/admin-roles';
+import { randomUUID } from 'crypto';
 
 type AsyncMethodResult<T extends (...args: any[]) => Promise<any>> = Awaited<ReturnType<T>>;
 
 @ApiTags('Payments')
 @Controller('payments')
 export class PaymentsController {
+  private readonly logger = new Logger(PaymentsController.name);
+
   constructor(
     private readonly stripe: StripeService,
     private readonly ledger: LedgerService,
@@ -165,7 +181,7 @@ export class PaymentsController {
     @CurrentUser() user: { id: string; role: string },
   ) {
     const booking = await this.paymentData.getBookingForPayment(bookingId);
-    const isAdmin = this.isAdminRole(user.role);
+    const isAdmin = isAdminRole(user.role);
 
     if (booking.renterId !== user.id && booking.ownerId !== user.id && !isAdmin) {
       throw i18nForbidden('booking.unauthorizedAction');
@@ -320,47 +336,6 @@ export class PaymentsController {
     return { customerId };
   }
 
-  @Get('methods')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get payment methods' })
-  @ApiResponse({ status: 200, description: 'Payment methods retrieved' })
-  async getPaymentMethods(@CurrentUser('id') userId: string) {
-    const stripeCustomerId = await this.paymentData.getUserStripeCustomerId(userId);
-
-    if (!stripeCustomerId) {
-      return { data: [] as any[] };
-    }
-
-    try {
-      return await this.stripe.getPaymentMethods(stripeCustomerId);
-    } catch {
-      // Return empty list if Stripe is unavailable or customer not found
-      return { data: [] as any[] };
-    }
-  }
-
-  @Post('methods/attach')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Attach payment method to customer' })
-  @ApiResponse({ status: 200, description: 'Payment method attached' })
-  async attachPaymentMethod(
-    @CurrentUser('id') userId: string,
-    @Body() dto: AttachPaymentMethodDto,
-  ) {
-    const stripeCustomerId = await this.paymentData.getUserStripeCustomerId(userId);
-
-    if (!stripeCustomerId) {
-      throw i18nBadRequest('payment.noCustomerAccount');
-    }
-
-    await this.stripe.attachPaymentMethod(stripeCustomerId, dto.paymentMethodId);
-
-    return { success: true };
-  }
-
   @Post('payouts')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -490,6 +465,7 @@ export class PaymentsController {
   @Post('refund/:bookingId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Idempotent()
   @ApiOperation({ summary: 'Request a refund for a booking' })
   @ApiResponse({ status: 202, description: 'Refund queued for processing' })
   async requestRefund(
@@ -497,9 +473,13 @@ export class PaymentsController {
     @CurrentUser() user: { id: string; role: string },
     @Body() dto: RequestRefundDto,
   ) {
-    // Only the renter or admin can request a refund
-    const bookingLedger = await this.ledger.getBookingLedger(bookingId);
-    if (!bookingLedger) {
+    // Get booking to verify ownership
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { renterId: true },
+    });
+
+    if (!booking) {
       throw i18nNotFound('booking.notFound');
     }
 
@@ -511,20 +491,21 @@ export class PaymentsController {
     }
 
     // Verify the user is the renter or an admin
-    const isRenter = payment.booking.renterId === user.id;
+    const isRenter = booking.renterId === user.id;
     const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
     if (!isRenter && !isAdmin) {
       throw i18nForbidden('booking.unauthorizedAction');
     }
 
     const refundAmount = dto.amount ?? toNumber(payment.amount);
+    const refundId = `refund_${randomUUID()}`;
     const refundRecord = await this.prisma.refund.create({
       data: {
         bookingId,
         amount: refundAmount,
         currency: payment.currency || 'USD',
         status: 'PENDING',
-        refundId: `pending_${bookingId}_${Date.now()}`,
+        refundId,
         reason: dto.reason,
         metadata: JSON.stringify({
           requestedBy: user.id,
@@ -577,12 +558,6 @@ export class PaymentsController {
     };
   }
 
-  private isAdminRole(role: string | undefined): boolean {
-    return ['ADMIN', 'SUPER_ADMIN', 'SUPPORT_ADMIN', 'FINANCE_ADMIN'].includes(
-      String(role || '').toUpperCase(),
-    );
-  }
-
   private getReusableClientSecret(
     payment: { paymentIntentId?: string | null; status?: string | null; metadata?: string | null } | null | undefined,
     bookingPaymentIntentId?: string | null,
@@ -625,28 +600,15 @@ export class PaymentsController {
     actionRequired: boolean;
   }): 'confirmed' | 'processing' | 'action_required' | 'failed' | 'pending' {
     const {
-      bookingStatus,
       paymentStatus,
       providerStatus,
       actionRequired,
     } = input;
 
-    if (
-      [
-        'CONFIRMED',
-        'IN_PROGRESS',
-        'AWAITING_RETURN_INSPECTION',
-        'COMPLETED',
-        'SETTLED',
-        'DISPUTED',
-        'REFUNDED',
-      ].includes(bookingStatus)
-    ) {
-      return 'confirmed';
-    }
+    // Payment status truth comes from Payment/Stripe state, not inferred booking status
+    // Only use paymentStatus and providerStatus to determine confirmation state
 
     if (
-      bookingStatus === 'PAYMENT_FAILED' ||
       ['FAILED', 'CANCELLED'].includes(paymentStatus) ||
       ['requires_payment_method', 'canceled'].includes(providerStatus || '')
     ) {
@@ -658,8 +620,15 @@ export class PaymentsController {
     }
 
     if (
-      ['SUCCEEDED', 'COMPLETED', 'PROCESSING'].includes(paymentStatus) ||
-      ['succeeded', 'processing'].includes(providerStatus || '')
+      ['SUCCEEDED', 'COMPLETED'].includes(paymentStatus) ||
+      ['succeeded'].includes(providerStatus || '')
+    ) {
+      return 'confirmed';
+    }
+
+    if (
+      ['PROCESSING'].includes(paymentStatus) ||
+      ['processing'].includes(providerStatus || '')
     ) {
       return 'processing';
     }

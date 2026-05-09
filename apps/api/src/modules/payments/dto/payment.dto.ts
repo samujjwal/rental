@@ -21,13 +21,6 @@ export class StartOnboardingDto {
   refreshUrl: string;
 }
 
-export class AttachPaymentMethodDto {
-  @ApiProperty({ description: 'Stripe payment method ID' })
-  @IsString()
-  @IsNotEmpty()
-  paymentMethodId: string;
-}
-
 export class RequestPayoutDto {
   @ApiProperty({ description: 'Payout amount (optional, defaults to full balance)', required: false })
   @IsOptional()

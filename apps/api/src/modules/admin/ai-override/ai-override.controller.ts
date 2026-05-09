@@ -1,22 +1,25 @@
 /**
  * AI Override Controller
- * 
+ *
  * Provides REST API endpoints for AI suggestion management:
  * - Get pending suggestions
  * - Review and override suggestions
  * - Get audit trail
  * - Get statistics
+ *
+ * All sensitive actions require MFA verification for admin users.
  */
 
 import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RolesGuard } from '@/common/auth/guards/roles.guard';
+import { MfaGuard, RequireMFA } from '@/modules/auth/guards/mfa.guard';
 import { Roles } from '@/common/auth/decorators/roles.decorator';
 import { AIOverrideService, AISuggestion, CreateSuggestionDto, OverrideSuggestionDto } from './ai-override.service';
 
 @ApiTags('admin-ai-override')
 @Controller('admin/ai-override')
-@UseGuards(RolesGuard)
+@UseGuards(RolesGuard, MfaGuard)
 @ApiBearerAuth()
 @Roles('ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN')
 export class AIOverrideController {
@@ -53,10 +56,11 @@ export class AIOverrideController {
   }
 
   /**
-   * Review and override/approve/reject a suggestion
+   * Review and override/approve/reject a suggestion - REQUIRES MFA
    */
   @Post('suggestions/:id/review')
-  @ApiOperation({ summary: 'Review and override/approve/reject a suggestion' })
+  @RequireMFA()
+  @ApiOperation({ summary: 'Review and override/approve/reject a suggestion (MFA required)' })
   async reviewSuggestion(
     @Param('id') id: string,
     @Body() dto: OverrideSuggestionDto,
@@ -100,20 +104,22 @@ export class AIOverrideController {
   }
 
   /**
-   * Create a new AI suggestion
+   * Create a new AI suggestion - REQUIRES MFA
    */
   @Post('suggestions')
-  @ApiOperation({ summary: 'Create a new AI suggestion' })
+  @RequireMFA()
+  @ApiOperation({ summary: 'Create a new AI suggestion (MFA required)' })
   async createSuggestion(@Body() dto: CreateSuggestionDto): Promise<AISuggestion> {
     const adminId = 'current_admin';
     return this.aiOverrideService.createSuggestion(dto, adminId);
   }
 
   /**
-   * Generate fraud detection suggestion
+   * Generate fraud detection suggestion - REQUIRES MFA
    */
   @Post('generate/fraud-detection/:bookingId')
-  @ApiOperation({ summary: 'Generate fraud detection suggestion' })
+  @RequireMFA()
+  @ApiOperation({ summary: 'Generate fraud detection suggestion (MFA required)' })
   async generateFraudDetection(
     @Param('bookingId') bookingId: string,
     @Body() bookingData: any,
@@ -122,10 +128,11 @@ export class AIOverrideController {
   }
 
   /**
-   * Generate dispute resolution suggestion
+   * Generate dispute resolution suggestion - REQUIRES MFA
    */
   @Post('generate/dispute-resolution/:disputeId')
-  @ApiOperation({ summary: 'Generate dispute resolution suggestion' })
+  @RequireMFA()
+  @ApiOperation({ summary: 'Generate dispute resolution suggestion (MFA required)' })
   async generateDisputeResolution(
     @Param('disputeId') disputeId: string,
     @Body() disputeData: any,
@@ -134,10 +141,11 @@ export class AIOverrideController {
   }
 
   /**
-   * Generate pricing recommendation
+   * Generate pricing recommendation - REQUIRES MFA
    */
   @Post('generate/pricing-recommendation/:listingId')
-  @ApiOperation({ summary: 'Generate pricing recommendation' })
+  @RequireMFA()
+  @ApiOperation({ summary: 'Generate pricing recommendation (MFA required)' })
   async generatePricingRecommendation(
     @Param('listingId') listingId: string,
     @Body() listingData: any,

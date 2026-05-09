@@ -98,4 +98,24 @@ export class ListingVersionController {
       parseInt(versionB, 10),
     );
   }
+
+  @Post(':version/rollback')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Rollback listing to a specific version' })
+  @ApiResponse({ status: 201, description: 'Listing rolled back to specified version' })
+  async rollbackToVersion(
+    @Param('listingId') listingId: string,
+    @Param('version') version: string,
+    @CurrentUser('id') userId: string,
+    @Query('notes') changeNotes?: string,
+  ) {
+    await this.verifyOwnership(listingId, userId);
+    return this.versionService.rollbackToVersion(
+      listingId,
+      parseInt(version, 10),
+      userId,
+      changeNotes,
+    );
+  }
 }

@@ -160,17 +160,27 @@ export class PaymentIdempotencyService {
    * @param entityType - Type of payment entity
    * @param entityId - ID of the entity
    * @param userId - User ID (optional)
-   * @returns Provider-safe idempotency key
+   * @returns Provider-safe idempotency key (deterministic based on inputs)
    */
   getProviderIdempotencyKey(
     entityType: PaymentCommandType,
     entityId: string,
     userId?: string,
   ): string {
-    // Generate a consistent key format for payment providers
-    const timestamp = Date.now();
+    // Generate a deterministic key format for payment providers
+    // Same inputs should always produce the same key for true idempotency
     const userPart = userId || 'anonymous';
-    return `${entityType}_${entityId}_${userPart}_${timestamp}`;
+    // Use a hash-like combination of inputs instead of timestamp
+    // This ensures the same operation always gets the same idempotency key
+    const inputString = `${entityType}:${entityId}:${userPart}`;
+    let hash = 0;
+    for (let i = 0; i < inputString.length; i++) {
+      const char = inputString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    // Convert to positive hex string
+    return `${entityType}_${entityId}_${Math.abs(hash).toString(16)}`;
   }
 
   /**

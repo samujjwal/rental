@@ -569,37 +569,8 @@ export class StripeService implements PaymentProvider {
       });
 
       return customer.id;
-    } catch (error) {
+  } catch (error) {
       this.handleStripeError(error, 'createCustomer');
     }
-  }
-
-  async attachPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
-    try {
-      await this.stripe.paymentMethods.attach(paymentMethodId, {
-        customer: customerId,
-      });
-    } catch (error) {
-      this.handleStripeError(error, 'attachPaymentMethod');
-    }
-  }
-
-  async setDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
-    try {
-      await this.stripe.customers.update(customerId, {
-        invoice_settings: {
-          default_payment_method: paymentMethodId,
-        },
-      });
-    } catch (error) {
-      this.handleStripeError(error, 'setDefaultPaymentMethod');
-    }
-  }
-
-  async getPaymentMethods(customerId: string) {
-    return this.stripe.paymentMethods.list({
-      customer: customerId,
-      type: 'card',
-    });
   }
 }

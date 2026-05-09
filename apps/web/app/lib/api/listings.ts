@@ -94,6 +94,7 @@ const searchCircuitBreaker = new CircuitBreaker(5, 30000);
 
 type SearchResult = {
   id: string;
+  ownerId: string;
   title: string;
   description: string;
   slug: string;
@@ -112,7 +113,16 @@ type SearchResult = {
   totalReviews: number;
   bookingMode?: string;
   condition?: Listing["condition"];
+  availability?: Listing["availability"];
+  status?: Listing["status"];
+  securityDeposit?: number;
+  verified?: boolean;
   features?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+  featured?: boolean;
+  totalBookings?: number;
+  views?: number;
 };
 
 type SearchResponse = {
@@ -124,58 +134,65 @@ type SearchResponse = {
 
 function mapSearchResponse(response: SearchResponse): ListingSearchResponse {
   const size = response.size || 20;
-  const listings: Listing[] = response.results.map((listing) => ({
+  const listings: Listing[] = response.results.map((listing): Listing => ({
     id: listing.id,
-    ownerId: "",
+    ownerId: listing.ownerId,
     title: listing.title,
     description: listing.description,
-    category: listing.categoryName || listing.categorySlug || "",
+    category: { id: "", name: listing.categoryName, slug: listing.categorySlug },
     subcategory: null,
-    basePrice: Number(listing.basePrice || 0),
+    basePrice: listing.basePrice,
     pricePerWeek: null,
     pricePerMonth: null,
     currency: listing.currency || APP_CURRENCY,
     condition: listing.condition || "good",
     location: {
+      city: listing.city,
+      state: listing.state,
+      country: listing.country,
       address: "",
-      city: listing.city || "",
-      state: listing.state || "",
-      country: listing.country || "",
       postalCode: "",
       coordinates: {
-        lat: listing.location?.lat as number,
-        lng: listing.location?.lon as number,
+        lat: listing.location?.lat || 0,
+        lng: listing.location?.lon || 0,
       },
     },
     photos: listing.photos || [],
-    availability: "available",
+    images: listing.photos || [],
+    categoryId: undefined,
+    availability: (listing.availability as Listing["availability"]) || "available",
+    status: undefined,
     availabilitySchedule: { startDate: null, endDate: null },
     instantBooking: listing.bookingMode === "INSTANT_BOOK",
     deliveryOptions: { pickup: true, delivery: false, shipping: false },
     deliveryRadius: null,
     deliveryFee: null,
-    securityDeposit: 0,
+    securityDeposit: listing.securityDeposit || 0,
     minimumRentalPeriod: 1,
     maximumRentalPeriod: null,
     cancellationPolicy: "moderate",
     rules: null,
     features: listing.features || [],
-    rating: listing.averageRating ?? null,
-    totalReviews: listing.totalReviews ?? 0,
-    totalBookings: 0,
-    views: 0,
-    featured: false,
-    verified: false,
+    rating: listing.averageRating,
+    totalReviews: listing.totalReviews,
+    totalBookings: listing.totalBookings || 0,
+    views: listing.views || 0,
+    featured: listing.featured || false,
+    verified: listing.verified || false,
+    verificationStatus: undefined,
+    rejectionReason: undefined,
+    categorySlug: listing.categorySlug,
+    categorySpecificData: undefined,
     owner: {
-      id: "",
+      id: listing.ownerId,
       firstName: listing.ownerName?.split(" ")[0] || "",
       lastName: listing.ownerName?.split(" ").slice(1).join(" ") || null,
       avatar: null,
-      rating: listing.ownerRating ?? null,
+      rating: listing.ownerRating,
       verified: false,
     },
-    createdAt: "",
-    updatedAt: "",
+    createdAt: listing.createdAt || "",
+    updatedAt: listing.updatedAt || "",
   }));
 
   return {
@@ -376,12 +393,12 @@ export const listingsApi = {
     return api.post<void>(`/listings/${id}/activate`);
   },
 
-  async uploadImages(id: string, files: File[]): Promise<{ urls: string[] }> {
+  async uploadImages(id: string, files: File[]): Promise<{ images: string[]; uploaded: string[] }> {
     const formData = new FormData();
     files.forEach((file) => {
-      formData.append("photos", file);
+      formData.append("images", file);
     });
-    return api.post<{ urls: string[] }>(`/listings/${id}/images`, formData, {
+    return api.post<{ images: string[]; uploaded: string[] }>(`/listings/${id}/images`, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },

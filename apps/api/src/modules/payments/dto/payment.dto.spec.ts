@@ -3,7 +3,6 @@ import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import {
   StartOnboardingDto,
-  AttachPaymentMethodDto,
   RequestPayoutDto,
   RequestRefundDto,
 } from './payment.dto';
@@ -44,30 +43,6 @@ describe('Payment DTOs', () => {
       });
       const errors = await validate(dto);
       expect(errors.some((e) => e.property === 'returnUrl')).toBe(true);
-    });
-  });
-
-  describe('AttachPaymentMethodDto', () => {
-    it('passes with valid paymentMethodId', async () => {
-      const dto = plainToInstance(AttachPaymentMethodDto, {
-        paymentMethodId: 'pm_1234567890',
-      });
-      const errors = await validate(dto);
-      expect(errors.length).toBe(0);
-    });
-
-    it('fails with empty paymentMethodId', async () => {
-      const dto = plainToInstance(AttachPaymentMethodDto, {
-        paymentMethodId: '',
-      });
-      const errors = await validate(dto);
-      expect(errors.some((e) => e.property === 'paymentMethodId')).toBe(true);
-    });
-
-    it('fails without paymentMethodId', async () => {
-      const dto = plainToInstance(AttachPaymentMethodDto, {});
-      const errors = await validate(dto);
-      expect(errors.some((e) => e.property === 'paymentMethodId')).toBe(true);
     });
   });
 

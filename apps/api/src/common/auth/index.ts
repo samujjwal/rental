@@ -8,3 +8,4 @@ export {
 	PERMISSIONS_KEY,
 	ROLES_KEY,
 } from '@/common/auth/authz.constants';
+export { RequireMFA, MfaGuard, REQUIRE_MFA_KEY } from '@/modules/auth/guards/mfa.guard';

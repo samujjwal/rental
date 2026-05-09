@@ -1,5 +1,5 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -52,6 +52,7 @@ import configuration from './config/configuration';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { ConfigCascadeModule } from './common/config/config-cascade.module';
 import { ConfigValidationService } from './config/config-validation.service';
+import { IdempotencyInterceptor } from './common/guards/idempotency.guard';
 
 @Module({
   imports: [
@@ -142,6 +143,8 @@ import { ConfigValidationService } from './config/config-validation.service';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Global CSRF guard: JWT Bearer routes are auto-exempt; webhooks use @SkipCsrf()
     { provide: APP_GUARD, useClass: CsrfGuard },
+    // Idempotency interceptor (only applies to methods decorated with @Idempotent())
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
   ],
 })
 export class AppModule implements NestModule {

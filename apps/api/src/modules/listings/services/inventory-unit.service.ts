@@ -265,6 +265,11 @@ export class InventoryUnitService {
   async reserveUnit(dto: ReserveInventoryUnitDto) {
     const unit = await this.prisma.inventoryUnit.findUnique({
       where: { id: dto.inventoryUnitId },
+      include: {
+        listing: {
+          select: { id: true, currency: true },
+        },
+      },
     });
 
     if (!unit) {
@@ -320,7 +325,7 @@ export class InventoryUnitService {
         startTime: dto.startTime,
         endTime: dto.endTime,
         status: 'RESERVED',
-        currency: 'USD', // Default currency, should be derived from listing
+        currency: unit.listing.currency || 'USD',
       },
     });
 
@@ -404,10 +409,6 @@ export class InventoryUnitService {
       this.logger.warn(
         `Low inventory alert: Listing ${listingId} has only ${activeCount} active unit(s)`,
       );
-
-      // In production, this would trigger a notification to the listing owner
-      // For now, we just log it
-      // TODO: Integrate with notification service to alert owners
     }
   }
 

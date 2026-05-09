@@ -200,21 +200,21 @@ export class NotificationsService {
     if (channels.includes('EMAIL') && preferences.email !== false) {
       if (this.shouldSendByType(type, preferences)) {
         usedChannels.push('EMAIL');
-        sendPromises.push(this.sendEmailNotification(user, normalizedNotification));
+        sendPromises.push(this.sendEmail(user.email, notification.title, notification.message));
       }
     }
 
     if (channels.includes('SMS') && preferences.sms === true && user.phoneVerified) {
       if (this.shouldSendByType(type, preferences)) {
         usedChannels.push('SMS');
-        sendPromises.push(this.sendSMSNotification(user, normalizedNotification));
+        sendPromises.push(this.sendSMS(user.phone, notification.message));
       }
     }
 
     if (channels.includes('PUSH') && preferences.push !== false) {
       if (this.shouldSendByType(type, preferences)) {
         usedChannels.push('PUSH');
-        sendPromises.push(this.sendPushNotification(user, normalizedNotification));
+        sendPromises.push(this.sendPush(user.id, notification.title, notification.message));
       }
     }
 
@@ -266,51 +266,76 @@ export class NotificationsService {
 
   /**
    * Send email notification (F-33 fix: uses retry-capable EmailService).
+   * Public method for retry service integration.
    */
-  private async sendEmailNotification(user: any, notification: NormalizedNotification): Promise<void> {
-    const template = this.getEmailTemplate(notification);
-
-    await this.emailService.sendEmail({
-      to: user.email,
-      subject: template.subject,
-      html: template.html,
+  async sendEmail(to: string, subject: string, body: string): Promise<{ messageId: string }> {
+    const result = await this.emailService.sendEmail({
+      to,
+      subject,
+      html: body,
     });
 
-    this.logger.log(`Email sent to ${user.email} for notification ${notification.id}`);
+    this.logger.log(`Email sent to ${to}`);
+    return { messageId: result.messageId || 'email-sent' };
   }
 
   /**
    * Send SMS notification (F-33 fix: uses retry-capable SmsService).
+   * Public method for retry service integration.
    */
-  private async sendSMSNotification(user: any, notification: NormalizedNotification): Promise<void> {
-    const smsBody = `${notification.title}\n${notification.message}`;
-
+  async sendSMS(to: string, body: string): Promise<{ messageId: string; status: string }> {
     const result = await this.smsService.sendSms({
-      to: user.phone,
-      body: smsBody.substring(0, 160),
+      to,
+      body: body.substring(0, 160),
     });
 
     if (result.status !== 'sent' && result.status !== 'queued') {
-      this.logger.warn(`SMS delivery uncertain for user ${user.id}: status=${result.status}`);
+      this.logger.warn(`SMS delivery uncertain for ${to}: status=${result.status}`);
     }
 
-    this.logger.log(`SMS dispatched to ${user.phone} for notification ${notification.id}`);
+    this.logger.log(`SMS dispatched to ${to}`);
+    return { messageId: result.sid || 'sms-sent', status: result.status };
   }
 
   /**
-   * Send push notification via PushNotificationService
+   * Send push notification via PushNotificationService.
+   * Public method for retry service integration.
    */
-  private async sendPushNotification(user: any, notification: NormalizedNotification): Promise<void> {
+  async sendPush(userId: string, title: string, body: string): Promise<{ messageId: string }> {
     try {
       await this.pushService.sendPushNotification({
-        userId: user.id,
-        title: notification.title,
-        body: notification.message,
-        data: notification.data || {},
+        userId,
+        title,
+        body,
+        data: {},
       });
-      this.logger.log(`Push notification sent to user ${user.id} for notification ${notification.id}`);
+      this.logger.log(`Push notification sent to user ${userId}`);
+      return { messageId: `push-${Date.now()}` };
     } catch (error) {
-      this.logger.warn(`Push notification failed for user ${user.id}: ${error.message}`);
+      this.logger.warn(`Push notification failed for user ${userId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Track notification delivery for retry service integration.
+   */
+  async trackDelivery(notificationId: string, channel: string): Promise<void> {
+    this.logger.log(`Tracking delivery for ${notificationId} via ${channel}`);
+    try {
+      const deliveryData = JSON.stringify({
+        deliveryChannel: channel,
+        deliveredAt: new Date().toISOString(),
+      });
+
+      await this.prisma.notification.update({
+        where: { id: notificationId },
+        data: {
+          data: deliveryData,
+        },
+      });
+    } catch (error) {
+      this.logger.error('Failed to track delivery', error);
     }
   }
 

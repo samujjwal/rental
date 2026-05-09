@@ -102,10 +102,14 @@ export class AuthClient extends BaseClient {
   /**
    * Verify OTP and authenticate
    */
-  async verifyOtp(email: string, code: string): Promise<AuthResponse> {
+  async verifyOtp(email: string, code: string, mfaCode?: string): Promise<AuthResponse> {
+    const payload: any = { email, code };
+    if (mfaCode) {
+      payload.mfaCode = mfaCode;
+    }
     return this.request<AuthResponse>('/auth/otp/verify', {
       method: 'POST',
-      body: JSON.stringify({ email, code }),
+      body: JSON.stringify(payload),
     });
   }
 

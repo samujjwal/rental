@@ -1,15 +1,18 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { i18nNotFound, i18nForbidden, i18nBadRequest } from '@/common/errors/i18n-exceptions';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CacheService } from '../../../common/cache/cache.service';
+import { Review, ReviewType } from '@rental-portal/database';
+import { ContentModerationService } from '../../moderation/services/content-moderation.service';
 import { EmbeddingService } from '../../ai/services/embedding.service';
+import { isAdminRole, isCoreAdmin } from '@/common/auth/admin-roles';
 import {
   Listing as Property,
   PropertyStatus,
@@ -19,8 +22,8 @@ import {
   PropertyCondition,
 } from '@rental-portal/database';
 import { CategoryTemplateService } from '../../categories/services/category-template.service';
-import { PropertyValidationService } from './listing-validation.service';
-import { ContentModerationService } from '../../moderation/services/content-moderation.service';
+import { CategoryAttributeService } from '../../categories/services/category-attribute.service';
+import { ListingValidationService } from './listing-validation.service';
 import { ListingVersionService } from './listing-version.service';
 import { MultiCurrencyService } from '../../currency/services/multi-currency.service';
 
@@ -94,7 +97,8 @@ export class ListingsService {
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly templateService: CategoryTemplateService,
-    private readonly validationService: PropertyValidationService,
+    private readonly attributeService: CategoryAttributeService,
+    private readonly validationService: ListingValidationService,
     private readonly moderationService: ContentModerationService,
     private readonly embeddingService: EmbeddingService,
     private readonly versionService: ListingVersionService,
@@ -182,6 +186,23 @@ export class ListingsService {
       .split('\n')
       .map((rule) => rule.trim())
       .filter(Boolean);
+  }
+
+  private serializeAttributeValue(value: any, fieldType: string): string {
+    switch (fieldType) {
+      case 'number':
+        return String(value);
+      case 'boolean':
+        return String(Boolean(value));
+      case 'multiselect':
+        return Array.isArray(value) ? JSON.stringify(value) : String(value);
+      case 'date':
+        return new Date(value).toISOString();
+      case 'text':
+      case 'select':
+      default:
+        return String(value);
+    }
   }
 
   private buildMetadata(input: any): string | undefined {
@@ -353,6 +374,41 @@ export class ListingsService {
         this.logger.warn(`Failed to generate embedding for listing ${listing.id}`, err),
       );
 
+    // Create initial version snapshot for audit trail
+    this.versionService
+      .createSnapshot({
+        listingId: listing.id,
+        changedBy: ownerId,
+        changeNotes: 'Initial listing creation',
+      })
+      .catch((err) => this.logger.warn(`Failed to create version snapshot for listing ${listing.id}`, err));
+
+    // Store category-specific attributes using CategoryAttributeService if dynamic attributes exist
+    if (Object.keys(categorySpecificData).length > 0) {
+      const attributeDefinitions = await this.attributeService.findDefinitionsByCategory(categoryId);
+      if (attributeDefinitions.length > 0) {
+        // Map categorySpecificData keys to attribute definition IDs
+        const attributeValues = attributeDefinitions
+          .filter(def => categorySpecificData[def.slug] !== undefined && categorySpecificData[def.slug] !== null)
+          .map(def => ({
+            attributeDefinitionId: def.id,
+            value: this.serializeAttributeValue(categorySpecificData[def.slug], def.fieldType),
+          }));
+
+        if (attributeValues.length > 0) {
+          try {
+            await this.attributeService.bulkSetValues({
+              listingId: listing.id,
+              values: attributeValues,
+            });
+          } catch (err) {
+            this.logger.warn(`Failed to store category-specific attributes for listing ${listing.id}`, err);
+            // Don't fail listing creation if attribute storage fails
+          }
+        }
+      }
+    }
+
     return listing;
   }
 
@@ -476,7 +532,7 @@ export class ListingsService {
 
     // Allow owner or admin to see non-AVAILABLE listings
     const isOwner = viewerUserId && listing.ownerId === viewerUserId;
-    const isAdmin = viewerRole && ['ADMIN', 'SUPER_ADMIN'].includes(viewerRole);
+    const isAdmin = isCoreAdmin(viewerRole);
     const canSeePrivate = includePrivate || isOwner || isAdmin;
 
     if (!canSeePrivate && listing.status !== PropertyStatus.AVAILABLE) {
@@ -708,6 +764,32 @@ export class ListingsService {
         .catch((err) => this.logger.warn(`Failed to regenerate embedding for listing ${id}`, err));
     }
 
+    // Update category-specific attributes using CategoryAttributeService if provided
+    if (dto.categorySpecificData) {
+      const attributeDefinitions = await this.attributeService.findDefinitionsByCategory(listing.categoryId);
+      if (attributeDefinitions.length > 0) {
+        // Map categorySpecificData keys to attribute definition IDs
+        const attributeValues = attributeDefinitions
+          .filter(def => dto.categorySpecificData[def.slug] !== undefined && dto.categorySpecificData[def.slug] !== null)
+          .map(def => ({
+            attributeDefinitionId: def.id,
+            value: this.serializeAttributeValue(dto.categorySpecificData[def.slug], def.fieldType),
+          }));
+
+        if (attributeValues.length > 0) {
+          try {
+            await this.attributeService.bulkSetValues({
+              listingId: id,
+              values: attributeValues,
+            });
+          } catch (err) {
+            this.logger.warn(`Failed to update category-specific attributes for listing ${id}`, err);
+            // Don't fail listing update if attribute storage fails
+          }
+        }
+      }
+    }
+
     return updated;
   }
 
@@ -783,6 +865,15 @@ export class ListingsService {
 
     await this.cacheService.del(`listing:${id}`);
 
+    // Create version snapshot for audit trail
+    this.versionService
+      .createSnapshot({
+        listingId: id,
+        changedBy: userId,
+        changeNotes: 'Published listing',
+      })
+      .catch((err) => this.logger.warn(`Failed to create version snapshot for listing ${id}`, err));
+
     return updated;
   }
 
@@ -804,6 +895,15 @@ export class ListingsService {
 
     await this.cacheService.del(`listing:${id}`);
     await this.cacheService.del(`listing:slug:${listing.slug}`);
+
+    // Create version snapshot for audit trail
+    this.versionService
+      .createSnapshot({
+        listingId: id,
+        changedBy: userId,
+        changeNotes: 'Paused listing',
+      })
+      .catch((err) => this.logger.warn(`Failed to create version snapshot for listing ${id}`, err));
 
     return updated;
   }
@@ -837,6 +937,15 @@ export class ListingsService {
 
     await this.cacheService.del(`listing:${id}`);
 
+    // Create version snapshot for audit trail
+    this.versionService
+      .createSnapshot({
+        listingId: id,
+        changedBy: userId,
+        changeNotes: 'Activated listing',
+      })
+      .catch((err) => this.logger.warn(`Failed to create version snapshot for listing ${id}`, err));
+
     return updated;
   }
 
@@ -866,6 +975,15 @@ export class ListingsService {
     if (activeBookings > 0) {
       throw i18nBadRequest('listing.hasActiveBookings');
     }
+
+    // Create version snapshot for audit trail before deletion
+    this.versionService
+      .createSnapshot({
+        listingId: id,
+        changedBy: userId,
+        changeNotes: 'Deleted listing (archived)',
+      })
+      .catch((err) => this.logger.warn(`Failed to create version snapshot for listing ${id}`, err));
 
     await this.prisma.listing.update({
       where: { id },

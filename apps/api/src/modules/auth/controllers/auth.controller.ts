@@ -261,6 +261,22 @@ export class AuthController {
     await this.authService.disableMfa(userId, dto.password);
   }
 
+  @Post('mfa/verify-session')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Verify MFA for current session (required for sensitive admin actions)' })
+  @ApiResponse({ status: 200, description: 'MFA verified for session' })
+  @ApiResponse({ status: 400, description: 'Invalid verification code' })
+  @ApiResponse({ status: 403, description: 'MFA not enabled for account' })
+  async verifyMfaForSession(@CurrentUser('id') userId: string, @Body() dto: VerifyMfaDto, @Req() req: Request) {
+    const verified = await this.authService.verifyMfaForSession(userId, dto.code);
+    if (verified) {
+      (req as any).mfaVerified = true;
+    }
+    return { verified };
+  }
+
   // === OAuth Endpoints (6.1) ===
 
   @Post('google')

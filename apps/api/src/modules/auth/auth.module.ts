@@ -22,6 +22,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { WsJwtAuthGuard } from './guards/ws-jwt-auth.guard';
+import { MfaGuard } from './guards/mfa.guard';
 
 @Module({
   imports: [
@@ -54,7 +55,8 @@ import { WsJwtAuthGuard } from './guards/ws-jwt-auth.guard';
     WsJwtAuthGuard,
     LocalAuthGuard,
     RolesGuard,
+    MfaGuard,
   ],
-  exports: [AuthService, JwtAuthGuard, WsJwtAuthGuard, RolesGuard, TokenService, JwtModule],
+  exports: [AuthService, JwtAuthGuard, WsJwtAuthGuard, RolesGuard, MfaGuard, TokenService, JwtModule],
 })
 export class AuthModule {}

@@ -287,100 +287,100 @@ export class BookingsService {
       });
     }
 
-    const booking = (await this.prisma.$transaction(async (tx: any) => {
-      // Create booking atomically (availability already reserved by checkAndReserve)
-      const bookingMetadata: Record<string, any> = {};
-      if (dto.deliveryMethod) {
-        bookingMetadata.deliveryMethod = dto.deliveryMethod;
-      }
-      if (dto.deliveryAddress) {
-        bookingMetadata.deliveryAddress = dto.deliveryAddress;
-      }
-      if (taxCalculationFailed) {
-        bookingMetadata.taxCalculationFailed = true;
-        bookingMetadata.needsManualTaxReview = true;
-      }
-      if (constraintEvaluationFailed) {
-        bookingMetadata.constraintEvaluationFailed = true;
-        bookingMetadata.needsManualConstraintReview = true;
-      }
-      if (safetyChecksSkipped.length > 0) {
-        bookingMetadata.safetyChecksSkipped = safetyChecksSkipped;
-        bookingMetadata.needsReview = true;
-      }
+    let booking: Booking;
+    try {
+      booking = (await this.prisma.$transaction(async (tx: any) => {
+        // Create booking atomically (availability already reserved by checkAndReserve)
+        const bookingMetadata: Record<string, any> = {};
+        if (dto.deliveryMethod) {
+          bookingMetadata.deliveryMethod = dto.deliveryMethod;
+        }
+        if (dto.deliveryAddress) {
+          bookingMetadata.deliveryAddress = dto.deliveryAddress;
+        }
+        if (taxCalculationFailed) {
+          bookingMetadata.taxCalculationFailed = true;
+          bookingMetadata.needsManualTaxReview = true;
+        }
+        if (constraintEvaluationFailed) {
+          bookingMetadata.constraintEvaluationFailed = true;
+          bookingMetadata.needsManualConstraintReview = true;
+        }
 
-      const createdBooking = await tx.booking.create({
-        data: {
-          renterId,
-          listingId: dto.listingId,
-          ownerId: listing.ownerId,
+        const createdBooking = await tx.booking.create({
+          data: {
+            renterId,
+            ownerId: listing.ownerId,
+            listingId: dto.listingId,
+            startDate,
+            endDate,
+            basePrice: pricing.subtotal,
+            serviceFee: pricing.serviceFee,
+            platformFee: pricing.platformFee,
+            depositAmount: pricing.depositAmount,
+            totalPrice: pricing.total,
+            currency: listing.currency || 'USD',
+            status: initialStatus,
+            metadata: JSON.stringify(bookingMetadata),
+          },
+          include: {
+            renter: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profilePhotoUrl: true,
+                averageRating: true,
+              },
+            },
+            listing: {
+              include: {
+                owner: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    profilePhotoUrl: true,
+                  },
+                },
+                category: true,
+              },
+            },
+          },
+        });
+
+        // Persist price breakdown line items for the booking (inside transaction)
+        // Price breakdown is REQUIRED for invoice generation and refund calculations
+        const days = Math.max(
+          1,
+          Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
+        );
+
+        await this.pricing.persistBreakdown(createdBooking.id, {
+          basePrice: pricing.breakdown.basePrice,
+          nights: days,
+          securityDeposit: pricing.depositAmount,
+          taxRate: taxBreakdown.totalTax > 0 ? taxBreakdown.totalTax / pricing.subtotal : undefined,
+          currency: listing.currency,
+        });
+
+        return createdBooking;
+      })) as unknown as Booking;
+    } catch (err) {
+      // If booking creation fails, release the reservation to prevent orphaned slots
+      this.logger.error(`Booking creation failed, releasing reservation for listing ${dto.listingId}`, err);
+      try {
+        await this.availabilityService.releaseReservation(
+          dto.listingId,
           startDate,
           endDate,
-          guestCount: dto.guestCount,
-          specialRequests: dto.message,
-          metadata: Object.keys(bookingMetadata).length
-            ? JSON.stringify(bookingMetadata)
-            : undefined,
-          status: initialStatus,
-          basePrice: pricing.breakdown.basePrice,
-          totalPrice: pricing.total + taxBreakdown.totalTax,
-          taxAmount: taxBreakdown.totalTax,
-          platformFee: pricing.platformFee,
-          serviceFee: pricing.serviceFee,
-          depositAmount: pricing.depositAmount,
-          ownerEarnings: pricing.ownerEarnings,
-          currency: listing.currency,
-          stateHistory: {
-            create: {
-              toStatus: initialStatus,
-              changedBy: renterId,
-              reason: 'Booking created',
-            },
-          },
-        } as Prisma.BookingUncheckedCreateInput,
-        include: {
-          renter: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              profilePhotoUrl: true,
-              averageRating: true,
-            },
-          },
-          listing: {
-            include: {
-              owner: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  profilePhotoUrl: true,
-                },
-              },
-              category: true,
-            },
-          },
-        },
-      });
-
-      // Persist price breakdown line items for the booking (inside transaction)
-      // Price breakdown is REQUIRED for invoice generation and refund calculations
-      const days = Math.max(
-        1,
-        Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
-      );
-      
-      await this.pricing.persistBreakdown(createdBooking.id, {
-        basePrice: pricing.breakdown.basePrice,
-        nights: days,
-        securityDeposit: pricing.depositAmount,
-        taxRate: taxBreakdown.totalTax > 0 ? taxBreakdown.totalTax / pricing.subtotal : undefined,
-        currency: listing.currency,
-      });
-
-      return createdBooking;
-    })) as unknown as Booking;
+          reservationResult.unitId,
+        );
+      } catch (releaseErr) {
+        this.logger.error(`Failed to release reservation for listing ${dto.listingId}`, releaseErr);
+      }
+      throw err;
+    }
 
     // Confirm the reservation after successful booking creation
     try {
@@ -611,8 +611,9 @@ export class BookingsService {
   }
 
   private attachPaymentStatus(booking: any, userId?: string): any {
+    // Payment status truth comes from Payment/Stripe state, not inferred booking status
     const latestPaymentStatus = booking?.payments?.[0]?.status as string | undefined;
-    let paymentStatus: 'PENDING' | 'PAID' | 'REFUNDED' | 'FAILED' = 'PENDING';
+    let paymentStatus: 'PENDING' | 'PAID' | 'REFUNDED' | 'FAILED' | 'NOT_INITIATED' | 'RECONCILIATION_REQUIRED' = 'NOT_INITIATED';
 
     if (latestPaymentStatus) {
       const upper = latestPaymentStatus.toUpperCase();
@@ -626,20 +627,17 @@ export class BookingsService {
         paymentStatus = 'PENDING';
       }
     } else {
-      const bookingStatus = String(booking.status || '').toUpperCase();
-      if (bookingStatus === 'REFUNDED') {
-        paymentStatus = 'REFUNDED';
-      } else if (bookingStatus === 'CANCELLED') {
-        paymentStatus = 'FAILED';
-      } else if (
-        ['CONFIRMED', 'IN_PROGRESS', 'AWAITING_RETURN_INSPECTION', 'COMPLETED', 'SETTLED'].includes(
-          bookingStatus,
-        )
-      ) {
-        paymentStatus = 'PAID';
-      } else {
-        paymentStatus = 'PENDING';
+      // If no payment record exists, check if booking status implies payment should exist
+      // If booking is in a state that requires payment (CONFIRMED, IN_PROGRESS, COMPLETED, SETTLED)
+      // but no payment record exists, mark as RECONCILIATION_REQUIRED instead of NOT_INITIATED
+      const paymentRequiredStates = ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'SETTLED'];
+      if (paymentRequiredStates.includes(booking.status)) {
+        paymentStatus = 'RECONCILIATION_REQUIRED';
+        this.logger.warn(
+          `Booking ${booking.id} is in ${booking.status} state but has no payment record. Reconciliation required.`,
+        );
       }
+      // Otherwise, return NOT_INITIATED for states that don't require payment yet
     }
 
     const startDate = booking.startDate ? new Date(booking.startDate) : null;
